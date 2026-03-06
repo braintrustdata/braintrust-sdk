@@ -5,7 +5,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 
 # Docker container label
-DOCKER_LABEL="braintrust-sdk"
+DOCKER_LABEL="braintrust-sdk-javascript"
 
 COMMAND="${1:-}"
 
@@ -124,32 +124,16 @@ EOFPROFILE
     echo "Tools installed"
     echo "  node:   $(node --version)"
     echo "  pnpm:   $(pnpm --version)"
-    echo "  python: $(python --version)"
-
-    # Python SDK setup
-    echo ""
-    echo "Setting up Python SDK..."
-    cd /workspace/repo/py
-    make install-dev
 
     # TypeScript SDK setup
     echo ""
     echo "Setting up TypeScript SDK..."
-    cd /workspace/repo/js
     pnpm install
-
-    # Return to repo root
-    cd /workspace/repo
 
     echo ""
     echo "============================================"
     echo "Development environment ready!"
     echo "============================================"
-    echo ""
-    echo "Python SDK: cd py"
-    echo "  make test-core    - Run core tests"
-    echo "  make build        - Build package"
-    echo "  make install-optional - Install optional deps (anthropic, openai, etc.)"
     echo ""
     echo "TypeScript SDK: cd js"
     echo "  pnpm test         - Run core tests"

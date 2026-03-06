@@ -8,13 +8,11 @@ on:
       - ".github/workflows/temporal-js-test.yaml"
   push:
     branches: [main]
-    paths:
-      - "integrations/temporal-js/**"
-      - "js/**"
 
 jobs:
   build-and-test:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
 
     strategy:
       fail-fast: false

@@ -8,9 +8,5 @@
     "zod/": "npm:/zod@^4.2.1/"
   },
   "nodeModulesDir": "auto",
-  "links": [
-    "../../../../../js",
-    "../../../",
-    "../../../../../js/smoke/shared"
-  ]
+  "links": ["../../../../../js", "../../../", "../../../../../js/smoke/shared"]
 }

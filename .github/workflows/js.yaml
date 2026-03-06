@@ -13,15 +13,6 @@ on:
       - "pnpm-workspace.yaml"
   push:
     branches: [main]
-    paths:
-      - "js/**"
-      - "integrations/otel-js/**"
-      - "integrations/temporal-js/**"
-      - ".github/workflows/js.yaml"
-      - ".github/workflows/otel-js-test.yaml"
-      - ".github/workflows/temporal-js-build-test.yaml"
-      - "pnpm-lock.yaml"
-      - "pnpm-workspace.yaml"
 
 permissions:
   contents: read
@@ -30,6 +21,7 @@ permissions:
 jobs:
   build:
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
 
     strategy:
       fail-fast: false
@@ -146,6 +138,7 @@ jobs:
 
   api-compatibility:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     # Run in parallel with build job
     strategy:
       fail-fast: false
@@ -196,27 +189,12 @@ jobs:
           pnpm install --frozen-lockfile || { echo "Baseline install failed"; git checkout "$CURRENT_REF"; exit 0; }
           pnpm run build || { echo "Baseline build failed"; git checkout "$CURRENT_REF"; exit 0; }
 
-          # Copy built .d.ts files to baseline directory
-          if [ -d "js/dist" ]; then
-            mkdir -p "$BASELINE_DIR/js/dist"
-            cp js/dist/*.d.ts "$BASELINE_DIR/js/dist/" 2>/dev/null || true
-            cp js/dist/*.d.mts "$BASELINE_DIR/js/dist/" 2>/dev/null || true
-            echo "Copied main/browser dist files"
-          fi
-
-          if [ -d "js/dev/dist" ]; then
-            mkdir -p "$BASELINE_DIR/js/dev/dist"
-            cp js/dev/dist/*.d.ts "$BASELINE_DIR/js/dev/dist/" 2>/dev/null || true
-            cp js/dev/dist/*.d.mts "$BASELINE_DIR/js/dev/dist/" 2>/dev/null || true
-            echo "Copied dev dist files"
-          fi
-
-          if [ -d "js/util/dist" ]; then
-            mkdir -p "$BASELINE_DIR/js/util/dist"
-            cp js/util/dist/*.d.ts "$BASELINE_DIR/js/util/dist/" 2>/dev/null || true
-            cp js/util/dist/*.d.mts "$BASELINE_DIR/js/util/dist/" 2>/dev/null || true
-            echo "Copied util dist files"
-          fi
+          # Copy built files to baseline directory
+          mkdir -p "$BASELINE_DIR/js/dev" "$BASELINE_DIR/js/util"
+          cp -R js/dist "$BASELINE_DIR/js/"
+          cp -R js/dev/dist "$BASELINE_DIR/js/dev/"
+          cp -R js/util/dist "$BASELINE_DIR/js/util/"
+          echo "Copied js/dist, js/dev/dist, and js/util/dist to baseline"
 
           # Return to original commit
           git checkout "$CURRENT_REF"
@@ -240,6 +218,7 @@ jobs:
   # Smoke v2: Auto-discovery of scenarios
   smoke-discover:
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     outputs:
       scenarios: ${{ steps.discover.outputs.scenarios }}
     steps:
@@ -264,6 +243,7 @@ jobs:
   smoke-test:
     needs: [build, smoke-discover]
     runs-on: ubuntu-latest
+    timeout-minutes: 15
 
     strategy:
       fail-fast: false

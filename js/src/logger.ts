@@ -122,7 +122,7 @@ import {
   SyncLazyValue,
   runCatchFinally,
 } from "./util";
-import { lintTemplate as lintMustacheTemplate } from "./template/mustache-utils";
+import { lintTemplate as _lintMustacheTemplate } from "./template/mustache-utils";
 import { prettifyXact } from "../util/index";
 import { SpanCache, CachedSpan } from "./span-cache";
 import type { EvalParameters, InferParameters } from "./eval-parameters";
@@ -874,7 +874,7 @@ export class BraintrustState {
   public httpLogger(): HTTPBackgroundLogger {
     // this is called for configuration in some end-to-end tests so
     // expose the http bg logger here.
-    return this._bgLogger.get() as HTTPBackgroundLogger;
+    return this._bgLogger.get();
   }
 
   public setOverrideBgLogger(logger: BackgroundLogger | null) {
@@ -1059,7 +1059,7 @@ class HTTPConnection {
     try {
       const resp = await this.get("ping");
       return resp.status === 200;
-    } catch (e) {
+    } catch {
       return false;
     }
   }
@@ -1783,9 +1783,9 @@ function logFeedbackImpl(
     tags,
   });
 
-  let { metadata, ...updateEvent } = deepCopyEvent(validatedEvent);
-  updateEvent = Object.fromEntries(
-    Object.entries(updateEvent).filter(([_, v]) => !isEmpty(v)),
+  const { metadata, ...rawUpdateEvent } = deepCopyEvent(validatedEvent);
+  const updateEvent = Object.fromEntries(
+    Object.entries(rawUpdateEvent).filter(([_, v]) => !isEmpty(v)),
   );
 
   const parentIds = async () =>
@@ -2168,7 +2168,7 @@ export class Logger<IsAsyncFlush extends boolean> implements Exportable {
   private calledStartSpan: boolean;
 
   // For type identification.
-  public kind: "logger" = "logger";
+  public kind = "logger" as const;
 
   constructor(
     state: BraintrustState,
@@ -2550,9 +2550,13 @@ export interface BackgroundLoggerOpts {
   onFlushError?: (error: unknown) => void;
 }
 
+const DEFAULT_FLUSH_BACKPRESSURE_BYTES = 10 * 1024 * 1024; // 10 MB
+
 interface BackgroundLogger {
   log(items: LazyValue<BackgroundLogEvent>[]): void;
   flush(): Promise<void>;
+  pendingFlushBytes(): number;
+  flushBackpressureBytes(): number;
   setMaskingFunction(
     maskingFunction: ((value: unknown) => unknown) | null,
   ): void;
@@ -2574,6 +2578,14 @@ export class TestBackgroundLogger implements BackgroundLogger {
 
   async flush(): Promise<void> {
     return Promise.resolve();
+  }
+
+  pendingFlushBytes(): number {
+    return 0;
+  }
+
+  flushBackpressureBytes(): number {
+    return DEFAULT_FLUSH_BACKPRESSURE_BYTES;
   }
 
   async drain(): Promise<BackgroundLogEvent[]> {
@@ -2660,7 +2672,9 @@ class HTTPBackgroundLogger implements BackgroundLogger {
   public queueDropLoggingPeriod: number = 60;
   public failedPublishPayloadsDir: string | undefined = undefined;
   public allPublishPayloadsDir: string | undefined = undefined;
-  public flushChunkSize: number = 25;
+  private _flushBackpressureBytes: number = DEFAULT_FLUSH_BACKPRESSURE_BYTES;
+
+  private _pendingBytes: number = 0;
 
   private _disabled = false;
 
@@ -2712,11 +2726,19 @@ class HTTPBackgroundLogger implements BackgroundLogger {
       this.queueDropLoggingPeriod = queueDropLoggingPeriodEnv;
     }
 
-    const flushChunkSizeEnv = Number(
-      iso.getEnv("BRAINTRUST_LOG_FLUSH_CHUNK_SIZE"),
+    if (iso.getEnv("BRAINTRUST_LOG_FLUSH_CHUNK_SIZE")) {
+      console.warn(
+        "BRAINTRUST_LOG_FLUSH_CHUNK_SIZE is deprecated and no longer has any effect. " +
+          "Log flushing now sends all items at once and batches them automatically. " +
+          "This environment variable will be removed in a future major release.",
+      );
+    }
+
+    const flushBackpressureBytesEnv = Number(
+      iso.getEnv("BRAINTRUST_FLUSH_BACKPRESSURE_BYTES"),
     );
-    if (!isNaN(flushChunkSizeEnv) && flushChunkSizeEnv > 0) {
-      this.flushChunkSize = flushChunkSizeEnv;
+    if (!isNaN(flushBackpressureBytesEnv) && flushBackpressureBytesEnv > 0) {
+      this._flushBackpressureBytes = flushBackpressureBytesEnv;
     }
 
     const failedPublishPayloadsDirEnv = iso.getEnv(
@@ -2748,6 +2770,14 @@ class HTTPBackgroundLogger implements BackgroundLogger {
     maskingFunction: ((value: unknown) => unknown) | null,
   ): void {
     this.maskingFunction = maskingFunction;
+  }
+
+  pendingFlushBytes(): number {
+    return this._pendingBytes;
+  }
+
+  flushBackpressureBytes(): number {
+    return this._flushBackpressureBytes;
   }
 
   log(items: LazyValue<BackgroundLogEvent>[]) {
@@ -2833,17 +2863,7 @@ class HTTPBackgroundLogger implements BackgroundLogger {
       return;
     }
 
-    const chunkSize = Math.max(1, Math.min(batchSize, this.flushChunkSize));
-
-    let index = 0;
-    while (index < wrappedItems.length) {
-      const chunk = wrappedItems.slice(index, index + chunkSize);
-      await this.flushWrappedItemsChunk(chunk, batchSize);
-      index += chunk.length;
-    }
-    // Clear the array once at the end to allow garbage collection
-    // More efficient than filling with undefined after each chunk
-    wrappedItems.length = 0;
+    await this.flushWrappedItemsChunk(wrappedItems, batchSize);
 
     // If more items were added while we were flushing, flush again
     if (this.queue.length() > 0) {
@@ -2865,9 +2885,14 @@ class HTTPBackgroundLogger implements BackgroundLogger {
     }
 
     // Construct batches of records to flush in parallel.
-    const allItemsWithMeta = allItems.map((item) =>
-      stringifyWithOverflowMeta(item),
-    );
+    let chunkBytes = 0;
+    const allItemsWithMeta = allItems.map((item) => {
+      const withMeta = stringifyWithOverflowMeta(item);
+      chunkBytes += withMeta.str.length;
+      return withMeta;
+    });
+    this._pendingBytes += chunkBytes;
+
     const maxRequestSizeResult = await this.getMaxRequestSize();
     const batches = batchItems({
       items: allItemsWithMeta,
@@ -2887,6 +2912,7 @@ class HTTPBackgroundLogger implements BackgroundLogger {
       })(),
     );
     const results = await Promise.all(postPromises);
+    this._pendingBytes = Math.max(0, this._pendingBytes - chunkBytes);
     const failingResultErrors = results
       .map((r) => (r.type === "success" ? undefined : r.value))
       .filter((r) => r !== undefined);
@@ -5206,7 +5232,8 @@ function validateAndSanitizeExperimentLogPartialArgs(
     if (Array.isArray(event.scores)) {
       throw new Error("scores must be an object, not an array");
     }
-    for (let [name, score] of Object.entries(event.scores)) {
+    for (const [name, rawScore] of Object.entries(event.scores)) {
+      let score = rawScore;
       if (typeof name !== "string") {
         throw new Error("score names must be strings");
       }
@@ -5474,9 +5501,9 @@ export type WithTransactionId<R> = R & {
 export const DEFAULT_FETCH_BATCH_SIZE = 1000;
 export const MAX_BTQL_ITERATIONS = 10000;
 
-export class ObjectFetcher<RecordType>
-  implements AsyncIterable<WithTransactionId<RecordType>>
-{
+export class ObjectFetcher<RecordType> implements AsyncIterable<
+  WithTransactionId<RecordType>
+> {
   private _fetchedData: WithTransactionId<RecordType>[] | undefined = undefined;
 
   constructor(
@@ -5849,8 +5876,11 @@ export class Experiment
       readonly comparisonExperimentId?: string;
     } = {},
   ): Promise<ExperimentSummary> {
-    let { summarizeScores = true, comparisonExperimentId = undefined } =
-      options || {};
+    const {
+      summarizeScores = true,
+      comparisonExperimentId: comparisonExperimentIdOpt,
+    } = options || {};
+    let comparisonExperimentId = comparisonExperimentIdOpt;
 
     const state = await this.getState();
     const projectUrl = `${state.appPublicUrl}/app/${encodeURIComponent(
@@ -6143,7 +6173,7 @@ export class SpanImpl implements Span {
   private _rootSpanId: string;
   private _spanParents: string[] | undefined;
 
-  public kind: "span" = "span";
+  public kind = "span" as const;
 
   constructor(
     args: {
@@ -6290,8 +6320,8 @@ export class SpanImpl implements Span {
       [IS_MERGE_FIELD]: this.isMerge,
     });
 
-    if (partialRecord.metrics?.end) {
-      this.loggedEndTime = partialRecord.metrics?.end as number;
+    if (typeof partialRecord.metrics?.end === "number") {
+      this.loggedEndTime = partialRecord.metrics.end;
     }
 
     // Write to local span cache for scorer access
@@ -6300,11 +6330,10 @@ export class SpanImpl implements Span {
       const cachedSpan: CachedSpan = {
         input: partialRecord.input,
         output: partialRecord.output,
-        metadata: partialRecord.metadata as Record<string, unknown> | undefined,
+        metadata: partialRecord.metadata,
         span_id: this._spanId,
         span_parents: this._spanParents,
-        span_attributes:
-          partialRecord.span_attributes as CachedSpan["span_attributes"],
+        span_attributes: partialRecord.span_attributes,
       };
       this._state.spanCache.queueWrite(
         this._rootSpanId,
@@ -6512,6 +6541,7 @@ export class SpanImpl implements Span {
       default: {
         // trigger a compile-time error if we add a new object type
         const _exhaustive: never = this.parentObjectType;
+        // eslint-disable-next-line no-unused-expressions
         _exhaustive;
         return NOOP_SPAN_PERMALINK;
       }
@@ -6953,7 +6983,8 @@ export type CompiledPrompt<Flavor extends "chat" | "completion"> =
       ? ChatPrompt
       : Flavor extends "completion"
         ? CompletionPrompt
-        : {});
+        : // eslint-disable-next-line @typescript-eslint/no-empty-object-type
+          {});
 
 export type DefaultPromptArgs = Partial<
   CompiledPromptParams & AnyModelParam & ChatPrompt & CompletionPrompt
@@ -7637,14 +7668,7 @@ export class RemoteEvalParameters<
       typeof x === "object" &&
       x !== null &&
       "__braintrust_parameters_marker" in x &&
-      // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
-      (
-        x as unknown as RemoteEvalParameters<
-          boolean,
-          boolean,
-          Record<string, unknown>
-        >
-      ).__braintrust_parameters_marker === true
+      x.__braintrust_parameters_marker === true
     );
   }
 }

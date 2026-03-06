@@ -1,7 +1,5 @@
 import {
-  GitMetadataSettings as GitMetadataSettingsSchema,
   type GitMetadataSettingsType as GitMetadataSettings,
-  RepoInfo as RepoInfoSchema,
   type RepoInfoType as RepoInfo,
 } from "./generated_types";
 import { simpleGit } from "simple-git";
@@ -19,7 +17,7 @@ export async function currentRepo() {
     } else {
       return null;
     }
-  } catch (e) {
+  } catch {
     return null;
   }
 }
@@ -95,7 +93,7 @@ async function getBaseBranchAncestor(remote: string | undefined = undefined) {
       `${remoteName}/${baseBranch}`,
     ]);
     return ancestor.trim();
-  } catch (e) {
+  } catch {
     /*
     console.warn(
       `Warning: Could not find a common ancestor with ${remoteName}/${baseBranch}`
@@ -133,7 +131,7 @@ export async function getPastNAncestors(
 async function attempt<T>(fn: () => Promise<T>): Promise<T | undefined> {
   try {
     return await fn();
-  } catch (e) {
+  } catch {
     return undefined;
   }
 }

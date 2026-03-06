@@ -1,6 +1,11 @@
+import { tracingChannel } from "dc-browser";
 import iso from "../isomorph";
 import { _internalSetInitialState } from "../logger";
-import type { AsyncLocalStorage as NodeAsyncLocalStorage } from "async_hooks";
+import { registry } from "../instrumentation/registry";
+
+// This is copied from next.js. It seems they define AsyncLocalStorage in the edge
+// environment, even though it's not defined in the browser.
+import type { AsyncLocalStorage as NodeAsyncLocalStorage } from "node:async_hooks";
 
 declare global {
   var AsyncLocalStorage: typeof NodeAsyncLocalStorage;
@@ -19,6 +24,7 @@ export function configureBrowser(): void {
 
   iso.buildType = "browser";
 
+  // Try to use global AsyncLocalStorage (edge runtime like Next.js)
   try {
     if (typeof AsyncLocalStorage !== "undefined") {
       iso.newAsyncLocalStorage = <T>() => new AsyncLocalStorage<T>();
@@ -26,6 +32,9 @@ export function configureBrowser(): void {
   } catch {
     // Ignore
   }
+
+  iso.newTracingChannel = <_M = any>(nameOrChannels: string | object) =>
+    tracingChannel(nameOrChannels as any) as any;
 
   iso.getEnv = (name: string) => {
     if (typeof process === "undefined" || typeof process.env === "undefined") {
@@ -46,5 +55,9 @@ export function configureBrowser(): void {
   };
 
   _internalSetInitialState();
+
+  // Enable auto-instrumentation
+  registry.enable();
+
   browserConfigured = true;
 }

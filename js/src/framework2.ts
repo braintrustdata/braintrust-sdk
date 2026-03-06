@@ -5,19 +5,14 @@ import { slugify } from "../util/string_util";
 import { z } from "zod/v3";
 import {
   type FunctionTypeEnumType as FunctionType,
-  IfExists as IfExistsSchema,
   type IfExistsType as IfExists,
-  SavedFunctionId as SavedFunctionIdSchema,
   type SavedFunctionIdType as SavedFunctionId,
-  PromptBlockData as PromptBlockDataSchema,
   type PromptBlockDataType as PromptBlockData,
-  PromptData as PromptDataSchema,
   type PromptDataType as PromptData,
   ToolFunctionDefinition as toolFunctionDefinitionSchema,
   type ToolFunctionDefinitionType as ToolFunctionDefinition,
   FunctionData as functionDataSchema,
   Project as projectSchema,
-  ExtendedSavedFunctionId as ExtendedSavedFunctionIdSchema,
   type ExtendedSavedFunctionIdType as ExtendedSavedFunctionId,
 } from "./generated_types";
 import { loadPrettyXact, TransactionId } from "../util/index";

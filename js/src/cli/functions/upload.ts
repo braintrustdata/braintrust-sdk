@@ -1,9 +1,6 @@
 import {
-  CodeBundle as CodeBundleSchema,
   type CodeBundleType as CodeBundle,
-  Function as FunctionObjectSchema,
   type FunctionType as FunctionObject,
-  IfExists as IfExistsSchema,
   type IfExistsType as IfExists,
 } from "../../generated_types";
 import type { BuildSuccess, EvaluatorState, FileHandle } from "../types";
@@ -14,9 +11,9 @@ import {
   FailedHTTPResponse,
 } from "../../logger";
 import * as esbuild from "esbuild";
-import fs from "fs";
-import path from "path";
-import { createGzip } from "zlib";
+import fs from "node:fs";
+import path from "node:path";
+import { createGzip } from "node:zlib";
 import { addAzureBlobHeaders, isEmpty } from "../../util";
 import { z } from "zod/v3";
 import { capitalize } from "../../../util/index";
@@ -24,7 +21,11 @@ import { findCodeDefinition, makeSourceMapContext } from "./infer-source";
 import { slugify } from "../../../util/string_util";
 import { zodToJsonSchema } from "../../zod/utils";
 import pluralize from "pluralize";
-import { FunctionEvent, ProjectNameIdMap } from "../../framework2";
+import {
+  FunctionEvent,
+  ProjectNameIdMap,
+  serializeRemoteEvalParametersContainer,
+} from "../../framework2";
 
 export type EvaluatorMap = Record<
   string,
@@ -46,6 +47,8 @@ interface BundledFunctionSpec {
   if_exists?: IfExists;
   metadata?: Record<string, unknown>;
 }
+
+const SANDBOX_GROUP_NAME_METADATA_KEY = "_bt_sandbox_group_name";
 
 const pathInfoSchema = z
   .strictObject({
@@ -190,6 +193,51 @@ export async function uploadHandleBundles({
       ];
 
       bundleSpecs.push(...fileSpecs);
+
+      if (setCurrent) {
+        const sourceStem = path
+          .basename(sourceFile, path.extname(sourceFile))
+          .replace(/\.eval$/, "");
+        const evalName = evaluator.evaluator.evalName;
+        const sandboxGroupName = sourceStem;
+
+        const resolvedParameters = evaluator.evaluator.parameters
+          ? await Promise.resolve(evaluator.evaluator.parameters)
+          : undefined;
+
+        const evaluatorDefinition = {
+          ...(resolvedParameters
+            ? {
+                parameters:
+                  serializeRemoteEvalParametersContainer(resolvedParameters),
+              }
+            : {}),
+          scores: evaluator.evaluator.scores.map((score, i) => ({
+            name: scorerName(score, i),
+          })),
+        };
+
+        bundleSpecs.push({
+          ...baseInfo,
+          name: `Eval ${evalName} sandbox`,
+          slug: slugify(`${sourceStem}-${evalName}-sandbox`),
+          description: `Sandbox eval ${evalName}`,
+          location: {
+            type: "sandbox",
+            sandbox_spec: {
+              provider: "lambda",
+            },
+            entrypoints: [sourceFile],
+            eval_name: evalName,
+            evaluator_definition: evaluatorDefinition,
+          },
+          function_type: "sandbox",
+          metadata: {
+            [SANDBOX_GROUP_NAME_METADATA_KEY]: sandboxGroupName,
+          },
+          origin,
+        });
+      }
     }
 
     const slugs: Set<string> = new Set();
@@ -358,10 +406,12 @@ async function uploadBundles({
             runtime_context,
             location: spec.location,
             bundle_id: pathInfo!.bundleId,
-            preview: await findCodeDefinition({
-              location: spec.location,
-              ctx: sourceMapContext,
-            }),
+            preview: sourceMapContext
+              ? await findCodeDefinition({
+                  location: spec.location,
+                  ctx: sourceMapContext,
+                })
+              : undefined,
           },
         },
         origin: spec.origin,

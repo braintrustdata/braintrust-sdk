@@ -1,10 +1,12 @@
 # Braintrust Browser SDK
 
+[![npm version](https://img.shields.io/npm/v/%40braintrust%2Fbrowser.svg)](https://www.npmjs.com/package/@braintrust/browser)
+
 Official browser-only SDK for [Braintrust](https://braintrust.dev).
 
 This is an integration package that provides browser-optimized builds of the Braintrust SDK with AsyncLocalStorage polyfill support for standard browsers.
 
-Note: This package supports limited functionality in the browser. We're aware of a CORS issue that users may run into if they use this outside of the braintrust.dev domain. If you'd like to use this package in your own domain, please provide us feedback [support@braintrust.dev](mailto:support@braintrust.dev)
+This package supports limited functionality in the browser. There is a known CORS limitation when used outside the `braintrust.dev` domain. If you need this for your own domain, contact [support@braintrust.dev](mailto:support@braintrust.dev).
 
 ## Installation
 
@@ -16,9 +18,14 @@ pnpm add @braintrust/browser braintrust
 yarn add @braintrust/browser braintrust
 ```
 
-Note: `braintrust` is a peer dependency and must be installed alongside `@braintrust/browser`.
+Note: Install both packages so your browser integration and main SDK stay on compatible versions.
 
-## Usage
+## Requirements
+
+- `braintrust` (installed alongside `@braintrust/browser`)
+- `zod` (`^3.25.34 || ^4.0`)
+
+## Quickstart
 
 ```typescript
 import * as braintrust from "@braintrust/browser";
@@ -37,29 +44,20 @@ const result = await braintrust.traced(
 );
 ```
 
-## Differences from Main Package
-
-This package:
-
-- **Includes** `als-browser` polyfill for AsyncLocalStorage (bundled)
-- **Requires** `braintrust`
-
-## When to Use
+## Notes
 
 Use `@braintrust/browser` when:
 
 - Building browser-only applications
-- Need AsyncLocalStorage support in standard browsers
+- Needing AsyncLocalStorage support in standard browsers
 
 Use `braintrust` directly when:
 
 - Building Node.js applications
-- Using in Next.js or other full-stack frameworks (with proper module resolution)
-- Need CLI tools or filesystem access
+- Using Next.js or other full-stack frameworks
+- Needing CLI tools or filesystem access
 
-## Features
-
-All browser-compatible features from the main SDK:
+Browser-compatible features include:
 
 - Logging and tracing
 - Experiments and datasets

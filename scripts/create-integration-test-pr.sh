@@ -55,7 +55,7 @@ fi
 git submodule init
 git submodule update --init --recursive
 cd sdk
-git remote set-url origin https://github.com/braintrustdata/braintrust-sdk.git
+git remote set-url origin https://github.com/braintrustdata/braintrust-sdk-javascript.git
 git fetch origin
 
 # Create a temporary branch to avoid detached HEAD state
@@ -66,7 +66,7 @@ git checkout "$COMMIT_HASH"
 # Get commit author and PR number
 COMMIT_AUTHOR=$(git log -1 --format='%an <%ae>')
 PR_NUMBER=$(gh pr list --head "$BRANCH_NAME" --json number --jq '.[0].number')
-SDK_PR_URL="https://github.com/braintrustdata/braintrust-sdk/pull/${PR_NUMBER}"
+SDK_PR_URL="https://github.com/braintrustdata/braintrust-sdk-javascript/pull/${PR_NUMBER}"
 
 cd ..
 git add sdk

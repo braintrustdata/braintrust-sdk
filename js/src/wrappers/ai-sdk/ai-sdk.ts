@@ -7,6 +7,23 @@ import {
   getExtensionFromMediaType,
 } from "../attachment-utils";
 import { zodToJsonSchema } from "../../zod/utils";
+import type {
+  AISDK,
+  AISDKAgentClass,
+  AISDKAgentInstance,
+  AISDKCallParams,
+  AISDKGeneratedFile,
+  AISDKGenerateFunction,
+  AISDKLanguageModel,
+  AISDKModel,
+  AISDKModelStreamChunk,
+  AISDKOutputObject,
+  AISDKOutputResponseFormat,
+  AISDKResult,
+  AISDKStreamFunction,
+  AISDKTool,
+  AISDKTools,
+} from "../../vendor-sdk-types/ai-sdk";
 
 // list of json paths to remove from output field
 const DENY_OUTPUT_PATHS: string[] = [
@@ -28,6 +45,16 @@ interface WrapAISDKOptions {
   denyOutputPaths?: string[];
 }
 
+type SpanInfo = {
+  span_info?: {
+    metadata?: Record<string, unknown>;
+    name?: string;
+    spanAttributes?: Record<string, unknown>;
+  };
+};
+
+type AISDKNamespaceObject = Record<PropertyKey, unknown>;
+
 /**
  * Detects if an object is an ES module namespace (ModuleRecord).
  *
@@ -41,7 +68,7 @@ interface WrapAISDKOptions {
  * @param obj - Object to check
  * @returns true if obj appears to be an ES module namespace
  */
-function isModuleNamespace(obj: any): boolean {
+function isModuleNamespace(obj: unknown): obj is AISDKNamespaceObject {
   if (!obj || typeof obj !== "object") {
     return false;
   }
@@ -99,28 +126,34 @@ export function wrapAISDK<T>(aiSDK: T, options: WrapAISDKOptions = {}): T {
     return aiSDK;
   }
 
+  const typedAISDK = aiSDK as unknown as AISDK;
+
   // Handle ES module namespaces (ModuleRecords) that have non-configurable properties.
   // These cause Proxy invariant violations because we return wrapped functions instead
   // of the original values. Using prototype chain preserves all properties (enumerable
   // and non-enumerable) while avoiding invariants since the target has no own properties.
-  // See: https://github.com/braintrustdata/braintrust-sdk/pull/1259
-  const target = isModuleNamespace(aiSDK)
+  // See: https://github.com/braintrustdata/braintrust-sdk-javascript/pull/1259
+  const target: AISDKNamespaceObject = isModuleNamespace(aiSDK)
     ? Object.setPrototypeOf({}, aiSDK)
-    : aiSDK;
+    : (aiSDK as unknown as AISDKNamespaceObject);
 
   // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
-  return new Proxy(target as unknown as any, {
+  return new Proxy(target, {
     get(target, prop, receiver) {
       const original = Reflect.get(target, prop, receiver);
       switch (prop) {
         case "generateText":
-          return wrapGenerateText(original, options, aiSDK);
+          return wrapGenerateText(typedAISDK.generateText, options, typedAISDK);
         case "streamText":
-          return wrapStreamText(original, options, aiSDK);
+          return wrapStreamText(typedAISDK.streamText, options, typedAISDK);
         case "generateObject":
-          return wrapGenerateObject(original, options, aiSDK);
+          return wrapGenerateObject(
+            typedAISDK.generateObject,
+            options,
+            typedAISDK,
+          );
         case "streamObject":
-          return wrapStreamObject(original, options, aiSDK);
+          return wrapStreamObject(typedAISDK.streamObject, options, typedAISDK);
         case "Agent":
         case "Experimental_Agent":
         case "ToolLoopAgent":
@@ -134,10 +167,16 @@ export function wrapAISDK<T>(aiSDK: T, options: WrapAISDKOptions = {}): T {
 export const wrapAgentClass = (
   AgentClass: any,
   options: WrapAISDKOptions = {},
-) => {
-  return new Proxy(AgentClass, {
+): any => {
+  const typedAgentClass = AgentClass as AISDKAgentClass;
+
+  return new Proxy(typedAgentClass, {
     construct(target, args, newTarget) {
-      const instance = Reflect.construct(target, args, newTarget);
+      const instance = Reflect.construct(
+        target,
+        args,
+        newTarget,
+      ) as AISDKAgentInstance;
       return new Proxy(instance, {
         get(instanceTarget, prop, instanceReceiver) {
           const original = Reflect.get(instanceTarget, prop, instanceTarget);
@@ -159,15 +198,15 @@ export const wrapAgentClass = (
         },
       });
     },
-  });
+  }) as any;
 };
 
 const wrapAgentGenerate = (
-  generate: any,
-  instance: any,
+  generate: AISDKGenerateFunction,
+  instance: AISDKAgentInstance,
   options: WrapAISDKOptions = {},
 ) => {
-  return async (params: any) =>
+  return async (params: AISDKCallParams) =>
     makeGenerateTextWrapper(
       `${instance.constructor.name}.generate`,
       options,
@@ -177,11 +216,11 @@ const wrapAgentGenerate = (
 };
 
 const wrapAgentStream = (
-  stream: any,
-  instance: any,
+  stream: AISDKStreamFunction,
+  instance: AISDKAgentInstance,
   options: WrapAISDKOptions = {},
 ) => {
-  return (params: any) =>
+  return (params: AISDKCallParams) =>
     makeStreamTextWrapper(
       `${instance.constructor.name}.stream`,
       options,
@@ -193,10 +232,10 @@ const wrapAgentStream = (
 const makeGenerateTextWrapper = (
   name: string,
   options: WrapAISDKOptions,
-  generateText: any,
-  aiSDK?: any,
+  generateText: AISDKGenerateFunction,
+  aiSDK?: AISDK,
 ) => {
-  const wrapper = async function (allParams: any) {
+  const wrapper = async function (allParams: AISDKCallParams & SpanInfo) {
     // Extract span_info from params (used by Braintrust-managed prompts)
     const { span_info, ...params } = allParams;
     const {
@@ -272,13 +311,24 @@ const makeGenerateTextWrapper = (
  * Resolves a model string ID to a model instance using AI SDK's global provider.
  * This mirrors the internal resolveLanguageModel function in AI SDK.
  */
-const resolveModel = (model: any, ai: any): any => {
+const resolveModel = (
+  model: AISDKModel | undefined,
+  ai?: AISDK,
+): AISDKModel | undefined => {
   if (typeof model !== "string") {
     return model;
   }
   // Use AI SDK's global provider if set, otherwise fall back to gateway
   const provider =
-    (globalThis as any).AI_SDK_DEFAULT_PROVIDER ?? ai?.gateway ?? null;
+    (
+      globalThis as typeof globalThis & {
+        AI_SDK_DEFAULT_PROVIDER?: {
+          languageModel?: (modelId: string) => AISDKLanguageModel;
+        };
+      }
+    ).AI_SDK_DEFAULT_PROVIDER ??
+    ai?.gateway ??
+    null;
   if (provider && typeof provider.languageModel === "function") {
     return provider.languageModel(model);
   }
@@ -290,7 +340,10 @@ const resolveModel = (model: any, ai: any): any => {
  * Wraps a model's doGenerate method to create a span for each LLM call.
  * This allows visibility into each step of a multi-round tool interaction.
  */
-const wrapModel = (model: any, ai?: any): any => {
+const wrapModel = (
+  model: AISDKModel | undefined,
+  ai?: AISDK,
+): AISDKModel | undefined => {
   // Resolve string model IDs to model instances
   const resolvedModel = resolveModel(model, ai);
 
@@ -313,7 +366,7 @@ const wrapModel = (model: any, ai?: any): any => {
   const { model: modelId, provider } =
     serializeModelWithProvider(resolvedModel);
 
-  const wrappedDoGenerate = async (options: any) => {
+  const wrappedDoGenerate = async (options: AISDKCallParams) => {
     // Process input attachments (including async Output.object resolution for v6)
     const processedInput = await processInputAttachments(options);
 
@@ -364,7 +417,7 @@ const wrapModel = (model: any, ai?: any): any => {
     );
   };
 
-  const wrappedDoStream = async (options: any) => {
+  const wrappedDoStream = async (options: AISDKCallParams) => {
     const startTime = Date.now();
     let receivedFirst = false;
 
@@ -389,7 +442,7 @@ const wrapModel = (model: any, ai?: any): any => {
       },
     });
 
-    const result = await originalDoStream(options);
+    const result = await originalDoStream!(options);
 
     // Accumulate streamed content for output logging
     const output: Record<string, unknown> = {};
@@ -399,7 +452,7 @@ const wrapModel = (model: any, ai?: any): any => {
     let object: unknown = undefined; // For structured output / streamObject
 
     // Helper to extract text from various chunk formats
-    const extractTextDelta = (chunk: any): string => {
+    const extractTextDelta = (chunk: AISDKModelStreamChunk): string => {
       // Try all known property names for text deltas
       if (typeof chunk.textDelta === "string") return chunk.textDelta;
       if (typeof chunk.delta === "string") return chunk.delta;
@@ -444,7 +497,7 @@ const wrapModel = (model: any, ai?: any): any => {
             // Raw chunks may contain text content for structured output / JSON mode
             // The rawValue often contains the delta text from the provider
             if (chunk.rawValue) {
-              const rawVal = chunk.rawValue as any;
+              const rawVal = chunk.rawValue;
               // OpenAI format: rawValue.delta.content or rawValue.choices[0].delta.content
               if (rawVal.delta?.content) {
                 text += rawVal.delta.content;
@@ -484,7 +537,7 @@ const wrapModel = (model: any, ai?: any): any => {
 
             span.log({
               output: await processOutput(output),
-              metrics: extractTokenMetrics(output),
+              metrics: extractTokenMetrics(output as AISDKResult),
               ...(Object.keys(resolvedMetadata).length > 0
                 ? { metadata: resolvedMetadata }
                 : {}),
@@ -519,9 +572,9 @@ const wrapModel = (model: any, ai?: any): any => {
 };
 
 const wrapGenerateText = (
-  generateText: any,
+  generateText: AISDKGenerateFunction,
   options: WrapAISDKOptions = {},
-  aiSDK?: any,
+  aiSDK?: AISDK,
 ) => {
   return makeGenerateTextWrapper("generateText", options, generateText, aiSDK);
 };
@@ -533,27 +586,32 @@ const wrapGenerateText = (
  * double-counting on the parent.
  */
 const wrapModelAndGetMetrics = (
-  model: any,
-  aiSDK?: any,
+  model: AISDKModel | undefined,
+  aiSDK?: AISDK,
 ): {
-  wrappedModel: any;
-  getMetrics: (result: any) => Record<string, number> | undefined;
+  wrappedModel: AISDKModel | undefined;
+  getMetrics: (result: AISDKResult) => Record<string, number> | undefined;
 } => {
   const wrappedModel = wrapModel(model, aiSDK);
-  const modelIsWrapped = wrappedModel?._braintrustWrapped === true;
+  const modelIsWrapped =
+    typeof wrappedModel === "object" &&
+    wrappedModel !== null &&
+    wrappedModel._braintrustWrapped === true;
   return {
     wrappedModel,
-    getMetrics: (result: any) =>
+    getMetrics: (result: AISDKResult) =>
       modelIsWrapped ? undefined : extractTokenMetrics(result),
   };
 };
 
 const wrapGenerateObject = (
-  generateObject: any,
+  generateObject: AISDKGenerateFunction,
   options: WrapAISDKOptions = {},
-  aiSDK?: any,
+  aiSDK?: AISDK,
 ) => {
-  return async function generateObjectWrapper(allParams: any) {
+  return async function generateObjectWrapper(
+    allParams: AISDKCallParams & SpanInfo,
+  ) {
     // Extract span_info from params (used by Braintrust-managed prompts)
     const { span_info, ...params } = allParams;
     const {
@@ -628,14 +686,14 @@ const wrapGenerateObject = (
 const makeStreamTextWrapper = (
   name: string,
   options: WrapAISDKOptions,
-  streamText: any,
-  aiSDK?: any,
+  streamText: AISDKStreamFunction,
+  aiSDK?: AISDK,
 ) => {
   // Note: streamText returns a sync result (stream object), so we cannot make this async
   // For v6, Output.object responseFormat is a Promise - we handle this by:
   // 1. Processing input synchronously (v5 works, v6 gets placeholder)
   // 2. Updating the span with resolved schema when Promise completes
-  const wrapper = function (allParams: any) {
+  const wrapper = function (allParams: AISDKCallParams & SpanInfo) {
     // Extract span_info from params (used by Braintrust-managed prompts)
     const { span_info, ...params } = allParams;
     const {
@@ -696,7 +754,7 @@ const makeStreamTextWrapper = (
           ...params,
           model: wrappedModel,
           tools: wrapTools(params.tools),
-          onChunk: (chunk: any) => {
+          onChunk: (chunk: AISDKModelStreamChunk) => {
             if (!receivedFirst) {
               receivedFirst = true;
               span.log({
@@ -708,7 +766,7 @@ const makeStreamTextWrapper = (
 
             params.onChunk?.(chunk);
           },
-          onFinish: async (event: any) => {
+          onFinish: async (event: AISDKResult) => {
             params.onFinish?.(event);
 
             // Extract resolved model/provider from gateway routing if available
@@ -794,23 +852,23 @@ const makeStreamTextWrapper = (
 };
 
 const wrapStreamText = (
-  streamText: any,
+  streamText: AISDKStreamFunction,
   options: WrapAISDKOptions = {},
-  aiSDK?: any,
+  aiSDK?: AISDK,
 ) => {
   return makeStreamTextWrapper("streamText", options, streamText, aiSDK);
 };
 
 const wrapStreamObject = (
-  streamObject: any,
+  streamObject: AISDKStreamFunction,
   options: WrapAISDKOptions = {},
-  aiSDK?: any,
+  aiSDK?: AISDK,
 ) => {
   // Note: streamObject returns a sync result (stream object), so we cannot make this async
   // For v6, Output.object responseFormat is a Promise - we handle this by:
   // 1. Processing input synchronously (v5 works, v6 gets placeholder)
   // 2. Updating the span with resolved schema when Promise completes
-  return function streamObjectWrapper(allParams: any) {
+  return function streamObjectWrapper(allParams: AISDKCallParams & SpanInfo) {
     // Extract span_info from params (used by Braintrust-managed prompts)
     const { span_info, ...params } = allParams;
     const {
@@ -871,7 +929,7 @@ const wrapStreamObject = (
           ...params,
           model: wrappedModel,
           tools: wrapTools(params.tools),
-          onChunk: (chunk: any) => {
+          onChunk: (chunk: AISDKModelStreamChunk) => {
             if (!receivedFirst) {
               receivedFirst = true;
               span.log({
@@ -882,7 +940,7 @@ const wrapStreamObject = (
             }
             params.onChunk?.(chunk);
           },
-          onFinish: async (event: any) => {
+          onFinish: async (event: AISDKResult) => {
             params.onFinish?.(event);
 
             // Extract resolved model/provider from gateway routing if available
@@ -975,10 +1033,10 @@ const wrapStreamObject = (
  *
  * Tools with execute are wrapped with tracing; others are passed through as-is.
  */
-const wrapTools = (tools: any) => {
+const wrapTools = (tools: AISDKTools | undefined) => {
   if (!tools) return tools;
 
-  const inferName = (tool: any, fallback: string) =>
+  const inferName = (tool: AISDKTool, fallback: string) =>
     (tool && (tool.name || tool.toolName || tool.id)) || fallback;
 
   if (Array.isArray(tools)) {
@@ -988,7 +1046,7 @@ const wrapTools = (tools: any) => {
     });
   }
 
-  const wrappedTools: Record<string, any> = {};
+  const wrappedTools: Record<string, AISDKTool> = {};
   for (const [key, tool] of Object.entries(tools)) {
     wrappedTools[key] = wrapToolExecute(tool, key);
   }
@@ -1011,7 +1069,7 @@ const isAsyncGenerator = (value: any): value is AsyncGenerator => {
   );
 };
 
-const wrapToolExecute = (tool: any, name: string) => {
+const wrapToolExecute = (tool: AISDKTool, name: string): AISDKTool => {
   // Only wrap tools that have an execute function (created with tool() helper)
   // AI SDK v3-v6: tool({ description, inputSchema/parameters, execute })
   if (
@@ -1027,7 +1085,7 @@ const wrapToolExecute = (tool: any, name: string) => {
       get(target, prop) {
         if (prop === "execute") {
           // Return a function that handles both regular async functions and async generators
-          const wrappedExecute = (...args: any[]) => {
+          const wrappedExecute = (...args: unknown[]) => {
             const result = originalExecute.apply(target, args);
 
             // Check if the result is an async generator (from async function* () {})
@@ -1047,7 +1105,7 @@ const wrapToolExecute = (tool: any, name: string) => {
                 span.log({ input: args.length === 1 ? args[0] : args });
 
                 try {
-                  let lastValue: any;
+                  let lastValue: unknown;
                   for await (const value of result) {
                     lastValue = value;
                     yield value;
@@ -1139,10 +1197,6 @@ const serializeError = (error: unknown) => {
   return String(error);
 };
 
-const serializeModel = (model: any) => {
-  return typeof model === "string" ? model : model?.modelId;
-};
-
 /**
  * Parses a gateway model string like "openai/gpt-5-mini" into provider and model.
  * Returns { provider, model } if parseable, otherwise { model } only.
@@ -1170,8 +1224,8 @@ function parseGatewayModelString(modelString: string): {
  *
  * @param model - Either a model object (with modelId and optional provider) or a model string
  */
-function serializeModelWithProvider(model: any): {
-  model: string;
+function serializeModelWithProvider(model: AISDKModel | undefined): {
+  model: string | undefined;
   provider?: string;
 } {
   const modelId = typeof model === "string" ? model : model?.modelId;
@@ -1194,7 +1248,7 @@ function serializeModelWithProvider(model: any): {
  * Extracts gateway routing info from the result's providerMetadata.
  * This provides the actual resolved provider and model used by the gateway.
  */
-function extractGatewayRoutingInfo(result: any): {
+function extractGatewayRoutingInfo(result: AISDKResult): {
   model?: string;
   provider?: string;
 } | null {
@@ -1238,9 +1292,9 @@ const isZodSchema = (value: any): boolean => {
  * Converts a Zod schema to JSON Schema for serialization
  * This prevents errors when logging tools with Zod schemas
  */
-const serializeZodSchema = (schema: any): any => {
+const serializeZodSchema = (schema: unknown): AISDKOutputResponseFormat => {
   try {
-    return zodToJsonSchema(schema);
+    return zodToJsonSchema(schema as any) as AISDKOutputResponseFormat;
   } catch {
     // If conversion fails, return a placeholder
     return {
@@ -1254,21 +1308,23 @@ const serializeZodSchema = (schema: any): any => {
  * Processes tools to convert Zod schemas to JSON Schema
  * AI SDK v3-v6 tools can have inputSchema or parameters fields with Zod schemas
  */
-const processTools = (tools: any): any => {
+const processTools = (
+  tools: AISDKTools | undefined,
+): AISDKTools | undefined => {
   if (!tools || typeof tools !== "object") return tools;
 
   if (Array.isArray(tools)) {
     return tools.map(processTool);
   }
 
-  const processed: Record<string, any> = {};
+  const processed: Record<string, AISDKTool> = {};
   for (const [key, tool] of Object.entries(tools)) {
     processed[key] = processTool(tool);
   }
   return processed;
 };
 
-const processTool = (tool: any): any => {
+const processTool = (tool: AISDKTool): AISDKTool => {
   if (!tool || typeof tool !== "object") return tool;
 
   const processed = { ...tool };
@@ -1302,25 +1358,27 @@ const processTool = (tool: any): any => {
  * AI SDK v5: { type: "object", responseFormat: { type: "json", schema: {...} } }
  * AI SDK v6: { responseFormat: Promise<{ type: "json", schema: {...} }> }
  */
-const isOutputObject = (value: any): boolean => {
+const isOutputObject = (value: unknown): value is AISDKOutputObject => {
   if (value == null || typeof value !== "object") {
     return false;
   }
 
+  const output = value as AISDKOutputObject;
+
   // Check for responseFormat property - this is the key indicator
-  if (!("responseFormat" in value)) {
+  if (!("responseFormat" in output)) {
     return false;
   }
 
   // v5: Has type: "object" or "text"
-  if (value.type === "object" || value.type === "text") {
+  if (output.type === "object" || output.type === "text") {
     return true;
   }
 
   // v6 and other cases: responseFormat is a Promise, object, or function
   if (
-    typeof value.responseFormat === "function" ||
-    typeof value.responseFormat === "object"
+    typeof output.responseFormat === "function" ||
+    typeof output.responseFormat === "object"
   ) {
     return true;
   }
@@ -1333,9 +1391,26 @@ const isOutputObject = (value: any): boolean => {
  * Extracts the response format including schema for structured outputs
  * Handles v5 (plain object), v6 (Promise), and function-based responseFormat
  */
-const serializeOutputObject = (output: any, model: any): any => {
+const serializeOutputObject = (
+  output: AISDKOutputObject,
+  model: AISDKModel | undefined,
+): {
+  type?: string;
+  response_format:
+    | AISDKOutputResponseFormat
+    | Promise<AISDKOutputResponseFormat>
+    | null;
+} => {
   try {
-    const result: any = {};
+    const result: {
+      type?: string;
+      response_format:
+        | AISDKOutputResponseFormat
+        | Promise<AISDKOutputResponseFormat>
+        | null;
+    } = {
+      response_format: null,
+    };
 
     // Include type if present (v5 has this)
     if (output.type) {
@@ -1346,7 +1421,10 @@ const serializeOutputObject = (output: any, model: any): any => {
     // 1. A function (edge case) - need to call it
     // 2. A Promise (v6) - return the Promise to be resolved by logger
     // 3. A plain object (v5) - can use directly
-    let responseFormat: any;
+    let responseFormat:
+      | AISDKOutputResponseFormat
+      | Promise<AISDKOutputResponseFormat>
+      | undefined;
 
     if (typeof output.responseFormat === "function") {
       // Call responseFormat to get the schema
@@ -1354,7 +1432,7 @@ const serializeOutputObject = (output: any, model: any): any => {
       // to ensure we always extract the schema when available
       const mockModelForSchema = {
         supportsStructuredOutputs: true,
-        ...(model || {}),
+        ...(model && typeof model === "object" ? model : {}),
       };
       responseFormat = output.responseFormat({ model: mockModelForSchema });
     } else if (
@@ -1384,10 +1462,14 @@ const serializeOutputObject = (output: any, model: any): any => {
         );
       } else {
         // Plain object - convert Zod schema if needed
-        if (responseFormat.schema && isZodSchema(responseFormat.schema)) {
+        const syncResponseFormat = responseFormat as AISDKOutputResponseFormat;
+        if (
+          syncResponseFormat.schema &&
+          isZodSchema(syncResponseFormat.schema)
+        ) {
           responseFormat = {
-            ...responseFormat,
-            schema: serializeZodSchema(responseFormat.schema),
+            ...syncResponseFormat,
+            schema: serializeZodSchema(syncResponseFormat.schema),
           };
         }
         result.response_format = responseFormat;
@@ -1408,9 +1490,13 @@ const serializeOutputObject = (output: any, model: any): any => {
  * For v6, includes a Promise to resolve the async output schema.
  */
 interface ProcessInputSyncResult {
-  input: any;
+  input: AISDKCallParams;
   // v6: Promise that resolves to { output: { response_format: {...} } } when available
-  outputPromise?: Promise<any>;
+  outputPromise?: Promise<{
+    output: {
+      response_format: AISDKOutputResponseFormat;
+    };
+  }>;
 }
 
 /**
@@ -1418,10 +1504,12 @@ interface ProcessInputSyncResult {
  * For v5: responseFormat is a plain object - captured fully
  * For v6: responseFormat is a Promise - returns initial input + Promise for update
  */
-const processInputAttachmentsSync = (input: any): ProcessInputSyncResult => {
+const processInputAttachmentsSync = (
+  input: AISDKCallParams,
+): ProcessInputSyncResult => {
   if (!input) return { input };
 
-  const processed: any = { ...input };
+  const processed: AISDKCallParams = { ...input };
 
   // Process messages array if present
   if (input.messages && Array.isArray(input.messages)) {
@@ -1455,7 +1543,13 @@ const processInputAttachmentsSync = (input: any): ProcessInputSyncResult => {
   }
 
   // Track if we need async resolution for v6
-  let outputPromise: Promise<any> | undefined;
+  let outputPromise:
+    | Promise<{
+        output: {
+          response_format: AISDKOutputResponseFormat;
+        };
+      }>
+    | undefined;
 
   // Process output schema for generateText/streamText with Output.object()
   // v5: responseFormat is a plain object with schema - serialize it
@@ -1471,7 +1565,7 @@ const processInputAttachmentsSync = (input: any): ProcessInputSyncResult => {
       // v6: Store placeholder now, resolve Promise for later update
       processed.output = { ...serialized, response_format: {} };
       outputPromise = serialized.response_format.then(
-        (resolvedFormat: any) => ({
+        (resolvedFormat: AISDKOutputResponseFormat) => ({
           output: { ...serialized, response_format: resolvedFormat },
         }),
       );
@@ -1497,10 +1591,12 @@ const processInputAttachmentsSync = (input: any): ProcessInputSyncResult => {
  * For v5: responseFormat is a plain object - captured fully
  * For v6: responseFormat is a Promise - awaited and captured fully
  */
-const processInputAttachments = async (input: any): Promise<any> => {
+const processInputAttachments = async (
+  input: AISDKCallParams,
+): Promise<AISDKCallParams> => {
   if (!input) return input;
 
-  const processed: any = { ...input };
+  const processed: AISDKCallParams = { ...input };
 
   // Process messages array if present
   if (input.messages && Array.isArray(input.messages)) {
@@ -1776,10 +1872,12 @@ const convertDataToAttachment = (
   return null;
 };
 
-const extractGetterValues = (obj: any): any => {
+const extractGetterValues = (
+  obj: AISDKResult,
+): Partial<Record<string, unknown>> => {
   // Extract common getter values from AI SDK result objects
   // These are typically on the prototype and not enumerable
-  const getterValues: Record<string, any> = {};
+  const getterValues: Record<string, unknown> = {};
 
   // List of known getters from AI SDK result objects
   const getterNames = [
@@ -1808,7 +1906,10 @@ const extractGetterValues = (obj: any): any => {
   return getterValues;
 };
 
-const processOutput = async (output: any, denyOutputPaths?: string[]) => {
+const processOutput = async (
+  output: AISDKResult,
+  denyOutputPaths?: string[],
+) => {
   // Extract getter values before processing
   const getterValues = extractGetterValues(output);
 
@@ -1822,7 +1923,7 @@ const processOutput = async (output: any, denyOutputPaths?: string[]) => {
   return omit(merged, denyOutputPaths ?? DENY_OUTPUT_PATHS);
 };
 
-const processOutputAttachments = async (output: any) => {
+const processOutputAttachments = async (output: AISDKResult) => {
   try {
     return await doProcessOutputAttachments(output);
   } catch (error) {
@@ -1831,7 +1932,7 @@ const processOutputAttachments = async (output: any) => {
   }
 };
 
-const doProcessOutputAttachments = async (output: any) => {
+const doProcessOutputAttachments = async (output: AISDKResult) => {
   if (!output || !("files" in output)) {
     return output;
   }
@@ -1839,7 +1940,7 @@ const doProcessOutputAttachments = async (output: any) => {
   if (output.files && typeof output.files.then === "function") {
     return {
       ...output,
-      files: output.files.then(async (files: any[]) => {
+      files: output.files.then(async (files: AISDKGeneratedFile[]) => {
         if (!files || !Array.isArray(files) || files.length === 0) {
           return files;
         }
@@ -1860,7 +1961,16 @@ const doProcessOutputAttachments = async (output: any) => {
   return output;
 };
 
-const convertFileToAttachment = (file: any, index: number): any => {
+const convertFileToAttachment = (
+  file: { mediaType?: string; base64?: string; uint8Array?: Uint8Array },
+  index: number,
+):
+  | Attachment
+  | {
+      mediaType?: string;
+      base64?: string;
+      uint8Array?: Uint8Array;
+    } => {
   try {
     const mediaType = file.mediaType || "application/octet-stream";
     const filename = `generated_file_${index}.${getExtensionFromMediaType(mediaType)}`;
@@ -1902,7 +2012,9 @@ function firstNumber(...values: unknown[]): number | undefined {
  * Extracts all token metrics from usage data.
  * Handles various provider formats and naming conventions for token counts.
  */
-export function extractTokenMetrics(result: any): Record<string, number> {
+export function extractTokenMetrics(
+  result: AISDKResult,
+): Record<string, number> {
   const metrics: Record<string, number> = {};
 
   // Agent results use totalUsage, other results use usage
@@ -2030,7 +2142,7 @@ export function extractTokenMetrics(result: any): Record<string, number> {
   return metrics;
 }
 
-function extractCostFromResult(result: any): number | undefined {
+function extractCostFromResult(result: AISDKResult): number | undefined {
   // Check for cost in steps (multi-step results like generateText with tools)
   if (result?.steps && Array.isArray(result.steps) && result.steps.length > 0) {
     let totalCost = 0;

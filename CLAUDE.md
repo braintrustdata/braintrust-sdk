@@ -1,27 +1,26 @@
-# Braintrust SDK
+# Braintrust JavaScript SDK Monorepo
 
-Python and JavaScript clients for Braintrust, plus wrapper libraries for OpenAI, Anthropic, and other AI providers.
+JavaScript/TypeScript SDKs and integrations for Braintrust.
 
-## Structure
+This repository uses `pnpm` workspaces.
 
+## Repository Structure
+
+```text
+.
+├── js/             # Main `braintrust` package (see js/CLAUDE.md)
+├── integrations/   # Integration packages (@braintrust/*)
+├── docs/           # Docs and reference material
+└── internal/       # Internal test fixtures and golden projects
 ```
-sdk/
-├── py/           # Python SDK (see py/CLAUDE.md)
-├── js/           # JavaScript SDK (see js/CLAUDE.md)
-└── core/         # Shared core library
-```
 
-## Quick Reference
-
-| Task          | Command       |
-| ------------- | ------------- |
-| Run all tests | `make test`   |
-| Lint/format   | `make fixup`  |
-| Python lint   | `make pylint` |
-
-## Setup
+## Common Commands (repo root)
 
 ```bash
-make develop      # Create venv and install deps
-source env.sh     # Activate environment
+pnpm install        # Install dependencies
+pnpm run build      # Build all workspace packages
+pnpm run test       # Run workspace tests (via turbo)
+pnpm run lint       # Prettier + ESLint checks
+pnpm run fix        # Auto-fix Prettier + ESLint
+make test           # Full JS-oriented test flow used in this repo
 ```

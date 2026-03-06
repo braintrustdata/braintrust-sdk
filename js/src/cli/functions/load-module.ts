@@ -1,5 +1,5 @@
 import nodeModulesPaths from "../jest/nodeModulesPaths";
-import path, { dirname } from "path";
+import path, { dirname } from "node:path";
 import { _internalGetGlobalState } from "../../logger";
 import { EvaluatorFile } from "../../framework";
 

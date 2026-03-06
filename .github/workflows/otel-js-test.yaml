@@ -8,13 +8,11 @@ on:
       - ".github/workflows/otel-js-test.yaml"
   push:
     branches: [main]
-    paths:
-      - "integrations/otel-js/**"
-      - "js/**"
 
 jobs:
   test:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
 
     strategy:
       fail-fast: false

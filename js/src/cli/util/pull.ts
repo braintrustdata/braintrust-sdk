@@ -1,9 +1,7 @@
 import {
   Function as functionSchema,
   type FunctionType as FunctionObject,
-  SavedFunctionId as SavedFunctionIdSchema,
   type SavedFunctionIdType as SavedFunctionId,
-  ToolFunctionDefinition as ToolFunctionDefinitionSchema,
   type ToolFunctionDefinitionType as ToolFunctionDefinition,
 } from "../../generated_types";
 import { _internalGetGlobalState } from "../../logger";
@@ -11,10 +9,10 @@ import { loadCLIEnv } from "./bundle";
 import { PullArgs } from "./types";
 import { warning } from "../../framework";
 import { z } from "zod/v3";
-import fs from "fs/promises";
-import util from "util";
+import fs from "node:fs/promises";
+import util from "node:util";
 import { slugify } from "../../../util/string_util";
-import path from "path";
+import path from "node:path";
 import { currentRepo } from "../../gitutil";
 import { isEmpty, loadPrettyXact, prettifyXact } from "../../../util/index";
 import {

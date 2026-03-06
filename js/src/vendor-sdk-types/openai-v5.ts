@@ -1,0 +1,15 @@
+import type {
+  OpenAIBeta,
+  OpenAIChatWithParsing,
+  OpenAIEmbeddings,
+  OpenAIModerations,
+  OpenAIResponsesWithParsing,
+} from "./openai-common";
+
+export interface OpenAIV5Client {
+  chat: OpenAIChatWithParsing;
+  embeddings: OpenAIEmbeddings;
+  moderations: OpenAIModerations;
+  beta?: OpenAIBeta;
+  responses?: OpenAIResponsesWithParsing;
+}

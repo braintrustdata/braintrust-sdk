@@ -5,8 +5,5 @@
     "braintrust": "npm:braintrust"
   },
   "nodeModulesDir": "auto",
-  "links": [
-    "../../..",
-    "../../shared"
-  ]
+  "links": ["../../..", "../../shared"]
 }

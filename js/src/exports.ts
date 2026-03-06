@@ -40,6 +40,12 @@ export type {
   WithTransactionId,
 } from "./logger";
 
+export type {
+  SandboxConfig,
+  RegisterSandboxOptions,
+  RegisterSandboxResult,
+} from "./sandbox";
+
 export {
   Attachment,
   BaseAttachment,
@@ -113,6 +119,8 @@ export {
   registerOtelFlush,
 } from "./logger";
 
+export { registerSandbox } from "./sandbox";
+
 // Internal isomorph layer for platform-specific implementations
 import _internalIso from "./isomorph";
 export { _internalIso };
@@ -165,6 +173,8 @@ export { wrapAnthropic } from "./wrappers/anthropic";
 export { wrapMastraAgent } from "./wrappers/mastra";
 export { wrapClaudeAgentSDK } from "./wrappers/claude-agent-sdk/claude-agent-sdk";
 export { wrapGoogleGenAI } from "./wrappers/google-genai";
+export { wrapVitest } from "./wrappers/vitest";
+export { initNodeTestSuite } from "./wrappers/node-test";
 
 export * as graph from "./graph-framework";
 
@@ -257,3 +267,7 @@ export {
   evaluatorDefinitionSchema,
   evaluatorDefinitionsSchema,
 } from "../dev/types";
+
+// Auto-instrumentation configuration
+export { configureInstrumentation } from "./instrumentation";
+export type { InstrumentationConfig } from "./instrumentation";

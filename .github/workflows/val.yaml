@@ -7,12 +7,11 @@ on:
       - "integrations/val.town/vals/**"
   push:
     branches: [main]
-    paths:
-      - "integrations/val.town/vals/**"
 
 jobs:
   update:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
 
     steps:
       - uses: actions/checkout@v4

@@ -48,7 +48,7 @@ pnpm run client
 
 Notes and troubleshooting:
 
-- **File references:** worker is at [src/worker.ts](sdk/integrations/temporal-js/examples/temporal-esm/src/worker.ts), the client at [src/client.ts](sdk/integrations/temporal-js/examples/temporal-esm/src/client.ts), and workflows at [src/workflows.ts](sdk/integrations/temporal-js/examples/temporal-esm/src/workflows.ts).
+- **File references:** worker is at [src/worker.ts](src/worker.ts), the client at [src/client.ts](src/client.ts), and workflows at [src/workflows.ts](src/workflows.ts).
 - The example expects the local `@braintrust/temporal` integration to be built (see `pnpm build` step). Building the integration ensures the example uses the local package code.
 - Use separate terminals for the Temporal server, worker, and client to observe logs independently.
 - This example uses modern Node ESM. `tsx` is recommended as the runtime for a smooth ESM experience; if you prefer `ts-node`, adapt the commands accordingly.

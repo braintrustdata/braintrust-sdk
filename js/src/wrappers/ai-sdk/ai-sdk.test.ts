@@ -194,10 +194,7 @@ describe("ai sdk client unit tests", TEST_SUITE_OPTIONS, () => {
   test("ai sdk image input", async () => {
     expect(await backgroundLogger.drain()).toHaveLength(0);
 
-    const base64Image = readFileSync(
-      join(FIXTURES_DIR, "test-image.png"),
-      "base64",
-    );
+    const imageBuffer = readFileSync(join(FIXTURES_DIR, "test-image.png"));
 
     const model = openai(TEST_MODEL);
     const start = getCurrentUnixTimestamp();
@@ -210,7 +207,8 @@ describe("ai sdk client unit tests", TEST_SUITE_OPTIONS, () => {
           content: [
             {
               type: "image",
-              image: `data:image/png;base64,${base64Image}`,
+              image: imageBuffer,
+              mimeType: "image/png",
             },
             { type: "text", text: "What color is this image?" },
           ],
@@ -854,6 +852,48 @@ describe("ai sdk client unit tests", TEST_SUITE_OPTIONS, () => {
     expect(streamObjectSpan.span_attributes.name).toBe("Stream Object Prompt");
     expect(streamObjectSpan.metadata.prompt.id).toBe("prompt-sobj-111");
     expect(streamObjectSpan.metadata.prompt.project_id).toBe("proj-sobj-222");
+  });
+
+  test("streamText preserves span_info when spreading a compiled prompt", async () => {
+    expect(await backgroundLogger.drain()).toHaveLength(0);
+
+    // Simulate the object shape returned by prompt.build({ ... }, { flavor: "chat" })
+    const compiledPrompt = {
+      messages: [{ role: "user" as const, content: "stream text" }],
+      temperature: 0.7,
+      span_info: {
+        name: "Stream Text Prompt",
+        metadata: {
+          prompt: {
+            id: "prompt-compiled-abc",
+            project_id: "proj-compiled-xyz",
+            version: "5",
+            variables: { foo: "bar" },
+          },
+        },
+      },
+    };
+
+    const stream = wrappedAI.streamText({
+      ...compiledPrompt,
+      model: openai(TEST_MODEL),
+    });
+
+    for await (const _ of stream.textStream) {
+      // consume
+    }
+
+    const spans = (await backgroundLogger.drain()) as any[];
+    const streamTextSpan = spans.find(
+      (s) => s?.span_attributes?.name === "Stream Text Prompt",
+    );
+
+    expect(streamTextSpan).toBeTruthy();
+    expect(streamTextSpan.metadata.prompt).toBeTruthy();
+    expect(streamTextSpan.metadata.prompt.id).toBe("prompt-compiled-abc");
+    expect(streamTextSpan.metadata.prompt.project_id).toBe("proj-compiled-xyz");
+    expect(streamTextSpan.metadata.prompt.version).toBe("5");
+    expect(streamTextSpan.metadata.prompt.variables).toEqual({ foo: "bar" });
   });
 
   test("streamObject toTextStreamResponse", async () => {
@@ -1946,10 +1986,7 @@ describe("ai sdk client unit tests", TEST_SUITE_OPTIONS, () => {
   test("doGenerate processes image attachments in prompt array", async () => {
     expect(await backgroundLogger.drain()).toHaveLength(0);
 
-    const base64Image = readFileSync(
-      join(FIXTURES_DIR, "test-image.png"),
-      "base64",
-    );
+    const imageBuffer = readFileSync(join(FIXTURES_DIR, "test-image.png"));
 
     const { createOpenAI } = await import("@ai-sdk/openai");
     const openaiProvider = createOpenAI({});
@@ -1963,7 +2000,8 @@ describe("ai sdk client unit tests", TEST_SUITE_OPTIONS, () => {
           content: [
             {
               type: "image",
-              image: `data:image/png;base64,${base64Image}`,
+              image: imageBuffer,
+              mimeType: "image/png",
             },
             { type: "text", text: "What color is this image?" },
           ],

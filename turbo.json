@@ -8,10 +8,14 @@
       "env": []
     },
     "test": {
+      "env": ["ANTHROPIC_API_KEY", "BRAINTRUST_API_KEY", "OPENAI_API_KEY"],
       "dependsOn": ["^build"],
       "outputs": []
     },
     "lint": {
+      "outputs": []
+    },
+    "fix:eslint": {
       "outputs": []
     },
     "dev": {
@@ -23,6 +27,15 @@
     "clean": {
       "cache": false
     },
-    "watch": {}
+    "watch": {},
+    "playground": {
+      "cache": false,
+      "passThroughEnv": [
+        "ANTHROPIC_API_KEY",
+        "BRAINTRUST_API_KEY",
+        "OPENAI_API_KEY"
+      ],
+      "dependsOn": ["^build", "build"]
+    }
   }
 }

@@ -1,0 +1,22 @@
+version: 2
+updates:
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "monthly"
+    commit-message:
+      prefix: ci
+      include: scope
+
+  - package-ecosystem: "npm"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    versioning-strategy: increase
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: feat
+      prefix-development: chore
+      include: scope
+    exclude-paths:
+      - "internal/golden/**"

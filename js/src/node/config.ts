@@ -1,4 +1,5 @@
 import { AsyncLocalStorage } from "node:async_hooks";
+import * as diagnostics_channel from "node:diagnostics_channel";
 import * as path from "node:path";
 import * as fs from "node:fs/promises";
 import * as os from "node:os";
@@ -11,6 +12,7 @@ import iso from "../isomorph";
 import { getRepoInfo, getPastNAncestors } from "../gitutil";
 import { getCallerLocation } from "../stackutil";
 import { _internalSetInitialState } from "../logger";
+import { registry } from "../instrumentation/registry";
 
 export function configureNode() {
   iso.buildType = "node";
@@ -20,6 +22,8 @@ export function configureNode() {
   iso.getEnv = (name) => process.env[name];
   iso.getCallerLocation = getCallerLocation;
   iso.newAsyncLocalStorage = <T>() => new AsyncLocalStorage<T>();
+  iso.newTracingChannel = <_M = any>(nameOrChannels: string | object) =>
+    (diagnostics_channel as any).tracingChannel(nameOrChannels) as any;
   iso.processOn = (event: string, handler: (code: unknown) => void) => {
     process.on(event, handler);
   };
@@ -48,4 +52,7 @@ export function configureNode() {
   iso.hash = (data) => crypto.createHash("sha256").update(data).digest("hex");
 
   _internalSetInitialState();
+
+  // Enable auto-instrumentation
+  registry.enable();
 }

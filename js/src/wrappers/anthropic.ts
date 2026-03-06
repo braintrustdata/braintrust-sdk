@@ -1,8 +1,21 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import { Attachment, Span, startSpan } from "../logger";
 import { isObject, SpanTypeAttribute } from "../../util/index";
 import { filterFrom, getCurrentUnixTimestamp } from "../util";
 import { finalizeAnthropicTokens } from "./anthropic-tokens-util";
+import type {
+  AnthropicAPIPromise,
+  AnthropicBase64Source,
+  AnthropicBeta,
+  AnthropicClient,
+  AnthropicCreateParams,
+  AnthropicInputMessage,
+  AnthropicMessage,
+  AnthropicMessages,
+  AnthropicOutputContentBlock,
+  AnthropicStreamEvent,
+  AnthropicUsage,
+  AnthropicWithResponse,
+} from "../vendor-sdk-types/anthropic";
 
 /**
  * Wrap an `Anthropic` object (created with `new Anthropic(...)`) to add tracing. If Braintrust is
@@ -24,20 +37,23 @@ export function wrapAnthropic<T extends object>(anthropic: T): T {
     au.messages &&
     "create" in au.messages
   ) {
-    return anthropicProxy(au);
+    // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
+    return anthropicProxy(au as AnthropicClient) as unknown as T;
   } else {
     console.warn("Unsupported Anthropic library. Not wrapping.");
     return anthropic;
   }
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function anthropicProxy(anthropic: any): any {
+function anthropicProxy(anthropic: AnthropicClient): AnthropicClient {
   return new Proxy(anthropic, {
     get(target, prop, receiver) {
       switch (prop) {
         case "beta":
-          return betaProxy(target.beta);
+          if (target.beta) {
+            return betaProxy(target.beta);
+          }
+          return Reflect.get(target, prop, receiver);
         case "messages":
           return messagesProxy(target.messages);
         default:
@@ -47,8 +63,7 @@ function anthropicProxy(anthropic: any): any {
   });
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function betaProxy(beta: any) {
+function betaProxy(beta: AnthropicBeta): AnthropicBeta {
   return new Proxy(beta, {
     get(target, prop, receiver) {
       if (prop === "messages") {
@@ -59,8 +74,7 @@ function betaProxy(beta: any) {
   });
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function messagesProxy(messages: any) {
+function messagesProxy(messages: AnthropicMessages): AnthropicMessages {
   return new Proxy(messages, {
     get(target, prop, receiver) {
       // NOTE[matt] I didn't proxy `stream` because it's called by `create` under the hood. The callbacks
@@ -77,8 +91,9 @@ function messagesProxy(messages: any) {
   });
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function createProxy(create: (params: any) => Promise<any>) {
+type AnthropicResponse = AnthropicMessage | AsyncIterable<AnthropicStreamEvent>;
+
+function createProxy(create: AnthropicMessages["create"]) {
   return new Proxy(create, {
     apply(target, thisArg, argArray) {
       if (argArray.length === 0) {
@@ -86,8 +101,9 @@ function createProxy(create: (params: any) => Promise<any>) {
         return Reflect.apply(target, thisArg, argArray);
       }
 
-      const args = argArray[0];
-      const input = coalesceInput(args["messages"] || [], args["system"]);
+      // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
+      const args = argArray[0] as AnthropicCreateParams;
+      const input = coalesceInput(args.messages ?? [], args.system);
       const metadata = filterFrom(args, ["messages", "system"]);
 
       const spanArgs = {
@@ -106,14 +122,20 @@ function createProxy(create: (params: any) => Promise<any>) {
       const sspan = { span, startTime: spanArgs.startTime };
 
       // Actually do the call.
-      const apiPromise = Reflect.apply(target, thisArg, argArray);
+      // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
+      const apiPromise = Reflect.apply(
+        target,
+        thisArg,
+        argArray,
+      ) as AnthropicAPIPromise<AnthropicResponse>;
 
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const onThen: ThenFn<any> = function (msgOrStream: any) {
+      const onThen = function (msgOrStream: AnthropicResponse) {
         // handle the sync interface create(stream=False)
-        if (!args["stream"]) {
+        if (!args.stream) {
+          // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
+          const message = msgOrStream as AnthropicMessage;
           const ttft = getCurrentUnixTimestamp() - sspan.startTime;
-          const event = parseEventFromMessage(msgOrStream);
+          const event = parseEventFromMessage(message);
           span.log({
             ...event,
             metrics: event.metrics
@@ -128,7 +150,11 @@ function createProxy(create: (params: any) => Promise<any>) {
         }
 
         // ... or the async interface when create(stream=True)
-        return streamProxy(msgOrStream, sspan);
+        return streamProxy(
+          // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
+          msgOrStream as AsyncIterable<AnthropicStreamEvent>,
+          sspan,
+        );
       };
 
       return apiPromiseProxy(apiPromise, sspan, onThen);
@@ -136,25 +162,26 @@ function createProxy(create: (params: any) => Promise<any>) {
   });
 }
 
-type ThenFn<T> = Promise<T>["then"];
-
-function apiPromiseProxy<T>(
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  apiPromise: any,
+function apiPromiseProxy(
+  apiPromise: AnthropicAPIPromise<AnthropicResponse>,
   span: StartedSpan,
-  onThen: ThenFn<T>,
+  onThen: (result: AnthropicResponse) => unknown,
 ) {
   return new Proxy(apiPromise, {
     get(target, prop, receiver) {
       if (prop === "then") {
         // This path is used with messages.create(stream=True) calls.
-        const thenFunc = Reflect.get(target, prop, receiver);
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        return function (onFulfilled: any, onRejected: any) {
+        const thenFunc: AnthropicAPIPromise<AnthropicResponse>["then"] =
+          Reflect.get(target, prop, receiver);
+
+        return function (
+          onFulfilled?: ((value: unknown) => unknown) | undefined | null,
+          onRejected?: ((reason: unknown) => unknown) | undefined | null,
+        ) {
           return thenFunc.call(
             target,
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            async (result: any) => {
+
+            async (result: AnthropicResponse) => {
               try {
                 const processed = onThen(result);
                 return onFulfilled ? onFulfilled(processed) : processed;
@@ -167,16 +194,20 @@ function apiPromiseProxy<T>(
         };
       } else if (prop === "withResponse") {
         // This path is used with messages.stream(...) calls.
-        const withResponseFunc = Reflect.get(target, prop, receiver);
+        const withResponseFunc: AnthropicAPIPromise<AnthropicResponse>["withResponse"] =
+          Reflect.get(target, prop, receiver);
         return () => {
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          return withResponseFunc.call(target).then((withResponse: any) => {
-            if (withResponse["data"]) {
-              const { data: stream } = withResponse;
-              withResponse.data = streamProxy(stream, span);
-            }
-            return Promise.resolve(withResponse);
-          });
+          return withResponseFunc
+            .call(target)
+            .then((withResponse: AnthropicWithResponse<AnthropicResponse>) => {
+              if (withResponse.data) {
+                const stream =
+                  // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
+                  withResponse.data as AsyncIterable<AnthropicStreamEvent>;
+                withResponse.data = streamProxy(stream, span);
+              }
+              return Promise.resolve(withResponse);
+            });
         };
       }
       return Reflect.get(target, prop, receiver);
@@ -217,18 +248,24 @@ function apiPromiseProxy<T>(
 //  }
 //  item { type: 'message_stop' }
 
-function streamProxy<T>(
-  stream: AsyncIterable<T>,
+function streamProxy(
+  stream: AsyncIterable<AnthropicStreamEvent>,
   span: StartedSpan,
-): AsyncIterable<T> {
+): AsyncIterable<AnthropicStreamEvent> {
   // Set up the scaffolding to proxy the stream. This is necessary because the stream
   // has other things that get called (e.g. controller.signal)
   return new Proxy(stream, {
     get(target, prop, receiver) {
       if (prop === Symbol.asyncIterator) {
-        const original = Reflect.get(target, prop, receiver);
+        // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
+        const original = Reflect.get(
+          target,
+          prop,
+          receiver,
+        ) as () => AsyncIterator<AnthropicStreamEvent>;
         return function () {
-          const iterator: AsyncIterator<T> = original.call(target);
+          const iterator: AsyncIterator<AnthropicStreamEvent> =
+            original.call(target);
           return new Proxy(iterator, {
             get(iterTarget, iterProp, iterReceiver) {
               // Intercept the 'next' method
@@ -246,19 +283,22 @@ function streamProxy<T>(
   });
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function streamNextProxy(stream: AsyncIterator<any>, sspan: StartedSpan) {
+function streamNextProxy(
+  stream: AsyncIterator<AnthropicStreamEvent>,
+  sspan: StartedSpan,
+) {
   // this is where we actually do the business of iterating the message stream
   let ttft = -1;
-  let metadata = {};
+  let metadata: Record<string, unknown> = {};
   let totals: Metrics = {};
   const span = sspan.span;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const contentBlocks: any[] = [];
+
+  const contentBlocks: AnthropicOutputContentBlock[] = [];
   const contentBlockDeltas: Record<number, string[]> = {};
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  return async function <T>(...args: [any]): Promise<IteratorResult<T>> {
+  return async function (
+    ...args: [] | [undefined]
+  ): Promise<IteratorResult<AnthropicStreamEvent>> {
     const result = await stream.next(...args);
 
     if (ttft < 0) {
@@ -276,40 +316,45 @@ function streamNextProxy(stream: AsyncIterator<any>, sspan: StartedSpan) {
     }
 
     const item = result.value;
-    const blockIndex = item.index;
-    switch (item?.type) {
-      case "message_start":
-        const msg = item?.message;
+    switch (item.type) {
+      case "message_start": {
+        const msg = item.message;
         if (msg) {
           const event = parseEventFromMessage(msg);
           totals = { ...totals, ...event.metrics }; // save the first copy of our metrics.
           span.log(event);
         }
         break;
-      case "content_block_start":
+      }
+      case "content_block_start": {
         // Track content blocks including images
+        const blockIndex = item.index;
         if (item.content_block) {
           contentBlocks[blockIndex] = item.content_block;
           contentBlockDeltas[blockIndex] = [];
         }
         break;
-      case "content_block_delta":
+      }
+      case "content_block_delta": {
+        const blockIndex = item.index;
         if (!contentBlockDeltas[blockIndex]) {
           contentBlockDeltas[blockIndex] = [];
         }
-        if (item?.delta?.type === "text_delta") {
-          const text = item?.delta?.text;
+        if (item.delta.type === "text_delta") {
+          const text = item.delta.text;
           if (text) {
             contentBlockDeltas[blockIndex].push(text);
           }
-        } else if (item?.delta?.type === "input_json_delta") {
-          const partialJson = item?.delta?.partial_json;
+        } else if (item.delta.type === "input_json_delta") {
+          const partialJson = item.delta.partial_json;
           if (partialJson) {
             contentBlockDeltas[blockIndex].push(partialJson);
           }
         }
         break;
-      case "content_block_stop":
+      }
+      case "content_block_stop": {
+        const blockIndex = item.index;
         const text = contentBlockDeltas[blockIndex]?.join("");
         if (!text) break;
 
@@ -318,7 +363,6 @@ function streamNextProxy(stream: AsyncIterator<any>, sspan: StartedSpan) {
           try {
             span.log({
               output: {
-                role: item.role,
                 content: [{ ...block, input: JSON.parse(text) }],
               },
             });
@@ -329,20 +373,22 @@ function streamNextProxy(stream: AsyncIterator<any>, sspan: StartedSpan) {
           span.log({ output: text });
         }
         break;
+      }
 
-      case "message_delta":
+      case "message_delta": {
         // Collect stats + metadata about the message.
-        const usage = item?.usage;
+        const usage = item.usage;
         if (usage) {
           const metrics = parseMetricsFromUsage(usage);
           totals = { ...totals, ...metrics }; // update our totals.
         }
-        const delta = item?.delta;
+        const delta = item.delta;
         if (delta) {
           // stop reason, etc.
           metadata = { ...metadata, ...delta };
         }
         break;
+      }
       case "message_stop":
         break;
     }
@@ -360,14 +406,14 @@ type Metrics = Record<string, number>;
 type MetricsOrUndefined = Metrics | undefined;
 
 // Parse the event from given anthropic Message.
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function parseEventFromMessage(message: any) {
+
+function parseEventFromMessage(message: AnthropicMessage) {
   // FIXME[matt] the whole content or just the text?
   const output = message
     ? { role: message.role, content: message.content }
     : null;
   const metrics = parseMetricsFromUsage(message?.usage);
-  const metas = ["stop_reason", "stop_sequence"];
+  const metas = ["stop_reason", "stop_sequence"] as const;
   const metadata: Record<string, unknown> = {};
   for (const m of metas) {
     if (message[m] !== undefined) {
@@ -383,16 +429,18 @@ function parseEventFromMessage(message: any) {
 }
 
 // Parse the metrics from the usage object.
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function parseMetricsFromUsage(usage: any): MetricsOrUndefined {
+
+function parseMetricsFromUsage(
+  usage: AnthropicUsage | undefined,
+): MetricsOrUndefined {
   if (!usage) {
     return undefined;
   }
 
   const metrics: Metrics = {};
 
-  function saveIfExistsTo(source: string, target: string) {
-    const value = usage[source];
+  function saveIfExistsTo(source: keyof AnthropicUsage, target: string) {
+    const value = usage![source];
     if (value !== undefined && value !== null) {
       metrics[target] = value;
     }
@@ -408,9 +456,9 @@ function parseMetricsFromUsage(usage: any): MetricsOrUndefined {
 
 // Helper function to convert base64 content to an Attachment
 function convertBase64ToAttachment(
-  source: any,
+  source: AnthropicBase64Source,
   contentType: "image" | "document",
-): any {
+): Record<string, unknown> {
   const mediaType =
     typeof source.media_type === "string" ? source.media_type : "image/png";
   const base64Data = source.data;
@@ -442,11 +490,11 @@ function convertBase64ToAttachment(
     };
   }
 
-  return source;
+  return { ...source };
 }
 
 // Process input to convert base64 attachments (images, PDFs, etc.) to Attachment objects
-function processAttachmentsInInput(input: any): any {
+function processAttachmentsInInput(input: unknown): unknown {
   if (Array.isArray(input)) {
     return input.map(processAttachmentsInInput);
   }
@@ -461,12 +509,17 @@ function processAttachmentsInInput(input: any): any {
     ) {
       return {
         ...input,
-        source: convertBase64ToAttachment(input.source, input.type),
+        source: convertBase64ToAttachment(
+          // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
+          input.source as unknown as AnthropicBase64Source,
+          // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
+          input.type as "image" | "document",
+        ),
       };
     }
 
     // Recursively process nested objects
-    const processed: any = {};
+    const processed: Record<string, unknown> = {};
     for (const [key, value] of Object.entries(input)) {
       processed[key] = processAttachmentsInInput(value);
     }
@@ -476,8 +529,10 @@ function processAttachmentsInInput(input: any): any {
   return input;
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function coalesceInput(messages: any[], system: string | undefined) {
+function coalesceInput(
+  messages: AnthropicInputMessage[],
+  system: AnthropicCreateParams["system"],
+): AnthropicInputMessage[] {
   // convert anthropic args to the single "input" field Braintrust expects.
 
   // Make a copy because we're going to mutate it.

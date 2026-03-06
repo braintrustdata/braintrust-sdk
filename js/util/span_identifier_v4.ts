@@ -334,7 +334,7 @@ export function makeScorerPropagatedEvent(
   parent: string | undefined,
 ): Record<string, unknown> {
   const parentPropagatedEvent = parent
-    ? SpanComponentsV4.fromStr(parent).data.propagated_event ?? {}
+    ? (SpanComponentsV4.fromStr(parent).data.propagated_event ?? {})
     : {};
   return mergeDicts(
     { ...parentPropagatedEvent },
