@@ -1,0 +1,324 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`span-hierarchy covers context propagation, parent reattachment, span mutation, and automatic error logging > mutation-payload-rows 1`] = `
+[
+  {
+    "context": {
+      "caller_filename": "node:internal/async_local_storage/async_context_frame",
+      "caller_functionname": "AsyncLocalStorage.run",
+      "caller_lineno": 63,
+    },
+    "created": "<timestamp>",
+    "id": "<span:1>",
+    "log_id": "g",
+    "metadata": {
+      "kind": "fan-in",
+      "testRunId": "<run:1>",
+    },
+    "metrics": {
+      "end": 0,
+      "start": 0,
+    },
+    "project_id": "project:e2e-span-hierarchy",
+    "root_span_id": "<span:3>",
+    "span_attributes": {
+      "exec_counter": 3,
+      "name": "fan-in",
+      "spanAttributes": {
+        "mode": "fan-in",
+        "testRunId": "<run:1>",
+      },
+      "type": "task",
+    },
+    "span_id": "<span:2>",
+    "span_parents": [
+      "<span:3>",
+      "<span:4>",
+    ],
+  },
+  {
+    "context": {
+      "caller_filename": "<repo>/e2e/scenarios/span-hierarchy.ts",
+      "caller_functionname": "main",
+      "caller_lineno": 128,
+    },
+    "created": "<timestamp>",
+    "id": "<span:5>",
+    "log_id": "g",
+    "metadata": {
+      "kind": "updatable",
+      "testRunId": "<run:1>",
+    },
+    "metrics": {
+      "end": 0,
+      "start": 0,
+    },
+    "project_id": "project:e2e-span-hierarchy",
+    "root_span_id": "<span:6>",
+    "span_attributes": {
+      "exec_counter": 5,
+      "name": "updatable",
+      "type": "task",
+    },
+    "span_id": "<span:6>",
+  },
+  {
+    "_is_merge": true,
+    "id": "<span:5>",
+    "log_id": "g",
+    "metadata": {
+      "kind": "updatable",
+      "patched": true,
+      "testRunId": "<run:1>",
+    },
+    "output": {
+      "state": "updated",
+    },
+    "project_id": "project:e2e-span-hierarchy",
+    "root_span_id": "<span:6>",
+    "span_id": "<span:6>",
+  },
+]
+`;
+
+exports[`span-hierarchy covers context propagation, parent reattachment, span mutation, and automatic error logging > span-events 1`] = `
+[
+  {
+    "error": null,
+    "metadata": {
+      "kind": "top-level-start-span",
+      "testRunId": "<run:1>",
+    },
+    "name": "top-level-start-span",
+    "output": null,
+    "root_span_id": "<span:1>",
+    "span_attributes": {
+      "exec_counter": 0,
+      "name": "top-level-start-span",
+      "type": "task",
+    },
+    "span_id": "<span:1>",
+    "span_parents": null,
+  },
+  {
+    "error": null,
+    "metadata": {
+      "currentSpanMatchesLoggerRoot": true,
+      "kind": "with-current",
+      "testRunId": "<run:1>",
+    },
+    "name": "logger-root",
+    "output": null,
+    "root_span_id": "<span:2>",
+    "span_attributes": {
+      "exec_counter": 1,
+      "name": "logger-root",
+      "type": "task",
+    },
+    "span_id": "<span:2>",
+    "span_parents": null,
+  },
+  {
+    "error": null,
+    "metadata": {
+      "kind": "current-child",
+      "testRunId": "<run:1>",
+    },
+    "name": "current-child",
+    "output": null,
+    "root_span_id": "<span:2>",
+    "span_attributes": {
+      "exec_counter": 2,
+      "name": "current-child",
+    },
+    "span_id": "<span:3>",
+    "span_parents": [
+      "<span:2>",
+    ],
+  },
+  {
+    "error": null,
+    "metadata": {
+      "kind": "fan-in",
+      "testRunId": "<run:1>",
+    },
+    "name": "fan-in",
+    "output": null,
+    "root_span_id": "<span:2>",
+    "span_attributes": {
+      "exec_counter": 3,
+      "name": "fan-in",
+      "spanAttributes": {
+        "mode": "fan-in",
+        "testRunId": "<run:1>",
+      },
+      "type": "task",
+    },
+    "span_id": "<span:4>",
+    "span_parents": [
+      "<span:2>",
+      "<span:3>",
+    ],
+  },
+  {
+    "error": null,
+    "metadata": {
+      "kind": "reattached",
+      "parentSpanIdFromContext": "<span:2>",
+      "testRunId": "<run:1>",
+    },
+    "name": "reattached",
+    "output": null,
+    "root_span_id": "<span:2>",
+    "span_attributes": {
+      "exec_counter": 4,
+      "name": "reattached",
+    },
+    "span_id": "<span:5>",
+    "span_parents": [
+      "<span:2>",
+    ],
+  },
+  {
+    "error": null,
+    "metadata": {
+      "kind": "updatable",
+      "patched": true,
+      "testRunId": "<run:1>",
+    },
+    "name": "updatable",
+    "output": {
+      "state": "updated",
+    },
+    "root_span_id": "<span:6>",
+    "span_attributes": {
+      "exec_counter": 5,
+      "name": "updatable",
+      "type": "task",
+    },
+    "span_id": "<span:6>",
+    "span_parents": null,
+  },
+  {
+    "error": "traced boom",
+    "metadata": {
+      "kind": "traced-error",
+      "testRunId": "<run:1>",
+    },
+    "name": "traced-error",
+    "output": null,
+    "root_span_id": "<span:7>",
+    "span_attributes": {
+      "exec_counter": 6,
+      "name": "traced-error",
+      "type": "task",
+    },
+    "span_id": "<span:7>",
+    "span_parents": null,
+  },
+  {
+    "error": "wrapped boom",
+    "metadata": {
+      "kind": "wrapped-error",
+      "testRunId": "<run:1>",
+    },
+    "name": "wrapped-error",
+    "output": null,
+    "root_span_id": "<span:8>",
+    "span_attributes": {
+      "exec_counter": 7,
+      "name": "wrapped-error",
+      "type": "function",
+    },
+    "span_id": "<span:8>",
+    "span_parents": null,
+  },
+  {
+    "error": "traceable boom",
+    "metadata": {
+      "kind": "traceable-error",
+      "testRunId": "<run:1>",
+    },
+    "name": "traceable-error",
+    "output": null,
+    "root_span_id": "<span:9>",
+    "span_attributes": {
+      "exec_counter": 8,
+      "name": "traceable-error",
+      "type": "function",
+    },
+    "span_id": "<span:9>",
+    "span_parents": null,
+  },
+  {
+    "error": "manual boom",
+    "metadata": {
+      "kind": "manual-error",
+      "testRunId": "<run:1>",
+    },
+    "name": "manual-error",
+    "output": null,
+    "root_span_id": "<span:10>",
+    "span_attributes": {
+      "exec_counter": 9,
+      "name": "manual-error",
+      "type": "task",
+    },
+    "span_id": "<span:10>",
+    "span_parents": null,
+  },
+  {
+    "error": null,
+    "metadata": {
+      "kind": "experiment-root",
+      "testRunId": "<run:1>",
+    },
+    "name": "experiment-root",
+    "output": null,
+    "root_span_id": "<span:11>",
+    "span_attributes": {
+      "exec_counter": 10,
+      "name": "experiment-root",
+      "type": "eval",
+    },
+    "span_id": "<span:11>",
+    "span_parents": null,
+  },
+  {
+    "error": null,
+    "metadata": {
+      "kind": "experiment-child",
+      "testRunId": "<run:1>",
+    },
+    "name": "experiment-child",
+    "output": null,
+    "root_span_id": "<span:11>",
+    "span_attributes": {
+      "exec_counter": 11,
+      "name": "experiment-child",
+    },
+    "span_id": "<span:12>",
+    "span_parents": [
+      "<span:11>",
+    ],
+  },
+  {
+    "error": null,
+    "metadata": {
+      "kind": "explicit-parent-child",
+      "testRunId": "<run:1>",
+    },
+    "name": "explicit-parent-child",
+    "output": null,
+    "root_span_id": "<span:11>",
+    "span_attributes": {
+      "exec_counter": 12,
+      "name": "explicit-parent-child",
+    },
+    "span_id": "<span:13>",
+    "span_parents": [
+      "<span:12>",
+    ],
+  },
+]
+`;

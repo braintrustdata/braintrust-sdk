@@ -21,6 +21,11 @@ export interface CapturedRequest {
   jsonBody: JsonValue | null;
 }
 
+export type CapturedRequestBatch = {
+  cursor: number;
+  requests: CapturedRequest[];
+};
+
 export type CapturedLogRow = Record<string, unknown>;
 
 export type CapturedLogPayload = {
@@ -82,6 +87,23 @@ type ExperimentRecord = {
   name: string;
   projectId: string;
   projectName: string;
+};
+
+type DatasetRecord = {
+  created: string;
+  description?: string;
+  id: string;
+  metadata?: Record<string, unknown>;
+  name: string;
+  projectId: string;
+  projectName: string;
+};
+
+type DatasetVersionEntry = {
+  deleted: boolean;
+  order: number;
+  row: CapturedLogRow;
+  xactId: string;
 };
 
 function slugify(value: string): string {
@@ -256,7 +278,100 @@ export async function startMockBraintrustServer(
   const mergedRows = new Map<string, CapturedLogRow>();
   const projects = new Map<string, ProjectRecord>();
   const experiments = new Map<string, ExperimentRecord>();
+  const datasets = new Map<string, DatasetRecord>();
+  const datasetVersions = new Map<string, Map<string, DatasetVersionEntry[]>>();
+  const datasetRowOrder = new Map<string, number>();
+  let datasetOrderCursor = 0;
+  let xactCursor = 0;
   let serverUrl = "";
+
+  function nextXactId(): string {
+    xactCursor += 1;
+    return String(xactCursor).padStart(12, "0");
+  }
+
+  function getDatasetKey(projectId: string, datasetName: string): string {
+    return `${projectId}:${datasetName}`;
+  }
+
+  function getDatasetHistory(
+    datasetId: string,
+    rowId: string,
+  ): DatasetVersionEntry[] {
+    let datasetRows = datasetVersions.get(datasetId);
+    if (!datasetRows) {
+      datasetRows = new Map<string, DatasetVersionEntry[]>();
+      datasetVersions.set(datasetId, datasetRows);
+    }
+
+    let rowHistory = datasetRows.get(rowId);
+    if (!rowHistory) {
+      rowHistory = [];
+      datasetRows.set(rowId, rowHistory);
+    }
+
+    return rowHistory;
+  }
+
+  function compareXactIds(left: string, right: string): number {
+    return left.localeCompare(right);
+  }
+
+  function recordDatasetVersion(row: CapturedLogRow): void {
+    const datasetId = stringField(row.dataset_id);
+    const rowId = stringField(row.id);
+    const xactId = stringField(row._xact_id);
+
+    if (!datasetId || !rowId || !xactId) {
+      return;
+    }
+
+    const orderKey = `${datasetId}:${rowId}`;
+    let order = datasetRowOrder.get(orderKey);
+    if (order === undefined) {
+      datasetOrderCursor += 1;
+      order = datasetOrderCursor;
+      datasetRowOrder.set(orderKey, order);
+    }
+
+    getDatasetHistory(datasetId, rowId).push({
+      deleted: row._object_delete === true,
+      order,
+      row: clone(row),
+      xactId,
+    });
+  }
+
+  function datasetSnapshot(
+    datasetId: string,
+    version?: string,
+  ): CapturedLogRow[] {
+    const rows = datasetVersions.get(datasetId);
+    if (!rows) {
+      return [];
+    }
+
+    return [...rows.values()]
+      .map((history) =>
+        history.reduce<DatasetVersionEntry | undefined>((latest, entry) => {
+          if (version && compareXactIds(entry.xactId, version) > 0) {
+            return latest;
+          }
+
+          if (!latest || compareXactIds(entry.xactId, latest.xactId) >= 0) {
+            return entry;
+          }
+
+          return latest;
+        }, undefined),
+      )
+      .filter(
+        (entry): entry is DatasetVersionEntry =>
+          entry !== undefined && !entry.deleted,
+      )
+      .sort((left, right) => left.order - right.order)
+      .map((entry) => clone(entry.row));
+  }
 
   const server = createServer((req, res) => {
     void (async () => {
@@ -287,6 +402,17 @@ export async function startMockBraintrustServer(
             : {};
           const after =
             typeof body.after === "number" && body.after >= 0 ? body.after : 0;
+
+          if (
+            capturedRequest.method === "POST" &&
+            capturedRequest.path === `${CONTROL_ROUTE_PREFIX}/requests`
+          ) {
+            respondJson(res, 200, {
+              cursor: requests.length,
+              requests: requests.slice(after),
+            } satisfies CapturedRequestBatch);
+            return;
+          }
 
           if (
             capturedRequest.method === "POST" &&
@@ -333,7 +459,7 @@ export async function startMockBraintrustServer(
                 id: "org:e2e",
                 name: "e2e-org",
                 api_url: serverUrl,
-                proxy_url: null,
+                proxy_url: serverUrl,
                 git_metadata: { collect: "none" },
               },
             ],
@@ -372,6 +498,51 @@ export async function startMockBraintrustServer(
           };
 
           respondJson(res, 200, { name: project.name, project });
+          return;
+        }
+
+        if (
+          capturedRequest.method === "POST" &&
+          capturedRequest.path === "/api/dataset/register"
+        ) {
+          const body = (capturedRequest.jsonBody ?? {}) as {
+            project_name?: string;
+            project_id?: string;
+            dataset_name?: string;
+            description?: string;
+            metadata?: Record<string, unknown>;
+          };
+          const projectName = body.project_name ?? body.project_id ?? "project";
+          const project = projects.get(projectName) ?? {
+            id:
+              body.project_id ?? `project:${slugify(projectName) || "project"}`,
+            name: projectName,
+          };
+          projects.set(project.name, project);
+
+          const datasetName = body.dataset_name ?? "dataset";
+          const datasetKey = getDatasetKey(project.id, datasetName);
+          const dataset = datasets.get(datasetKey) ?? {
+            id: `dataset:${slugify(datasetName) || "dataset"}`,
+            name: datasetName,
+            created: "2026-01-01T00:00:00.000Z",
+            projectId: project.id,
+            projectName: project.name,
+            description: body.description,
+            metadata: body.metadata,
+          };
+          datasets.set(datasetKey, dataset);
+
+          respondJson(res, 200, {
+            project,
+            dataset: {
+              id: dataset.id,
+              name: dataset.name,
+              created: dataset.created,
+              description: dataset.description,
+              metadata: dataset.metadata,
+            },
+          });
           return;
         }
 
@@ -468,6 +639,66 @@ export async function startMockBraintrustServer(
 
         if (
           capturedRequest.method === "GET" &&
+          capturedRequest.path === "/dataset-summary"
+        ) {
+          const datasetId = capturedRequest.query.dataset_id ?? "";
+          respondJson(res, 200, {
+            total_records: datasetSnapshot(datasetId).length,
+          });
+          return;
+        }
+
+        if (
+          capturedRequest.method === "POST" &&
+          capturedRequest.path === "/btql"
+        ) {
+          const body = isRecord(capturedRequest.jsonBody)
+            ? capturedRequest.jsonBody
+            : {};
+          const query = isRecord(body.query) ? body.query : {};
+          const from = isRecord(query.from) ? query.from : {};
+          const name = isRecord(from.name) ? from.name : {};
+          const args = Array.isArray(from.args) ? from.args : [];
+          const firstArg =
+            args.length > 0 && isRecord(args[0]) ? args[0] : undefined;
+          const objectType =
+            Array.isArray(name.name) && typeof name.name[0] === "string"
+              ? name.name[0]
+              : "";
+          const objectId =
+            firstArg && typeof firstArg.value === "string"
+              ? firstArg.value
+              : "";
+          const limit =
+            typeof query.limit === "number" && query.limit > 0
+              ? query.limit
+              : 1000;
+          const offset =
+            typeof query.cursor === "string"
+              ? Number.parseInt(query.cursor, 10)
+              : typeof query.cursor === "number"
+                ? query.cursor
+                : 0;
+          const version =
+            typeof body.version === "string" ? body.version : undefined;
+
+          if (objectType === "dataset") {
+            const records = datasetSnapshot(objectId, version);
+            const page = records.slice(offset, offset + limit);
+            respondJson(res, 200, {
+              data: page,
+              cursor:
+                offset + limit < records.length ? String(offset + limit) : null,
+            });
+            return;
+          }
+
+          respondJson(res, 200, { data: [], cursor: null });
+          return;
+        }
+
+        if (
+          capturedRequest.method === "GET" &&
           capturedRequest.path === "/version"
         ) {
           respondJson(res, 200, { logs3_payload_max_bytes: null });
@@ -483,11 +714,21 @@ export async function startMockBraintrustServer(
             payloads.push(payload);
 
             for (const row of payload.rows) {
-              const key = rowKey(row);
-              const mergedRow = mergeRow(mergedRows.get(key), row);
+              const persistedRow = clone(row);
+              if (typeof persistedRow._xact_id !== "string") {
+                persistedRow._xact_id = nextXactId();
+              }
+
+              const key = rowKey(persistedRow);
+              const mergedRow = mergeRow(mergedRows.get(key), persistedRow);
               mergedRows.set(key, mergedRow);
+              recordDatasetVersion(mergedRow);
               events.push(
-                toCapturedLogEvent(payload.api_version, mergedRow, row),
+                toCapturedLogEvent(
+                  payload.api_version,
+                  mergedRow,
+                  persistedRow,
+                ),
               );
             }
           }

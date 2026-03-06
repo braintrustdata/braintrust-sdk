@@ -1,0 +1,493 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`logging-and-datasets covers top-level rows, dataset CRUD payloads, and dataset fetch behavior > dataset-btql-requests 1`] = `
+[
+  {
+    "jsonBody": {
+      "brainstore_realtime": true,
+      "query": {
+        "from": {
+          "args": [
+            {
+              "op": "literal",
+              "value": "dataset:e2e-sdk-dataset",
+            },
+          ],
+          "name": {
+            "name": [
+              "dataset",
+            ],
+            "op": "ident",
+          },
+          "op": "function",
+        },
+        "limit": 1,
+        "select": [
+          {
+            "op": "star",
+          },
+        ],
+      },
+      "query_source": "js_sdk_object_fetcher_dataset",
+      "use_columnstore": false,
+    },
+    "method": "POST",
+    "path": "/btql",
+  },
+  {
+    "jsonBody": {
+      "brainstore_realtime": true,
+      "query": {
+        "from": {
+          "args": [
+            {
+              "op": "literal",
+              "value": "dataset:e2e-sdk-dataset",
+            },
+          ],
+          "name": {
+            "name": [
+              "dataset",
+            ],
+            "op": "ident",
+          },
+          "op": "function",
+        },
+        "limit": 1,
+        "select": [
+          {
+            "op": "star",
+          },
+        ],
+      },
+      "query_source": "js_sdk_object_fetcher_dataset",
+      "use_columnstore": false,
+    },
+    "method": "POST",
+    "path": "/btql",
+  },
+  {
+    "jsonBody": {
+      "brainstore_realtime": true,
+      "query": {
+        "cursor": "1",
+        "from": {
+          "args": [
+            {
+              "op": "literal",
+              "value": "dataset:e2e-sdk-dataset",
+            },
+          ],
+          "name": {
+            "name": [
+              "dataset",
+            ],
+            "op": "ident",
+          },
+          "op": "function",
+        },
+        "limit": 1,
+        "select": [
+          {
+            "op": "star",
+          },
+        ],
+      },
+      "query_source": "js_sdk_object_fetcher_dataset",
+      "use_columnstore": false,
+    },
+    "method": "POST",
+    "path": "/btql",
+  },
+  {
+    "jsonBody": {
+      "brainstore_realtime": true,
+      "query": {
+        "from": {
+          "args": [
+            {
+              "op": "literal",
+              "value": "dataset:e2e-sdk-dataset",
+            },
+          ],
+          "name": {
+            "name": [
+              "dataset",
+            ],
+            "op": "ident",
+          },
+          "op": "function",
+        },
+        "limit": 1,
+        "select": [
+          {
+            "op": "star",
+          },
+        ],
+      },
+      "query_source": "js_sdk_object_fetcher_dataset",
+      "use_columnstore": false,
+    },
+    "method": "POST",
+    "path": "/btql",
+  },
+  {
+    "jsonBody": {
+      "brainstore_realtime": true,
+      "query": {
+        "cursor": "1",
+        "from": {
+          "args": [
+            {
+              "op": "literal",
+              "value": "dataset:e2e-sdk-dataset",
+            },
+          ],
+          "name": {
+            "name": [
+              "dataset",
+            ],
+            "op": "ident",
+          },
+          "op": "function",
+        },
+        "limit": 1,
+        "select": [
+          {
+            "op": "star",
+          },
+        ],
+      },
+      "query_source": "js_sdk_object_fetcher_dataset",
+      "use_columnstore": false,
+    },
+    "method": "POST",
+    "path": "/btql",
+  },
+  {
+    "jsonBody": {
+      "brainstore_realtime": true,
+      "query": {
+        "from": {
+          "args": [
+            {
+              "op": "literal",
+              "value": "dataset:e2e-sdk-dataset",
+            },
+          ],
+          "name": {
+            "name": [
+              "dataset",
+            ],
+            "op": "ident",
+          },
+          "op": "function",
+        },
+        "limit": 1,
+        "select": [
+          {
+            "op": "star",
+          },
+        ],
+      },
+      "query_source": "js_sdk_object_fetcher_dataset",
+      "use_columnstore": false,
+      "version": "<xact:1>",
+    },
+    "method": "POST",
+    "path": "/btql",
+  },
+  {
+    "jsonBody": {
+      "brainstore_realtime": true,
+      "query": {
+        "from": {
+          "args": [
+            {
+              "op": "literal",
+              "value": "dataset:e2e-sdk-dataset",
+            },
+          ],
+          "name": {
+            "name": [
+              "dataset",
+            ],
+            "op": "ident",
+          },
+          "op": "function",
+        },
+        "limit": 1,
+        "select": [
+          {
+            "op": "star",
+          },
+        ],
+      },
+      "query_source": "js_sdk_object_fetcher_dataset",
+      "use_columnstore": false,
+      "version": "<xact:1>",
+    },
+    "method": "POST",
+    "path": "/btql",
+  },
+]
+`;
+
+exports[`logging-and-datasets covers top-level rows, dataset CRUD payloads, and dataset fetch behavior > dataset-fetch-results 1`] = `
+{
+  "currentRecords": [
+    {
+      "_xact_id": "<xact:1>",
+      "created": "<timestamp>",
+      "dataset_id": "dataset:e2e-sdk-dataset",
+      "expected": {
+        "answer": "updated",
+      },
+      "id": "<span:1>",
+      "input": {
+        "prompt": "first",
+        "testRunId": "<run:1>",
+      },
+      "metadata": {
+        "stage": "updated",
+        "testRunId": "<run:1>",
+      },
+      "tags": [
+        "seed",
+        "updated",
+      ],
+    },
+    {
+      "_xact_id": "<xact:2>",
+      "created": "<timestamp>",
+      "dataset_id": "dataset:e2e-sdk-dataset",
+      "expected": {
+        "answer": "two",
+      },
+      "id": "<span:2>",
+      "input": {
+        "prompt": "second",
+        "testRunId": "<run:1>",
+      },
+      "metadata": {
+        "stage": "inserted-later",
+        "testRunId": "<run:1>",
+      },
+      "tags": [
+        "added",
+      ],
+    },
+  ],
+  "currentVersion": "<xact:2>",
+  "initialVersion": "<xact:3>",
+  "legacyRecords": [
+    {
+      "_xact_id": "<xact:3>",
+      "created": "<timestamp>",
+      "dataset_id": "dataset:e2e-sdk-dataset",
+      "id": "<span:1>",
+      "input": {
+        "prompt": "first",
+        "testRunId": "<run:1>",
+      },
+      "metadata": {
+        "stage": "inserted",
+        "testRunId": "<run:1>",
+      },
+      "output": {
+        "answer": "one",
+      },
+      "tags": [
+        "seed",
+      ],
+    },
+  ],
+  "pinnedRecords": [
+    {
+      "_xact_id": "<xact:3>",
+      "created": "<timestamp>",
+      "dataset_id": "dataset:e2e-sdk-dataset",
+      "expected": {
+        "answer": "one",
+      },
+      "id": "<span:1>",
+      "input": {
+        "prompt": "first",
+        "testRunId": "<run:1>",
+      },
+      "metadata": {
+        "stage": "inserted",
+        "testRunId": "<run:1>",
+      },
+      "tags": [
+        "seed",
+      ],
+    },
+  ],
+}
+`;
+
+exports[`logging-and-datasets covers top-level rows, dataset CRUD payloads, and dataset fetch behavior > dataset-payload-rows 1`] = `
+[
+  {
+    "created": "<timestamp>",
+    "dataset_id": "dataset:e2e-sdk-dataset",
+    "expected": {
+      "answer": "one",
+    },
+    "id": "<span:1>",
+    "input": {
+      "prompt": "first",
+      "testRunId": "<run:1>",
+    },
+    "metadata": {
+      "stage": "inserted",
+      "testRunId": "<run:1>",
+    },
+    "tags": [
+      "seed",
+    ],
+  },
+  {
+    "created": "<timestamp>",
+    "dataset_id": "dataset:e2e-sdk-dataset",
+    "expected": {
+      "answer": "three",
+    },
+    "id": "<span:2>",
+    "input": {
+      "prompt": "delete-me",
+      "testRunId": "<run:1>",
+    },
+    "metadata": {
+      "stage": "delete-target",
+      "testRunId": "<run:1>",
+    },
+    "tags": [
+      "delete",
+    ],
+  },
+  {
+    "_is_merge": true,
+    "dataset_id": "dataset:e2e-sdk-dataset",
+    "expected": {
+      "answer": "updated",
+    },
+    "id": "<span:1>",
+    "metadata": {
+      "stage": "updated",
+      "testRunId": "<run:1>",
+    },
+    "tags": [
+      "seed",
+      "updated",
+    ],
+  },
+  {
+    "created": "<timestamp>",
+    "dataset_id": "dataset:e2e-sdk-dataset",
+    "expected": {
+      "answer": "two",
+    },
+    "id": "<span:3>",
+    "input": {
+      "prompt": "second",
+      "testRunId": "<run:1>",
+    },
+    "metadata": {
+      "stage": "inserted-later",
+      "testRunId": "<run:1>",
+    },
+    "tags": [
+      "added",
+    ],
+  },
+  {
+    "_object_delete": true,
+    "created": "<timestamp>",
+    "dataset_id": "dataset:e2e-sdk-dataset",
+    "id": "<span:2>",
+  },
+]
+`;
+
+exports[`logging-and-datasets covers top-level rows, dataset CRUD payloads, and dataset fetch behavior > experiment-row 1`] = `
+{
+  "context": {
+    "caller_filename": "<repo>/e2e/scenarios/logging-and-datasets.ts",
+    "caller_functionname": "main",
+    "caller_lineno": 45,
+  },
+  "created": "<timestamp>",
+  "expected": {
+    "result": "pass",
+  },
+  "experiment_id": "experiment:e2e-payload-experiment",
+  "id": "<span:1>",
+  "input": {
+    "record": "experiment-row",
+    "testRunId": "<run:1>",
+  },
+  "metadata": {
+    "kind": "experiment-row",
+    "testRunId": "<run:1>",
+  },
+  "metrics": {
+    "end": 0,
+    "start": 0,
+  },
+  "output": {
+    "result": "pass",
+  },
+  "root_span_id": "<span:2>",
+  "scores": {
+    "pass": 1,
+  },
+  "span_attributes": {
+    "exec_counter": 1,
+    "name": "root",
+    "type": "eval",
+  },
+  "span_id": "<span:2>",
+}
+`;
+
+exports[`logging-and-datasets covers top-level rows, dataset CRUD payloads, and dataset fetch behavior > project-log-row 1`] = `
+{
+  "_is_merge": false,
+  "context": {
+    "caller_filename": "<repo>/e2e/scenarios/logging-and-datasets.ts",
+    "caller_functionname": "main",
+    "caller_lineno": 18,
+  },
+  "created": "<timestamp>",
+  "id": "<span:1>",
+  "input": {
+    "record": "project-log-row",
+    "testRunId": "<run:1>",
+  },
+  "log_id": "g",
+  "metadata": {
+    "kind": "project-log-row",
+    "scenario": "logging-and-datasets",
+    "testRunId": "<run:1>",
+  },
+  "metrics": {
+    "start": 0,
+  },
+  "output": {
+    "status": "ok",
+  },
+  "project_id": "project:e2e-logging-datasets",
+  "root_span_id": "<span:2>",
+  "scores": {
+    "pass": 1,
+  },
+  "span_attributes": {
+    "exec_counter": 0,
+    "name": "root",
+    "type": "task",
+  },
+  "span_id": "<span:2>",
+}
+`;

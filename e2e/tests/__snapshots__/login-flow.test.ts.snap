@@ -1,0 +1,82 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`login-flow logs in once and reuses serialized state for object registration > requests 1`] = `
+[
+  {
+    "headers": {
+      "authorization": "Bearer mock-braintrust-api-key",
+    },
+    "jsonBody": null,
+    "method": "POST",
+    "path": "/api/apikey/login",
+  },
+  {
+    "headers": {
+      "authorization": "Bearer mock-braintrust-api-key",
+    },
+    "jsonBody": {
+      "dataset_name": "e2e-login-flow-dataset",
+      "description": "Login flow dataset",
+      "metadata": {
+        "scope": "login-flow",
+      },
+      "org_id": "org:e2e",
+      "project_name": "e2e-login-flow-project",
+    },
+    "method": "POST",
+    "path": "/api/dataset/register",
+  },
+  {
+    "headers": {
+      "authorization": "Bearer mock-braintrust-api-key",
+    },
+    "jsonBody": {
+      "base_exp_id": "experiment:login-flow-base",
+      "experiment_name": "e2e-login-flow-experiment",
+      "metadata": {
+        "scope": "login-flow",
+      },
+      "org_id": "org:e2e",
+      "project_name": "e2e-login-flow-project",
+      "tags": [
+        "login-flow",
+      ],
+    },
+    "method": "POST",
+    "path": "/api/experiment/register",
+  },
+  {
+    "headers": {
+      "authorization": "Bearer mock-braintrust-api-key",
+    },
+    "jsonBody": {
+      "org_id": "org:e2e",
+      "project_name": "e2e-login-flow-project",
+    },
+    "method": "POST",
+    "path": "/api/project/register",
+  },
+]
+`;
+
+exports[`login-flow logs in once and reuses serialized state for object registration > stdout 1`] = `
+{
+  "ids": {
+    "datasetId": "dataset:e2e-login-flow-dataset",
+    "experimentId": "experiment:e2e-login-flow-experiment",
+    "projectId": "project:e2e-login-flow-project",
+  },
+  "serializedState": {
+    "apiUrl": "<mock-server>",
+    "appPublicUrl": "<mock-server>",
+    "appUrl": "<mock-server>",
+    "gitMetadataSettings": {
+      "collect": "none",
+    },
+    "loginToken": "mock-braintrust-api-key",
+    "orgId": "org:e2e",
+    "orgName": "e2e-org",
+    "proxyUrl": "<mock-server>",
+  },
+}
+`;

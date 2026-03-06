@@ -15,8 +15,14 @@ type TokenMaps = {
 const ISO_DATE_REGEX = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z$/;
 const UUID_REGEX =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const NUMERIC_VERSION_REGEX = /^\d+$/;
 const TIME_KEYS = new Set(["created", "start", "end"]);
 const SPAN_ID_KEYS = new Set(["id", "span_id", "root_span_id"]);
+const XACT_VERSION_KEYS = new Set([
+  "currentVersion",
+  "initialVersion",
+  "version",
+]);
 
 function normalizeCallerFilename(value: string): string {
   const e2eIndex = value.lastIndexOf("/e2e/");
@@ -25,6 +31,20 @@ function normalizeCallerFilename(value: string): string {
   }
 
   return value;
+}
+
+function normalizeMockServerUrl(value: string): string | undefined {
+  try {
+    const url = new URL(value);
+    if (url.protocol !== "http:" || url.hostname !== "127.0.0.1") {
+      return undefined;
+    }
+
+    const suffix = `${url.pathname}${url.search}${url.hash}`;
+    return suffix === "/" ? "<mock-server>" : `<mock-server>${suffix}`;
+  } catch {
+    return undefined;
+  }
 }
 
 function tokenFor(
@@ -76,11 +96,24 @@ function normalizeValue(
   }
 
   if (typeof value === "string") {
+    const normalizedUrl = normalizeMockServerUrl(value);
+    if (normalizedUrl) {
+      return normalizedUrl;
+    }
+
     if (currentKey === "caller_filename") {
       return normalizeCallerFilename(value);
     }
 
     if (currentKey === "_xact_id") {
+      return tokenFor(tokenMaps.xacts, value, "xact");
+    }
+
+    if (
+      currentKey &&
+      XACT_VERSION_KEYS.has(currentKey) &&
+      NUMERIC_VERSION_REGEX.test(value)
+    ) {
       return tokenFor(tokenMaps.xacts, value, "xact");
     }
 
