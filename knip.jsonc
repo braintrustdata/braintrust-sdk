@@ -1,0 +1,74 @@
+{
+  "$schema": "./node_modules/knip/schema.json",
+  "include": ["files", "exports"],
+  "ignoreFiles": [
+    "integrations/otel-js/otel-v1/**",
+    "integrations/otel-js/otel-v2/**",
+    "integrations/val.town/vals/tutorial/code.ts"
+  ],
+  "ignoreIssues": {
+    "**/generated_types.ts": ["exports", "types"]
+  },
+  "workspaces": {
+    "js": {
+      "entry": [
+        "src/auto-instrumentations/bundler/*.ts",
+        "tests/**/*.{ts,tsx,mts,cts,cjs,mjs}",
+        "scripts/**/*.ts",
+        "examples/**/*.{ts,tsx,js,jsx,mjs,cjs}",
+        "smoke/**/*.{ts,tsx,js,jsx,mjs,cjs}",
+        "dev/**/*.ts",
+        "util/**/*.ts"
+      ],
+      "project": [
+        "src/**/*.{ts,tsx,mts,cts}",
+        "tests/**/*.{ts,tsx,mts,cts,cjs,mjs}",
+        "scripts/**/*.ts",
+        "examples/**/*.{ts,tsx,js,jsx,mjs,cjs}",
+        "smoke/**/*.{ts,tsx,js,jsx,mjs,cjs,d.ts}",
+        "dev/**/*.ts",
+        "util/**/*.ts"
+      ]
+    },
+    "js/src/wrappers/claude-agent-sdk": {
+      "entry": ["*.test.ts"],
+      "project": ["*.ts"]
+    },
+    "js/src/wrappers/vitest": {
+      "entry": ["*.test.ts"],
+      "project": ["*.ts"]
+    },
+    "integrations/otel-js": {
+      "entry": [
+        "src/**/*.test.ts",
+        "tests/**/*.ts",
+        "examples/**/*.{ts,js,mjs,cjs}",
+        "smoke/**/*.{ts,js,mjs,cjs}"
+      ],
+      "project": [
+        "src/**/*.ts",
+        "tests/**/*.ts",
+        "examples/**/*.{ts,js,mjs,cjs}",
+        "smoke/**/*.{ts,js,mjs,cjs}"
+      ]
+    },
+    "integrations/temporal-js": {
+      "entry": [
+        "examples/**/*.{ts,js,mjs,cjs}"
+      ],
+      "project": [
+        "src/**/*.ts",
+        "examples/**/*.{ts,js,mjs,cjs}"
+      ]
+    },
+    "integrations/templates-nunjucks": {
+      "entry": [
+        "smoke/**/*.{ts,tsx,js,jsx,mjs,cjs}"
+      ],
+      "project": [
+        "src/**/*.ts",
+        "smoke/**/*.{ts,tsx,js,jsx,mjs,cjs,d.ts}"
+      ]
+    }
+  }
+}

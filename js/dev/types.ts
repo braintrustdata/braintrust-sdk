@@ -64,7 +64,7 @@ export const parametersSchema = z.object({
 
 export type ParametersSchema = z.infer<typeof parametersSchema>;
 
-export const parametersSourceSchema = z.object({
+const parametersSourceSchema = z.object({
   parametersId: z.string().optional(),
   slug: z.string(),
   name: z.string(),
@@ -74,7 +74,7 @@ export const parametersSourceSchema = z.object({
 
 export type ParametersSource = z.infer<typeof parametersSourceSchema>;
 
-export const parametersContainerSchema = z.object({
+const parametersContainerSchema = z.object({
   type: z.literal("braintrust.parameters"),
   schema: parametersSchema,
   source: parametersSourceSchema,
@@ -82,7 +82,7 @@ export const parametersContainerSchema = z.object({
 
 export type ParametersContainer = z.infer<typeof parametersContainerSchema>;
 
-export const staticParametersContainerSchema = z.object({
+const staticParametersContainerSchema = z.object({
   type: z.literal("braintrust.staticParameters"),
   schema: staticParametersSchema,
   source: z.null(),
