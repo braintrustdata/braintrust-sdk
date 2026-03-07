@@ -630,7 +630,7 @@ export class CodeParameters {
   }
 }
 
-export class ParametersBuilder {
+class ParametersBuilder {
   constructor(private readonly project: Project) {}
 
   public create<S extends EvalParameters>(opts: ParametersOpts<S>): S {
@@ -689,7 +689,7 @@ export function serializeEvalParametersToStaticParametersSchema(
   );
 }
 
-export function serializeEvalParameterstoParametersSchema(
+function serializeEvalParameterstoParametersSchema(
   parameters: EvalParameters,
 ): ParametersSchema {
   const properties: Record<string, Record<string, unknown>> = {};

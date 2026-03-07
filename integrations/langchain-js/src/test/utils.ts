@@ -6,7 +6,7 @@ import { LogsRequest } from "./types";
 
 const decoder = new TextDecoder();
 // comment out process.env overriding in setup.ts for this to be helpful
-export const bypassAndLog = async (request: Request): Promise<Response> => {
+const bypassAndLog = async (request: Request): Promise<Response> => {
   console.log(request.method, request.url);
   const res = await fetch(bypass(request));
 
