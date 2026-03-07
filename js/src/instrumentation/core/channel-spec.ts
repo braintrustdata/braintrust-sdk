@@ -18,6 +18,7 @@ export type ChannelSpec<
   TKind extends ChannelKind = "async",
 > = {
   name: string;
+  fullName: string;
   kind: TKind;
   __args?: TArgs;
   __result?: TResult;
@@ -174,6 +175,7 @@ export function channel<
   TChunk = never,
 >(spec: {
   name: string;
+  fullName: string;
   kind: "async";
 }): TypedAsyncChannel<ChannelSpec<TArgs, TResult, TExtra, TChunk, "async">>;
 export function channel<
@@ -183,17 +185,19 @@ export function channel<
   TChunk = never,
 >(spec: {
   name: string;
+  fullName: string;
   kind: "sync-stream";
 }): TypedSyncStreamChannel<
   ChannelSpec<TArgs, TResult, TExtra, TChunk, "sync-stream">
 >;
 export function channel(spec: {
   name: string;
+  fullName: string;
   kind: ChannelKind;
 }): AnyTypedChannel {
   if (spec.kind === "async") {
     const tracingChannel = () =>
-      iso.newTracingChannel<ChannelMessage<AnyAsyncChannelSpec>>(spec.name);
+      iso.newTracingChannel<ChannelMessage<AnyAsyncChannelSpec>>(spec.fullName);
     return {
       ...spec,
       tracingChannel,
@@ -209,7 +213,9 @@ export function channel(spec: {
   }
 
   const tracingChannel = () =>
-    iso.newTracingChannel<ChannelMessage<AnySyncStreamChannelSpec>>(spec.name);
+    iso.newTracingChannel<ChannelMessage<AnySyncStreamChannelSpec>>(
+      spec.fullName,
+    );
   return {
     ...spec,
     tracingChannel,

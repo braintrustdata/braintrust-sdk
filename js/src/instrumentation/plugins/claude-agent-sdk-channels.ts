@@ -11,7 +11,8 @@ export const claudeAgentSDKChannels = defineChannels({
     Record<string, never>,
     ClaudeAgentSDKMessage
   >({
-    name: "orchestrion:@anthropic-ai/claude-agent-sdk:query",
+    name: "query",
+    fullName: "orchestrion:@anthropic-ai/claude-agent-sdk:query",
     kind: "async",
   }),
 });

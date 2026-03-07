@@ -380,7 +380,7 @@ export abstract class BasePlugin<TChannels extends ChannelMap = ChannelMap> {
     type TResult = ResultOf<TChannel>;
     type TExtra = ExtraOf<TChannel>;
     type TEvent = ChannelLifecycleEvent<TArguments, TResult, TExtra>;
-    const channelName = channel.name;
+    const channelName = channel.fullName;
     const tracingChannel =
       channel.tracingChannel() as IsoTracingChannel<TEvent>;
 
@@ -540,7 +540,7 @@ export abstract class BasePlugin<TChannels extends ChannelMap = ChannelMap> {
     type TChunk = ChunkOf<TChannel>;
     type TExtra = ExtraOf<TChannel>;
     type TEvent = ChannelLifecycleEvent<TArguments, TResult, TExtra>;
-    const channelName = channel.name;
+    const channelName = channel.fullName;
     const tracingChannel =
       channel.tracingChannel() as IsoTracingChannel<TEvent>;
 
@@ -742,7 +742,7 @@ export abstract class BasePlugin<TChannels extends ChannelMap = ChannelMap> {
     type TStreamEvent = ChunkOf<TChannel>;
     type TExtra = ExtraOf<TChannel>;
     type TEvent = ChannelLifecycleEvent<TArguments, TResult, TExtra>;
-    const channelName = channel.name;
+    const channelName = channel.fullName;
     const tracingChannel =
       channel.tracingChannel() as IsoTracingChannel<TEvent>;
 

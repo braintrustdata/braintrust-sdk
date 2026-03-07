@@ -13,7 +13,8 @@ export const aiSDKChannels = defineChannels({
     Record<string, never>,
     unknown
   >({
-    name: "orchestrion:ai:generateText",
+    name: "generateText",
+    fullName: "orchestrion:ai:generateText",
     kind: "async",
   }),
   streamText: channel<
@@ -22,7 +23,8 @@ export const aiSDKChannels = defineChannels({
     Record<string, never>,
     unknown
   >({
-    name: "orchestrion:ai:streamText",
+    name: "streamText",
+    fullName: "orchestrion:ai:streamText",
     kind: "async",
   }),
   generateObject: channel<
@@ -31,7 +33,8 @@ export const aiSDKChannels = defineChannels({
     Record<string, never>,
     unknown
   >({
-    name: "orchestrion:ai:generateObject",
+    name: "generateObject",
+    fullName: "orchestrion:ai:generateObject",
     kind: "async",
   }),
   streamObject: channel<
@@ -40,7 +43,8 @@ export const aiSDKChannels = defineChannels({
     Record<string, never>,
     unknown
   >({
-    name: "orchestrion:ai:streamObject",
+    name: "streamObject",
+    fullName: "orchestrion:ai:streamObject",
     kind: "async",
   }),
   agentGenerate: channel<
@@ -49,7 +53,8 @@ export const aiSDKChannels = defineChannels({
     Record<string, never>,
     unknown
   >({
-    name: "orchestrion:ai:Agent.generate",
+    name: "Agent.generate",
+    fullName: "orchestrion:ai:Agent.generate",
     kind: "async",
   }),
   agentStream: channel<
@@ -58,7 +63,8 @@ export const aiSDKChannels = defineChannels({
     Record<string, never>,
     unknown
   >({
-    name: "orchestrion:ai:Agent.stream",
+    name: "Agent.stream",
+    fullName: "orchestrion:ai:Agent.stream",
     kind: "async",
   }),
 });

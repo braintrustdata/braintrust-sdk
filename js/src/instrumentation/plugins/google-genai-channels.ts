@@ -13,7 +13,8 @@ export const googleGenAIChannels = defineChannels({
     [GoogleGenAIGenerateContentParams],
     GoogleGenAIGenerateContentResponse
   >({
-    name: "orchestrion:@google/genai:models.generateContent",
+    name: "models.generateContent",
+    fullName: "orchestrion:@google/genai:models.generateContent",
     kind: "async",
   }),
   generateContentStream: channel<
@@ -22,7 +23,8 @@ export const googleGenAIChannels = defineChannels({
     Record<string, never>,
     GoogleGenAIGenerateContentResponse
   >({
-    name: "orchestrion:@google/genai:models.generateContentStream",
+    name: "models.generateContentStream",
+    fullName: "orchestrion:@google/genai:models.generateContentStream",
     kind: "async",
   }),
 });

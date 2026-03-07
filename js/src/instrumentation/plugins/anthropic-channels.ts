@@ -14,7 +14,8 @@ export const anthropicChannels = defineChannels({
     Record<string, never>,
     AnthropicStreamEvent
   >({
-    name: "orchestrion:@anthropic-ai/sdk:messages.create",
+    name: "messages.create",
+    fullName: "orchestrion:@anthropic-ai/sdk:messages.create",
     kind: "async",
   }),
   betaMessagesCreate: channel<
@@ -23,7 +24,8 @@ export const anthropicChannels = defineChannels({
     Record<string, never>,
     AnthropicStreamEvent
   >({
-    name: "orchestrion:@anthropic-ai/sdk:beta.messages.create",
+    name: "beta.messages.create",
+    fullName: "orchestrion:@anthropic-ai/sdk:beta.messages.create",
     kind: "async",
   }),
 });

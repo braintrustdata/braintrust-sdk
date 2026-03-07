@@ -34,7 +34,8 @@ export const openAIChannels = defineChannels({
     OpenAIChatChannelExtras,
     OpenAIChatCompletionChunk
   >({
-    name: "orchestrion:openai:chat.completions.create",
+    name: "chat.completions.create",
+    fullName: "orchestrion:openai:chat.completions.create",
     kind: "async",
   }),
 
@@ -43,7 +44,8 @@ export const openAIChannels = defineChannels({
     OpenAIEmbeddingResponse,
     OpenAIChatChannelExtras
   >({
-    name: "orchestrion:openai:embeddings.create",
+    name: "embeddings.create",
+    fullName: "orchestrion:openai:embeddings.create",
     kind: "async",
   }),
 
@@ -53,7 +55,8 @@ export const openAIChannels = defineChannels({
     OpenAIChatChannelExtras,
     OpenAIChatCompletionChunk
   >({
-    name: "orchestrion:openai:beta.chat.completions.parse",
+    name: "beta.chat.completions.parse",
+    fullName: "orchestrion:openai:beta.chat.completions.parse",
     kind: "async",
   }),
 
@@ -62,7 +65,8 @@ export const openAIChannels = defineChannels({
     unknown,
     OpenAIChatChannelExtras
   >({
-    name: "orchestrion:openai:beta.chat.completions.stream",
+    name: "beta.chat.completions.stream",
+    fullName: "orchestrion:openai:beta.chat.completions.stream",
     kind: "sync-stream",
   }),
 
@@ -71,7 +75,8 @@ export const openAIChannels = defineChannels({
     OpenAIModerationResponse,
     OpenAIChatChannelExtras
   >({
-    name: "orchestrion:openai:moderations.create",
+    name: "moderations.create",
+    fullName: "orchestrion:openai:moderations.create",
     kind: "async",
   }),
 
@@ -81,7 +86,8 @@ export const openAIChannels = defineChannels({
     OpenAIResponsesChannelExtras,
     OpenAIResponseStreamEvent
   >({
-    name: "orchestrion:openai:responses.create",
+    name: "responses.create",
+    fullName: "orchestrion:openai:responses.create",
     kind: "async",
   }),
 
@@ -91,7 +97,8 @@ export const openAIChannels = defineChannels({
     OpenAIResponsesChannelExtras,
     OpenAIResponseStreamEvent
   >({
-    name: "orchestrion:openai:responses.stream",
+    name: "responses.stream",
+    fullName: "orchestrion:openai:responses.stream",
     kind: "sync-stream",
   }),
 
@@ -101,7 +108,8 @@ export const openAIChannels = defineChannels({
     OpenAIResponsesChannelExtras,
     OpenAIResponseStreamEvent
   >({
-    name: "orchestrion:openai:responses.parse",
+    name: "responses.parse",
+    fullName: "orchestrion:openai:responses.parse",
     kind: "async",
   }),
 });
