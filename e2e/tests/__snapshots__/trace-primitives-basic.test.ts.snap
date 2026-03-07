@@ -158,16 +158,16 @@ exports[`trace-primitives-basic collects a minimal manual trace tree > request-f
           "error": "basic boom
 
 Error: basic boom
-    at logger.traced.name (/Users/lucaforstner/conductor/workspaces/braintrust-sdk-javascript/quebec/e2e/scenarios/trace-primitives-basic.ts:41:27)
-    at /Users/lucaforstner/conductor/workspaces/braintrust-sdk-javascript/quebec/js/dist/index.js:7507:63
-    at AsyncLocalStorage.run (node:internal/async_local_storage/async_context_frame:63:14)
-    at BraintrustContextManager.runInContext (/Users/lucaforstner/conductor/workspaces/braintrust-sdk-javascript/quebec/js/dist/index.js:4421:30)
-    at withCurrent (/Users/lucaforstner/conductor/workspaces/braintrust-sdk-javascript/quebec/js/dist/index.js:7507:38)
-    at /Users/lucaforstner/conductor/workspaces/braintrust-sdk-javascript/quebec/js/dist/index.js:5723:18
-    at runCatchFinally (/Users/lucaforstner/conductor/workspaces/braintrust-sdk-javascript/quebec/js/dist/index.js:1551:17)
-    at _class9.traced (/Users/lucaforstner/conductor/workspaces/braintrust-sdk-javascript/quebec/js/dist/index.js:5720:17)
-    at main (/Users/lucaforstner/conductor/workspaces/braintrust-sdk-javascript/quebec/e2e/scenarios/trace-primitives-basic.ts:10:16)
-    at runMain (/Users/lucaforstner/conductor/workspaces/braintrust-sdk-javascript/quebec/e2e/scenarios/helpers.ts:40:8)",
+    at logger.traced.name (<repo>/e2e/scenarios/trace-primitives-basic.ts:0:0)
+    at <repo>/js/dist/index.js:0:0
+    at AsyncLocalStorage.run (node:<internal>:0:0)
+    at BraintrustContextManager.runInContext (<repo>/js/dist/index.js:0:0)
+    at withCurrent (<repo>/js/dist/index.js:0:0)
+    at <repo>/js/dist/index.js:0:0
+    at runCatchFinally (<repo>/js/dist/index.js:0:0)
+    at _class9.traced (<repo>/js/dist/index.js:0:0)
+    at main (<repo>/e2e/scenarios/trace-primitives-basic.ts:0:0)
+    at runMain (<repo>/e2e/scenarios/helpers.ts:0:0)",
           "id": "<span:7>",
           "log_id": "g",
           "metadata": {
@@ -256,16 +256,16 @@ Error: basic boom
           "error": "basic boom
 
 Error: basic boom
-    at logger.traced.name (/Users/lucaforstner/conductor/workspaces/braintrust-sdk-javascript/quebec/e2e/scenarios/trace-primitives-basic.ts:41:27)
-    at /Users/lucaforstner/conductor/workspaces/braintrust-sdk-javascript/quebec/js/dist/index.js:7507:63
-    at AsyncLocalStorage.run (node:internal/async_local_storage/async_context_frame:63:14)
-    at BraintrustContextManager.runInContext (/Users/lucaforstner/conductor/workspaces/braintrust-sdk-javascript/quebec/js/dist/index.js:4421:30)
-    at withCurrent (/Users/lucaforstner/conductor/workspaces/braintrust-sdk-javascript/quebec/js/dist/index.js:7507:38)
-    at /Users/lucaforstner/conductor/workspaces/braintrust-sdk-javascript/quebec/js/dist/index.js:5723:18
-    at runCatchFinally (/Users/lucaforstner/conductor/workspaces/braintrust-sdk-javascript/quebec/js/dist/index.js:1551:17)
-    at _class9.traced (/Users/lucaforstner/conductor/workspaces/braintrust-sdk-javascript/quebec/js/dist/index.js:5720:17)
-    at main (/Users/lucaforstner/conductor/workspaces/braintrust-sdk-javascript/quebec/e2e/scenarios/trace-primitives-basic.ts:10:16)
-    at runMain (/Users/lucaforstner/conductor/workspaces/braintrust-sdk-javascript/quebec/e2e/scenarios/helpers.ts:40:8)",
+    at logger.traced.name (<repo>/e2e/scenarios/trace-primitives-basic.ts:0:0)
+    at <repo>/js/dist/index.js:0:0
+    at AsyncLocalStorage.run (node:<internal>:0:0)
+    at BraintrustContextManager.runInContext (<repo>/js/dist/index.js:0:0)
+    at withCurrent (<repo>/js/dist/index.js:0:0)
+    at <repo>/js/dist/index.js:0:0
+    at runCatchFinally (<repo>/js/dist/index.js:0:0)
+    at _class9.traced (<repo>/js/dist/index.js:0:0)
+    at main (<repo>/e2e/scenarios/trace-primitives-basic.ts:0:0)
+    at runMain (<repo>/e2e/scenarios/helpers.ts:0:0)",
           "id": "<span:7>",
           "log_id": "g",
           "metadata": {

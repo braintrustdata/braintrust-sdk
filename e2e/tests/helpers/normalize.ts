@@ -1,3 +1,6 @@
+import * as path from "node:path";
+import { fileURLToPath } from "node:url";
+
 type Primitive = null | boolean | number | string;
 export type Json =
   | Primitive
@@ -24,6 +27,13 @@ const XACT_VERSION_KEYS = new Set([
   "initialVersion",
   "version",
 ]);
+const HELPERS_DIR = path.dirname(fileURLToPath(import.meta.url));
+const REPO_ROOT = path.resolve(HELPERS_DIR, "../../..").replace(/\\/g, "/");
+const STACK_FRAME_REPO_PATH_REGEX =
+  /(?:[A-Za-z]:)?[^\s)\n]*braintrust-sdk-javascript(?:[\\/](?:braintrust-sdk-javascript|[^\\/\s)\n]+))?((?:[\\/](?:e2e|js)[^:\s)\n]+)):\d+:\d+/g;
+const REPO_PATH_REGEX =
+  /(?:[A-Za-z]:)?[^\s)\n]*braintrust-sdk-javascript(?:[\\/](?:braintrust-sdk-javascript|[^\\/\s)\n]+))?((?:[\\/](?:e2e|js)[^:\s)\n]+))/g;
+const NODE_INTERNAL_FRAME_REGEX = /node:[^)\n]+:\d+:\d+/g;
 
 function normalizeCallerFilename(value: string): string {
   const e2eIndex = value.lastIndexOf("/e2e/");
@@ -46,6 +56,28 @@ function normalizeMockServerUrl(value: string): string | undefined {
   } catch {
     return undefined;
   }
+}
+
+function normalizeStackLikeString(value: string): string {
+  let normalized = value.replaceAll(REPO_ROOT, "<repo>");
+
+  normalized = normalized.replace(
+    STACK_FRAME_REPO_PATH_REGEX,
+    (_, suffix: string) => `<repo>${suffix.replace(/\\/g, "/")}:0:0`,
+  );
+  normalized = normalized.replace(REPO_PATH_REGEX, (_, suffix: string) => {
+    return `<repo>${suffix.replace(/\\/g, "/")}`;
+  });
+  normalized = normalized.replace(
+    /(<repo>(?:\/(?:e2e|js)\/[^:\s)\n]+)):\d+:\d+/g,
+    "$1:0:0",
+  );
+  normalized = normalized.replace(
+    NODE_INTERNAL_FRAME_REGEX,
+    "node:<internal>:0:0",
+  );
+
+  return normalized;
 }
 
 function normalizeObject(
@@ -121,6 +153,8 @@ function normalizeValue(
   }
 
   if (typeof value === "string") {
+    value = normalizeStackLikeString(value);
+
     const normalizedUrl = normalizeMockServerUrl(value);
     if (normalizedUrl) {
       return normalizedUrl;
