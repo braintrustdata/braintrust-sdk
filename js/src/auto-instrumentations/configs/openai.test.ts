@@ -15,7 +15,7 @@ describe("OpenAI Instrumentation Configs", () => {
   it("should have chat.completions.create config", () => {
     const configs = configsForChannel("chat.completions.create");
 
-    expect(configs).toHaveLength(2);
+    expect(configs).toHaveLength(3);
     expect(configs).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
@@ -23,6 +23,18 @@ describe("OpenAI Instrumentation Configs", () => {
             name: "openai",
             versionRange: ">=4.0.0 <5.0.0",
             filePath: "resources/chat/completions.mjs",
+          }),
+          functionQuery: expect.objectContaining({
+            className: "Completions",
+            methodName: "create",
+            kind: "Async",
+          }),
+        }),
+        expect.objectContaining({
+          module: expect.objectContaining({
+            name: "openai",
+            versionRange: ">=4.0.0 <5.0.0",
+            filePath: "resources/chat/completions/completions.mjs",
           }),
           functionQuery: expect.objectContaining({
             className: "Completions",
