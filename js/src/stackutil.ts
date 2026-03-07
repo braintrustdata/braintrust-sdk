@@ -6,7 +6,7 @@ export interface StackTraceEntry {
   lineNo: number;
 }
 
-export function getStackTrace(): StackTraceEntry[] {
+function getStackTrace(): StackTraceEntry[] {
   const trace = new Error().stack;
   if (typeof trace !== "string") {
     return [];

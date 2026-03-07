@@ -767,16 +767,12 @@ export function Reporter<EvalReport>(
   return ret;
 }
 
-export function getLoadedEvals() {
-  return _evals;
-}
-
 export interface Filter {
   path: string[];
   pattern: RegExp;
 }
 
-export function serializeJSONWithPlainString(v: unknown) {
+function serializeJSONWithPlainString(v: unknown) {
   if (typeof v === "string") {
     return v;
   } else {
@@ -784,7 +780,7 @@ export function serializeJSONWithPlainString(v: unknown) {
   }
 }
 
-export function deserializePlainStringAsJSON(s: string) {
+function deserializePlainStringAsJSON(s: string) {
   try {
     return { value: JSON.parse(s), error: undefined };
   } catch (e) {
@@ -1551,7 +1547,7 @@ export function reportFailures<
 /**
  * Simple plain-text reporter for framework - no fancy formatting dependencies
  */
-export const defaultReporter: ReporterDef<boolean> = {
+const defaultReporter: ReporterDef<boolean> = {
   name: "Braintrust default reporter",
   async reportEval(
     // eslint-disable-next-line @typescript-eslint/no-explicit-any

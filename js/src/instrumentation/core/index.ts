@@ -15,11 +15,7 @@ export {
   parseChannelName,
   isValidChannelName,
 } from "./channel";
-export {
-  isAsyncIterable,
-  patchStreamIfNeeded,
-  wrapStreamResult,
-} from "./stream-patcher";
+export { isAsyncIterable, patchStreamIfNeeded } from "./stream-patcher";
 export type {
   BaseContext,
   StartEvent,
