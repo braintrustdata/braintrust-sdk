@@ -1,50 +1,49 @@
 # E2E Tests
 
-End-to-end tests that validate the Braintrust SDK by running real SDK usage scenarios against a mock server.
+End-to-end tests that validate the Braintrust SDK by running real usage scenarios against a mock Braintrust server.
 
 ## How It Works
 
-1. A **mock Braintrust server** starts before all tests (via Vitest global setup)
-2. Each test spawns a **scenario script** as a subprocess using `tsx`, with env vars pointing at the mock server
-3. The scenario uses the SDK normally (init, create spans, log data, flush)
-4. The test waits for expected events to arrive at the mock server, then **normalizes** and **snapshots** them
+1. Each test uses `withScenarioHarness(...)`, which starts an isolated mock Braintrust server
+2. The test spawns a scenario script as a subprocess, usually with `tsx`
+3. The scenario uses the SDK normally (init, create spans, log data, flush, or OTEL / OpenAI integrations)
+4. The test inspects captured events, payloads, or raw HTTP requests, then normalizes and snapshots them where useful
 
-Subprocess isolation ensures the SDK operates exactly as it would in production.
+Subprocess isolation keeps the SDK execution path close to production, including plain Node runs for auto-instrumentation hook coverage.
 
 ## Structure
 
 ```
 e2e/
-├── scenarios/          # Standalone scripts that use the SDK (run as subprocesses)
-├── tests/
-│   ├── helpers/        # Test utilities (see below)
-│   ├── global-setup.ts # Starts mock server, injects URL + API key into test context
-│   ├── *.test.ts       # Test files
-│   └── __snapshots__/  # Vitest snapshot files
-└── vitest.config.mts
+|- scenarios/          # Standalone scripts run as subprocesses
+|- tests/
+|  |- helpers/         # Harness, mock server, normalization, selectors, summaries
+|  |- *.test.ts        # Trace, OTEL, and OpenAI coverage
+|  `- __snapshots__/   # Vitest snapshots
+`- vitest.config.mts
 ```
 
 ## Helpers (`tests/helpers/`)
 
-- `mock-braintrust-server.ts` — Mock Braintrust API server (started automatically via global setup).
-- `run-scenario.ts` — Spawns scenario scripts as subprocesses.
-- `ingestion.ts` — Utilities for retrieving and waiting on data captured by the mock server.
-- `normalize.ts` — Makes captured data deterministic for snapshot testing.
+- `scenario-harness.ts` - Starts the mock server, creates a unique test run id, and runs scenarios.
+- `mock-braintrust-server.ts` - Captures requests, merged log payloads, and parsed span-like events.
+- `normalize.ts` - Makes snapshots deterministic by normalizing ids, timestamps, paths, and mock-server URLs.
+- `trace-selectors.ts` / `trace-summary.ts` - Helpers for finding spans and snapshotting only the relevant shape.
+- `openai.ts` - Shared scenario lists and assertions for OpenAI wrapper and hook coverage across v4/v5/v6.
 
 ### Writing a new test
 
-Use `runScenarioOrThrow(scenarioFile, env)` to execute a scenario. It runs the file with `tsx`, passes your env vars, and throws on non-zero exit. Default timeout is 15s.
+Most tests use `withScenarioHarness(async (harness) => { ... })`. It gives each test a fresh server plus helpers for running scenarios and reading what the server captured.
 
 The main utilities you'll use in test files:
 
-- `createTestRunId()` — Returns a unique `e2e-{uuid}` string. Pass it to your scenario via env vars so you can filter events for your test.
-- `getTestServerEnv(testRunId)` — Returns the env vars a scenario needs to talk to the mock server (`BRAINTRUST_API_URL`, `BRAINTRUST_API_KEY`, `TEST_RUN_ID`).
-- `waitForRunEvent(testRunId, predicate)` — Polls the mock server until an event matching the test run ID and predicate arrives (5s timeout, 50ms interval). Returns the matched `CapturedLogEvent`.
-- `waitForEvent(predicate)` — Same as above but without filtering by test run ID.
-- `getPayloadsForRun(testRunId)` — Returns all raw `logs3` payloads for a given test run.
-- `getEvents()` / `getPayloads()` — Low-level access to all captured events/payloads, with optional predicate filtering.
+- `runScenario(path, timeoutMs?)` - Runs a TypeScript scenario with `tsx`.
+- `runNodeScenario(path, nodeArgs?, timeoutMs?)` - Runs plain Node scenarios, used for `--import braintrust/hook.mjs`.
+- `testRunEvents()` - Returns parsed events tagged with the current test run id.
+- `events()`, `payloads()`, `requestCursor()`, `requestsAfter()` - Lower-level access for ingestion payloads and HTTP request flow assertions.
+- `testRunId` - Useful when a scenario or assertion needs the exact run marker.
 
-Use `normalizeEvent(event)` and `normalizePayloads(payloads)` before snapshotting. Replaces timestamps with `<timestamp>`, UUIDs with indexed tokens (`<uuid:1>`, `<span:1>`, `<xact:1>`, `<run:1>`), and absolute file paths with relative ones.
+Use `normalizeForSnapshot(...)` before snapshotting. It replaces timestamps and ids with stable tokens and strips machine-specific paths and localhost ports.
 
 ## Running
 
