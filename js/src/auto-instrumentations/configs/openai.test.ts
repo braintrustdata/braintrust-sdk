@@ -13,19 +13,37 @@ describe("OpenAI Instrumentation Configs", () => {
   });
 
   it("should have chat.completions.create config", () => {
-    const config = openaiConfigs.find(
-      (c) => c.channelName === "chat.completions.create",
-    );
+    const configs = configsForChannel("chat.completions.create");
 
-    expect(config).toBeDefined();
-    expect(config?.module.name).toBe("openai");
-    expect(config?.module.versionRange).toBe(">=4.0.0");
-    expect(config?.module.filePath).toBe(
-      "resources/chat/completions/completions.mjs",
+    expect(configs).toHaveLength(2);
+    expect(configs).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          module: expect.objectContaining({
+            name: "openai",
+            versionRange: ">=4.0.0 <5.0.0",
+            filePath: "resources/chat/completions.mjs",
+          }),
+          functionQuery: expect.objectContaining({
+            className: "Completions",
+            methodName: "create",
+            kind: "Async",
+          }),
+        }),
+        expect.objectContaining({
+          module: expect.objectContaining({
+            name: "openai",
+            versionRange: ">=5.0.0",
+            filePath: "resources/chat/completions/completions.mjs",
+          }),
+          functionQuery: expect.objectContaining({
+            className: "Completions",
+            methodName: "create",
+            kind: "Async",
+          }),
+        }),
+      ]),
     );
-    expect((config?.functionQuery as any).className).toBe("Completions");
-    expect((config?.functionQuery as any).methodName).toBe("create");
-    expect((config?.functionQuery as any).kind).toBe("Async");
   });
 
   it("should have embeddings.create config", () => {
