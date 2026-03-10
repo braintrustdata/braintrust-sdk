@@ -11,6 +11,10 @@
       "outputs": [".next/**", "!.next/cache/**", "dist/**"],
       "env": []
     },
+    "check:typings": {
+      "dependsOn": ["^build"],
+      "outputs": []
+    },
     "test": {
       "env": [
         "ANTHROPIC_API_KEY",
