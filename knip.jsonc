@@ -12,6 +12,7 @@
   "workspaces": {
     "js": {
       "entry": [
+        "src/instrumentation/index.ts",
         "src/auto-instrumentations/bundler/*.ts",
         "tests/**/*.{ts,tsx,mts,cts,cjs,mjs}",
         "scripts/**/*.ts",
