@@ -17,6 +17,14 @@
         "scenarios/**/*.ts",
         "scenarios/**/*.mjs"
       ],
+      "ignore": ["runScenarioDir", "runNodeScenarioDir"],
+      "ignoreFiles": [
+        "helpers/scenario-runtime.ts",
+        "scenarios/**/scenario.ts",
+        "scenarios/**/scenario.mjs",
+        "scenarios/**/scenario.*.ts",
+        "scenarios/**/scenario.*.mjs"
+      ],
       "ignoreDependencies": ["openai", "openai-v4", "openai-v5"]
     }
   }
