@@ -29,7 +29,9 @@ import type {
  * const client = new GoogleGenAI({ apiKey: 'YOUR_API_KEY' });
  * ```
  */
-export function wrapGoogleGenAI<T extends object>(googleGenAI: T): T {
+export function wrapGoogleGenAI<T extends Record<string, any>>(
+  googleGenAI: T,
+): T {
   if (!googleGenAI || typeof googleGenAI !== "object") {
     console.warn("Invalid Google GenAI module. Not wrapping.");
     return googleGenAI;
