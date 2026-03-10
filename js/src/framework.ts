@@ -736,7 +736,7 @@ export async function Eval<
       }
       progressReporter.stop();
       resolvedReporter.reportEval(evalDef, ret, {
-        showDetailedErrors: true,
+        verbose: true,
         jsonl: false,
       });
       return ret;
@@ -1440,8 +1440,8 @@ async function runEvaluatorInternal(
 export const error = (text: string) => `Error: ${text}`;
 export const warning = (text: string) => `Warning: ${text}`;
 
-export function logError(e: unknown, showDetailedErrors: boolean) {
-  if (!showDetailedErrors) {
+export function logError(e: unknown, verbose: boolean) {
+  if (!verbose) {
     console.error(`${e}`);
   } else {
     console.error(e);
@@ -1513,7 +1513,7 @@ export function reportFailures<
 >(
   evaluator: EvaluatorDef<Input, Output, Expected, Metadata>,
   failingResults: EvalResult<Input, Output, Expected, Metadata>[],
-  { showDetailedErrors, jsonl }: ReporterOpts,
+  { verbose, jsonl }: ReporterOpts,
 ) {
   if (failingResults.length > 0) {
     // TODO: We may want to support a non-strict mode (and make this the "strict" behavior), so that
@@ -1535,10 +1535,10 @@ export function reportFailures<
       );
     } else {
       for (const result of failingResults) {
-        logError(result.error, showDetailedErrors);
+        logError(result.error, verbose);
       }
     }
-    if (!showDetailedErrors && !jsonl) {
+    if (!verbose && !jsonl) {
       console.error(
         warning(
           "Use --debug-logging full to see full stack traces and troubleshooting details.",
@@ -1563,7 +1563,7 @@ const defaultReporter: ReporterDef<boolean> = {
     evaluator: EvaluatorDef<any, any, any, any>,
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     result: EvalResultWithSummary<any, any, any, any>,
-    { showDetailedErrors, jsonl }: ReporterOpts,
+    { verbose, jsonl }: ReporterOpts,
   ) {
     const { results, summary } = result;
     const failingResults = results.filter(
@@ -1571,7 +1571,7 @@ const defaultReporter: ReporterDef<boolean> = {
     );
 
     if (failingResults.length > 0) {
-      reportFailures(evaluator, failingResults, { showDetailedErrors, jsonl });
+      reportFailures(evaluator, failingResults, { verbose, jsonl });
     }
 
     if (jsonl) {

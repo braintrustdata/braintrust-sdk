@@ -261,7 +261,7 @@ function buildWatchPluginForEvaluator(
             evaluator,
             evaluatorResult,
             {
-              showDetailedErrors: opts.showDetailedErrors,
+              verbose: opts.showDetailedErrors,
               jsonl: opts.jsonl,
             },
           );
@@ -577,7 +577,7 @@ async function runOnce(
       // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
       allEvalsResults[idx as number],
       {
-        showDetailedErrors: opts.showDetailedErrors,
+        verbose: opts.showDetailedErrors,
         jsonl: opts.jsonl,
       },
     );

@@ -1164,90 +1164,53 @@ function areInterfaceSignaturesCompatible(
   oldInterface: string,
   newInterface: string,
 ): boolean {
-  // Extract interface name to ensure we're comparing the same interface
-  const oldNameMatch = oldInterface.match(/interface\s+(\w+)/);
-  const newNameMatch = newInterface.match(/interface\s+(\w+)/);
+  const parseInterface = (interfaceSig: string) => {
+    const sourceFile = ts.createSourceFile(
+      "interface.ts",
+      interfaceSig,
+      ts.ScriptTarget.Latest,
+      true,
+      ts.ScriptKind.TS,
+    );
 
-  if (!oldNameMatch || !newNameMatch || oldNameMatch[1] !== newNameMatch[1]) {
-    return false; // Different interfaces
-  }
-
-  // Extract fields from interface body
-  // Pattern: interface Name { field1: Type1; field2?: Type2; ... }
-  // Returns Map<fieldName, {type, optional}>
-  const extractFields = (
-    interfaceSig: string,
-  ): Map<string, { type: string; optional: boolean }> => {
-    const fields = new Map<string, { type: string; optional: boolean }>();
-
-    // Extract the content between { and }
-    const bodyMatch = interfaceSig.match(/\{([^}]*)\}/);
-    if (!bodyMatch) return fields;
-
-    const body = bodyMatch[1];
-
-    // Match field definitions: fieldName: Type or fieldName?: Type
-    // Handle nested types with angle brackets, braces, etc.
-    let currentField = "";
-    let depth = 0;
-    let fieldName = "";
-    let isOptional = false;
-    let inFieldName = true;
-
-    for (let i = 0; i < body.length; i++) {
-      const char = body[i];
-
-      if (char === "<" || char === "{" || char === "(") {
-        depth++;
-        if (!inFieldName) currentField += char;
-      } else if (char === ">" || char === "}" || char === ")") {
-        depth--;
-        if (!inFieldName) currentField += char;
-      } else if (char === "?" && depth === 0 && inFieldName) {
-        // Found optional marker after field name
-        isOptional = true;
-      } else if (char === ":" && depth === 0 && inFieldName) {
-        // Found the separator between field name and type
-        inFieldName = false;
-        fieldName = currentField.trim();
-        currentField = "";
-      } else if (char === ";" && depth === 0) {
-        // End of field definition
-        if (fieldName) {
-          fields.set(fieldName, {
-            type: currentField.trim(),
-            optional: isOptional,
-          });
-        }
-        currentField = "";
-        fieldName = "";
-        isOptional = false;
-        inFieldName = true;
-      } else {
-        if (inFieldName) {
-          if (char.trim()) {
-            // Skip whitespace in field name
-            currentField += char;
-          }
-        } else {
-          currentField += char;
-        }
+    let declaration: ts.InterfaceDeclaration | undefined;
+    ts.forEachChild(sourceFile, (node) => {
+      if (ts.isInterfaceDeclaration(node) && !declaration) {
+        declaration = node;
       }
+    });
+
+    if (!declaration) {
+      return null;
     }
 
-    // Handle last field if no trailing semicolon
-    if (fieldName && currentField.trim()) {
-      fields.set(fieldName, {
-        type: currentField.trim(),
-        optional: isOptional,
+    const fields = new Map<string, { type: string; optional: boolean }>();
+    for (const member of declaration.members) {
+      if (!ts.isPropertySignature(member) || !member.type) {
+        return null;
+      }
+
+      fields.set(member.name.getText(sourceFile), {
+        type: member.type.getText(sourceFile),
+        optional: !!member.questionToken,
       });
     }
 
-    return fields;
+    return {
+      name: declaration.name.text,
+      fields,
+    };
   };
 
-  const oldFields = extractFields(oldInterface);
-  const newFields = extractFields(newInterface);
+  const oldParsed = parseInterface(oldInterface);
+  const newParsed = parseInterface(newInterface);
+
+  if (!oldParsed || !newParsed || oldParsed.name !== newParsed.name) {
+    return false;
+  }
+
+  const oldFields = oldParsed.fields;
+  const newFields = newParsed.fields;
 
   // Check that all old fields exist in new interface with compatible types
   for (const [fieldName, oldField] of oldFields) {
@@ -1721,6 +1684,31 @@ describe("areInterfaceSignaturesCompatible", () => {
   test("should allow widening field type to union (simple case)", () => {
     const oldInterface = `export interface Config { value: string; }`;
     const newInterface = `export interface Config { value: string | number; }`;
+
+    const result = areInterfaceSignaturesCompatible(oldInterface, newInterface);
+    expect(result).toBe(true);
+  });
+
+  test("should allow adding an optional field to a documented interface", () => {
+    const oldInterface = `interface LoginOptions {
+      appUrl?: string;
+      apiKey?: string;
+      orgName?: string;
+      fetch?: typeof globalThis.fetch;
+      noExitFlush?: boolean;
+      onFlushError?: (error: unknown) => void;
+      disableSpanCache?: boolean;
+    }`;
+    const newInterface = `interface LoginOptions {
+      appUrl?: string;
+      apiKey?: string;
+      orgName?: string;
+      fetch?: typeof globalThis.fetch;
+      noExitFlush?: boolean;
+      onFlushError?: (error: unknown) => void;
+      disableSpanCache?: boolean;
+      debugLogging?: boolean | DebugLogLevel;
+    }`;
 
     const result = areInterfaceSignaturesCompatible(oldInterface, newInterface);
     expect(result).toBe(true);

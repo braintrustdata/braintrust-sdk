@@ -8,7 +8,7 @@ export interface ProgressReporter {
 }
 
 export interface ReporterOpts {
-  showDetailedErrors: boolean;
+  verbose: boolean;
   jsonl: boolean;
 }
 

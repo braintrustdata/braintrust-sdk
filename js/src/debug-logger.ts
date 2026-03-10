@@ -51,7 +51,7 @@ export function normalizeDebugLogOption(
   );
 }
 
-export function parseDebugLogLevelEnv(
+function parseDebugLogLevelEnv(
   value: string | undefined,
 ): DebugLogLevel | undefined {
   if (!value) {
@@ -66,13 +66,6 @@ export function parseDebugLogLevelEnv(
 
 export function getEnvDebugLogLevel(): DebugLogLevel | undefined {
   return parseDebugLogLevelEnv(iso.getEnv("BRAINTRUST_LOG_LEVEL"));
-}
-
-export function getGlobalDebugLogLevel(): DebugLogLevel | undefined {
-  // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
-  return (globalThis as Record<symbol, DebugLogLevel | false | undefined>)[
-    DEBUG_LOG_LEVEL_SYMBOL
-  ] as DebugLogLevel | undefined;
 }
 
 export function setGlobalDebugLogLevel(
@@ -108,7 +101,8 @@ function resolveDebugLogLevel(
     // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
     (globalThis as Record<symbol, DebugLogLevel | false | undefined>)[
       DEBUG_LOG_LEVEL_SYMBOL
-    ];
+    ] as DebugLogLevel | false | undefined;
+
   if (globalLevel !== undefined) {
     return globalLevel === false ? undefined : globalLevel;
   }
