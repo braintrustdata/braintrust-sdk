@@ -9,12 +9,14 @@
   ],
   "scripts": {
     "build": "turbo run build",
+    "check:typings": "turbo run check:typings",
     "dev": "turbo run dev",
     "watch": "turbo run watch",
     "start": "turbo run start",
     "clean": "turbo run clean",
-    "test": "dotenv -e .env -- turbo run test --filter=\"!@braintrust/otel\"",
-    "playground": "dotenv -e .env -- turbo run playground --filter=\"braintrust\"",
+    "knip": "knip --config knip.jsonc --no-config-hints",
+    "test": "turbo run test --filter=\"!@braintrust/otel\"",
+    "playground": "turbo run playground --filter=\"braintrust\"",
     "prepare": "husky || true",
     "lint:prettier": "prettier --check .",
     "lint:eslint": "turbo run lint",
@@ -26,10 +28,10 @@
   "devDependencies": {
     "eslint": "^9.39.2",
     "husky": "^9.1.7",
+    "knip": "^5.85.0",
     "lint-staged": "^16.2.7",
     "prettier": "^3.8.1",
-    "turbo": "^2.5.6",
-    "dotenv-cli": "11.0.0"
+    "turbo": "^2.5.6"
   },
   "overrides": {
     "zod": "3.25.34",

@@ -62,7 +62,7 @@ export function isRootSpan(span: ReadableSpan): boolean {
 /**
  * Returns true if the span is an AI span (name or attribute matches AI prefixes).
  */
-export function isAISpan(span: ReadableSpan): boolean {
+function isAISpan(span: ReadableSpan): boolean {
   if (FILTER_PREFIXES.some((prefix) => span.name.startsWith(prefix))) {
     return true;
   }

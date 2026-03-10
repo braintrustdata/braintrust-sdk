@@ -8,6 +8,7 @@ experimental = true
 _.file = ".env"
 
 [tools]
+nodejs = "22.15.0"
 pnpm = "10.26.2"
 
 [hooks]
