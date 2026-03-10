@@ -15,7 +15,6 @@ export {
   parseChannelName,
   isValidChannelName,
 } from "./channel";
-export { isAsyncIterable, patchStreamIfNeeded } from "./stream-patcher";
 export type {
   BaseContext,
   ChannelSpanInfo,
