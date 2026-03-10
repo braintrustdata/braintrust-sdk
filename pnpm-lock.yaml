@@ -5775,6 +5775,10 @@ packages:
     engines: {node: '>=0.8.0'}
     hasBin: true
 
+  unbash@2.2.0:
+    resolution: {integrity: sha512-X2wH19RAPZE3+ldGicOkoj/SIA83OIxcJ6Cuaw23hf8Xc6fQpvZXY0SftE2JgS0QhYLUG4uwodSI3R53keyh7w==}
+    engines: {node: '>=14'}
+
   undici-types@5.26.5:
     resolution: {integrity: sha512-JlCMO+ehdEIKqlFxk6IfVoAUVmgz7cU7zD/h9XZ0qzeosSHmUJVOzSQvvYSYWXkFXC+IfLKSIffhv0sVZup6pA==}
 
@@ -12428,6 +12432,8 @@ snapshots:
 
   uglify-js@3.19.3:
     optional: true
+
+  unbash@2.2.0: {}
 
   undici-types@5.26.5: {}
 
