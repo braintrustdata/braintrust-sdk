@@ -2,6 +2,7 @@ import {
   type GitMetadataSettingsType as GitMetadataSettings,
   type RepoInfoType as RepoInfo,
 } from "./generated_types";
+import { debugLogger } from "./debug-logger";
 import { simpleGit } from "simple-git";
 
 const COMMON_BASE_BRANCHES = ["main", "master", "develop"];
@@ -116,7 +117,7 @@ export async function getPastNAncestors(
   try {
     ancestor = await getBaseBranchAncestor(remote);
   } catch (e) {
-    console.warn(
+    debugLogger.warn(
       "Skipping git metadata. This is likely because the repository has not been published to a remote yet.",
       `${e}`,
     );

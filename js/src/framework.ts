@@ -15,6 +15,7 @@ import {
 import { queue } from "async";
 
 import iso from "./isomorph";
+import { debugLogger } from "./debug-logger";
 import { GenericFunction } from "./framework-types";
 import { CodeFunction, CodePrompt, CodeParameters } from "./framework2";
 import { Trace, LocalTrace } from "./trace";
@@ -735,7 +736,7 @@ export async function Eval<
       }
       progressReporter.stop();
       resolvedReporter.reportEval(evalDef, ret, {
-        verbose: true,
+        showDetailedErrors: true,
         jsonl: false,
       });
       return ret;
@@ -1248,10 +1249,12 @@ async function runEvaluatorInternal(
               const names = Object.keys(scorerErrors).join(", ");
               const errors = failingScorersAndResults.map((item) => item.error);
               unhandledScores = Object.keys(scorerErrors);
-              console.warn(
-                `Found exceptions for the following scorers: ${names}`,
-                errors,
-              );
+              debugLogger
+                .forState(evaluator.state)
+                .warn(
+                  `Found exceptions for the following scorers: ${names}`,
+                  errors,
+                );
             }
           } catch (e) {
             logSpanError(rootSpan, e);
@@ -1394,7 +1397,9 @@ async function runEvaluatorInternal(
       if (e instanceof InternalAbortError) {
         // Log cancellation for debugging
         if (iso.getEnv("BRAINTRUST_VERBOSE")) {
-          console.warn("Evaluator cancelled:", e.message);
+          debugLogger
+            .forState(evaluator.state)
+            .warn("Evaluator cancelled:", e.message);
         }
       }
 
@@ -1435,8 +1440,8 @@ async function runEvaluatorInternal(
 export const error = (text: string) => `Error: ${text}`;
 export const warning = (text: string) => `Warning: ${text}`;
 
-export function logError(e: unknown, verbose: boolean) {
-  if (!verbose) {
+export function logError(e: unknown, showDetailedErrors: boolean) {
+  if (!showDetailedErrors) {
     console.error(`${e}`);
   } else {
     console.error(e);
@@ -1508,7 +1513,7 @@ export function reportFailures<
 >(
   evaluator: EvaluatorDef<Input, Output, Expected, Metadata>,
   failingResults: EvalResult<Input, Output, Expected, Metadata>[],
-  { verbose, jsonl }: ReporterOpts,
+  { showDetailedErrors, jsonl }: ReporterOpts,
 ) {
   if (failingResults.length > 0) {
     // TODO: We may want to support a non-strict mode (and make this the "strict" behavior), so that
@@ -1530,11 +1535,15 @@ export function reportFailures<
       );
     } else {
       for (const result of failingResults) {
-        logError(result.error, verbose);
+        logError(result.error, showDetailedErrors);
       }
     }
-    if (!verbose && !jsonl) {
-      console.error(warning("Add --verbose to see full stack traces."));
+    if (!showDetailedErrors && !jsonl) {
+      console.error(
+        warning(
+          "Use --debug-logging full to see full stack traces and troubleshooting details.",
+        ),
+      );
     }
   }
 }
@@ -1554,7 +1563,7 @@ const defaultReporter: ReporterDef<boolean> = {
     evaluator: EvaluatorDef<any, any, any, any>,
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     result: EvalResultWithSummary<any, any, any, any>,
-    { verbose, jsonl }: ReporterOpts,
+    { showDetailedErrors, jsonl }: ReporterOpts,
   ) {
     const { results, summary } = result;
     const failingResults = results.filter(
@@ -1562,7 +1571,7 @@ const defaultReporter: ReporterDef<boolean> = {
     );
 
     if (failingResults.length > 0) {
-      reportFailures(evaluator, failingResults, { verbose, jsonl });
+      reportFailures(evaluator, failingResults, { showDetailedErrors, jsonl });
     }
 
     if (jsonl) {

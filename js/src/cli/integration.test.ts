@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { CompileArgs, RunArgs, BundleArgs } from "./util/types";
+import { CompileArgs, RunArgs, BundleArgs, PullArgs } from "./util/types";
 
 // Test the type definitions for external packages
 describe("External Packages Type Definitions", () => {
@@ -43,6 +43,7 @@ describe("External Packages Type Definitions", () => {
         org_name: "test-org",
         app_url: "https://test.com",
         env_file: ".env",
+        debug_logging: "setup",
         tsconfig: "tsconfig.json",
         terminate_on_failure: false,
         external_packages: ["@mapbox/node-pre-gyp"],
@@ -61,6 +62,7 @@ describe("External Packages Type Definitions", () => {
       };
 
       expect(args.external_packages).toEqual(["@mapbox/node-pre-gyp"]);
+      expect(args.debug_logging).toBe("setup");
     });
   });
 
@@ -72,6 +74,7 @@ describe("External Packages Type Definitions", () => {
         org_name: "test-org",
         app_url: "https://test.com",
         env_file: ".env",
+        debug_logging: "full",
         tsconfig: "tsconfig.json",
         terminate_on_failure: false,
         external_packages: ["sqlite3", "sharp"],
@@ -80,6 +83,21 @@ describe("External Packages Type Definitions", () => {
       };
 
       expect(args.external_packages).toEqual(["sqlite3", "sharp"]);
+      expect(args.debug_logging).toBe("full");
+    });
+  });
+
+  describe("PullArgs interface", () => {
+    it("should include debug_logging from CommonArgs", () => {
+      const args: PullArgs = {
+        verbose: false,
+        output_dir: "./braintrust",
+        project_name: "test-project",
+        force: false,
+        debug_logging: "setup",
+      };
+
+      expect(args.debug_logging).toBe("setup");
     });
   });
 });

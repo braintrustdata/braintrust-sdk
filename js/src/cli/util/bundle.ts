@@ -1,13 +1,18 @@
 import { loadEnvConfig } from "@next/env";
 import * as dotenv from "dotenv";
-import { AuthArgs, BundleArgs } from "./types";
+import { AuthArgs, BundleArgs, CommonArgs } from "./types";
 import { error } from "../../framework";
 import type { BtBuildResult } from "../types";
 import { handleBuildFailure, initializeHandles } from "../index";
 import { login } from "../../logger";
 import { uploadHandleBundles } from "../functions/upload";
+import {
+  normalizeDebugLoggingArgs,
+  shouldShowDetailedErrors,
+} from "./debug-logging";
 
-export async function loadCLIEnv(args: AuthArgs) {
+export async function loadCLIEnv(args: AuthArgs & CommonArgs) {
+  normalizeDebugLoggingArgs(args);
   // Load the environment variables from the .env files using the same rules as Next.js
   loadEnvConfig(process.cwd(), true);
 
@@ -24,11 +29,13 @@ export async function loadCLIEnv(args: AuthArgs) {
     apiKey: args.api_key,
     orgName: args.org_name,
     appUrl: args.app_url,
+    debugLogging: args.debug_logging,
   });
 }
 
 export async function bundleCommand(args: BundleArgs) {
   await loadCLIEnv(args);
+  const showDetailedErrors = shouldShowDetailedErrors(args.debug_logging);
 
   const handles = await initializeHandles({
     mode: "bundle",
@@ -56,7 +63,7 @@ export async function bundleCommand(args: BundleArgs) {
         handleBuildFailure({
           result: buildResult,
           terminateOnFailure: args.terminate_on_failure,
-          verbose: args.verbose,
+          showDetailedErrors,
         });
       } else {
         buildResults.push(buildResult);
@@ -68,7 +75,7 @@ export async function bundleCommand(args: BundleArgs) {
       bundlePromises,
       handles,
       setCurrent: true,
-      verbose: args.verbose,
+      showDetailedErrors,
       defaultIfExists: args.if_exists,
     });
 

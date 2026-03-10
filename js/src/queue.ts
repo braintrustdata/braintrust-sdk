@@ -1,3 +1,5 @@
+import { debugLogger } from "./debug-logger";
+
 export const DEFAULT_QUEUE_SIZE = 15000;
 
 // A simple queue that drops oldest items when full. Uses a plain array
@@ -9,7 +11,7 @@ export class Queue<T> {
 
   constructor(maxSize: number) {
     if (maxSize < 1) {
-      console.warn(
+      debugLogger.warn(
         `maxSize ${maxSize} is <1, using default ${DEFAULT_QUEUE_SIZE}`,
       );
       maxSize = DEFAULT_QUEUE_SIZE;

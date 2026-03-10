@@ -663,7 +663,11 @@ describe("wrapTraced generator support", () => {
 
   test("traced sync generator truncation", async () => {
     process.env.BRAINTRUST_MAX_GENERATOR_ITEMS = "3";
-    initLogger({ projectName: "test", projectId: "test-project-id" });
+    initLogger({
+      projectName: "test",
+      projectId: "test-project-id",
+      debugLogging: "setup",
+    });
 
     const consoleWarnSpy = vi
       .spyOn(console, "warn")
@@ -683,6 +687,7 @@ describe("wrapTraced generator support", () => {
     expect(results).toEqual([0, 1, 2, 3, 4, 5, 6, 7, 8, 9]);
 
     expect(consoleWarnSpy).toHaveBeenCalledWith(
+      "[braintrust]",
       "Generator output exceeded limit of 3 items, output not logged. " +
         "Increase BRAINTRUST_MAX_GENERATOR_ITEMS or set to -1 to disable limit.",
     );
@@ -700,7 +705,11 @@ describe("wrapTraced generator support", () => {
 
   test("traced async generator truncation", async () => {
     process.env.BRAINTRUST_MAX_GENERATOR_ITEMS = "3";
-    initLogger({ projectName: "test", projectId: "test-project-id" });
+    initLogger({
+      projectName: "test",
+      projectId: "test-project-id",
+      debugLogging: "setup",
+    });
 
     const consoleWarnSpy = vi
       .spyOn(console, "warn")
@@ -723,6 +732,7 @@ describe("wrapTraced generator support", () => {
     expect(results).toEqual([0, 1, 2, 3, 4, 5, 6, 7, 8, 9]);
 
     expect(consoleWarnSpy).toHaveBeenCalledWith(
+      "[braintrust]",
       "Generator output exceeded limit of 3 items, output not logged. " +
         "Increase BRAINTRUST_MAX_GENERATOR_ITEMS or set to -1 to disable limit.",
     );
@@ -1025,6 +1035,7 @@ describe("parent precedence", () => {
 });
 
 test("attachment with unreadable path logs warning", () => {
+  _exportsForTestingOnly.simulateLogoutForTests().setDebugLogLevel("setup");
   const consoleWarnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
 
   new Attachment({
@@ -1035,6 +1046,7 @@ test("attachment with unreadable path logs warning", () => {
 
   expect(consoleWarnSpy).toHaveBeenCalledTimes(1);
   expect(consoleWarnSpy).toHaveBeenCalledWith(
+    "[braintrust]",
     expect.stringMatching(/Failed to read file:/),
   );
 

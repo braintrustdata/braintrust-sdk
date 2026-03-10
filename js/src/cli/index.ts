@@ -54,6 +54,10 @@ import { uploadHandleBundles } from "./functions/upload";
 import { loadModule } from "./functions/load-module";
 import { bundleCommand } from "./util/bundle";
 import { RunArgs } from "./util/types";
+import {
+  normalizeDebugLoggingArgs,
+  shouldShowDetailedErrors,
+} from "./util/debug-logging";
 import { pullCommand } from "./util/pull";
 import { runDevServer } from "../../dev/server";
 
@@ -186,7 +190,7 @@ function buildWatchPluginForEvaluator(
         console.error(`Done building ${inFile}`);
 
         if (!result.outputFiles) {
-          if (opts.verbose) {
+          if (opts.showDetailedErrors) {
             console.warn(`Failed to compile ${inFile}`);
             console.warn(result.errors);
           } else {
@@ -257,7 +261,7 @@ function buildWatchPluginForEvaluator(
             evaluator,
             evaluatorResult,
             {
-              verbose: opts.verbose,
+              showDetailedErrors: opts.showDetailedErrors,
               jsonl: opts.jsonl,
             },
           );
@@ -358,7 +362,7 @@ async function initFile({
 }
 
 interface EvaluatorOpts {
-  verbose: boolean;
+  showDetailedErrors: boolean;
   apiKey?: string;
   orgName?: string;
   appUrl?: string;
@@ -376,15 +380,15 @@ interface EvaluatorOpts {
 export function handleBuildFailure({
   result,
   terminateOnFailure,
-  verbose,
+  showDetailedErrors,
 }: {
   result: BuildFailure;
   terminateOnFailure: boolean;
-  verbose: boolean;
+  showDetailedErrors: boolean;
 }) {
   if (terminateOnFailure) {
     throw result.error;
-  } else if (verbose) {
+  } else if (showDetailedErrors) {
     console.warn(`Failed to compile ${result.sourceFile}`);
     console.warn(result.error);
   } else {
@@ -404,7 +408,7 @@ function updateEvaluators(
       handleBuildFailure({
         result,
         terminateOnFailure: opts.terminateOnFailure,
-        verbose: opts.verbose,
+        showDetailedErrors: opts.showDetailedErrors,
       });
       continue;
     }
@@ -573,7 +577,7 @@ async function runOnce(
       // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
       allEvalsResults[idx as number],
       {
-        verbose: opts.verbose,
+        showDetailedErrors: opts.showDetailedErrors,
         jsonl: opts.jsonl,
       },
     );
@@ -592,7 +596,7 @@ async function runOnce(
       handles,
       setCurrent: opts.setCurrent,
       defaultIfExists: "replace",
-      verbose: opts.verbose,
+      showDetailedErrors: opts.showDetailedErrors,
     });
   }
 
@@ -862,6 +866,7 @@ export async function initializeHandles({
 }
 
 async function run(args: RunArgs) {
+  normalizeDebugLoggingArgs(args);
   // Load the environment variables from the .env files using the same rules as Next.js
   loadEnvConfig(process.cwd(), true);
 
@@ -875,7 +880,7 @@ async function run(args: RunArgs) {
   }
 
   const evaluatorOpts: EvaluatorOpts = {
-    verbose: args.verbose,
+    showDetailedErrors: shouldShowDetailedErrors(args.debug_logging),
     apiKey: args.api_key,
     orgName: args.org_name,
     appUrl: args.app_url,
@@ -933,6 +938,7 @@ async function run(args: RunArgs) {
         apiKey: args.api_key,
         orgName: args.org_name,
         appUrl: args.app_url,
+        debugLogging: args.debug_logging,
       });
     }
 
@@ -973,6 +979,13 @@ function addAuthArgs(parser: ArgumentParser) {
   });
 }
 
+function addDebugLoggingArg(parser: ArgumentParser) {
+  parser.add_argument("--debug-logging", {
+    choices: ["setup", "full"],
+    help: "Enable internal Braintrust SDK troubleshooting output. Use 'setup' for setup-relevant diagnostics or 'full' for deeper SDK debug logging.",
+  });
+}
+
 function addCompileArgs(parser: ArgumentParser) {
   parser.add_argument("--terminate-on-failure", {
     action: "store_true",
@@ -997,7 +1010,7 @@ async function main() {
   const parentParser = new ArgumentParser({ add_help: false });
   parentParser.add_argument("--verbose", {
     action: "store_true",
-    help: "Include additional details, including full stack traces on errors.",
+    help: "Deprecated alias for --debug-logging full. Use --debug-logging full to include full stack traces and detailed troubleshooting output.",
   });
 
   const subparser = parser.add_subparsers({
@@ -1009,6 +1022,7 @@ async function main() {
     parents: [parentParser],
   });
   addAuthArgs(parser_run);
+  addDebugLoggingArg(parser_run);
   parser_run.add_argument("--filter", {
     help: "Only run evaluators that match these filters. Each filter is a regular expression (https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/RegExp). For example, --filter metadata.priority='^P0$' input.name='foo.*bar' will only run evaluators that have metadata.priority equal to 'P0' and input.name matching the regular expression 'foo.*bar'.",
     nargs: "*",
@@ -1070,6 +1084,7 @@ async function main() {
     help: "Bundle prompts, tools, scorers, and other resources into Braintrust",
   });
   addAuthArgs(parser_push);
+  addDebugLoggingArg(parser_push);
   addCompileArgs(parser_push);
   parser_push.add_argument("files", {
     nargs: "*",
@@ -1085,6 +1100,7 @@ async function main() {
   const parser_pull = subparser.add_parser("pull", {
     help: "Pull prompts, tools, scorers, and other resources from Braintrust to save in your codebase.",
   });
+  addDebugLoggingArg(parser_pull);
   parser_pull.add_argument("--output-dir", {
     help: "The directory to output the pulled resources to. If not specified, the current directory is used.",
   });
@@ -1109,12 +1125,12 @@ async function main() {
   });
   parser_pull.set_defaults({ func: pullCommand });
 
-  const parsed = parser.parse_args();
+  const parsed = normalizeDebugLoggingArgs(parser.parse_args());
 
   try {
     await parsed.func(parsed);
   } catch (e) {
-    logError(e, parsed.verbose);
+    logError(e, shouldShowDetailedErrors(parsed.debug_logging));
     process.exit(1);
   }
 }

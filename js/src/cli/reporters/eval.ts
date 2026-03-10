@@ -166,7 +166,10 @@ export const fancyReporter: ReporterDef<boolean> = {
     evaluator: EvaluatorDef<any, any, any, any>,
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     result: EvalResultWithSummary<any, any, any, any>,
-    { verbose, jsonl }: { verbose: boolean; jsonl?: boolean },
+    {
+      showDetailedErrors,
+      jsonl,
+    }: { showDetailedErrors: boolean; jsonl?: boolean },
   ) {
     const { results, summary } = result;
     const failingResults = results.filter(
@@ -184,7 +187,7 @@ export const fancyReporter: ReporterDef<boolean> = {
           process.stdout.write(JSON.stringify(result));
           process.stdout.write("\n");
         }
-      } else if (verbose) {
+      } else if (showDetailedErrors) {
         for (const result of failingResults) {
           console.error(result);
         }
