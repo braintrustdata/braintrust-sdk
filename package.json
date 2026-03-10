@@ -9,6 +9,7 @@
   ],
   "scripts": {
     "build": "turbo run build",
+    "check:typings": "turbo run check:typings",
     "dev": "turbo run dev",
     "watch": "turbo run watch",
     "start": "turbo run start",
