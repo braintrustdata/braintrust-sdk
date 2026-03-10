@@ -15,8 +15,8 @@
     "start": "turbo run start",
     "clean": "turbo run clean",
     "knip": "knip --config knip.jsonc --no-config-hints",
-    "test": "dotenv -e .env -- turbo run test --filter=\"!@braintrust/otel\"",
-    "playground": "dotenv -e .env -- turbo run playground --filter=\"braintrust\"",
+    "test": "turbo run test --filter=\"!@braintrust/otel\"",
+    "playground": "turbo run playground --filter=\"braintrust\"",
     "prepare": "husky || true",
     "lint:prettier": "prettier --check .",
     "lint:eslint": "turbo run lint",
@@ -26,7 +26,6 @@
     "fix": "pnpm run fix:prettier && pnpm run fix:eslint"
   },
   "devDependencies": {
-    "dotenv-cli": "11.0.0",
     "eslint": "^9.39.2",
     "husky": "^9.1.7",
     "knip": "^5.85.0",
