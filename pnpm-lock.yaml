@@ -50,15 +50,6 @@ importers:
       braintrust:
         specifier: workspace:^
         version: link:../js
-      openai:
-        specifier: 6.25.0
-        version: 6.25.0(ws@8.18.3)(zod@3.25.76)
-      openai-v4:
-        specifier: npm:openai@4.104.0
-        version: openai@4.104.0(ws@8.18.3)(zod@3.25.76)
-      openai-v5:
-        specifier: npm:openai@5.11.0
-        version: openai@5.11.0(ws@8.18.3)(zod@3.25.76)
       tsx:
         specifier: ^3.14.0
         version: 3.14.0
