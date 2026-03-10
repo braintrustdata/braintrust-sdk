@@ -7,6 +7,10 @@
       "outputs": [".next/**", "!.next/cache/**", "dist/**"],
       "env": []
     },
+    "check:typings": {
+      "dependsOn": ["^build"],
+      "outputs": []
+    },
     "test": {
       "env": ["ANTHROPIC_API_KEY", "BRAINTRUST_API_KEY", "OPENAI_API_KEY"],
       "dependsOn": ["^build"],
