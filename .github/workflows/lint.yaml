@@ -46,4 +46,4 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
       - name: Check dead code
-        run: pnpm run check:dead-code
+        run: pnpm run knip
