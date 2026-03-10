@@ -12,6 +12,18 @@
 
 export type EventArguments = readonly unknown[];
 
+export type ChannelSpanInfo = {
+  name?: string;
+  spanAttributes?: Record<string, unknown>;
+  metadata?: Record<string, unknown>;
+};
+
+export type SpanInfoCarrier<
+  TSpanInfo extends ChannelSpanInfo = ChannelSpanInfo,
+> = {
+  span_info?: TSpanInfo;
+};
+
 /**
  * Base context object shared across all events in a trace.
  */

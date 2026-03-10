@@ -10,34 +10,37 @@ import type {
   ErrorOf,
   StartOf,
 } from "./channel-definitions";
-import type { EventArguments, StartEventWith } from "./types";
+import type {
+  ChannelSpanInfo,
+  EventArguments,
+  SpanInfoCarrier,
+  StartEventWith,
+} from "./types";
 
 export type ChannelConfig = {
   name: string;
   type: string;
 };
 
-export type ChannelSpanInfo = {
-  name?: string;
-  spanAttributes?: Record<string, unknown>;
-  metadata?: Record<string, unknown>;
-};
+function hasChannelSpanInfo(
+  value: unknown,
+): value is SpanInfoCarrier & { span_info: ChannelSpanInfo } {
+  return isObject(value) && isObject(value.span_info);
+}
 
 function getChannelSpanInfo<
   TArguments extends EventArguments,
   TExtra extends object,
->(event: StartEventWith<TArguments, TExtra>): ChannelSpanInfo | undefined {
-  const fromContext = (event as Record<string, unknown>).span_info;
-  if (isObject(fromContext)) {
-    return fromContext as ChannelSpanInfo;
+>(
+  event: StartEventWith<TArguments, TExtra> & SpanInfoCarrier,
+): ChannelSpanInfo | undefined {
+  if (isObject(event.span_info)) {
+    return event.span_info;
   }
 
   const firstArg = event.arguments?.[0];
-  if (
-    isObject(firstArg) &&
-    isObject((firstArg as Record<string, unknown>).span_info)
-  ) {
-    return (firstArg as Record<string, unknown>).span_info as ChannelSpanInfo;
+  if (hasChannelSpanInfo(firstArg)) {
+    return firstArg.span_info;
   }
 
   return undefined;
@@ -48,7 +51,7 @@ export function buildStartSpanArgs<
   TExtra extends object,
 >(
   config: ChannelConfig,
-  event: StartEventWith<TArguments, TExtra>,
+  event: StartEventWith<TArguments, TExtra> & SpanInfoCarrier,
 ): {
   name: string;
   spanAttributes: Record<string, unknown>;

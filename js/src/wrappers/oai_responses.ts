@@ -2,6 +2,7 @@ import type {
   ArgsOf,
   ResultOf,
 } from "../instrumentation/core/channel-definitions";
+import type { ChannelSpanInfo } from "../instrumentation/core/types";
 import { openAIChannels } from "../instrumentation/plugins/openai-channels";
 import { parseMetricsFromUsage } from "../openai-utils";
 import {
@@ -14,7 +15,7 @@ import {
 } from "./openai-promise-utils";
 
 type SpanInfo = {
-  span_info?: Record<string, unknown>;
+  span_info?: ChannelSpanInfo;
 };
 
 export function responsesProxy(openai: any) {

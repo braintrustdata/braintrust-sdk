@@ -1,4 +1,4 @@
-import type { StartEvent } from "./types";
+import type { ChannelSpanInfo, SpanInfoCarrier, StartEvent } from "./types";
 import { isObject, mergeDicts } from "../../util";
 
 export type ChannelConfig = {
@@ -6,24 +6,22 @@ export type ChannelConfig = {
   type: string;
 };
 
-type ChannelSpanInfo = {
-  name?: string;
-  spanAttributes?: Record<string, unknown>;
-  metadata?: Record<string, unknown>;
-};
+function hasChannelSpanInfo(
+  value: unknown,
+): value is SpanInfoCarrier & { span_info: ChannelSpanInfo } {
+  return isObject(value) && isObject(value.span_info);
+}
 
-function getChannelSpanInfo(event: StartEvent): ChannelSpanInfo | undefined {
-  const fromContext = (event as Record<string, unknown>).span_info;
-  if (isObject(fromContext)) {
-    return fromContext as ChannelSpanInfo;
+function getChannelSpanInfo(
+  event: StartEvent & SpanInfoCarrier,
+): ChannelSpanInfo | undefined {
+  if (isObject(event.span_info)) {
+    return event.span_info;
   }
 
   const firstArg = event.arguments?.[0];
-  if (
-    isObject(firstArg) &&
-    isObject((firstArg as Record<string, unknown>).span_info)
-  ) {
-    return (firstArg as Record<string, unknown>).span_info as ChannelSpanInfo;
+  if (hasChannelSpanInfo(firstArg)) {
+    return firstArg.span_info;
   }
 
   return undefined;
@@ -31,7 +29,7 @@ function getChannelSpanInfo(event: StartEvent): ChannelSpanInfo | undefined {
 
 export function buildStartSpanArgs(
   config: ChannelConfig,
-  event: StartEvent,
+  event: StartEvent & SpanInfoCarrier,
 ): {
   name: string;
   spanAttributes: Record<string, unknown>;

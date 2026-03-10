@@ -1,6 +1,7 @@
 import type { CompiledPrompt } from "../../logger";
 import { channel, defineChannels } from "../core/channel-definitions";
 import type { AsyncEndOf, StartOf } from "../core/channel-definitions";
+import type { ChannelSpanInfo, SpanInfoCarrier } from "../core/types";
 import type {
   OpenAIChatCompletion,
   OpenAIChatCompletionChunk,
@@ -17,15 +18,14 @@ import type {
 
 type OpenAIChatSpanInfo = NonNullable<CompiledPrompt<"chat">["span_info"]>;
 
-export type OpenAIChannelExtras<TSpanInfo extends object> = {
+export type OpenAIChannelExtras<
+  TSpanInfo extends ChannelSpanInfo = ChannelSpanInfo,
+> = SpanInfoCarrier<TSpanInfo> & {
   response?: Response;
-  span_info?: TSpanInfo;
 };
 
 export type OpenAIChatChannelExtras = OpenAIChannelExtras<OpenAIChatSpanInfo>;
-export type OpenAIResponsesChannelExtras = OpenAIChannelExtras<
-  Record<string, unknown>
->;
+export type OpenAIResponsesChannelExtras = OpenAIChannelExtras;
 
 export const openAIChannels = defineChannels({
   chatCompletionsCreate: channel<
