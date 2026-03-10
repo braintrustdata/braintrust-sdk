@@ -805,7 +805,19 @@ export class BraintrustState {
     this.bgLogger().setMaskingFunction(maskingFunction);
   }
 
+  public setOnFlushError(onFlushError?: (error: unknown) => void): void {
+    if (onFlushError === undefined) {
+      return;
+    }
+
+    this.loginParams.onFlushError = onFlushError;
+    if (this._bgLogger.hasSucceeded) {
+      this._bgLogger.get().setOnFlushError(onFlushError);
+    }
+  }
+
   public async login(loginParams: LoginOptions & { forceLogin?: boolean }) {
+    this.setOnFlushError(loginParams.onFlushError);
     if (this.apiUrl && !loginParams.forceLogin) {
       return;
     }
@@ -2759,6 +2771,14 @@ class HTTPBackgroundLogger implements BackgroundLogger {
     this.maskingFunction = maskingFunction;
   }
 
+  setOnFlushError(onFlushError?: (error: unknown) => void): void {
+    if (onFlushError === undefined) {
+      return;
+    }
+
+    this.onFlushError = onFlushError;
+  }
+
   pendingFlushBytes(): number {
     return this._pendingBytes;
   }
@@ -3399,6 +3419,7 @@ export function init<IsOpen extends boolean = false>(
 
   const state = stateArg ?? _globalState;
 
+  state.setOnFlushError(options.onFlushError);
   // Ensure unlimited queue for init() calls (experiments)
   // Experiments should never drop data
   state.enforceQueueSizeLimit(false);
@@ -3917,6 +3938,7 @@ export function initLogger<IsAsyncFlush extends boolean = true>(
 
   const state = stateArg ?? _globalState;
 
+  state.setOnFlushError(options.onFlushError);
   // Enable queue size limit enforcement for initLogger() calls
   // This ensures production observability doesn't OOM customer processes
   state.enforceQueueSizeLimit(true);
@@ -4447,6 +4469,7 @@ export async function login(
       state.loginToken,
     );
     checkUpdatedParam("orgName", options.orgName, state.orgName);
+    state.setOnFlushError(options.onFlushError);
     return state;
   }
 
