@@ -107,6 +107,7 @@
   ],
   "scripts": {
     "build": "cross-env NODE_OPTIONS=\"--max-old-space-size=8192\" tsup",
+    "check:typings": "tsc --noEmit",
     "watch": "tsup --watch",
     "clean": "rm -r dist/* && rm -r dev/dist/*",
     "docs": "npx typedoc --options typedoc.json src/node/index.ts",

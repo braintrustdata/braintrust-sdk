@@ -3,7 +3,7 @@ import { AsyncLocalStorage as BrowserAsyncLocalStorage } from "als-browser";
 
 export function configureBrowser() {
   // Set build type indicator
-  iso.buildType = "browser-js";
+  iso.buildType = "browser-js" as "browser";
 
   iso.newAsyncLocalStorage = <T>() => new BrowserAsyncLocalStorage<T>();
 
