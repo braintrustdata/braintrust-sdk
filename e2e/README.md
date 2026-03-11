@@ -75,6 +75,7 @@ Wrapper scenarios often create a root span with `testRunId` metadata and then le
 - Find the scenario root span first.
 - Scope raw payload snapshots by `root_span_id` using `payloadRowsForRootSpan(...)`.
 - Pair a normalized `span-events` snapshot with a normalized `log-payloads` snapshot.
+- If the wrapper has an explicit support matrix, reuse one shared test across version-specific scenario entries instead of duplicating the assertions. The AI SDK wrapper scenario uses this for supported v3-v6 package combinations.
 
 ### Environment variables
 

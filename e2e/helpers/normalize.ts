@@ -34,8 +34,14 @@ const XACT_VERSION_KEYS = new Set([
   "version",
 ]);
 const DYNAMIC_HEADER_KEYS = new Set([
+  "cf-ray",
   "openai-processing-ms",
   "server-timing",
+  "set-cookie",
+  "x-ratelimit-remaining-requests",
+  "x-ratelimit-remaining-tokens",
+  "x-ratelimit-reset-requests",
+  "x-ratelimit-reset-tokens",
   "x-request-id",
 ]);
 const PROVIDER_ID_KEYS = new Set(["itemId", "responseId", "toolCallId"]);
