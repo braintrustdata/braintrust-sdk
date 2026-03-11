@@ -1,5 +1,5 @@
 {
-  "$schema": "./node_modules/knip/schema.json",
+  "$schema": "node_modules/knip/schema-jsonc.json",
   "include": ["files", "exports"],
   "ignoreFiles": [
     "integrations/otel-js/otel-v1/**",
