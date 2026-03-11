@@ -61,14 +61,10 @@ js-test-otel-docker:
 
 # -------------------------------------------------------------------------------------------------
 # Stable release publishing
-# Publishes stable release from main branch using git tags
-# Usage: make release-js-sdk
-# Note: Update version in js/package.json and commit to main before running
+# Preferred: trigger publish-js-sdk.yaml from GitHub Actions UI
+# Fallback: make release-js-sdk [BRANCH=<branch>] dispatches the same workflow via gh
 # -------------------------------------------------------------------------------------------------
 .PHONY: release-js-sdk
 
 release-js-sdk:
-	@echo "Publishing stable JS SDK release..."
-	@echo "This will create and push a git tag, triggering GitHub Actions to publish to npm."
-	@echo ""
-	./js/scripts/push-release-tag.sh
+	./js/scripts/dispatch-release-workflow.sh
