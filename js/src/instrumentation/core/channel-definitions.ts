@@ -10,20 +10,28 @@ import type {
 
 export type ChannelKind = "async" | "sync-stream";
 
-export type ChannelSpec<
+type ChannelTypeInfo<
   TArgs extends EventArguments,
   TResult,
   TExtra extends object = Record<string, never>,
   TChunk = never,
   TKind extends ChannelKind = "async",
 > = {
-  channelName: string;
-  fullChannelName: string;
   kind: TKind;
   __args?: TArgs;
   __result?: TResult;
   __extra?: TExtra;
   __chunk?: TChunk;
+};
+
+export type ChannelSpec<
+  TArgs extends EventArguments,
+  TResult,
+  TExtra extends object = Record<string, never>,
+  TChunk = never,
+  TKind extends ChannelKind = "async",
+> = ChannelTypeInfo<TArgs, TResult, TExtra, TChunk, TKind> & {
+  channelName: string;
 };
 
 type AnyAsyncChannelSpec = ChannelSpec<
@@ -43,19 +51,9 @@ type AnySyncStreamChannelSpec = ChannelSpec<
 >;
 
 type AnyChannelSpec = AnyAsyncChannelSpec | AnySyncStreamChannelSpec;
-type GenericChannelSpec = ChannelSpec<
-  EventArguments,
-  unknown,
-  object,
-  unknown,
-  ChannelKind
->;
-
-export type AnyAsyncChannelSpecType = AnyAsyncChannelSpec;
-export type AnySyncStreamChannelSpecType = AnySyncStreamChannelSpec;
 
 export type ArgsOf<TChannel> =
-  TChannel extends ChannelSpec<
+  TChannel extends ChannelTypeInfo<
     infer TArgs,
     unknown,
     object,
@@ -66,7 +64,7 @@ export type ArgsOf<TChannel> =
     : never;
 
 export type ResultOf<TChannel> =
-  TChannel extends ChannelSpec<
+  TChannel extends ChannelTypeInfo<
     EventArguments,
     infer TResult,
     object,
@@ -77,7 +75,7 @@ export type ResultOf<TChannel> =
     : never;
 
 export type ExtraOf<TChannel> =
-  TChannel extends ChannelSpec<
+  TChannel extends ChannelTypeInfo<
     EventArguments,
     unknown,
     infer TExtra extends object,
@@ -88,7 +86,7 @@ export type ExtraOf<TChannel> =
     : never;
 
 export type ChunkOf<TChannel> =
-  TChannel extends ChannelSpec<
+  TChannel extends ChannelTypeInfo<
     EventArguments,
     unknown,
     object,
@@ -145,28 +143,11 @@ export type TypedSyncStreamChannel<TSpec extends AnySyncStreamChannelSpec> =
     ): TResult;
   };
 
-export type AnyTypedChannel =
-  | TypedAsyncChannel<AnyAsyncChannelSpec>
-  | TypedSyncStreamChannel<AnySyncStreamChannelSpec>;
-
 export type AnyAsyncChannel = TypedAsyncChannel<AnyAsyncChannelSpec>;
 export type AnySyncStreamChannel =
   TypedSyncStreamChannel<AnySyncStreamChannelSpec>;
 
-export type TypedChannel<TSpec extends GenericChannelSpec = AnyChannelSpec> =
-  TSpec extends ChannelSpec<EventArguments, unknown, object, unknown, "async">
-    ? TypedAsyncChannel<TSpec>
-    : TSpec extends ChannelSpec<
-          EventArguments,
-          unknown,
-          object,
-          unknown,
-          "sync-stream"
-        >
-      ? TypedSyncStreamChannel<TSpec>
-      : never;
-
-export type ChannelMap = Record<string, AnyTypedChannel>;
+type ChannelSpecMap = Record<string, AnyChannelSpec>;
 
 export function channel<
   TArgs extends EventArguments,
@@ -175,9 +156,8 @@ export function channel<
   TChunk = never,
 >(spec: {
   channelName: string;
-  fullChannelName: string;
   kind: "async";
-}): TypedAsyncChannel<ChannelSpec<TArgs, TResult, TExtra, TChunk, "async">>;
+}): ChannelSpec<TArgs, TResult, TExtra, TChunk, "async">;
 export function channel<
   TArgs extends EventArguments,
   TResult,
@@ -185,59 +165,91 @@ export function channel<
   TChunk = never,
 >(spec: {
   channelName: string;
-  fullChannelName: string;
   kind: "sync-stream";
-}): TypedSyncStreamChannel<
-  ChannelSpec<TArgs, TResult, TExtra, TChunk, "sync-stream">
->;
+}): ChannelSpec<TArgs, TResult, TExtra, TChunk, "sync-stream">;
 export function channel(spec: {
   channelName: string;
-  fullChannelName: string;
   kind: ChannelKind;
-}): AnyTypedChannel {
-  if (spec.kind === "async") {
-    const tracingChannel = () =>
-      iso.newTracingChannel<ChannelMessage<AnyAsyncChannelSpec>>(
-        spec.fullChannelName,
-      );
-
-    // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
-    return {
-      ...spec,
-      tracingChannel,
-      tracePromise: <TResult>(
-        fn: () => Promise<TResult>,
-        context: StartOf<AnyAsyncChannelSpec>,
-      ) =>
-        tracingChannel().tracePromise(
-          fn,
-          // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
-          context as ChannelMessage<AnyAsyncChannelSpec>,
-        ),
-    } as AnyAsyncChannel;
-  }
-
-  const tracingChannel = () =>
-    iso.newTracingChannel<ChannelMessage<AnySyncStreamChannelSpec>>(
-      spec.fullChannelName,
-    );
-
-  // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
-  return {
-    ...spec,
-    tracingChannel,
-    traceSync: <TResult>(
-      fn: () => TResult,
-      context: StartOf<AnySyncStreamChannelSpec>,
-    ) =>
-      tracingChannel().traceSync(
-        fn,
-        // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
-        context as ChannelMessage<AnySyncStreamChannelSpec>,
-      ),
-  } as AnySyncStreamChannel;
+}): AnyChannelSpec {
+  return spec as AnyChannelSpec;
 }
 
-export function defineChannels<T extends ChannelMap>(channels: T): T {
-  return channels;
+type MaterializedChannel<T extends AnyChannelSpec> = T["kind"] extends "async"
+  ? TypedAsyncChannel<
+      ChannelSpec<ArgsOf<T>, ResultOf<T>, ExtraOf<T>, ChunkOf<T>, "async">
+    >
+  : TypedSyncStreamChannel<
+      ChannelSpec<ArgsOf<T>, ResultOf<T>, ExtraOf<T>, ChunkOf<T>, "sync-stream">
+    >;
+
+export function defineChannels<T extends ChannelSpecMap>(
+  pkg: string,
+  channels: T,
+): {
+  [K in keyof T]: MaterializedChannel<T[K]>;
+} {
+  return Object.fromEntries(
+    Object.entries(channels).map(([key, spec]) => {
+      const fullChannelName = `orchestrion:${pkg}:${spec.channelName}`;
+      if (spec.kind === "async") {
+        const asyncSpec = spec as ChannelSpec<
+          ArgsOf<typeof spec>,
+          ResultOf<typeof spec>,
+          ExtraOf<typeof spec>,
+          ChunkOf<typeof spec>,
+          "async"
+        >;
+        const tracingChannel = () =>
+          iso.newTracingChannel<ChannelMessage<AnyAsyncChannelSpec>>(
+            fullChannelName,
+          );
+        return [
+          key,
+          {
+            ...asyncSpec,
+            tracingChannel,
+            tracePromise: <TResult>(
+              fn: () => Promise<TResult>,
+              context: StartOf<AnyAsyncChannelSpec>,
+            ) =>
+              tracingChannel().tracePromise(
+                fn,
+                // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
+                context as ChannelMessage<AnyAsyncChannelSpec>,
+              ),
+          } as AnyAsyncChannel,
+        ];
+      }
+
+      const syncSpec = spec as ChannelSpec<
+        ArgsOf<typeof spec>,
+        ResultOf<typeof spec>,
+        ExtraOf<typeof spec>,
+        ChunkOf<typeof spec>,
+        "sync-stream"
+      >;
+      const tracingChannel = () =>
+        iso.newTracingChannel<ChannelMessage<AnySyncStreamChannelSpec>>(
+          fullChannelName,
+        );
+      return [
+        key,
+        {
+          ...syncSpec,
+          tracingChannel,
+          traceSync: <TResult>(
+            fn: () => TResult,
+            context: StartOf<AnySyncStreamChannelSpec>,
+          ) =>
+            tracingChannel().traceSync(
+              fn,
+              // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
+              context as ChannelMessage<AnySyncStreamChannelSpec>,
+            ),
+        } as AnySyncStreamChannel,
+      ];
+    }),
+  ) as {
+    [K in keyof T]: MaterializedChannel<T[K]>;
+  };
 }

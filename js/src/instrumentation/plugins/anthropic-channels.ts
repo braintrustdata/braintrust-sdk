@@ -7,7 +7,7 @@ import type {
 
 type AnthropicResult = AnthropicMessage | AsyncIterable<AnthropicStreamEvent>;
 
-export const anthropicChannels = defineChannels({
+export const anthropicChannels = defineChannels("@anthropic-ai/sdk", {
   messagesCreate: channel<
     [AnthropicCreateParams],
     AnthropicResult,
@@ -15,7 +15,6 @@ export const anthropicChannels = defineChannels({
     AnthropicStreamEvent
   >({
     channelName: "messages.create",
-    fullChannelName: "orchestrion:@anthropic-ai/sdk:messages.create",
     kind: "async",
   }),
   betaMessagesCreate: channel<
@@ -25,7 +24,6 @@ export const anthropicChannels = defineChannels({
     AnthropicStreamEvent
   >({
     channelName: "beta.messages.create",
-    fullChannelName: "orchestrion:@anthropic-ai/sdk:beta.messages.create",
     kind: "async",
   }),
 });

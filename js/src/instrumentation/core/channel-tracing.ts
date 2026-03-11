@@ -136,7 +136,7 @@ function startSpanForEvent<
     };
   },
   event: StartOf<TChannel>,
-  fullChannelName: string,
+  channelName: string,
 ): SpanState {
   const { name, spanAttributes, spanInfoMetadata } = buildStartSpanArgs(
     config,
@@ -155,7 +155,7 @@ function startSpanForEvent<
       metadata: mergeInputMetadata(metadata, spanInfoMetadata),
     });
   } catch (error) {
-    console.error(`Error extracting input for ${fullChannelName}:`, error);
+    console.error(`Error extracting input for ${channelName}:`, error);
   }
 
   return { span, startTime };
@@ -184,7 +184,7 @@ export function traceAsyncChannel<TChannel extends AnyAsyncChannel>(
     ChannelMessage<TChannel>
   >;
   const states = new WeakMap<object, SpanState>();
-  const fullChannelName = channel.fullChannelName;
+  const channelName = channel.channelName;
 
   const handlers: IsoChannelHandlers<ChannelMessage<TChannel>> = {
     start: (event) => {
@@ -193,7 +193,7 @@ export function traceAsyncChannel<TChannel extends AnyAsyncChannel>(
         startSpanForEvent<TChannel>(
           config,
           event as StartOf<TChannel>,
-          fullChannelName,
+          channelName,
         ),
       );
     },
@@ -229,7 +229,7 @@ export function traceAsyncChannel<TChannel extends AnyAsyncChannel>(
           metrics,
         });
       } catch (error) {
-        console.error(`Error extracting output for ${fullChannelName}:`, error);
+        console.error(`Error extracting output for ${channelName}:`, error);
       } finally {
         span.end();
         states.delete(event as object);
@@ -255,7 +255,7 @@ export function traceStreamingChannel<TChannel extends AnyAsyncChannel>(
     ChannelMessage<TChannel>
   >;
   const states = new WeakMap<object, SpanState>();
-  const fullChannelName = channel.fullChannelName;
+  const channelName = channel.channelName;
 
   const handlers: IsoChannelHandlers<ChannelMessage<TChannel>> = {
     start: (event) => {
@@ -264,7 +264,7 @@ export function traceStreamingChannel<TChannel extends AnyAsyncChannel>(
         startSpanForEvent<TChannel>(
           config,
           event as StartOf<TChannel>,
-          fullChannelName,
+          channelName,
         ),
       );
     },
@@ -334,7 +334,7 @@ export function traceStreamingChannel<TChannel extends AnyAsyncChannel>(
               });
             } catch (error) {
               console.error(
-                `Error extracting output for ${fullChannelName}:`,
+                `Error extracting output for ${channelName}:`,
                 error,
               );
             } finally {
@@ -376,7 +376,7 @@ export function traceStreamingChannel<TChannel extends AnyAsyncChannel>(
           metrics,
         });
       } catch (error) {
-        console.error(`Error extracting output for ${fullChannelName}:`, error);
+        console.error(`Error extracting output for ${channelName}:`, error);
       } finally {
         span.end();
         states.delete(event as object);
@@ -402,7 +402,7 @@ export function traceSyncStreamChannel<TChannel extends AnySyncStreamChannel>(
     ChannelMessage<TChannel>
   >;
   const states = new WeakMap<object, SpanState>();
-  const fullChannelName = channel.fullChannelName;
+  const channelName = channel.channelName;
 
   const handlers: IsoChannelHandlers<ChannelMessage<TChannel>> = {
     start: (event) => {
@@ -411,7 +411,7 @@ export function traceSyncStreamChannel<TChannel extends AnySyncStreamChannel>(
         startSpanForEvent<TChannel>(
           config,
           event as StartOf<TChannel>,
-          fullChannelName,
+          channelName,
         ),
       );
     },
@@ -453,7 +453,7 @@ export function traceSyncStreamChannel<TChannel extends AnySyncStreamChannel>(
           }
         } catch (error) {
           console.error(
-            `Error extracting chatCompletion for ${fullChannelName}:`,
+            `Error extracting chatCompletion for ${channelName}:`,
             error,
           );
         }
@@ -479,10 +479,7 @@ export function traceSyncStreamChannel<TChannel extends AnySyncStreamChannel>(
             span.log(extracted);
           }
         } catch (error) {
-          console.error(
-            `Error extracting event for ${fullChannelName}:`,
-            error,
-          );
+          console.error(`Error extracting event for ${channelName}:`, error);
         }
       });
 

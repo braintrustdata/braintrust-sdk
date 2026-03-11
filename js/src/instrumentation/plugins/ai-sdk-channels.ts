@@ -6,7 +6,7 @@ import type {
 
 type AISDKStreamResult = AISDKResult | AsyncIterable<unknown>;
 
-export const aiSDKChannels = defineChannels({
+export const aiSDKChannels = defineChannels("ai", {
   generateText: channel<
     [AISDKCallParams],
     AISDKStreamResult,
@@ -14,7 +14,6 @@ export const aiSDKChannels = defineChannels({
     unknown
   >({
     channelName: "generateText",
-    fullChannelName: "orchestrion:ai:generateText",
     kind: "async",
   }),
   streamText: channel<
@@ -24,7 +23,6 @@ export const aiSDKChannels = defineChannels({
     unknown
   >({
     channelName: "streamText",
-    fullChannelName: "orchestrion:ai:streamText",
     kind: "async",
   }),
   generateObject: channel<
@@ -34,7 +32,6 @@ export const aiSDKChannels = defineChannels({
     unknown
   >({
     channelName: "generateObject",
-    fullChannelName: "orchestrion:ai:generateObject",
     kind: "async",
   }),
   streamObject: channel<
@@ -44,7 +41,6 @@ export const aiSDKChannels = defineChannels({
     unknown
   >({
     channelName: "streamObject",
-    fullChannelName: "orchestrion:ai:streamObject",
     kind: "async",
   }),
   agentGenerate: channel<
@@ -54,7 +50,6 @@ export const aiSDKChannels = defineChannels({
     unknown
   >({
     channelName: "Agent.generate",
-    fullChannelName: "orchestrion:ai:Agent.generate",
     kind: "async",
   }),
   agentStream: channel<
@@ -64,7 +59,6 @@ export const aiSDKChannels = defineChannels({
     unknown
   >({
     channelName: "Agent.stream",
-    fullChannelName: "orchestrion:ai:Agent.stream",
     kind: "async",
   }),
 });

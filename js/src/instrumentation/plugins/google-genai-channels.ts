@@ -8,13 +8,12 @@ type GoogleGenAIStreamingResult =
   | GoogleGenAIGenerateContentResponse
   | AsyncIterable<GoogleGenAIGenerateContentResponse>;
 
-export const googleGenAIChannels = defineChannels({
+export const googleGenAIChannels = defineChannels("@google/genai", {
   generateContent: channel<
     [GoogleGenAIGenerateContentParams],
     GoogleGenAIGenerateContentResponse
   >({
     channelName: "models.generateContent",
-    fullChannelName: "orchestrion:@google/genai:models.generateContent",
     kind: "async",
   }),
   generateContentStream: channel<
@@ -24,7 +23,6 @@ export const googleGenAIChannels = defineChannels({
     GoogleGenAIGenerateContentResponse
   >({
     channelName: "models.generateContentStream",
-    fullChannelName: "orchestrion:@google/genai:models.generateContentStream",
     kind: "async",
   }),
 });
