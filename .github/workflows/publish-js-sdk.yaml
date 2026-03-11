@@ -18,6 +18,10 @@
 
 name: Publish JavaScript SDK
 
+concurrency:
+  group: publish-js-sdk-${{ inputs.release_type }}-${{ inputs.branch }}
+  cancel-in-progress: false
+
 on:
   workflow_dispatch:
     inputs:
@@ -48,7 +52,7 @@ jobs:
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
         with:
-          fetch-depth: 0
+          fetch-depth: 1
           ref: ${{ inputs.branch }}
       - name: Set up Node.js
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
@@ -63,19 +67,12 @@ jobs:
         run: |
           set -euo pipefail
 
-          git fetch origin "$TARGET_BRANCH" --depth=1
-          git fetch --tags --prune --force
-
           CURRENT_VERSION=$(node -p "require('./package.json').version")
           RELEASE_COMMIT=$(git rev-parse HEAD)
 
           if [[ "$RELEASE_TYPE" == "stable" ]]; then
             RELEASE_TAG="js-sdk-v${CURRENT_VERSION}"
-
-            if git ls-remote --tags --exit-code origin "refs/tags/${RELEASE_TAG}" >/dev/null 2>&1; then
-              echo "ERROR: Release tag ${RELEASE_TAG} already exists on origin"
-              exit 1
-            fi
+            ./scripts/check-remote-tag.sh "${RELEASE_TAG}"
 
             echo "version=${CURRENT_VERSION}" >> "$GITHUB_OUTPUT"
             echo "is_prerelease=false" >> "$GITHUB_OUTPUT"
@@ -90,19 +87,20 @@ jobs:
           echo "branch=${TARGET_BRANCH}" >> "$GITHUB_OUTPUT"
           echo "commit=${RELEASE_COMMIT}" >> "$GITHUB_OUTPUT"
 
-  build-and-publish:
+  build-and-publish-stable:
     needs: prepare-release
+    if: needs.prepare-release.outputs.is_prerelease == 'false'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     permissions:
       contents: write
       id-token: write
+    environment: npm-publish
     env:
       VERSION: ${{ needs.prepare-release.outputs.version }}
       RELEASE_TAG: ${{ needs.prepare-release.outputs.release_tag }}
       TARGET_BRANCH: ${{ needs.prepare-release.outputs.branch }}
       RELEASE_COMMIT: ${{ needs.prepare-release.outputs.commit }}
-      IS_PRERELEASE: ${{ needs.prepare-release.outputs.is_prerelease }}
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
         with:
@@ -115,44 +113,30 @@ jobs:
           registry-url: "https://registry.npmjs.org"
       - name: Install npm 11.6.2
         run: npm install -g npm@11.6.2
-      - name: Create and push release tag
-        if: env.IS_PRERELEASE == 'false'
-        run: |
-          set -euo pipefail
-
-          git fetch --tags --prune --force
-
-          if git ls-remote --tags --exit-code origin "refs/tags/${RELEASE_TAG}" >/dev/null 2>&1; then
-            echo "ERROR: Release tag ${RELEASE_TAG} already exists on origin"
-            exit 1
-          fi
-
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git tag "${RELEASE_TAG}" "${RELEASE_COMMIT}"
-          git push origin "${RELEASE_TAG}"
-
       - name: Publish to npm (stable release)
-        if: env.IS_PRERELEASE == 'false'
         working-directory: js
         env:
           RELEASE_BRANCH: ${{ env.TARGET_BRANCH }}
         run: make publish-sdk-js
 
-      - name: Publish pre-release
-        if: env.IS_PRERELEASE == 'true'
-        working-directory: js
-        run: ./scripts/publish-prerelease.sh "rc" "$VERSION"
+      - name: Create and push release tag
+        run: |
+          set -euo pipefail
+
+          ./js/scripts/check-remote-tag.sh "${RELEASE_TAG}"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git tag "${RELEASE_TAG}" "${RELEASE_COMMIT}"
+          git push origin "${RELEASE_TAG}"
 
       - name: Upload build artifacts
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
-          name: javascript-sdk-${{ env.IS_PRERELEASE == 'true' && 'prerelease' || 'release' }}-dist
+          name: javascript-sdk-release-dist
           path: js/dist/
           retention-days: 5
 
       - name: Generate release notes
-        if: env.IS_PRERELEASE == 'false'
         id: release_notes
         run: |
           RELEASE_NOTES=$(.github/scripts/generate-release-notes.sh "${RELEASE_TAG}" "js/")
@@ -162,7 +146,6 @@ jobs:
           echo "release_name=JavaScript SDK v${VERSION}" >> "$GITHUB_OUTPUT"
 
       - name: Create GitHub Release
-        if: env.IS_PRERELEASE == 'false'
         uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8.0.0
         env:
           RELEASE_NOTES: ${{ steps.release_notes.outputs.notes }}
@@ -179,9 +162,48 @@ jobs:
               prerelease: false
             });
 
+  build-and-publish-prerelease:
+    needs: prepare-release
+    if: needs.prepare-release.outputs.is_prerelease == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: write
+      id-token: write
+    env:
+      VERSION: ${{ needs.prepare-release.outputs.version }}
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          fetch-depth: 0
+          ref: ${{ needs.prepare-release.outputs.branch }}
+      - name: Set up Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: "20"
+          registry-url: "https://registry.npmjs.org"
+      - name: Install npm 11.6.2
+        run: npm install -g npm@11.6.2
+      - name: Publish pre-release
+        working-directory: js
+        run: ./scripts/publish-prerelease.sh "rc" "$VERSION"
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: javascript-sdk-prerelease-dist
+          path: js/dist/
+          retention-days: 5
+
   notify-success:
-    needs: [prepare-release, build-and-publish]
-    if: always() && needs.build-and-publish.result == 'success'
+    needs:
+      [prepare-release, build-and-publish-stable, build-and-publish-prerelease]
+    if: |
+      always() &&
+      (
+        needs.build-and-publish-stable.result == 'success' ||
+        needs.build-and-publish-prerelease.result == 'success'
+      )
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -223,8 +245,15 @@ jobs:
                   text: "*Version:* ${{ needs.prepare-release.outputs.version }}\n*Branch:* `${{ needs.prepare-release.outputs.branch }}`\n*npm tag:* `rc` (install with `npm install braintrust@rc`)\n*Package:* <https://www.npmjs.com/package/braintrust|braintrust>\n\n<${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|View Run>"
 
   notify-failure:
-    needs: [prepare-release, build-and-publish]
-    if: always() && (needs.prepare-release.result == 'failure' || needs.build-and-publish.result == 'failure')
+    needs:
+      [prepare-release, build-and-publish-stable, build-and-publish-prerelease]
+    if: |
+      always() &&
+      (
+        needs.prepare-release.result == 'failure' ||
+        needs.build-and-publish-stable.result == 'failure' ||
+        needs.build-and-publish-prerelease.result == 'failure'
+      )
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:

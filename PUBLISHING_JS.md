@@ -6,6 +6,8 @@ Use the [Publish JavaScript SDK workflow](https://github.com/braintrustdata/brai
 
 This is the primary release entrypoint for both stable releases and prereleases.
 
+Stable releases now pause at the `npm-publish` GitHub Actions environment and require approval before the publish job runs.
+
 ## Release Types
 
 ### Stable release
@@ -14,6 +16,7 @@ This is the primary release entrypoint for both stable releases and prereleases.
 - Publishes to npm as the normal latest release
 - Creates the `js-sdk-v<version>` git tag from the workflow
 - Fails before publishing if that tag already exists on GitHub
+- Waits for approval on the `npm-publish` environment before publishing
 
 ### Prerelease
 
@@ -32,10 +35,11 @@ This is the primary release entrypoint for both stable releases and prereleases.
 6. Set `release_type=stable`.
 7. Set `branch=main`.
 8. Run the workflow.
-9. Monitor the run at https://github.com/braintrustdata/braintrust-sdk-javascript/actions/workflows/publish-js-sdk.yaml.
-10. Spot check the package at https://www.npmjs.com/package/braintrust.
-11. Update relevant docs ([internal](https://www.notion.so/braintrustdata/SDK-Release-Process-183f7858028980b8a57ac4a81d74f97c#2f1f78580289807ebf35d5e171832d2a)).
-12. Run the test app at https://github.com/braintrustdata/sdk-test-apps (internal) with `make verify-js`.
+9. Approve the pending `npm-publish` environment deployment when prompted.
+10. Monitor the run at https://github.com/braintrustdata/braintrust-sdk-javascript/actions/workflows/publish-js-sdk.yaml.
+11. Spot check the package at https://www.npmjs.com/package/braintrust.
+12. Update relevant docs ([internal](https://www.notion.so/braintrustdata/SDK-Release-Process-183f7858028980b8a57ac4a81d74f97c#2f1f78580289807ebf35d5e171832d2a)).
+13. Run the test app at https://github.com/braintrustdata/sdk-test-apps (internal) with `make verify-js`.
 
 ## Prerelease Steps
 
@@ -67,3 +71,7 @@ Notes:
 - It requires `gh` to be installed and authenticated.
 - It does not publish from your local checkout.
 - It dispatches the same GitHub Actions workflow against the selected branch on GitHub.
+
+## Repository Setup
+
+Configure the `npm-publish` environment in GitHub repository settings with the required reviewers who are allowed to approve stable releases.
