@@ -2,14 +2,14 @@ import { warning } from "../../framework";
 import type { CommonArgs } from "./types";
 
 export const VERBOSE_DEPRECATION_MESSAGE =
-  "--verbose is deprecated and will be removed in a future version of braintrust. Use --debug-logging full to see full stack traces and troubleshooting details.";
+  "--verbose is deprecated and will be removed in a future version of braintrust. Use --debug-logging debug to see full stack traces and troubleshooting details.";
 
 let hasWarnedAboutVerboseFlag = false;
 
 export function shouldShowDetailedErrors(
-  debugLogging: CommonArgs["debug_logging"] | undefined,
+  debugLogLevel: CommonArgs["debug_logging"] | undefined,
 ): boolean {
-  return debugLogging === "full";
+  return debugLogLevel === "debug";
 }
 
 export function normalizeDebugLoggingArgs<
@@ -25,7 +25,7 @@ export function normalizeDebugLoggingArgs<
   }
 
   if (!args.debug_logging) {
-    args.debug_logging = "full";
+    args.debug_logging = "debug";
   }
 
   return args;

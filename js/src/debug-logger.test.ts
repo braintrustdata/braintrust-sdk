@@ -16,10 +16,10 @@ import { configureNode } from "./node/config";
 configureNode();
 
 describe("debug logger", () => {
-  const originalLogLevel = process.env.BRAINTRUST_LOG_LEVEL;
+  const originalLogLevel = process.env.BRAINTRUST_DEBUG_LOG_LEVEL;
 
   beforeEach(() => {
-    delete process.env.BRAINTRUST_LOG_LEVEL;
+    delete process.env.BRAINTRUST_DEBUG_LOG_LEVEL;
     resetDebugLoggerForTests();
     _exportsForTestingOnly.simulateLogoutForTests();
     vi.restoreAllMocks();
@@ -27,22 +27,22 @@ describe("debug logger", () => {
 
   afterEach(() => {
     if (originalLogLevel === undefined) {
-      delete process.env.BRAINTRUST_LOG_LEVEL;
+      delete process.env.BRAINTRUST_DEBUG_LOG_LEVEL;
     } else {
-      process.env.BRAINTRUST_LOG_LEVEL = originalLogLevel;
+      process.env.BRAINTRUST_DEBUG_LOG_LEVEL = originalLogLevel;
     }
     resetDebugLoggerForTests();
     _exportsForTestingOnly.simulateLogoutForTests();
     vi.restoreAllMocks();
   });
 
-  test("setup level emits info, warn, and error but not debug", () => {
+  test("info level emits info, warn, and error but not debug", () => {
     const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
     const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
     const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
     const debugSpy = vi.spyOn(console, "debug").mockImplementation(() => {});
     const state = {
-      getDebugLogLevel: () => "setup" as const,
+      getDebugLogLevel: () => "info" as const,
       hasDebugLogLevelOverride: () => true,
     };
 
@@ -59,10 +59,10 @@ describe("debug logger", () => {
     expect(debugSpy).not.toHaveBeenCalled();
   });
 
-  test("full level emits debug", () => {
+  test("debug level emits debug", () => {
     const debugSpy = vi.spyOn(console, "debug").mockImplementation(() => {});
     const state = {
-      getDebugLogLevel: () => "full" as const,
+      getDebugLogLevel: () => "debug" as const,
       hasDebugLogLevelOverride: () => true,
     };
 
@@ -75,24 +75,30 @@ describe("debug logger", () => {
     const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
     _exportsForTestingOnly.setInitialTestState();
     const state = _exportsForTestingOnly.simulateLogoutForTests();
-    state.setDebugLogLevel("setup");
+    state.setDebugLogLevel("warn");
 
     debugLogger.warn("global warning");
 
     expect(warnSpy).toHaveBeenCalledWith("[braintrust]", "global warning");
   });
 
-  test("BRAINTRUST_LOG_LEVEL accepts setup and full", () => {
-    process.env.BRAINTRUST_LOG_LEVEL = "setup";
-    expect(getEnvDebugLogLevel()).toBe("setup");
+  test("BRAINTRUST_DEBUG_LOG_LEVEL accepts error, warn, info, and debug", () => {
+    process.env.BRAINTRUST_DEBUG_LOG_LEVEL = "error";
+    expect(getEnvDebugLogLevel()).toBe("error");
 
-    process.env.BRAINTRUST_LOG_LEVEL = "full";
-    expect(getEnvDebugLogLevel()).toBe("full");
+    process.env.BRAINTRUST_DEBUG_LOG_LEVEL = "warn";
+    expect(getEnvDebugLogLevel()).toBe("warn");
+
+    process.env.BRAINTRUST_DEBUG_LOG_LEVEL = "info";
+    expect(getEnvDebugLogLevel()).toBe("info");
+
+    process.env.BRAINTRUST_DEBUG_LOG_LEVEL = "debug";
+    expect(getEnvDebugLogLevel()).toBe("debug");
   });
 
-  test("BRAINTRUST_LOG_LEVEL rejects invalid values and warns once", () => {
+  test("BRAINTRUST_DEBUG_LOG_LEVEL rejects invalid values and warns once", () => {
     const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
-    process.env.BRAINTRUST_LOG_LEVEL = "true";
+    process.env.BRAINTRUST_DEBUG_LOG_LEVEL = "true";
 
     expect(getEnvDebugLogLevel()).toBeUndefined();
     expect(getEnvDebugLogLevel()).toBeUndefined();
@@ -100,23 +106,23 @@ describe("debug logger", () => {
     expect(warnSpy).toHaveBeenCalledTimes(1);
     expect(warnSpy).toHaveBeenCalledWith(
       "[braintrust]",
-      'Invalid BRAINTRUST_LOG_LEVEL value "true". Expected "setup" or "full".',
+      'Invalid BRAINTRUST_DEBUG_LOG_LEVEL value "true". Expected "error", "warn", "info", or "debug".',
     );
   });
 
   test("initLogger updates the state debug log level", () => {
     const state = new BraintrustState({});
 
-    initLogger({ state, debugLogging: "full" });
+    initLogger({ state, debugLogLevel: "debug" });
 
-    expect(state.getDebugLogLevel()).toBe("full");
+    expect(state.getDebugLogLevel()).toBe("debug");
   });
 
   test("explicitly disabling debug logging overrides the env var", () => {
     const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
-    process.env.BRAINTRUST_LOG_LEVEL = "setup";
+    process.env.BRAINTRUST_DEBUG_LOG_LEVEL = "info";
 
-    const state = new BraintrustState({ debugLogging: false });
+    const state = new BraintrustState({ debugLogLevel: false });
     debugLogger.forState(state).info("info");
 
     expect(logSpy).not.toHaveBeenCalled();
@@ -125,9 +131,9 @@ describe("debug logger", () => {
   test("login updates debug log level even when the state is already logged in", async () => {
     const state = await _exportsForTestingOnly.simulateLoginForTests();
 
-    await login({ debugLogging: "full" });
+    await login({ debugLogLevel: "debug" });
 
-    expect(state.getDebugLogLevel()).toBe("full");
+    expect(state.getDebugLogLevel()).toBe("debug");
   });
 
   test("serialized state preserves the debug log level", async () => {
@@ -139,10 +145,10 @@ describe("debug logger", () => {
     state.orgName = "test-org";
     state.loginToken = "test-token";
     state.loggedIn = true;
-    state.setDebugLogLevel("full");
+    state.setDebugLogLevel("debug");
 
     const deserialized = BraintrustState.deserialize(state.serialize());
 
-    expect(deserialized.getDebugLogLevel()).toBe("full");
+    expect(deserialized.getDebugLogLevel()).toBe("debug");
   });
 });

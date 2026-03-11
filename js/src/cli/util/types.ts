@@ -1,9 +1,9 @@
 import { type IfExistsType as IfExists } from "../../generated_types";
 
 export interface CommonArgs {
-  /** @deprecated Use debug_logging: "full" for detailed troubleshooting output. */
+  /** @deprecated Use debug_logging: "debug" for detailed troubleshooting output. */
   verbose: boolean;
-  debug_logging?: "setup" | "full";
+  debug_logging?: "error" | "warn" | "info" | "debug";
 }
 
 export interface AuthArgs {

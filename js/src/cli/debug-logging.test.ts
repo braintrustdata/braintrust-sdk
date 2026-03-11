@@ -31,24 +31,24 @@ describe("CLI debug logging", () => {
     resetDebugLoggingArgsForTests();
   });
 
-  test("loadCLIEnv forwards debugLogging to login", async () => {
+  test("loadCLIEnv forwards debugLogLevel to login", async () => {
     await loadCLIEnv({
       verbose: false,
       api_key: "test-key",
       org_name: "test-org",
       app_url: "https://braintrust.dev",
-      debug_logging: "full",
+      debug_logging: "debug",
     });
 
     expect(login).toHaveBeenCalledWith({
       apiKey: "test-key",
       orgName: "test-org",
       appUrl: "https://braintrust.dev",
-      debugLogging: "full",
+      debugLogLevel: "debug",
     });
   });
 
-  test("loadCLIEnv treats --verbose as a deprecated alias for --debug-logging full", async () => {
+  test("loadCLIEnv treats --verbose as a deprecated alias for --debug-logging debug", async () => {
     const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
 
     await loadCLIEnv({
@@ -62,10 +62,10 @@ describe("CLI debug logging", () => {
       apiKey: "test-key",
       orgName: "test-org",
       appUrl: "https://braintrust.dev",
-      debugLogging: "full",
+      debugLogLevel: "debug",
     });
     expect(warnSpy).toHaveBeenCalledWith(
-      "Warning: --verbose is deprecated and will be removed in a future version of braintrust. Use --debug-logging full to see full stack traces and troubleshooting details.",
+      "Warning: --verbose is deprecated and will be removed in a future version of braintrust. Use --debug-logging debug to see full stack traces and troubleshooting details.",
     );
   });
 });

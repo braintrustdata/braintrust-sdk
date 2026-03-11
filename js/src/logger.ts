@@ -6,9 +6,9 @@ import { Queue, DEFAULT_QUEUE_SIZE } from "./queue";
 import {
   debugLogger,
   type DebugLogLevel,
-  type DebugLogOption,
+  type DebugLogLevelOption,
   getEnvDebugLogLevel,
-  normalizeDebugLogOption,
+  normalizeDebugLogLevelOption,
   resetDebugLoggerForTests,
   setDebugLogStateResolver,
   setGlobalDebugLogLevel,
@@ -563,9 +563,9 @@ const loginSchema = z.strictObject({
   loginToken: z.string(),
   orgId: z.string().nullish(),
   gitMetadataSettings: gitMetadataSettingsSchema.nullish(),
-  debugLogLevel: z.enum(["setup", "full"]).optional(),
+  debugLogLevel: z.enum(["error", "warn", "info", "debug"]).optional(),
   // Distinguishes explicit false from unset so env fallback stays disabled after deserialization.
-  debugLoggingDisabled: z.boolean().optional(),
+  debugLogLevelDisabled: z.boolean().optional(),
 });
 
 export type SerializedBraintrustState = z.infer<typeof loginSchema>;
@@ -631,9 +631,11 @@ export class BraintrustState {
         new HTTPBackgroundLogger(new LazyValue(defaultGetLogConn), loginParams),
     );
 
-    if (loginParams.debugLogging !== undefined) {
+    if (loginParams.debugLogLevel !== undefined) {
       this.debugLogLevelConfigured = true;
-      this.debugLogLevel = normalizeDebugLogOption(loginParams.debugLogging);
+      this.debugLogLevel = normalizeDebugLogLevelOption(
+        loginParams.debugLogLevel,
+      );
       setGlobalDebugLogLevel(this.debugLogLevel ?? false);
     } else {
       this.debugLogLevel = getEnvDebugLogLevel();
@@ -785,7 +787,7 @@ export class BraintrustState {
       gitMetadataSettings: this.gitMetadataSettings,
       ...(this.debugLogLevel ? { debugLogLevel: this.debugLogLevel } : {}),
       ...(this.debugLogLevelConfigured && !this.debugLogLevel
-        ? { debugLoggingDisabled: true }
+        ? { debugLogLevelDisabled: true }
         : {}),
     };
   }
@@ -822,7 +824,7 @@ export class BraintrustState {
     state.loggedIn = true;
     state.debugLogLevelConfigured =
       "debugLogLevel" in serializedParsed.data ||
-      !!serializedParsed.data.debugLoggingDisabled;
+      !!serializedParsed.data.debugLogLevelDisabled;
     setGlobalDebugLogLevel(
       state.debugLogLevelConfigured
         ? (state.debugLogLevel ?? false)
@@ -846,12 +848,12 @@ export class BraintrustState {
     this.bgLogger().setMaskingFunction(maskingFunction);
   }
 
-  public setDebugLogLevel(option: DebugLogOption): void {
+  public setDebugLogLevel(option: DebugLogLevelOption): void {
     if (option === undefined) {
       return;
     }
     this.debugLogLevelConfigured = true;
-    this.debugLogLevel = normalizeDebugLogOption(option);
+    this.debugLogLevel = normalizeDebugLogLevelOption(option);
     setGlobalDebugLogLevel(this.debugLogLevel ?? false);
   }
 
@@ -864,7 +866,7 @@ export class BraintrustState {
   }
 
   public async login(loginParams: LoginOptions & { forceLogin?: boolean }) {
-    this.setDebugLogLevel(loginParams.debugLogging);
+    this.setDebugLogLevel(loginParams.debugLogLevel);
     if (this.apiUrl && !loginParams.forceLogin) {
       return;
     }
@@ -3953,7 +3955,7 @@ export type InitLoggerOptions<IsAsyncFlush> = FullLoginOptions & {
  * key is specified, will prompt the user to login.
  * @param options.orgName (Optional) The name of a specific organization to connect to. This is useful if you belong to multiple.
  * @param options.forceLogin Login again, even if you have already logged in (by default, the logger will not login if you are already logged in)
- * @param options.debugLogging Enables internal Braintrust SDK troubleshooting output. Use `true` or `"setup"` for setup-relevant diagnostics, `"full"` for deeper SDK debugging, or `false` to explicitly disable it. If omitted, the SDK stays silent unless `BRAINTRUST_LOG_LEVEL` is set.
+ * @param options.debugLogLevel Enables internal Braintrust SDK troubleshooting output. Use `"error"`, `"warn"`, `"info"`, or `"debug"` to choose an explicit level, or `false` to explicitly disable it. If omitted, the SDK stays silent unless `BRAINTRUST_DEBUG_LOG_LEVEL` is set.
  * @param setCurrent If true (the default), set the global current-experiment to the newly-created one.
  * @returns The newly created Logger.
  */
@@ -3968,7 +3970,7 @@ export function initLogger<IsAsyncFlush extends boolean = true>(
     apiKey,
     orgName,
     forceLogin,
-    debugLogging,
+    debugLogLevel,
     fetch,
     state: stateArg,
   } = options || {};
@@ -3989,7 +3991,7 @@ export function initLogger<IsAsyncFlush extends boolean = true>(
   };
 
   const state = stateArg ?? _globalState;
-  state.setDebugLogLevel(debugLogging);
+  state.setDebugLogLevel(debugLogLevel);
 
   // Enable queue size limit enforcement for initLogger() calls
   // This ensures production observability doesn't OOM customer processes
@@ -4463,18 +4465,18 @@ export interface LoginOptions {
    */
   disableSpanCache?: boolean;
   /**
-   * Enables internal Braintrust SDK troubleshooting output.
+   * Controls internal Braintrust SDK troubleshooting output.
    *
-   * Use `true` or `"setup"` to emit customer-relevant setup diagnostics such as
-   * cache fallbacks, queue pressure, and recoverable delivery issues. Use
-   * `"full"` to additionally emit deeper SDK debugging details such as retry
-   * traces and backoff activity. Use `false` to explicitly disable this output.
+   * Use `"error"`, `"warn"`, `"info"`, or `"debug"` to control how much
+   * internal SDK troubleshooting output is emitted. Use `false` to explicitly
+   * disable this output.
    *
-   * When omitted, the SDK remains silent unless `BRAINTRUST_LOG_LEVEL` is set
-   * to `"setup"` or `"full"`. This option only affects local console output; it
-   * does not change what data is logged to Braintrust.
+   * When omitted, the SDK remains silent unless
+   * `BRAINTRUST_DEBUG_LOG_LEVEL` is set to `"error"`, `"warn"`, `"info"`, or
+   * `"debug"`. This option only affects local console output; it does not
+   * change what data is logged to Braintrust.
    */
-  debugLogging?: boolean | DebugLogLevel;
+  debugLogLevel?: DebugLogLevel | false;
 }
 
 export type FullLoginOptions = LoginOptions & {
@@ -4515,7 +4517,7 @@ export async function login(
   }
 
   const state = _internalGetGlobalState();
-  state.setDebugLogLevel(options.debugLogging);
+  state.setDebugLogLevel(options.debugLogLevel);
   if (state.loggedIn && !forceLogin) {
     // We have already logged in. If any provided login inputs disagree with our
     // existing settings, raise an Exception warning the user to try again with

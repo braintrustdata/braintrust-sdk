@@ -666,7 +666,7 @@ describe("wrapTraced generator support", () => {
     initLogger({
       projectName: "test",
       projectId: "test-project-id",
-      debugLogging: "setup",
+      debugLogLevel: "info",
     });
 
     const consoleWarnSpy = vi
@@ -708,7 +708,7 @@ describe("wrapTraced generator support", () => {
     initLogger({
       projectName: "test",
       projectId: "test-project-id",
-      debugLogging: "setup",
+      debugLogLevel: "info",
     });
 
     const consoleWarnSpy = vi
@@ -1035,7 +1035,7 @@ describe("parent precedence", () => {
 });
 
 test("attachment with unreadable path logs warning", () => {
-  _exportsForTestingOnly.simulateLogoutForTests().setDebugLogLevel("setup");
+  _exportsForTestingOnly.simulateLogoutForTests().setDebugLogLevel("info");
   const consoleWarnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
 
   new Attachment({

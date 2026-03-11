@@ -29,7 +29,7 @@ export async function loadCLIEnv(args: AuthArgs & CommonArgs) {
     apiKey: args.api_key,
     orgName: args.org_name,
     appUrl: args.app_url,
-    debugLogging: args.debug_logging,
+    debugLogLevel: args.debug_logging,
   });
 }
 

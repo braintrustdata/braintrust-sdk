@@ -938,7 +938,7 @@ async function run(args: RunArgs) {
         apiKey: args.api_key,
         orgName: args.org_name,
         appUrl: args.app_url,
-        debugLogging: args.debug_logging,
+        debugLogLevel: args.debug_logging,
       });
     }
 
@@ -981,8 +981,8 @@ function addAuthArgs(parser: ArgumentParser) {
 
 function addDebugLoggingArg(parser: ArgumentParser) {
   parser.add_argument("--debug-logging", {
-    choices: ["setup", "full"],
-    help: "Enable internal Braintrust SDK troubleshooting output. Use 'setup' for setup-relevant diagnostics or 'full' for deeper SDK debug logging.",
+    choices: ["error", "warn", "info", "debug"],
+    help: "Enable internal Braintrust SDK troubleshooting output. Use 'error', 'warn', 'info', or 'debug' to control the log level.",
   });
 }
 
@@ -1010,7 +1010,7 @@ async function main() {
   const parentParser = new ArgumentParser({ add_help: false });
   parentParser.add_argument("--verbose", {
     action: "store_true",
-    help: "Deprecated alias for --debug-logging full. Use --debug-logging full to include full stack traces and detailed troubleshooting output.",
+    help: "Deprecated alias for --debug-logging debug. Use --debug-logging debug to include full stack traces and detailed troubleshooting output.",
   });
 
   const subparser = parser.add_subparsers({

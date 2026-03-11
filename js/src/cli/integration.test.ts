@@ -43,7 +43,7 @@ describe("External Packages Type Definitions", () => {
         org_name: "test-org",
         app_url: "https://test.com",
         env_file: ".env",
-        debug_logging: "setup",
+        debug_logging: "info",
         tsconfig: "tsconfig.json",
         terminate_on_failure: false,
         external_packages: ["@mapbox/node-pre-gyp"],
@@ -62,7 +62,7 @@ describe("External Packages Type Definitions", () => {
       };
 
       expect(args.external_packages).toEqual(["@mapbox/node-pre-gyp"]);
-      expect(args.debug_logging).toBe("setup");
+      expect(args.debug_logging).toBe("info");
     });
   });
 
@@ -74,7 +74,7 @@ describe("External Packages Type Definitions", () => {
         org_name: "test-org",
         app_url: "https://test.com",
         env_file: ".env",
-        debug_logging: "full",
+        debug_logging: "debug",
         tsconfig: "tsconfig.json",
         terminate_on_failure: false,
         external_packages: ["sqlite3", "sharp"],
@@ -83,7 +83,7 @@ describe("External Packages Type Definitions", () => {
       };
 
       expect(args.external_packages).toEqual(["sqlite3", "sharp"]);
-      expect(args.debug_logging).toBe("full");
+      expect(args.debug_logging).toBe("debug");
     });
   });
 
@@ -94,10 +94,10 @@ describe("External Packages Type Definitions", () => {
         output_dir: "./braintrust",
         project_name: "test-project",
         force: false,
-        debug_logging: "setup",
+        debug_logging: "info",
       };
 
-      expect(args.debug_logging).toBe("setup");
+      expect(args.debug_logging).toBe("info");
     });
   });
 });

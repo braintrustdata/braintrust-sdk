@@ -1,7 +1,7 @@
 import iso from "./isomorph";
 
-export type DebugLogLevel = "setup" | "full";
-export type DebugLogOption = boolean | DebugLogLevel | undefined;
+export type DebugLogLevel = "error" | "warn" | "info" | "debug";
+export type DebugLogLevelOption = DebugLogLevel | false | undefined;
 
 type DebugLoggerStateLike = {
   getDebugLogLevel?: () => DebugLogLevel | undefined;
@@ -17,6 +17,12 @@ type DebugLoggerMethods = {
 
 const PREFIX = "[braintrust]";
 const DEBUG_LOG_LEVEL_SYMBOL = Symbol.for("braintrust-debug-log-level");
+const LOG_LEVEL_PRIORITY: Record<DebugLogLevel, number> = {
+  error: 0,
+  warn: 1,
+  info: 2,
+  debug: 3,
+};
 
 let hasWarnedAboutInvalidEnvValue = false;
 let debugLogStateResolver:
@@ -30,24 +36,26 @@ function warnInvalidEnvValue(value: string) {
   hasWarnedAboutInvalidEnvValue = true;
   console.warn(
     PREFIX,
-    `Invalid BRAINTRUST_LOG_LEVEL value "${value}". Expected "setup" or "full".`,
+    `Invalid BRAINTRUST_DEBUG_LOG_LEVEL value "${value}". Expected "error", "warn", "info", or "debug".`,
   );
 }
 
-export function normalizeDebugLogOption(
-  option: Exclude<DebugLogOption, undefined>,
+export function normalizeDebugLogLevelOption(
+  option: Exclude<DebugLogLevelOption, undefined>,
 ): DebugLogLevel | undefined {
   if (option === false) {
     return undefined;
   }
-  if (option === true) {
-    return "setup";
-  }
-  if (option === "setup" || option === "full") {
+  if (
+    option === "error" ||
+    option === "warn" ||
+    option === "info" ||
+    option === "debug"
+  ) {
     return option;
   }
   throw new Error(
-    `Invalid debugLogging value "${option}". Expected true, false, "setup", or "full".`,
+    `Invalid debugLogLevel value "${option}". Expected false, "error", "warn", "info", or "debug".`,
   );
 }
 
@@ -57,7 +65,12 @@ function parseDebugLogLevelEnv(
   if (!value) {
     return undefined;
   }
-  if (value === "setup" || value === "full") {
+  if (
+    value === "error" ||
+    value === "warn" ||
+    value === "info" ||
+    value === "debug"
+  ) {
     return value;
   }
   warnInvalidEnvValue(value);
@@ -65,7 +78,7 @@ function parseDebugLogLevelEnv(
 }
 
 export function getEnvDebugLogLevel(): DebugLogLevel | undefined {
-  return parseDebugLogLevelEnv(iso.getEnv("BRAINTRUST_LOG_LEVEL"));
+  return parseDebugLogLevelEnv(iso.getEnv("BRAINTRUST_DEBUG_LOG_LEVEL"));
 }
 
 export function setGlobalDebugLogLevel(
@@ -117,9 +130,7 @@ function emit(
 ) {
   const level = resolveDebugLogLevel(state);
 
-  if (!level) {
-    return;
-  } else if (method === "debug" && level !== "full") {
+  if (!level || LOG_LEVEL_PRIORITY[method] > LOG_LEVEL_PRIORITY[level]) {
     return;
   }
 

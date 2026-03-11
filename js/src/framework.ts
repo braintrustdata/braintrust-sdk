@@ -1541,7 +1541,7 @@ export function reportFailures<
     if (!verbose && !jsonl) {
       console.error(
         warning(
-          "Use --debug-logging full to see full stack traces and troubleshooting details.",
+          "Use --debug-logging debug to see full stack traces and troubleshooting details.",
         ),
       );
     }

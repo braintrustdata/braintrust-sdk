@@ -1707,7 +1707,7 @@ describe("areInterfaceSignaturesCompatible", () => {
       noExitFlush?: boolean;
       onFlushError?: (error: unknown) => void;
       disableSpanCache?: boolean;
-      debugLogging?: boolean | DebugLogLevel;
+      debugLogLevel?: DebugLogLevel | false;
     }`;
 
     const result = areInterfaceSignaturesCompatible(oldInterface, newInterface);
