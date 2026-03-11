@@ -15,7 +15,7 @@
     "lint": {
       "outputs": []
     },
-    "fix:eslint": {
+    "fix:lint": {
       "outputs": []
     },
     "dev": {
