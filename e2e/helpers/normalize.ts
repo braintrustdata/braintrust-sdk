@@ -20,14 +20,31 @@ const UUID_REGEX =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const UUID_SUBSTRING_REGEX =
   /[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}/gi;
-const TIME_KEYS = new Set(["created", "start", "end"]);
+const TIME_KEYS = new Set(["created", "date", "start", "end"]);
 const SPAN_ID_KEYS = new Set(["id", "span_id", "root_span_id"]);
-const ZERO_NUMBER_KEYS = new Set(["caller_lineno"]);
+const ZERO_NUMBER_KEYS = new Set([
+  "avgLogprobs",
+  "caller_lineno",
+  "duration",
+  "time_to_first_token",
+]);
 const XACT_VERSION_KEYS = new Set([
   "currentVersion",
   "initialVersion",
   "version",
 ]);
+const DYNAMIC_HEADER_KEYS = new Set([
+  "cf-ray",
+  "openai-processing-ms",
+  "server-timing",
+  "set-cookie",
+  "x-ratelimit-remaining-requests",
+  "x-ratelimit-remaining-tokens",
+  "x-ratelimit-reset-requests",
+  "x-ratelimit-reset-tokens",
+  "x-request-id",
+]);
+const PROVIDER_ID_KEYS = new Set(["itemId", "responseId", "toolCallId"]);
 const HELPERS_DIR = path.dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = path.resolve(HELPERS_DIR, "../..").replace(/\\/g, "/");
 const STACK_FRAME_REPO_PATH_REGEX =
@@ -173,12 +190,20 @@ function normalizeValue(
       return tokenFor(tokenMaps.xacts, value, "xact");
     }
 
+    if (currentKey && DYNAMIC_HEADER_KEYS.has(currentKey)) {
+      return `<${currentKey}>`;
+    }
+
     if (currentKey && XACT_VERSION_KEYS.has(currentKey)) {
       return tokenFor(tokenMaps.xacts, value, "xact");
     }
 
     if (currentKey === "testRunId") {
       return tokenFor(tokenMaps.runs, value, "run");
+    }
+
+    if (currentKey && PROVIDER_ID_KEYS.has(currentKey)) {
+      return tokenFor(tokenMaps.ids, value, currentKey);
     }
 
     if (currentKey && SPAN_ID_KEYS.has(currentKey)) {

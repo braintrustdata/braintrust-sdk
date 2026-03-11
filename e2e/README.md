@@ -37,6 +37,7 @@ Any extra files needed only by one scenario stay in that scenario folder. Anythi
 - `trace-selectors.ts` / `trace-summary.ts` - Helpers for finding spans and snapshotting only the relevant shape.
 - `scenario-runtime.ts` - Shared runtime utilities used by scenario entrypoints.
 - `openai.ts` - Shared scenario lists and assertions for OpenAI wrapper and hook coverage across v4/v5/v6.
+- `wrapper-contract.ts` - Helpers for snapshotting wrapper span contracts and filtering payload rows by root span id.
 
 ### Writing a new test
 
@@ -65,6 +66,24 @@ The main utilities you'll use in test files:
 - `testRunId` - Useful when a scenario or assertion needs the exact run marker.
 
 Use `normalizeForSnapshot(...)` before snapshotting. It replaces timestamps and ids with stable tokens and strips machine-specific paths and localhost ports.
+
+### Wrapper scenario pattern
+
+Wrapper scenarios often create a root span with `testRunId` metadata and then let the wrapper emit child spans that do not repeat that metadata. In those cases:
+
+- Use `events()` rather than `testRunEvents()` to inspect the full trace tree.
+- Find the scenario root span first.
+- Scope raw payload snapshots by `root_span_id` using `payloadRowsForRootSpan(...)`.
+- Pair a normalized `span-events` snapshot with a normalized `log-payloads` snapshot.
+- If the wrapper has an explicit support matrix, reuse one shared test across version-specific scenario entries instead of duplicating the assertions. The AI SDK wrapper scenario uses this for supported v3-v6 package combinations.
+
+### Environment variables
+
+The wrapper scenarios in this directory require provider credentials in addition to the mock Braintrust server config supplied by the harness:
+
+- `OPENAI_API_KEY`
+- `ANTHROPIC_API_KEY`
+- `GEMINI_API_KEY` or `GOOGLE_API_KEY`
 
 ### Scenario-local `package.json`
 

@@ -1,0 +1,7 @@
+{
+  "name": "@braintrust/e2e-wrap-google-genai-content-traces",
+  "private": true,
+  "dependencies": {
+    "@google/genai": "1.25.0"
+  }
+}
