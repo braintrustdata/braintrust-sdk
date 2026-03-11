@@ -992,6 +992,81 @@ describe("framework2 metadata support", () => {
     });
   });
 
+  describe("CodePrompt tags", () => {
+    test("prompt stores tags correctly", () => {
+      const project = projects.create({ name: "test-project" });
+      const tags = ["ci", "production"];
+
+      project.prompts.create({
+        name: "test-prompt",
+        prompt: "Hello {{name}}",
+        model: "gpt-4",
+        tags,
+      });
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const prompts = (project as any)._publishablePrompts;
+      expect(prompts).toHaveLength(1);
+      expect(prompts[0].tags).toEqual(tags);
+    });
+
+    test("toFunctionDefinition includes tags when present", async () => {
+      const project = projects.create({ name: "test-project" });
+      const tags = ["ci", "production"];
+
+      const codePrompt = new CodePrompt(
+        project,
+        {
+          prompt: { type: "completion", content: "Hello {{name}}" },
+          options: { model: "gpt-4" },
+        },
+        [],
+        {
+          name: "test-prompt",
+          slug: "test-prompt",
+          tags,
+        },
+      );
+
+      const mockProjectMap = {
+        resolve: vi.fn().mockResolvedValue("project-123"),
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      } as any;
+
+      const funcDef = await codePrompt.toFunctionDefinition(mockProjectMap);
+
+      expect(funcDef.tags).toEqual(tags);
+      expect(funcDef.name).toBe("test-prompt");
+      expect(funcDef.project_id).toBe("project-123");
+    });
+
+    test("toFunctionDefinition excludes tags when undefined", async () => {
+      const project = projects.create({ name: "test-project" });
+
+      const codePrompt = new CodePrompt(
+        project,
+        {
+          prompt: { type: "completion", content: "Hello {{name}}" },
+          options: { model: "gpt-4" },
+        },
+        [],
+        {
+          name: "test-prompt",
+          slug: "test-prompt",
+        },
+      );
+
+      const mockProjectMap = {
+        resolve: vi.fn().mockResolvedValue("project-123"),
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      } as any;
+
+      const funcDef = await codePrompt.toFunctionDefinition(mockProjectMap);
+
+      expect(funcDef.tags).toBeUndefined();
+    });
+  });
+
   describe("CodeParameters defaults", () => {
     test("toFunctionDefinition initializes data with schema defaults", async () => {
       const project = projects.create({ name: "test-project" });

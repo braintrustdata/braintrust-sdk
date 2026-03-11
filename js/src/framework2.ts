@@ -424,6 +424,7 @@ export class CodePrompt {
   public readonly id?: string;
   public readonly functionType?: FunctionType;
   public readonly toolFunctions: (SavedFunctionId | GenericCodeFunction)[];
+  public readonly tags?: string[];
   public readonly metadata?: Record<string, unknown>;
 
   constructor(
@@ -445,6 +446,7 @@ export class CodePrompt {
     this.description = opts.description;
     this.id = opts.id;
     this.functionType = functionType;
+    this.tags = opts.tags;
     this.metadata = opts.metadata;
   }
 
@@ -486,6 +488,7 @@ export class CodePrompt {
       function_type: this.functionType,
       prompt_data,
       if_exists: this.ifExists,
+      tags: this.tags,
       metadata: this.metadata,
     };
   }
@@ -518,8 +521,9 @@ export type PromptOpts<
   // eslint-disable-next-line @typescript-eslint/no-empty-object-type
   (HasTools extends true ? Partial<PromptTools> : {}) &
   // eslint-disable-next-line @typescript-eslint/no-empty-object-type
-  (HasNoTrace extends true ? Partial<PromptNoTrace> : {}) &
-  PromptDefinition;
+  (HasNoTrace extends true ? Partial<PromptNoTrace> : {}) & {
+    tags?: string[];
+  } & PromptDefinition;
 
 export class PromptBuilder {
   constructor(private readonly project: Project) {}
@@ -552,6 +556,7 @@ export class PromptBuilder {
       name: opts.name,
       slug: slug,
       prompt_data: promptData,
+      tags: opts.tags,
       ...(this.project.id !== undefined ? { project_id: this.project.id } : {}),
     } as PromptRowWithId<HasId, HasVersion>;
 
@@ -782,6 +787,7 @@ export interface FunctionEvent {
   function_data: z.infer<typeof functionDataSchema>;
   function_type?: FunctionType;
   if_exists?: IfExists;
+  tags?: string[];
   metadata?: Record<string, unknown>;
 }
 
