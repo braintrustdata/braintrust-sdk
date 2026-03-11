@@ -21,6 +21,27 @@ import { getCurrentUnixTimestamp } from "../util";
 const TEST_MODEL = "gemini-2.0-flash-001";
 const TEST_SUITE_OPTIONS = { timeout: 10000, retry: 3 };
 
+async function drainRawEvents(backgroundLogger: TestBackgroundLogger) {
+  const queued = (
+    backgroundLogger as unknown as {
+      items: Array<Array<{ get: () => Promise<unknown> }>>;
+    }
+  ).items;
+  (
+    backgroundLogger as unknown as {
+      items: Array<Array<{ get: () => Promise<unknown> }>>;
+    }
+  ).items = [];
+
+  const events: unknown[] = [];
+  for (const batch of queued) {
+    for (const event of batch) {
+      events.push(await event.get());
+    }
+  }
+  return events;
+}
+
 try {
   configureNode();
 } catch {
@@ -152,6 +173,104 @@ describe("google genai client unit tests", TEST_SUITE_OPTIONS, () => {
     expect(metrics.tokens).toBeGreaterThan(0);
     expect(metrics.prompt_tokens).toBeGreaterThan(0);
     expect(metrics.completion_tokens).toBeGreaterThan(0);
+  });
+
+  test("google genai streaming completion logs a single terminal end row", async () => {
+    class FakeGoogleGenAI {
+      public models = {
+        generateContentStream: async () =>
+          (async function* () {
+            yield {
+              candidates: [
+                {
+                  content: {
+                    parts: [{ text: "One " }],
+                    role: "model",
+                  },
+                },
+              ],
+            };
+            yield {
+              candidates: [
+                {
+                  content: {
+                    parts: [{ text: "two" }],
+                    role: "model",
+                  },
+                  finishReason: "STOP",
+                },
+              ],
+              usageMetadata: {
+                promptTokenCount: 4,
+                candidatesTokenCount: 2,
+                totalTokenCount: 6,
+              },
+              text: "One two",
+            };
+          })(),
+      };
+
+      public constructor(_config: { apiKey?: string }) {}
+    }
+
+    initLogger({
+      projectName: "google-genai.test.ts",
+      projectId: "test-project-id",
+    });
+
+    const { GoogleGenAI } = wrapGoogleGenAI({
+      GoogleGenAI: FakeGoogleGenAI,
+    });
+    const fakeClient = new GoogleGenAI({ apiKey: "test-key" });
+
+    const stream = await fakeClient.models.generateContentStream({
+      model: TEST_MODEL,
+      contents: "Count to two.",
+      config: {
+        maxOutputTokens: 8,
+      },
+    });
+
+    const results = [];
+    for await (const chunk of stream) {
+      results.push(chunk);
+    }
+
+    expect(results).toHaveLength(2);
+
+    const rawEvents = (await drainRawEvents(backgroundLogger)) as any[];
+    expect(rawEvents).toHaveLength(3);
+
+    const [startRow, payloadRow, endRow] = rawEvents;
+    expect(startRow._is_merge).not.toBe(true);
+    expect(payloadRow._is_merge).toBe(true);
+    expect(payloadRow.output).toMatchObject({
+      candidates: [
+        {
+          content: {
+            parts: [{ text: "One two" }],
+            role: "model",
+          },
+          finishReason: "STOP",
+        },
+      ],
+      text: "One two",
+    });
+    expect(payloadRow.metrics).toMatchObject({
+      start: expect.any(Number),
+      duration: expect.any(Number),
+      time_to_first_token: expect.any(Number),
+      prompt_tokens: 4,
+      completion_tokens: 2,
+      tokens: 6,
+    });
+    expect(payloadRow.metrics.end).toBeUndefined();
+    expect(endRow).toMatchObject({
+      _is_merge: true,
+      metrics: {
+        end: expect.any(Number),
+      },
+    });
   });
 
   test("google genai tool calls", async () => {
