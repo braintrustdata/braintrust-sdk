@@ -18,7 +18,7 @@ lint:
 
 .PHONY: fixup
 fixup:
-	pnpm run fix
+	pnpm run fix:formatting && pnpm run fix:lint
 
 #
 # js stuff

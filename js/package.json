@@ -128,7 +128,7 @@
     "test:vitest": "pnpm --filter @braintrust/vitest-wrapper-tests test",
     "test:output": "tsx scripts/test-output.ts --with-comparison --with-metrics --with-progress",
     "lint": "eslint .",
-    "fix:eslint": "eslint --fix .",
+    "fix:lint": "eslint --fix .",
     "playground": "tsx playground.ts"
   },
   "author": "",

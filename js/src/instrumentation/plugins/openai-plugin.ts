@@ -1,9 +1,15 @@
 import { BasePlugin } from "../core";
+import {
+  traceAsyncChannel,
+  traceStreamingChannel,
+  traceSyncStreamChannel,
+  unsubscribeAll,
+} from "../core/channel-tracing";
 import { Attachment } from "../../logger";
 import { SpanTypeAttribute, isObject } from "../../../util/index";
 import { getCurrentUnixTimestamp } from "../../util";
 import { processInputAttachments } from "../../wrappers/attachment-utils";
-import { OPENAI_CHANNEL } from "./channels";
+import { openAIChannels } from "./openai-channels";
 import {
   BRAINTRUST_CACHED_STREAM_METRIC,
   getCachedMetricFromHeaders,
@@ -11,16 +17,7 @@ import {
 } from "../../openai-utils";
 import type {
   OpenAIChatChoice,
-  OpenAIChatCompletion,
   OpenAIChatCompletionChunk,
-  OpenAIChatCreateParams,
-  OpenAIEmbeddingCreateParams,
-  OpenAIEmbeddingResponse,
-  OpenAIModerationCreateParams,
-  OpenAIModerationResponse,
-  OpenAIResponse,
-  OpenAIResponseCompletedEvent,
-  OpenAIResponseCreateParams,
   OpenAIResponseStreamEvent,
 } from "../../vendor-sdk-types/openai";
 
@@ -41,109 +38,23 @@ export class OpenAIPlugin extends BasePlugin {
 
   protected onEnable(): void {
     // Chat Completions - supports streaming
-    this.subscribeToStreamingChannel(OPENAI_CHANNEL.CHAT_COMPLETIONS_CREATE, {
-      name: "Chat Completion",
-      type: SpanTypeAttribute.LLM,
-      extractInput: (args: unknown[]) => {
-        // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
-        const params = (args[0] || {}) as OpenAIChatCreateParams;
-        const { messages, ...metadata } = params;
-        return {
-          input: processInputAttachments(messages),
-          metadata: { ...metadata, provider: "openai" },
-        };
-      },
-      extractOutput: (result: unknown) => {
-        // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
-        const response = result as OpenAIChatCompletion | undefined;
-        return response?.choices;
-      },
-      extractMetrics: (
-        result: unknown,
-        startTime?: number,
-        endEvent?: unknown,
-      ) => {
-        // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
-        const response = result as OpenAIChatCompletion | undefined;
-        const metrics = withCachedMetric(
-          parseMetricsFromUsage(response?.usage),
-          result,
-          endEvent,
-        );
-        if (startTime) {
-          metrics.time_to_first_token = getCurrentUnixTimestamp() - startTime;
-        }
-        return metrics;
-      },
-      aggregateChunks: aggregateChatCompletionChunks,
-    });
-
-    // Embeddings
-    this.subscribeToChannel(OPENAI_CHANNEL.EMBEDDINGS_CREATE, {
-      name: "Embedding",
-      type: SpanTypeAttribute.LLM,
-      extractInput: (args: unknown[]) => {
-        // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
-        const params = (args[0] || {}) as OpenAIEmbeddingCreateParams;
-        const { input, ...metadata } = params;
-        return {
-          input,
-          metadata: { ...metadata, provider: "openai" },
-        };
-      },
-      extractOutput: (result: unknown) => {
-        // Preserve wrapper parity: old wrapper logged only first embedding length.
-        // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
-        const response = result as OpenAIEmbeddingResponse | undefined;
-        const embedding = response?.data?.[0]?.embedding;
-        return Array.isArray(embedding)
-          ? { embedding_length: embedding.length }
-          : undefined;
-      },
-      extractMetrics: (
-        result: unknown,
-        _startTime?: number,
-        endEvent?: unknown,
-      ) => {
-        // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
-        const response = result as OpenAIEmbeddingResponse | undefined;
-        return withCachedMetric(
-          parseMetricsFromUsage(response?.usage),
-          result,
-          endEvent,
-        );
-      },
-    });
-
-    // Beta Chat Completions Parse
-    this.subscribeToStreamingChannel(
-      OPENAI_CHANNEL.BETA_CHAT_COMPLETIONS_PARSE,
-      {
+    this.unsubscribers.push(
+      traceStreamingChannel(openAIChannels.chatCompletionsCreate, {
         name: "Chat Completion",
         type: SpanTypeAttribute.LLM,
-        extractInput: (args: unknown[]) => {
-          // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
-          const params = (args[0] || {}) as OpenAIChatCreateParams;
+        extractInput: ([params]) => {
           const { messages, ...metadata } = params;
           return {
             input: processInputAttachments(messages),
             metadata: { ...metadata, provider: "openai" },
           };
         },
-        extractOutput: (result: unknown) => {
-          // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
-          const response = result as OpenAIChatCompletion | undefined;
-          return response?.choices;
+        extractOutput: (result) => {
+          return result?.choices;
         },
-        extractMetrics: (
-          result: unknown,
-          startTime?: number,
-          endEvent?: unknown,
-        ) => {
-          // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
-          const response = result as OpenAIChatCompletion | undefined;
+        extractMetrics: (result, startTime, endEvent) => {
           const metrics = withCachedMetric(
-            parseMetricsFromUsage(response?.usage),
+            parseMetricsFromUsage(result?.usage),
             result,
             endEvent,
           );
@@ -153,201 +64,219 @@ export class OpenAIPlugin extends BasePlugin {
           return metrics;
         },
         aggregateChunks: aggregateChatCompletionChunks,
-      },
+      }),
     );
 
-    // Beta Chat Completions Stream (sync method returning event-based stream)
-    this.subscribeToSyncStreamChannel(
-      OPENAI_CHANNEL.BETA_CHAT_COMPLETIONS_STREAM,
-      {
+    // Embeddings
+    this.unsubscribers.push(
+      traceAsyncChannel(openAIChannels.embeddingsCreate, {
+        name: "Embedding",
+        type: SpanTypeAttribute.LLM,
+        extractInput: ([params]) => {
+          const { input, ...metadata } = params;
+          return {
+            input,
+            metadata: { ...metadata, provider: "openai" },
+          };
+        },
+        extractOutput: (result) => {
+          const embedding = result?.data?.[0]?.embedding;
+          return Array.isArray(embedding)
+            ? { embedding_length: embedding.length }
+            : undefined;
+        },
+        extractMetrics: (result, _startTime, endEvent) => {
+          return withCachedMetric(
+            parseMetricsFromUsage(result?.usage),
+            result,
+            endEvent,
+          );
+        },
+      }),
+    );
+
+    // Beta Chat Completions Parse
+    this.unsubscribers.push(
+      traceStreamingChannel(openAIChannels.betaChatCompletionsParse, {
         name: "Chat Completion",
         type: SpanTypeAttribute.LLM,
-        extractInput: (args: unknown[]) => {
-          // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
-          const params = (args[0] || {}) as OpenAIChatCreateParams;
+        extractInput: ([params]) => {
           const { messages, ...metadata } = params;
           return {
             input: processInputAttachments(messages),
             metadata: { ...metadata, provider: "openai" },
           };
         },
-      },
+        extractOutput: (result) => {
+          return result?.choices;
+        },
+        extractMetrics: (result, startTime, endEvent) => {
+          const metrics = withCachedMetric(
+            parseMetricsFromUsage(result?.usage),
+            result,
+            endEvent,
+          );
+          if (startTime) {
+            metrics.time_to_first_token = getCurrentUnixTimestamp() - startTime;
+          }
+          return metrics;
+        },
+        aggregateChunks: aggregateChatCompletionChunks,
+      }),
+    );
+
+    // Beta Chat Completions Stream (sync method returning event-based stream)
+    this.unsubscribers.push(
+      traceSyncStreamChannel(openAIChannels.betaChatCompletionsStream, {
+        name: "Chat Completion",
+        type: SpanTypeAttribute.LLM,
+        extractInput: ([params]) => {
+          const { messages, ...metadata } = params;
+          return {
+            input: processInputAttachments(messages),
+            metadata: { ...metadata, provider: "openai" },
+          };
+        },
+      }),
     );
 
     // Moderations
-    this.subscribeToChannel(OPENAI_CHANNEL.MODERATIONS_CREATE, {
-      name: "Moderation",
-      type: SpanTypeAttribute.LLM,
-      extractInput: (args: unknown[]) => {
-        // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
-        const params = (args[0] || {}) as OpenAIModerationCreateParams;
-        const { input, ...metadata } = params;
-        return {
-          input,
-          metadata: { ...metadata, provider: "openai" },
-        };
-      },
-      extractOutput: (result: unknown) => {
-        // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
-        const response = result as OpenAIModerationResponse | undefined;
-        return response?.results;
-      },
-      extractMetrics: (
-        result: unknown,
-        _startTime?: number,
-        endEvent?: unknown,
-      ) => {
-        // Include cached metric when wrappers annotate usage from headers.
-        // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
-        const response = result as OpenAIModerationResponse | undefined;
-        return withCachedMetric(
-          parseMetricsFromUsage(response?.usage),
-          result,
-          endEvent,
-        );
-      },
-    });
+    this.unsubscribers.push(
+      traceAsyncChannel(openAIChannels.moderationsCreate, {
+        name: "Moderation",
+        type: SpanTypeAttribute.LLM,
+        extractInput: ([params]) => {
+          const { input, ...metadata } = params;
+          return {
+            input,
+            metadata: { ...metadata, provider: "openai" },
+          };
+        },
+        extractOutput: (result) => {
+          return result?.results;
+        },
+        extractMetrics: (result, _startTime, endEvent) => {
+          return withCachedMetric(
+            parseMetricsFromUsage(result?.usage),
+            result,
+            endEvent,
+          );
+        },
+      }),
+    );
 
     // Responses API - create (supports streaming via stream=true param)
-    this.subscribeToStreamingChannel(OPENAI_CHANNEL.RESPONSES_CREATE, {
-      name: "openai.responses.create",
-      type: SpanTypeAttribute.LLM,
-      extractInput: (args: unknown[]) => {
-        // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
-        const params = (args[0] || {}) as OpenAIResponseCreateParams;
-        const { input, ...metadata } = params;
-        return {
-          input: processInputAttachments(input),
-          metadata: { ...metadata, provider: "openai" },
-        };
-      },
-      extractOutput: (result: unknown) => {
-        // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
-        const response = result as OpenAIResponse | undefined;
-        return processImagesInOutput(response?.output);
-      },
-      extractMetadata: (result: unknown) => {
-        // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
-        const response = result as OpenAIResponse | undefined;
-        if (!response) {
-          return undefined;
-        }
-        const { output: _output, usage: _usage, ...metadata } = response;
-        return Object.keys(metadata).length > 0 ? metadata : undefined;
-      },
-      extractMetrics: (
-        result: unknown,
-        startTime?: number,
-        endEvent?: unknown,
-      ) => {
-        // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
-        const response = result as OpenAIResponse | undefined;
-        const metrics = withCachedMetric(
-          parseMetricsFromUsage(response?.usage),
-          result,
-          endEvent,
-        );
-        if (startTime) {
-          metrics.time_to_first_token = getCurrentUnixTimestamp() - startTime;
-        }
-        return metrics;
-      },
-      aggregateChunks: aggregateResponseStreamEvents,
-    });
+    this.unsubscribers.push(
+      traceStreamingChannel(openAIChannels.responsesCreate, {
+        name: "openai.responses.create",
+        type: SpanTypeAttribute.LLM,
+        extractInput: ([params]) => {
+          const { input, ...metadata } = params;
+          return {
+            input: processInputAttachments(input),
+            metadata: { ...metadata, provider: "openai" },
+          };
+        },
+        extractOutput: (result) => {
+          return processImagesInOutput(result?.output);
+        },
+        extractMetadata: (result) => {
+          if (!result) {
+            return undefined;
+          }
+          const { output: _output, usage: _usage, ...metadata } = result;
+          return Object.keys(metadata).length > 0 ? metadata : undefined;
+        },
+        extractMetrics: (result, startTime, endEvent) => {
+          const metrics = withCachedMetric(
+            parseMetricsFromUsage(result?.usage),
+            result,
+            endEvent,
+          );
+          if (startTime) {
+            metrics.time_to_first_token = getCurrentUnixTimestamp() - startTime;
+          }
+          return metrics;
+        },
+        aggregateChunks: aggregateResponseStreamEvents,
+      }),
+    );
 
     // Responses API - stream (sync method returning event-based stream)
-    this.subscribeToSyncStreamChannel(OPENAI_CHANNEL.RESPONSES_STREAM, {
-      // Preserve wrapper parity: responses.stream logged as openai.responses.create.
-      name: "openai.responses.create",
-      type: SpanTypeAttribute.LLM,
-      extractInput: (args: unknown[]) => {
-        // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
-        const params = (args[0] || {}) as OpenAIResponseCreateParams;
-        const { input, ...metadata } = params;
-        return {
-          input: processInputAttachments(input),
-          metadata: { ...metadata, provider: "openai" },
-        };
-      },
-      extractFromEvent: (event: unknown) => {
-        // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
-        const response = (event as OpenAIResponseCompletedEvent | undefined)
-          ?.response;
-        if (
-          !event ||
-          !response ||
-          // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
-          (event as OpenAIResponseCompletedEvent).type !== "response.completed"
-        ) {
-          return {};
-        }
+    this.unsubscribers.push(
+      traceSyncStreamChannel(openAIChannels.responsesStream, {
+        name: "openai.responses.create",
+        type: SpanTypeAttribute.LLM,
+        extractInput: ([params]) => {
+          const { input, ...metadata } = params;
+          return {
+            input: processInputAttachments(input),
+            metadata: { ...metadata, provider: "openai" },
+          };
+        },
+        extractFromEvent: (event) => {
+          if (event.type !== "response.completed" || !event.response) {
+            return {};
+          }
 
-        const data: Record<string, unknown> = {};
+          const response = event.response;
+          const data: Record<string, unknown> = {};
 
-        if (response.output !== undefined) {
-          data.output = processImagesInOutput(response.output);
-        }
+          if (response.output !== undefined) {
+            data.output = processImagesInOutput(response.output);
+          }
 
-        const { usage: _usage, output: _output, ...metadata } = response;
-        if (Object.keys(metadata).length > 0) {
-          data.metadata = metadata;
-        }
+          const { usage: _usage, output: _output, ...metadata } = response;
+          if (Object.keys(metadata).length > 0) {
+            data.metadata = metadata;
+          }
 
-        data.metrics = parseMetricsFromUsage(response.usage);
-        return data;
-      },
-    });
+          data.metrics = parseMetricsFromUsage(response.usage);
+          return data;
+        },
+      }),
+    );
 
     // Responses API - parse
-    this.subscribeToStreamingChannel(OPENAI_CHANNEL.RESPONSES_PARSE, {
-      name: "openai.responses.parse",
-      type: SpanTypeAttribute.LLM,
-      extractInput: (args: unknown[]) => {
-        // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
-        const params = (args[0] || {}) as OpenAIResponseCreateParams;
-        const { input, ...metadata } = params;
-        return {
-          input: processInputAttachments(input),
-          metadata: { ...metadata, provider: "openai" },
-        };
-      },
-      extractOutput: (result: unknown) => {
-        // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
-        const response = result as OpenAIResponse | undefined;
-        return processImagesInOutput(response?.output);
-      },
-      extractMetadata: (result: unknown) => {
-        // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
-        const response = result as OpenAIResponse | undefined;
-        if (!response) {
-          return undefined;
-        }
-        const { output: _output, usage: _usage, ...metadata } = response;
-        return Object.keys(metadata).length > 0 ? metadata : undefined;
-      },
-      extractMetrics: (
-        result: unknown,
-        startTime?: number,
-        endEvent?: unknown,
-      ) => {
-        // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
-        const response = result as OpenAIResponse | undefined;
-        const metrics = withCachedMetric(
-          parseMetricsFromUsage(response?.usage),
-          result,
-          endEvent,
-        );
-        if (startTime) {
-          metrics.time_to_first_token = getCurrentUnixTimestamp() - startTime;
-        }
-        return metrics;
-      },
-      aggregateChunks: aggregateResponseStreamEvents,
-    });
+    this.unsubscribers.push(
+      traceStreamingChannel(openAIChannels.responsesParse, {
+        name: "openai.responses.parse",
+        type: SpanTypeAttribute.LLM,
+        extractInput: ([params]) => {
+          const { input, ...metadata } = params;
+          return {
+            input: processInputAttachments(input),
+            metadata: { ...metadata, provider: "openai" },
+          };
+        },
+        extractOutput: (result) => {
+          return processImagesInOutput(result?.output);
+        },
+        extractMetadata: (result) => {
+          if (!result) {
+            return undefined;
+          }
+          const { output: _output, usage: _usage, ...metadata } = result;
+          return Object.keys(metadata).length > 0 ? metadata : undefined;
+        },
+        extractMetrics: (result, startTime, endEvent) => {
+          const metrics = withCachedMetric(
+            parseMetricsFromUsage(result?.usage),
+            result,
+            endEvent,
+          );
+          if (startTime) {
+            metrics.time_to_first_token = getCurrentUnixTimestamp() - startTime;
+          }
+          return metrics;
+        },
+        aggregateChunks: aggregateResponseStreamEvents,
+      }),
+    );
   }
 
   protected onDisable(): void {
-    // Unsubscribers are handled by the base class
+    this.unsubscribers = unsubscribeAll(this.unsubscribers);
   }
 }
 

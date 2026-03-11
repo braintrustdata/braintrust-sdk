@@ -25,12 +25,10 @@ pnpm build
 From the repository root:
 
 ```bash
-pnpm run lint                # Check formatting + eslint
-pnpm run fix                 # Auto-fix formatting + eslint
-pnpm run lint:prettier       # Check formatting only
-pnpm run lint:eslint         # Run eslint only
-pnpm run fix:prettier        # Auto-fix formatting only
-pnpm run fix:eslint          # Auto-fix eslint only
+pnpm run formatting          # Check formatting
+pnpm run lint                # Run eslint checks
+pnpm run fix:formatting      # Auto-fix formatting
+pnpm run fix:lint            # Auto-fix eslint issues
 ```
 
 ## Before Committing
@@ -38,7 +36,7 @@ pnpm run fix:eslint          # Auto-fix eslint only
 Always run formatting before committing to avoid pre-commit hook failures:
 
 ```bash
-pnpm run fix:prettier        # Format all files
+pnpm run fix:formatting      # Format all files
 ```
 
 ## Test Framework

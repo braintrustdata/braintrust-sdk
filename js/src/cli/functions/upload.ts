@@ -45,8 +45,14 @@ interface BundledFunctionSpec {
   origin?: FunctionObject["origin"];
   function_schema?: FunctionObject["function_schema"];
   if_exists?: IfExists;
+  tags?: string[];
   metadata?: Record<string, unknown>;
 }
+
+type BundledFunctionEntry = FunctionEvent & {
+  origin?: FunctionObject["origin"];
+  function_schema?: FunctionObject["function_schema"];
+};
 
 const SANDBOX_GROUP_NAME_METADATA_KEY = "_bt_sandbox_group_name";
 
@@ -63,7 +69,7 @@ export async function uploadHandleBundles({
   bundlePromises,
   handles,
   setCurrent,
-  verbose,
+  showDetailedErrors,
   defaultIfExists,
 }: {
   buildResults: BuildSuccess[];
@@ -72,7 +78,7 @@ export async function uploadHandleBundles({
     [k: string]: Promise<esbuild.BuildResult<esbuild.BuildOptions>>;
   };
   handles: Record<string, FileHandle>;
-  verbose: boolean;
+  showDetailedErrors: boolean;
   setCurrent: boolean;
   defaultIfExists: IfExists;
 }) {
@@ -116,6 +122,7 @@ export async function uploadHandleBundles({
                 }
               : undefined,
           if_exists: fn.ifExists,
+          tags: fn.tags,
           metadata: fn.metadata,
         });
       }
@@ -261,7 +268,7 @@ export async function uploadHandleBundles({
       bundlePromises,
       handles,
       defaultIfExists,
-      verbose,
+      showDetailedErrors,
     });
   });
 
@@ -291,7 +298,7 @@ async function uploadBundles({
   bundlePromises,
   handles,
   defaultIfExists,
-  verbose,
+  showDetailedErrors,
 }: {
   sourceFile: string;
   prompts: FunctionEvent[];
@@ -301,7 +308,7 @@ async function uploadBundles({
   };
   handles: Record<string, FileHandle>;
   defaultIfExists: IfExists;
-  verbose: boolean;
+  showDetailedErrors: boolean;
 }): Promise<boolean> {
   const orgId = _internalGetGlobalState().orgId;
   if (!orgId) {
@@ -336,7 +343,7 @@ async function uploadBundles({
         }),
       );
     } catch (e) {
-      if (verbose) {
+      if (showDetailedErrors) {
         console.error(e);
       }
       const msg =
@@ -394,32 +401,14 @@ async function uploadBundles({
     ...prompts,
     // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
     ...((await Promise.all(
-      bundleSpecs.map(async (spec) => ({
-        project_id: spec.project_id,
-        name: spec.name,
-        slug: spec.slug,
-        description: spec.description,
-        function_data: {
-          type: "code",
-          data: {
-            type: "bundle",
-            runtime_context,
-            location: spec.location,
-            bundle_id: pathInfo!.bundleId,
-            preview: sourceMapContext
-              ? await findCodeDefinition({
-                  location: spec.location,
-                  ctx: sourceMapContext,
-                })
-              : undefined,
-          },
-        },
-        origin: spec.origin,
-        function_type: spec.function_type,
-        function_schema: spec.function_schema,
-        if_exists: spec.if_exists,
-        metadata: spec.metadata,
-      })),
+      bundleSpecs.map((spec) =>
+        buildBundledFunctionEntry({
+          spec,
+          runtime_context,
+          bundleId: pathInfo!.bundleId,
+          sourceMapContext,
+        }),
+      ),
     )) as FunctionEvent[]),
   ].map((fn) => ({
     ...fn,
@@ -432,7 +421,7 @@ async function uploadBundles({
         functions: functionEntries,
       });
     } catch (e) {
-      if (verbose) {
+      if (showDetailedErrors) {
         console.error(e);
       }
       const msg =
@@ -458,5 +447,48 @@ function formatNameAndSlug(pieces: string[]) {
   return {
     name: capitalize(nonEmptyPieces.join(" ")),
     slug: slugify(nonEmptyPieces.join("-")),
+  };
+}
+
+export async function buildBundledFunctionEntry({
+  spec,
+  runtime_context,
+  bundleId,
+  sourceMapContext,
+}: {
+  spec: BundledFunctionSpec;
+  runtime_context: {
+    runtime: "node";
+    version: string;
+  };
+  bundleId: string;
+  sourceMapContext?: Awaited<ReturnType<typeof makeSourceMapContext>>;
+}): Promise<BundledFunctionEntry> {
+  return {
+    project_id: spec.project_id,
+    name: spec.name,
+    slug: spec.slug,
+    description: spec.description,
+    function_data: {
+      type: "code",
+      data: {
+        type: "bundle",
+        runtime_context,
+        location: spec.location,
+        bundle_id: bundleId,
+        preview: sourceMapContext
+          ? await findCodeDefinition({
+              location: spec.location,
+              ctx: sourceMapContext,
+            })
+          : undefined,
+      },
+    },
+    origin: spec.origin,
+    function_type: spec.function_type ?? undefined,
+    function_schema: spec.function_schema,
+    if_exists: spec.if_exists,
+    tags: spec.tags,
+    metadata: spec.metadata,
   };
 }
