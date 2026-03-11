@@ -899,6 +899,32 @@ describe("framework2 metadata support", () => {
 
       expect(tool.metadata).toBeUndefined();
     });
+
+    test("tool stores tags correctly", () => {
+      const project = projects.create({ name: "test-project" });
+      const tags = ["ci", "sdk"];
+
+      const tool = project.tools.create({
+        handler: (x: number) => x * 2,
+        name: "test-tool",
+        parameters: z.object({ x: z.number() }),
+        tags,
+      });
+
+      expect(tool.tags).toEqual(tags);
+    });
+
+    test("tool works without tags", () => {
+      const project = projects.create({ name: "test-project" });
+
+      const tool = project.tools.create({
+        handler: (x: number) => x * 2,
+        name: "test-tool",
+        parameters: z.object({ x: z.number() }),
+      });
+
+      expect(tool.tags).toBeUndefined();
+    });
   });
 
   describe("CodePrompt metadata", () => {
@@ -1199,6 +1225,32 @@ describe("framework2 metadata support", () => {
       expect(scorers[0].metadata).toEqual(metadata);
     });
 
+    test("code scorer stores tags correctly", () => {
+      const project = projects.create({ name: "test-project" });
+      const tags = ["accuracy", "ci"];
+
+      project.scorers.create({
+        handler: ({
+          output,
+          expected,
+        }: {
+          output: string;
+          expected?: string;
+        }) => (output === expected ? 1 : 0),
+        name: "test-scorer",
+        parameters: z.object({
+          output: z.string(),
+          expected: z.string().optional(),
+        }),
+        tags,
+      });
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const scorers = (project as any)._publishableCodeFunctions;
+      expect(scorers).toHaveLength(1);
+      expect(scorers[0].tags).toEqual(tags);
+    });
+
     test("LLM scorer prompt stores metadata correctly", () => {
       const project = projects.create({ name: "test-project" });
       const metadata = { type: "llm_classifier", version: "2.0" };
@@ -1216,6 +1268,49 @@ describe("framework2 metadata support", () => {
       const prompts = (project as any)._publishablePrompts;
       expect(prompts).toHaveLength(1);
       expect(prompts[0].metadata).toEqual(metadata);
+    });
+
+    test("LLM scorer prompt stores tags correctly", () => {
+      const project = projects.create({ name: "test-project" });
+      const tags = ["classification", "production"];
+
+      project.scorers.create({
+        name: "llm-scorer",
+        prompt: "Is this correct?",
+        model: "gpt-4",
+        useCot: true,
+        choiceScores: { yes: 1.0, no: 0.0 },
+        tags,
+      });
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const prompts = (project as any)._publishablePrompts;
+      expect(prompts).toHaveLength(1);
+      expect(prompts[0].tags).toEqual(tags);
+    });
+
+    test("code scorer works without tags", () => {
+      const project = projects.create({ name: "test-project" });
+
+      project.scorers.create({
+        handler: ({
+          output,
+          expected,
+        }: {
+          output: string;
+          expected?: string;
+        }) => (output === expected ? 1 : 0),
+        name: "test-scorer",
+        parameters: z.object({
+          output: z.string(),
+          expected: z.string().optional(),
+        }),
+      });
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const scorers = (project as any)._publishableCodeFunctions;
+      expect(scorers).toHaveLength(1);
+      expect(scorers[0].tags).toBeUndefined();
     });
   });
 
