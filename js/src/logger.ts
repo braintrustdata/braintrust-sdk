@@ -3,6 +3,16 @@
 import { v4 as uuidv4 } from "uuid";
 
 import { Queue, DEFAULT_QUEUE_SIZE } from "./queue";
+import {
+  debugLogger,
+  type DebugLogLevel,
+  type DebugLogLevelOption,
+  getEnvDebugLogLevel,
+  normalizeDebugLogLevelOption,
+  resetDebugLoggerForTests,
+  setDebugLogStateResolver,
+  setGlobalDebugLogLevel,
+} from "./debug-logger";
 import { IDGenerator, getIdGenerator } from "./id-gen";
 import {
   _urljoin,
@@ -553,6 +563,9 @@ const loginSchema = z.strictObject({
   loginToken: z.string(),
   orgId: z.string().nullish(),
   gitMetadataSettings: gitMetadataSettingsSchema.nullish(),
+  debugLogLevel: z.enum(["error", "warn", "info", "debug"]).optional(),
+  // Distinguishes explicit false from unset so env fallback stays disabled after deserialization.
+  debugLogLevelDisabled: z.boolean().optional(),
 });
 
 export type SerializedBraintrustState = z.infer<typeof loginSchema>;
@@ -583,6 +596,8 @@ export class BraintrustState {
   public proxyUrl: string | null = null;
   public loggedIn: boolean = false;
   public gitMetadataSettings?: GitMetadataSettings;
+  public debugLogLevel?: DebugLogLevel;
+  private debugLogLevelConfigured = false;
 
   public fetch: typeof globalThis.fetch = globalThis.fetch;
   private _appConn: HTTPConnection | null = null;
@@ -615,6 +630,17 @@ export class BraintrustState {
       () =>
         new HTTPBackgroundLogger(new LazyValue(defaultGetLogConn), loginParams),
     );
+
+    if (loginParams.debugLogLevel !== undefined) {
+      this.debugLogLevelConfigured = true;
+      this.debugLogLevel = normalizeDebugLogLevelOption(
+        loginParams.debugLogLevel,
+      );
+      setGlobalDebugLogLevel(this.debugLogLevel ?? false);
+    } else {
+      this.debugLogLevel = getEnvDebugLogLevel();
+      setGlobalDebugLogLevel(undefined);
+    }
 
     this.resetLoginInfo();
 
@@ -717,6 +743,11 @@ export class BraintrustState {
     this.proxyUrl = other.proxyUrl;
     this.loggedIn = other.loggedIn;
     this.gitMetadataSettings = other.gitMetadataSettings;
+    this.debugLogLevel = other.debugLogLevel;
+    this.debugLogLevelConfigured = other.debugLogLevelConfigured;
+    setGlobalDebugLogLevel(
+      this.debugLogLevelConfigured ? (this.debugLogLevel ?? false) : undefined,
+    );
 
     this._appConn = other._appConn;
     this._apiConn = other._apiConn;
@@ -754,6 +785,10 @@ export class BraintrustState {
       apiUrl: this.apiUrl,
       proxyUrl: this.proxyUrl,
       gitMetadataSettings: this.gitMetadataSettings,
+      ...(this.debugLogLevel ? { debugLogLevel: this.debugLogLevel } : {}),
+      ...(this.debugLogLevelConfigured && !this.debugLogLevel
+        ? { debugLogLevelDisabled: true }
+        : {}),
     };
   }
 
@@ -787,6 +822,14 @@ export class BraintrustState {
     }
 
     state.loggedIn = true;
+    state.debugLogLevelConfigured =
+      "debugLogLevel" in serializedParsed.data ||
+      !!serializedParsed.data.debugLogLevelDisabled;
+    setGlobalDebugLogLevel(
+      state.debugLogLevelConfigured
+        ? (state.debugLogLevel ?? false)
+        : undefined,
+    );
     state.loginReplaceApiConn(state.apiConn());
 
     return state;
@@ -805,7 +848,25 @@ export class BraintrustState {
     this.bgLogger().setMaskingFunction(maskingFunction);
   }
 
+  public setDebugLogLevel(option: DebugLogLevelOption): void {
+    if (option === undefined) {
+      return;
+    }
+    this.debugLogLevelConfigured = true;
+    this.debugLogLevel = normalizeDebugLogLevelOption(option);
+    setGlobalDebugLogLevel(this.debugLogLevel ?? false);
+  }
+
+  public getDebugLogLevel(): DebugLogLevel | undefined {
+    return this.debugLogLevel;
+  }
+
+  public hasDebugLogLevelOverride(): boolean {
+    return this.debugLogLevelConfigured;
+  }
+
   public async login(loginParams: LoginOptions & { forceLogin?: boolean }) {
+    this.setDebugLogLevel(loginParams.debugLogLevel);
     if (this.apiUrl && !loginParams.forceLogin) {
       return;
     }
@@ -981,6 +1042,7 @@ export function _internalSetInitialState() {
  * @internal
  */
 export const _internalGetGlobalState = () => _globalState;
+setDebugLogStateResolver(() => _internalGetGlobalState());
 
 /**
  * Register a callback to flush OTEL spans. This is called by @braintrust/otel
@@ -1160,7 +1222,7 @@ class HTTPConnection {
         return await resp.json();
       } catch (e) {
         if (i < tries - 1) {
-          console.log(
+          debugLogger.debug(
             `Retrying API request ${object_type} ${JSON.stringify(args)} ${
               (e as any).status
             } ${(e as any).text}`,
@@ -1471,7 +1533,7 @@ with a Blob/ArrayBuffer, or run the program on Node.js.`,
     try {
       statSync(data);
     } catch (e) {
-      console.warn(`Failed to read file: ${e}`);
+      debugLogger.warn(`Failed to read file: ${e}`);
     }
   }
 }
@@ -2714,7 +2776,7 @@ class HTTPBackgroundLogger implements BackgroundLogger {
     }
 
     if (iso.getEnv("BRAINTRUST_LOG_FLUSH_CHUNK_SIZE")) {
-      console.warn(
+      debugLogger.warn(
         "BRAINTRUST_LOG_FLUSH_CHUNK_SIZE is deprecated and no longer has any effect. " +
           "Log flushing now sends all items at once and batches them automatically. " +
           "This environment variable will be removed in a future major release.",
@@ -2801,7 +2863,10 @@ class HTTPBackgroundLogger implements BackgroundLogger {
               .object({ logs3_payload_max_bytes: z.number().nullish() })
               .parse(versionInfo).logs3_payload_max_bytes ?? null;
         } catch (e) {
-          console.warn("Failed to fetch version info for payload limit:", e);
+          debugLogger.warn(
+            "Failed to fetch version info for payload limit:",
+            e,
+          );
         }
         const validServerLimit =
           serverLimit !== null && serverLimit > 0 ? serverLimit : null;
@@ -2996,16 +3061,16 @@ class HTTPBackgroundLogger implements BackgroundLogger {
           errmsg += ". Retrying";
         }
 
-        console.warn(errmsg);
+        debugLogger.warn(errmsg);
         if (!isRetrying) {
-          console.warn(
+          debugLogger.warn(
             `Failed to construct log records to flush after ${this.numTries} attempts. Dropping batch`,
           );
           throw e;
         } else {
-          console.warn(e);
+          debugLogger.warn(e);
           const sleepTimeS = BACKGROUND_LOGGER_BASE_SLEEP_TIME_S * 2 ** i;
-          console.info(`Sleeping for ${sleepTimeS}s`);
+          debugLogger.info(`Sleeping for ${sleepTimeS}s`);
           await new Promise((resolve) =>
             setTimeout(resolve, sleepTimeS * 1000),
           );
@@ -3131,15 +3196,15 @@ class HTTPBackgroundLogger implements BackgroundLogger {
       }
 
       if (!isRetrying) {
-        console.warn(
+        debugLogger.warn(
           `log request failed after ${this.numTries} retries. Dropping batch`,
         );
         throw new Error(errMsg);
       } else {
-        console.warn(errMsg);
+        debugLogger.warn(errMsg);
         if (isRetrying) {
           const sleepTimeS = BACKGROUND_LOGGER_BASE_SLEEP_TIME_S * 2 ** i;
-          console.info(`Sleeping for ${sleepTimeS}s`);
+          debugLogger.info(`Sleeping for ${sleepTimeS}s`);
           await new Promise((resolve) =>
             setTimeout(resolve, sleepTimeS * 1000),
           );
@@ -3158,7 +3223,7 @@ class HTTPBackgroundLogger implements BackgroundLogger {
       timeNow - this.queueDropLoggingState.lastLoggedTimestamp >
       this.queueDropLoggingPeriod
     ) {
-      console.warn(
+      debugLogger.warn(
         `Dropped ${this.queueDropLoggingState.numDropped} elements due to full queue`,
       );
       if (this.failedPublishPayloadsDir) {
@@ -3196,7 +3261,7 @@ class HTTPBackgroundLogger implements BackgroundLogger {
         await HTTPBackgroundLogger.writePayloadToDir({ payloadDir, payload });
       }
     } catch (e) {
-      console.error(e);
+      debugLogger.error(e);
     }
   }
 
@@ -3208,7 +3273,7 @@ class HTTPBackgroundLogger implements BackgroundLogger {
     payload: string;
   }) {
     if (!(iso.pathJoin && iso.mkdir && iso.writeFile)) {
-      console.warn(
+      debugLogger.warn(
         "Cannot dump payloads: filesystem-operations not supported on this platform",
       );
       return;
@@ -3221,7 +3286,7 @@ class HTTPBackgroundLogger implements BackgroundLogger {
       await iso.mkdir(payloadDir, { recursive: true });
       await iso.writeFile(payloadFile, payload);
     } catch (e) {
-      console.error(
+      debugLogger.error(
         `Failed to write failed payload to output file ${payloadFile}:\n`,
         e,
       );
@@ -3255,7 +3320,9 @@ class HTTPBackgroundLogger implements BackgroundLogger {
   }
 
   private logFailedPayloadsDir() {
-    console.warn(`Logging failed payloads to ${this.failedPublishPayloadsDir}`);
+    debugLogger.warn(
+      `Logging failed payloads to ${this.failedPublishPayloadsDir}`,
+    );
   }
 
   // Should only be called by BraintrustState.
@@ -3543,9 +3610,9 @@ export function init<IsOpen extends boolean = false>(
             args["base_experiment"] &&
             `${"data" in e && e.data}`.includes("base experiment")
           ) {
-            console.warn(
-              `Base experiment ${args["base_experiment"]} not found.`,
-            );
+            debugLogger
+              .forState(state)
+              .warn(`Base experiment ${args["base_experiment"]} not found.`);
             delete args["base_experiment"];
           } else {
             throw e;
@@ -3629,9 +3696,11 @@ export function withExperiment<R>(
   callback: (experiment: Experiment) => R,
   options: Readonly<InitOptions<false> & SetCurrentArg> = {},
 ): R {
-  console.warn(
-    "withExperiment is deprecated and will be removed in a future version of braintrust. Simply create the experiment with `init`.",
-  );
+  debugLogger
+    .forState(options.state)
+    .warn(
+      "withExperiment is deprecated and will be removed in a future version of braintrust. Simply create the experiment with `init`.",
+    );
   const experiment = init(project, options);
   return callback(experiment);
 }
@@ -3643,9 +3712,11 @@ export function withLogger<IsAsyncFlush extends boolean = false, R = void>(
   callback: (logger: Logger<IsAsyncFlush>) => R,
   options: Readonly<InitLoggerOptions<IsAsyncFlush> & SetCurrentArg> = {},
 ): R {
-  console.warn(
-    "withLogger is deprecated and will be removed in a future version of braintrust. Simply create the logger with `initLogger`.",
-  );
+  debugLogger
+    .forState(options.state)
+    .warn(
+      "withLogger is deprecated and will be removed in a future version of braintrust. Simply create the logger with `initLogger`.",
+    );
   const logger = initLogger(options);
   return callback(logger);
 }
@@ -3803,9 +3874,11 @@ export function withDataset<
   callback: (dataset: Dataset<IsLegacyDataset>) => R,
   options: Readonly<InitDatasetOptions<IsLegacyDataset>> = {},
 ): R {
-  console.warn(
-    "withDataset is deprecated and will be removed in a future version of braintrust. Simply create the dataset with `initDataset`.",
-  );
+  debugLogger
+    .forState(options.state)
+    .warn(
+      "withDataset is deprecated and will be removed in a future version of braintrust. Simply create the dataset with `initDataset`.",
+    );
   const dataset = initDataset<IsLegacyDataset>(project, options);
   return callback(dataset);
 }
@@ -3882,6 +3955,7 @@ export type InitLoggerOptions<IsAsyncFlush> = FullLoginOptions & {
  * key is specified, will prompt the user to login.
  * @param options.orgName (Optional) The name of a specific organization to connect to. This is useful if you belong to multiple.
  * @param options.forceLogin Login again, even if you have already logged in (by default, the logger will not login if you are already logged in)
+ * @param options.debugLogLevel Enables internal Braintrust SDK troubleshooting output. Use `"error"`, `"warn"`, `"info"`, or `"debug"` to choose an explicit level, or `false` to explicitly disable it. If omitted, the SDK stays silent unless `BRAINTRUST_DEBUG_LOG_LEVEL` is set.
  * @param setCurrent If true (the default), set the global current-experiment to the newly-created one.
  * @returns The newly created Logger.
  */
@@ -3896,6 +3970,7 @@ export function initLogger<IsAsyncFlush extends boolean = true>(
     apiKey,
     orgName,
     forceLogin,
+    debugLogLevel,
     fetch,
     state: stateArg,
   } = options || {};
@@ -3916,6 +3991,7 @@ export function initLogger<IsAsyncFlush extends boolean = true>(
   };
 
   const state = stateArg ?? _globalState;
+  state.setDebugLogLevel(debugLogLevel);
 
   // Enable queue size limit enforcement for initLogger() calls
   // This ensures production observability doesn't OOM customer processes
@@ -4106,7 +4182,9 @@ export async function loadPrompt({
       throw new Error(`Prompt not found with specified parameters: ${e}`);
     }
 
-    console.warn("Failed to load prompt, attempting to fall back to cache:", e);
+    debugLogger
+      .forState(state)
+      .warn("Failed to load prompt, attempting to fall back to cache:", e);
     let prompt;
     if (id) {
       prompt = await state.promptCache.get({ id });
@@ -4167,7 +4245,7 @@ export async function loadPrompt({
       );
     }
   } catch (e) {
-    console.warn("Failed to set prompt in cache:", e);
+    debugLogger.forState(state).warn("Failed to set prompt in cache:", e);
   }
   return prompt;
 }
@@ -4279,10 +4357,9 @@ export async function loadParameters<
       throw new Error(`Parameters not found with specified parameters: ${e}`);
     }
 
-    console.warn(
-      "Failed to load parameters, attempting to fall back to cache:",
-      e,
-    );
+    debugLogger
+      .forState(state)
+      .warn("Failed to load parameters, attempting to fall back to cache:", e);
     let parameters;
     if (id) {
       parameters = await state.parametersCache.get({ id });
@@ -4344,7 +4421,7 @@ export async function loadParameters<
       );
     }
   } catch (e) {
-    console.warn("Failed to set parameters in cache:", e);
+    debugLogger.forState(state).warn("Failed to set parameters in cache:", e);
   }
   // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
   return parameters as RemoteEvalParameters<true, true, InferParameters<S>>;
@@ -4387,6 +4464,19 @@ export interface LoginOptions {
    * server. Defaults to false.
    */
   disableSpanCache?: boolean;
+  /**
+   * Controls internal Braintrust SDK troubleshooting output.
+   *
+   * Use `"error"`, `"warn"`, `"info"`, or `"debug"` to control how much
+   * internal SDK troubleshooting output is emitted. Use `false` to explicitly
+   * disable this output.
+   *
+   * When omitted, the SDK remains silent unless
+   * `BRAINTRUST_DEBUG_LOG_LEVEL` is set to `"error"`, `"warn"`, `"info"`, or
+   * `"debug"`. This option only affects local console output; it does not
+   * change what data is logged to Braintrust.
+   */
+  debugLogLevel?: DebugLogLevel | false;
 }
 
 export type FullLoginOptions = LoginOptions & {
@@ -4422,7 +4512,12 @@ export async function login(
 ): Promise<BraintrustState> {
   const { forceLogin = false } = options || {};
 
+  if (!_internalGetGlobalState()) {
+    _internalSetInitialState();
+  }
+
   const state = _internalGetGlobalState();
+  state.setDebugLogLevel(options.debugLogLevel);
   if (state.loggedIn && !forceLogin) {
     // We have already logged in. If any provided login inputs disagree with our
     // existing settings, raise an Exception warning the user to try again with
@@ -4448,10 +4543,6 @@ export async function login(
     );
     checkUpdatedParam("orgName", options.orgName, state.orgName);
     return state;
-  }
-
-  if (!state) {
-    _internalSetInitialState();
   }
 
   await state.login(options);
@@ -4550,7 +4641,7 @@ export async function loginToState(options: LoginOptions = {}) {
  * @returns The `id` of the logged event.
  */
 export function log(event: ExperimentLogFullArgs): string {
-  console.warn(
+  debugLogger.warn(
     "braintrust.log is deprecated and will be removed in a future version of braintrust. Use `experiment.log` instead.",
   );
   const e = currentExperiment();
@@ -4574,7 +4665,7 @@ export async function summarize(
     readonly comparisonExperimentId?: string;
   } = {},
 ): Promise<ExperimentSummary> {
-  console.warn(
+  debugLogger.warn(
     "braintrust.summarize is deprecated and will be removed in a future version of braintrust. Use `experiment.summarize` instead.",
   );
   const e = currentExperiment();
@@ -4774,7 +4865,7 @@ function wrapTracedSyncGenerator<F extends (...args: any[]) => any>(
             } else {
               truncated = true;
               collected = [];
-              console.warn(
+              debugLogger.warn(
                 `Generator output exceeded limit of ${maxItems} items, output not logged. ` +
                   `Increase BRAINTRUST_MAX_GENERATOR_ITEMS or set to -1 to disable limit.`,
               );
@@ -4841,7 +4932,7 @@ function wrapTracedAsyncGenerator<F extends (...args: any[]) => any>(
             } else {
               truncated = true;
               collected = [];
-              console.warn(
+              debugLogger.warn(
                 `Generator output exceeded limit of ${maxItems} items, output not logged. ` +
                   `Increase BRAINTRUST_MAX_GENERATOR_ITEMS or set to -1 to disable limit.`,
               );
@@ -5917,9 +6008,11 @@ export class Experiment
         scores = results["scores"];
         metrics = results["metrics"];
       } catch (e) {
-        console.warn(
-          `Failed to fetch experiment scores and metrics: ${e}\n\nView complete results in Braintrust or run experiment.summarize() again.`,
-        );
+        debugLogger
+          .forState(state)
+          .warn(
+            `Failed to fetch experiment scores and metrics: ${e}\n\nView complete results in Braintrust or run experiment.summarize() again.`,
+          );
         scores = {};
         metrics = {};
       }
@@ -6001,9 +6094,11 @@ export class Experiment
    * @deprecated This function is deprecated. You can simply remove it from your code.
    */
   public async close(): Promise<string> {
-    console.warn(
-      "close is deprecated and will be removed in a future version of braintrust. It is now a no-op and can be removed",
-    );
+    debugLogger
+      .forState(this.state)
+      .warn(
+        "close is deprecated and will be removed in a future version of braintrust. It is now a no-op and can be removed",
+      );
     return this.id;
   }
 }
@@ -6655,9 +6750,11 @@ export class Dataset<
     const isLegacyDataset = (legacy ??
       DEFAULT_IS_LEGACY_DATASET) as IsLegacyDataset;
     if (isLegacyDataset) {
-      console.warn(
-        `Records will be fetched from this dataset in the legacy format, with the "expected" field renamed to "output". Please update your code to use "expected", and use \`braintrust.initDataset()\` with \`{ useOutput: false }\`, which will become the default in a future version of Braintrust.`,
-      );
+      debugLogger
+        .forState(state)
+        .warn(
+          `Records will be fetched from this dataset in the legacy format, with the "expected" field renamed to "output". Please update your code to use "expected", and use \`braintrust.initDataset()\` with \`{ useOutput: false }\`, which will become the default in a future version of Braintrust.`,
+        );
     }
     super(
       "dataset",
@@ -6938,9 +7035,11 @@ export class Dataset<
    * @deprecated This function is deprecated. You can simply remove it from your code.
    */
   public async close(): Promise<string> {
-    console.warn(
-      "close is deprecated and will be removed in a future version of braintrust. It is now a no-op and can be removed",
-    );
+    debugLogger
+      .forState(this.state)
+      .warn(
+        "close is deprecated and will be removed in a future version of braintrust. It is now a no-op and can be removed",
+      );
     return this.id;
   }
 
@@ -7793,6 +7892,7 @@ export const _exportsForTestingOnly = {
   deepCopyEvent,
   useTestBackgroundLogger,
   clearTestBackgroundLogger,
+  resetDebugLoggerForTests,
   simulateLoginForTests,
   simulateLogoutForTests,
   setInitialTestState,

@@ -89,8 +89,56 @@ export default [
   },
   {
     files: ["src/**/*.ts", "src/**/*.tsx"],
-    ignores: ["src/cli/**"],
+    ignores: [
+      "src/cli/**",
+      "src/debug-logger.ts",
+      "src/framework.ts",
+      "src/framework2.ts",
+      "src/isomorph.ts",
+      "src/sandbox.ts",
+      "src/template/**",
+      "src/reporters/**",
+      "src/prompt-cache/**",
+      "src/eval-parameters.ts",
+      "src/wrappers/**",
+      "src/instrumentation/**",
+      "src/auto-instrumentations/**",
+      "src/queue.bench.ts",
+    ],
     rules: {
+      "no-restricted-properties": [
+        "error",
+        {
+          object: "console",
+          property: "log",
+          message: "Use debugLogger instead of console for SDK logging.",
+        },
+        {
+          object: "console",
+          property: "warn",
+          message: "Use debugLogger instead of console for SDK logging.",
+        },
+        {
+          object: "console",
+          property: "error",
+          message: "Use debugLogger instead of console for SDK logging.",
+        },
+        {
+          object: "console",
+          property: "debug",
+          message: "Use debugLogger instead of console for SDK logging.",
+        },
+        {
+          object: "console",
+          property: "info",
+          message: "Use debugLogger instead of console for SDK logging.",
+        },
+        {
+          object: "console",
+          property: "trace",
+          message: "Use debugLogger instead of console for SDK logging.",
+        },
+      ],
       "no-restricted-imports": [
         "error",
         {

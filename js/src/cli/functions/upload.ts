@@ -69,7 +69,7 @@ export async function uploadHandleBundles({
   bundlePromises,
   handles,
   setCurrent,
-  verbose,
+  showDetailedErrors,
   defaultIfExists,
 }: {
   buildResults: BuildSuccess[];
@@ -78,7 +78,7 @@ export async function uploadHandleBundles({
     [k: string]: Promise<esbuild.BuildResult<esbuild.BuildOptions>>;
   };
   handles: Record<string, FileHandle>;
-  verbose: boolean;
+  showDetailedErrors: boolean;
   setCurrent: boolean;
   defaultIfExists: IfExists;
 }) {
@@ -268,7 +268,7 @@ export async function uploadHandleBundles({
       bundlePromises,
       handles,
       defaultIfExists,
-      verbose,
+      showDetailedErrors,
     });
   });
 
@@ -298,7 +298,7 @@ async function uploadBundles({
   bundlePromises,
   handles,
   defaultIfExists,
-  verbose,
+  showDetailedErrors,
 }: {
   sourceFile: string;
   prompts: FunctionEvent[];
@@ -308,7 +308,7 @@ async function uploadBundles({
   };
   handles: Record<string, FileHandle>;
   defaultIfExists: IfExists;
-  verbose: boolean;
+  showDetailedErrors: boolean;
 }): Promise<boolean> {
   const orgId = _internalGetGlobalState().orgId;
   if (!orgId) {
@@ -343,7 +343,7 @@ async function uploadBundles({
         }),
       );
     } catch (e) {
-      if (verbose) {
+      if (showDetailedErrors) {
         console.error(e);
       }
       const msg =
@@ -421,7 +421,7 @@ async function uploadBundles({
         functions: functionEntries,
       });
     } catch (e) {
-      if (verbose) {
+      if (showDetailedErrors) {
         console.error(e);
       }
       const msg =

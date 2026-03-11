@@ -15,6 +15,7 @@ import {
 import { queue } from "async";
 
 import iso from "./isomorph";
+import { debugLogger } from "./debug-logger";
 import { GenericFunction } from "./framework-types";
 import { CodeFunction, CodePrompt, CodeParameters } from "./framework2";
 import { Trace, LocalTrace } from "./trace";
@@ -1248,10 +1249,12 @@ async function runEvaluatorInternal(
               const names = Object.keys(scorerErrors).join(", ");
               const errors = failingScorersAndResults.map((item) => item.error);
               unhandledScores = Object.keys(scorerErrors);
-              console.warn(
-                `Found exceptions for the following scorers: ${names}`,
-                errors,
-              );
+              debugLogger
+                .forState(evaluator.state)
+                .warn(
+                  `Found exceptions for the following scorers: ${names}`,
+                  errors,
+                );
             }
           } catch (e) {
             logSpanError(rootSpan, e);
@@ -1394,7 +1397,9 @@ async function runEvaluatorInternal(
       if (e instanceof InternalAbortError) {
         // Log cancellation for debugging
         if (iso.getEnv("BRAINTRUST_VERBOSE")) {
-          console.warn("Evaluator cancelled:", e.message);
+          debugLogger
+            .forState(evaluator.state)
+            .warn("Evaluator cancelled:", e.message);
         }
       }
 
@@ -1534,7 +1539,11 @@ export function reportFailures<
       }
     }
     if (!verbose && !jsonl) {
-      console.error(warning("Add --verbose to see full stack traces."));
+      console.error(
+        warning(
+          "Use --debug-logging debug to see full stack traces and troubleshooting details.",
+        ),
+      );
     }
   }
 }
