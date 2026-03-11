@@ -77,6 +77,16 @@ Wrapper scenarios often create a root span with `testRunId` metadata and then le
 - Pair a normalized `span-events` snapshot with a normalized `log-payloads` snapshot.
 - If the wrapper has an explicit support matrix, reuse one shared test across version-specific scenario entries instead of duplicating the assertions. The AI SDK wrapper scenario uses this for supported v3-v6 package combinations.
 
+### Runner-wrapper scenario pattern
+
+Some wrappers execute inside a nested test runner rather than a single SDK call. The Vitest and `node:test` wrapper scenarios use this pattern:
+
+- Keep the outer e2e suite in `scenario.test.ts` and the spawned runner entrypoint in `scenario.ts`.
+- Put nested runner source in files like `runner.case.ts` or `runner.case.mjs`.
+- Do not name nested runner files `*.test.ts`, because the outer `e2e/vitest.config.mts` includes `scenarios/**/*.test.ts` and will try to execute them directly.
+- Tag every traced test/eval with `metadata.testRunId` so the outer assertions can isolate rows across multiple trace roots with `payloadRowsForTestRunId(...)`.
+- If a nested runner needs its own test discovery rules, keep that config local to the scenario folder so the shared e2e config stays unchanged.
+
 ### Environment variables
 
 The wrapper scenarios in this directory require provider credentials in addition to the mock Braintrust server config supplied by the harness:
@@ -84,6 +94,8 @@ The wrapper scenarios in this directory require provider credentials in addition
 - `OPENAI_API_KEY`
 - `ANTHROPIC_API_KEY`
 - `GEMINI_API_KEY` or `GOOGLE_API_KEY`
+
+`wrap-claude-agent-sdk-traces` also uses `ANTHROPIC_API_KEY`, because it runs the real Claude Agent SDK against Anthropic in the same style as the existing live Anthropic wrapper coverage.
 
 ### Scenario-local `package.json`
 
