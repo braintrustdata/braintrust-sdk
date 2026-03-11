@@ -29,7 +29,7 @@ export const openaiConfigs: InstrumentationConfig[] = [
   },
 
   {
-    channelName: OPENAI_CHANNEL_SUFFIX.CHAT_COMPLETIONS_CREATE,
+    channelName: openAIChannels.chatCompletionsCreate.channelName,
     module: {
       name: "openai",
       versionRange: ">=4.0.0 <5.0.0",
@@ -43,7 +43,7 @@ export const openaiConfigs: InstrumentationConfig[] = [
   },
 
   {
-    channelName: OPENAI_CHANNEL_SUFFIX.CHAT_COMPLETIONS_CREATE,
+    channelName: openAIChannels.chatCompletionsCreate.channelName,
     module: {
       name: "openai",
       versionRange: ">=5.0.0",
@@ -87,7 +87,7 @@ export const openaiConfigs: InstrumentationConfig[] = [
   },
 
   {
-    channelName: OPENAI_CHANNEL_SUFFIX.BETA_CHAT_COMPLETIONS_PARSE,
+    channelName: openAIChannels.betaChatCompletionsParse.channelName,
     module: {
       name: "openai",
       versionRange: ">=5.0.0",
@@ -131,7 +131,7 @@ export const openaiConfigs: InstrumentationConfig[] = [
   },
 
   {
-    channelName: OPENAI_CHANNEL_SUFFIX.BETA_CHAT_COMPLETIONS_STREAM,
+    channelName: openAIChannels.betaChatCompletionsStream.channelName,
     module: {
       name: "openai",
       versionRange: ">=5.0.0",

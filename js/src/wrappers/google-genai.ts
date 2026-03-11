@@ -1,4 +1,4 @@
-import { Span, traced, Attachment } from "../logger";
+import { Span, traced, Attachment, startSpan } from "../logger";
 import { SpanTypeAttribute } from "../../util/index";
 import { getCurrentUnixTimestamp } from "../util";
 import type {
@@ -164,6 +164,59 @@ function asyncGeneratorProxy(
   const start = getCurrentUnixTimestamp();
   let firstTokenTime: number | null = null;
   let span: Span | null = null;
+  let finalized = false;
+
+  const ensureSpan = () => {
+    if (span === null) {
+      span = startSpan({
+        name: "generate_content_stream",
+        spanAttributes: {
+          type: SpanTypeAttribute.LLM,
+        },
+        event: {
+          input,
+          metadata,
+        },
+      });
+    }
+
+    return span;
+  };
+
+  const finalizeSpan = ({
+    error,
+    result,
+  }: {
+    error?: unknown;
+    result?: {
+      aggregated: Record<string, unknown>;
+      metrics: Record<string, number>;
+    };
+  }) => {
+    if (finalized || span === null) {
+      return;
+    }
+
+    finalized = true;
+
+    if (result) {
+      const { end, ...metricsWithoutEnd } = result.metrics;
+      span.log({
+        output: result.aggregated,
+        metrics: cleanMetrics(metricsWithoutEnd),
+      });
+      span.end(typeof end === "number" ? { endTime: end } : undefined);
+      return;
+    }
+
+    if (error !== undefined) {
+      span.log({
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+
+    span.end();
+  };
 
   return new Proxy(generator, {
     get(target, prop, receiver) {
@@ -186,18 +239,7 @@ function asyncGeneratorProxy(
                   iterReceiver,
                 );
                 return async function () {
-                  if (span === null) {
-                    span = traced((s: Span) => s, {
-                      name: "generate_content_stream",
-                      spanAttributes: {
-                        type: SpanTypeAttribute.LLM,
-                      },
-                      event: {
-                        input,
-                        metadata,
-                      },
-                    });
-                  }
+                  ensureSpan();
 
                   try {
                     // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
@@ -213,31 +255,74 @@ function asyncGeneratorProxy(
                     }
 
                     if (result.done && span) {
-                      const { aggregated, metrics } =
-                        aggregateGenerateContentChunks(
+                      finalizeSpan({
+                        result: aggregateGenerateContentChunks(
                           chunks,
                           start,
                           firstTokenTime,
-                        );
-
-                      span.log({
-                        output: aggregated,
-                        metrics: cleanMetrics(metrics),
+                        ),
                       });
-                      span.end();
                     }
 
                     return result;
                   } catch (error) {
-                    if (span) {
-                      span.log({
-                        error:
-                          error instanceof Error
-                            ? error.message
-                            : String(error),
-                      });
-                      span.end();
-                    }
+                    finalizeSpan({ error });
+                    throw error;
+                  }
+                };
+              }
+              if (iterProp === "return") {
+                const originalReturn = Reflect.get(
+                  iterTarget,
+                  iterProp,
+                  iterReceiver,
+                );
+                if (typeof originalReturn !== "function") {
+                  return originalReturn;
+                }
+
+                return async function (...args: [] | [unknown]) {
+                  ensureSpan();
+                  try {
+                    // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
+                    return (await originalReturn.call(
+                      iterTarget,
+                      ...args,
+                    )) as IteratorResult<GoogleGenAIGenerateContentResponse>;
+                  } finally {
+                    finalizeSpan({
+                      result:
+                        chunks.length > 0
+                          ? aggregateGenerateContentChunks(
+                              chunks,
+                              start,
+                              firstTokenTime,
+                            )
+                          : undefined,
+                    });
+                  }
+                };
+              }
+              if (iterProp === "throw") {
+                const originalThrow = Reflect.get(
+                  iterTarget,
+                  iterProp,
+                  iterReceiver,
+                );
+                if (typeof originalThrow !== "function") {
+                  return originalThrow;
+                }
+
+                return async function (...args: [] | [unknown]) {
+                  ensureSpan();
+                  try {
+                    // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
+                    return (await originalThrow.call(
+                      iterTarget,
+                      ...args,
+                    )) as IteratorResult<GoogleGenAIGenerateContentResponse>;
+                  } catch (error) {
+                    finalizeSpan({ error });
                     throw error;
                   }
                 };
