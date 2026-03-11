@@ -45,6 +45,71 @@ function stageRank(row: CapturedLogRow): number {
   return 3;
 }
 
+function splitTerminalMergeRow(row: CapturedLogRow): CapturedLogRow[] {
+  const metrics =
+    typeof row.metrics === "object" &&
+    row.metrics !== null &&
+    !Array.isArray(row.metrics)
+      ? ({ ...(row.metrics as Record<string, unknown>) } as Record<
+          string,
+          unknown
+        >)
+      : undefined;
+
+  if (row._is_merge !== true) {
+    return [row];
+  }
+
+  const { end, ...restMetrics } = metrics ?? {};
+  const hasRestMetrics = Object.keys(restMetrics).length > 0;
+  const hasEnd = typeof end === "number";
+  const hasPayloadContent =
+    row.input !== undefined ||
+    row.output !== undefined ||
+    row.metadata !== undefined ||
+    row.expected !== undefined ||
+    row.scores !== undefined;
+
+  const stageCount =
+    Number(hasRestMetrics) + Number(hasPayloadContent) + Number(hasEnd);
+  if (stageCount <= 1) {
+    return [row];
+  }
+
+  const rows: CapturedLogRow[] = [];
+
+  if (hasRestMetrics) {
+    const metricsRow: CapturedLogRow = {
+      ...row,
+      metrics: restMetrics,
+    };
+    delete metricsRow.input;
+    delete metricsRow.output;
+    delete metricsRow.metadata;
+    delete metricsRow.expected;
+    delete metricsRow.scores;
+    rows.push(metricsRow);
+  }
+
+  if (hasPayloadContent) {
+    const payloadRow: CapturedLogRow = { ...row };
+    delete payloadRow.metrics;
+    rows.push(payloadRow);
+  }
+
+  if (hasEnd) {
+    const endRow: CapturedLogRow = { ...row, metrics: { end } };
+    delete endRow.input;
+    delete endRow.output;
+    delete endRow.metadata;
+    delete endRow.expected;
+    delete endRow.scores;
+    rows.push(endRow);
+  }
+
+  return rows;
+}
+
 export function summarizeWrapperContract(
   event: CapturedLogEvent,
   metadataKeys: string[] = [],
@@ -77,7 +142,8 @@ export function payloadRowsForRootSpan(
 
   const rows = payloads
     .flatMap((payload) => payload.rows)
-    .filter((row) => row.root_span_id === rootSpanId);
+    .filter((row) => row.root_span_id === rootSpanId)
+    .flatMap((row) => splitTerminalMergeRow(row));
 
   const spanOrder = new Map<string, number>();
   for (const row of rows) {

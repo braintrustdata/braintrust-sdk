@@ -133,9 +133,6 @@ exports[`wrap-ai-sdk-generation-traces captures wrapper and child model spans (a
     "_is_merge": true,
     "id": "<span:6>",
     "log_id": "g",
-    "metrics": {
-      "end": 0,
-    },
     "output": {
       "experimental_providerMetadata": {
         "openai": {
@@ -261,6 +258,20 @@ exports[`wrap-ai-sdk-generation-traces captures wrapper and child model spans (a
     ],
   },
   {
+    "_is_merge": true,
+    "id": "<span:6>",
+    "log_id": "g",
+    "metrics": {
+      "end": 0,
+    },
+    "project_id": "<uuid:3>",
+    "root_span_id": "<span:2>",
+    "span_id": "<span:7>",
+    "span_parents": [
+      "<span:5>",
+    ],
+  },
+  {
     "_is_merge": false,
     "context": {
       "caller_filename": "<repo>/e2e/scenarios/wrap-ai-sdk-generation-traces/node_modules/.pnpm/ai@3.4.33_react@19.2.4_sswr@2.2.0_svelte@5.53.6__svelte@5.53.6_vue@3.5.29_zod@3.25.76/node_modules/ai/dist/index.js",
@@ -317,12 +328,23 @@ exports[`wrap-ai-sdk-generation-traces captures wrapper and child model spans (a
     "_is_merge": true,
     "id": "<span:9>",
     "log_id": "g",
-    "metadata": {
-      "finish_reason": "stop",
-    },
     "metrics": {
       "completion_tokens": 2,
       "prompt_tokens": 18,
+    },
+    "project_id": "<uuid:3>",
+    "root_span_id": "<span:2>",
+    "span_id": "<span:10>",
+    "span_parents": [
+      "<span:7>",
+    ],
+  },
+  {
+    "_is_merge": true,
+    "id": "<span:9>",
+    "log_id": "g",
+    "metadata": {
+      "finish_reason": "stop",
     },
     "output": {
       "finishReason": "stop",
@@ -487,9 +509,6 @@ exports[`wrap-ai-sdk-generation-traces captures wrapper and child model spans (a
     "_is_merge": true,
     "id": "<span:13>",
     "log_id": "g",
-    "metrics": {
-      "end": 0,
-    },
     "output": {
       "finishReason": "stop",
       "rawResponse": {
@@ -594,6 +613,20 @@ exports[`wrap-ai-sdk-generation-traces captures wrapper and child model spans (a
     ],
   },
   {
+    "_is_merge": true,
+    "id": "<span:13>",
+    "log_id": "g",
+    "metrics": {
+      "end": 0,
+    },
+    "project_id": "<uuid:3>",
+    "root_span_id": "<span:2>",
+    "span_id": "<span:14>",
+    "span_parents": [
+      "<span:12>",
+    ],
+  },
+  {
     "_is_merge": false,
     "context": {
       "caller_filename": "<node-internal>",
@@ -664,12 +697,23 @@ exports[`wrap-ai-sdk-generation-traces captures wrapper and child model spans (a
     "_is_merge": true,
     "id": "<span:16>",
     "log_id": "g",
-    "metadata": {
-      "finish_reason": "stop",
-    },
     "metrics": {
       "completion_tokens": 6,
       "prompt_tokens": 22,
+    },
+    "project_id": "<uuid:3>",
+    "root_span_id": "<span:2>",
+    "span_id": "<span:17>",
+    "span_parents": [
+      "<span:14>",
+    ],
+  },
+  {
+    "_is_merge": true,
+    "id": "<span:16>",
+    "log_id": "g",
+    "metadata": {
+      "finish_reason": "stop",
     },
     "output": {
       "finishReason": "stop",
@@ -816,9 +860,6 @@ exports[`wrap-ai-sdk-generation-traces captures wrapper and child model spans (a
     "_is_merge": true,
     "id": "<span:20>",
     "log_id": "g",
-    "metrics": {
-      "end": 0,
-    },
     "output": {
       "experimental_providerMetadata": {
         "openai": {
@@ -1055,6 +1096,20 @@ exports[`wrap-ai-sdk-generation-traces captures wrapper and child model spans (a
     ],
   },
   {
+    "_is_merge": true,
+    "id": "<span:20>",
+    "log_id": "g",
+    "metrics": {
+      "end": 0,
+    },
+    "project_id": "<uuid:3>",
+    "root_span_id": "<span:2>",
+    "span_id": "<span:21>",
+    "span_parents": [
+      "<span:19>",
+    ],
+  },
+  {
     "_is_merge": false,
     "context": {
       "caller_filename": "<node-internal>",
@@ -1139,12 +1194,23 @@ exports[`wrap-ai-sdk-generation-traces captures wrapper and child model spans (a
     "_is_merge": true,
     "id": "<span:24>",
     "log_id": "g",
-    "metadata": {
-      "finish_reason": "tool-calls",
-    },
     "metrics": {
       "completion_tokens": 16,
       "prompt_tokens": 87,
+    },
+    "project_id": "<uuid:3>",
+    "root_span_id": "<span:2>",
+    "span_id": "<span:25>",
+    "span_parents": [
+      "<span:21>",
+    ],
+  },
+  {
+    "_is_merge": true,
+    "id": "<span:24>",
+    "log_id": "g",
+    "metadata": {
+      "finish_reason": "tool-calls",
     },
     "output": {
       "finishReason": "tool-calls",
@@ -1614,9 +1680,6 @@ exports[`wrap-ai-sdk-generation-traces captures wrapper and child model spans (a
     "_is_merge": true,
     "id": "<span:6>",
     "log_id": "g",
-    "metrics": {
-      "end": 0,
-    },
     "output": {
       "experimental_providerMetadata": {
         "openai": {
@@ -1735,6 +1798,20 @@ exports[`wrap-ai-sdk-generation-traces captures wrapper and child model spans (a
     ],
   },
   {
+    "_is_merge": true,
+    "id": "<span:6>",
+    "log_id": "g",
+    "metrics": {
+      "end": 0,
+    },
+    "project_id": "<uuid:3>",
+    "root_span_id": "<span:2>",
+    "span_id": "<span:7>",
+    "span_parents": [
+      "<span:5>",
+    ],
+  },
+  {
     "_is_merge": false,
     "context": {
       "caller_filename": "<repo>/e2e/scenarios/wrap-ai-sdk-generation-traces/node_modules/.pnpm/ai@4.3.19_react@19.2.4_zod@3.25.76/node_modules/ai/dist/index.js",
@@ -1790,12 +1867,23 @@ exports[`wrap-ai-sdk-generation-traces captures wrapper and child model spans (a
     "_is_merge": true,
     "id": "<span:10>",
     "log_id": "g",
-    "metadata": {
-      "finish_reason": "stop",
-    },
     "metrics": {
       "completion_tokens": 2,
       "prompt_tokens": 18,
+    },
+    "project_id": "<uuid:3>",
+    "root_span_id": "<span:2>",
+    "span_id": "<span:11>",
+    "span_parents": [
+      "<span:7>",
+    ],
+  },
+  {
+    "_is_merge": true,
+    "id": "<span:10>",
+    "log_id": "g",
+    "metadata": {
+      "finish_reason": "stop",
     },
     "output": {
       "finishReason": "stop",
@@ -2002,9 +2090,6 @@ exports[`wrap-ai-sdk-generation-traces captures wrapper and child model spans (a
     "_is_merge": true,
     "id": "<span:14>",
     "log_id": "g",
-    "metrics": {
-      "end": 0,
-    },
     "output": {
       "experimental_providerMetadata": {
         "openai": {
@@ -2121,6 +2206,20 @@ exports[`wrap-ai-sdk-generation-traces captures wrapper and child model spans (a
     ],
   },
   {
+    "_is_merge": true,
+    "id": "<span:14>",
+    "log_id": "g",
+    "metrics": {
+      "end": 0,
+    },
+    "project_id": "<uuid:3>",
+    "root_span_id": "<span:2>",
+    "span_id": "<span:15>",
+    "span_parents": [
+      "<span:13>",
+    ],
+  },
+  {
     "_is_merge": false,
     "context": {
       "caller_filename": "<node-internal>",
@@ -2190,12 +2289,23 @@ exports[`wrap-ai-sdk-generation-traces captures wrapper and child model spans (a
     "_is_merge": true,
     "id": "<span:18>",
     "log_id": "g",
-    "metadata": {
-      "finish_reason": "stop",
-    },
     "metrics": {
       "completion_tokens": 6,
       "prompt_tokens": 22,
+    },
+    "project_id": "<uuid:3>",
+    "root_span_id": "<span:2>",
+    "span_id": "<span:19>",
+    "span_parents": [
+      "<span:15>",
+    ],
+  },
+  {
+    "_is_merge": true,
+    "id": "<span:18>",
+    "log_id": "g",
+    "metadata": {
+      "finish_reason": "stop",
     },
     "output": {
       "finishReason": "stop",
@@ -2342,9 +2452,6 @@ exports[`wrap-ai-sdk-generation-traces captures wrapper and child model spans (a
     "_is_merge": true,
     "id": "<span:22>",
     "log_id": "g",
-    "metrics": {
-      "end": 0,
-    },
     "output": {
       "experimental_providerMetadata": {
         "openai": {
@@ -2533,6 +2640,20 @@ exports[`wrap-ai-sdk-generation-traces captures wrapper and child model spans (a
     ],
   },
   {
+    "_is_merge": true,
+    "id": "<span:22>",
+    "log_id": "g",
+    "metrics": {
+      "end": 0,
+    },
+    "project_id": "<uuid:3>",
+    "root_span_id": "<span:2>",
+    "span_id": "<span:23>",
+    "span_parents": [
+      "<span:21>",
+    ],
+  },
+  {
     "_is_merge": false,
     "context": {
       "caller_filename": "<node-internal>",
@@ -2616,12 +2737,23 @@ exports[`wrap-ai-sdk-generation-traces captures wrapper and child model spans (a
     "_is_merge": true,
     "id": "<span:28>",
     "log_id": "g",
-    "metadata": {
-      "finish_reason": "tool-calls",
-    },
     "metrics": {
       "completion_tokens": 16,
       "prompt_tokens": 87,
+    },
+    "project_id": "<uuid:3>",
+    "root_span_id": "<span:2>",
+    "span_id": "<span:29>",
+    "span_parents": [
+      "<span:23>",
+    ],
+  },
+  {
+    "_is_merge": true,
+    "id": "<span:28>",
+    "log_id": "g",
+    "metadata": {
+      "finish_reason": "tool-calls",
     },
     "output": {
       "finishReason": "tool-calls",
@@ -3160,9 +3292,6 @@ exports[`wrap-ai-sdk-generation-traces captures wrapper and child model spans (a
     "_is_merge": true,
     "id": "<span:6>",
     "log_id": "g",
-    "metrics": {
-      "end": 0,
-    },
     "output": {
       "finishReason": "stop",
       "response": {
@@ -3264,6 +3393,20 @@ exports[`wrap-ai-sdk-generation-traces captures wrapper and child model spans (a
     ],
   },
   {
+    "_is_merge": true,
+    "id": "<span:6>",
+    "log_id": "g",
+    "metrics": {
+      "end": 0,
+    },
+    "project_id": "<uuid:3>",
+    "root_span_id": "<span:2>",
+    "span_id": "<span:7>",
+    "span_parents": [
+      "<span:5>",
+    ],
+  },
+  {
     "_is_merge": false,
     "context": {
       "caller_filename": "<repo>/e2e/scenarios/wrap-ai-sdk-generation-traces/node_modules/.pnpm/ai@5.0.82_zod@3.25.76/node_modules/ai/dist/index.js",
@@ -3318,9 +3461,6 @@ exports[`wrap-ai-sdk-generation-traces captures wrapper and child model spans (a
     "_is_merge": true,
     "id": "<span:10>",
     "log_id": "g",
-    "metadata": {
-      "finish_reason": "stop",
-    },
     "metrics": {
       "completion_reasoning_tokens": 0,
       "completion_tokens": 3,
@@ -3328,6 +3468,20 @@ exports[`wrap-ai-sdk-generation-traces captures wrapper and child model spans (a
       "prompt_tokens": 18,
       "reasoning_tokens": 0,
       "tokens": 21,
+    },
+    "project_id": "<uuid:3>",
+    "root_span_id": "<span:2>",
+    "span_id": "<span:11>",
+    "span_parents": [
+      "<span:7>",
+    ],
+  },
+  {
+    "_is_merge": true,
+    "id": "<span:10>",
+    "log_id": "g",
+    "metadata": {
+      "finish_reason": "stop",
     },
     "output": {
       "content": [
@@ -3490,9 +3644,6 @@ exports[`wrap-ai-sdk-generation-traces captures wrapper and child model spans (a
     "_is_merge": true,
     "id": "<span:14>",
     "log_id": "g",
-    "metrics": {
-      "end": 0,
-    },
     "output": {
       "content": [
         {
@@ -3626,6 +3777,20 @@ exports[`wrap-ai-sdk-generation-traces captures wrapper and child model spans (a
     ],
   },
   {
+    "_is_merge": true,
+    "id": "<span:14>",
+    "log_id": "g",
+    "metrics": {
+      "end": 0,
+    },
+    "project_id": "<uuid:3>",
+    "root_span_id": "<span:2>",
+    "span_id": "<span:15>",
+    "span_parents": [
+      "<span:13>",
+    ],
+  },
+  {
     "_is_merge": false,
     "context": {
       "caller_filename": "<node-internal>",
@@ -3692,9 +3857,6 @@ exports[`wrap-ai-sdk-generation-traces captures wrapper and child model spans (a
     "_is_merge": true,
     "id": "<span:18>",
     "log_id": "g",
-    "metadata": {
-      "finish_reason": "stop",
-    },
     "metrics": {
       "completion_reasoning_tokens": 0,
       "completion_tokens": 7,
@@ -3702,6 +3864,20 @@ exports[`wrap-ai-sdk-generation-traces captures wrapper and child model spans (a
       "prompt_tokens": 22,
       "reasoning_tokens": 0,
       "tokens": 29,
+    },
+    "project_id": "<uuid:3>",
+    "root_span_id": "<span:2>",
+    "span_id": "<span:19>",
+    "span_parents": [
+      "<span:15>",
+    ],
+  },
+  {
+    "_is_merge": true,
+    "id": "<span:18>",
+    "log_id": "g",
+    "metadata": {
+      "finish_reason": "stop",
     },
     "output": {
       "finishReason": "stop",
@@ -3861,9 +4037,6 @@ exports[`wrap-ai-sdk-generation-traces captures wrapper and child model spans (a
     "_is_merge": true,
     "id": "<span:22>",
     "log_id": "g",
-    "metrics": {
-      "end": 0,
-    },
     "output": {
       "finishReason": "tool-calls",
       "response": {
@@ -4586,6 +4759,20 @@ exports[`wrap-ai-sdk-generation-traces captures wrapper and child model spans (a
     ],
   },
   {
+    "_is_merge": true,
+    "id": "<span:22>",
+    "log_id": "g",
+    "metrics": {
+      "end": 0,
+    },
+    "project_id": "<uuid:3>",
+    "root_span_id": "<span:2>",
+    "span_id": "<span:23>",
+    "span_parents": [
+      "<span:21>",
+    ],
+  },
+  {
     "_is_merge": false,
     "context": {
       "caller_filename": "<node-internal>",
@@ -4668,9 +4855,6 @@ exports[`wrap-ai-sdk-generation-traces captures wrapper and child model spans (a
     "_is_merge": true,
     "id": "<span:36>",
     "log_id": "g",
-    "metadata": {
-      "finish_reason": "tool-calls",
-    },
     "metrics": {
       "completion_reasoning_tokens": 0,
       "completion_tokens": 8,
@@ -4678,6 +4862,20 @@ exports[`wrap-ai-sdk-generation-traces captures wrapper and child model spans (a
       "prompt_tokens": 94,
       "reasoning_tokens": 0,
       "tokens": 102,
+    },
+    "project_id": "<uuid:3>",
+    "root_span_id": "<span:2>",
+    "span_id": "<span:37>",
+    "span_parents": [
+      "<span:23>",
+    ],
+  },
+  {
+    "_is_merge": true,
+    "id": "<span:36>",
+    "log_id": "g",
+    "metadata": {
+      "finish_reason": "tool-calls",
     },
     "output": {
       "content": [
@@ -4895,9 +5093,6 @@ exports[`wrap-ai-sdk-generation-traces captures wrapper and child model spans (a
     "_is_merge": true,
     "id": "<span:40>",
     "log_id": "g",
-    "metadata": {
-      "finish_reason": "tool-calls",
-    },
     "metrics": {
       "completion_reasoning_tokens": 0,
       "completion_tokens": 8,
@@ -4905,6 +5100,20 @@ exports[`wrap-ai-sdk-generation-traces captures wrapper and child model spans (a
       "prompt_tokens": 133,
       "reasoning_tokens": 0,
       "tokens": 141,
+    },
+    "project_id": "<uuid:3>",
+    "root_span_id": "<span:2>",
+    "span_id": "<span:41>",
+    "span_parents": [
+      "<span:23>",
+    ],
+  },
+  {
+    "_is_merge": true,
+    "id": "<span:40>",
+    "log_id": "g",
+    "metadata": {
+      "finish_reason": "tool-calls",
     },
     "output": {
       "content": [
@@ -5186,9 +5395,6 @@ exports[`wrap-ai-sdk-generation-traces captures wrapper and child model spans (a
     "_is_merge": true,
     "id": "<span:44>",
     "log_id": "g",
-    "metadata": {
-      "finish_reason": "tool-calls",
-    },
     "metrics": {
       "completion_reasoning_tokens": 0,
       "completion_tokens": 8,
@@ -5196,6 +5402,20 @@ exports[`wrap-ai-sdk-generation-traces captures wrapper and child model spans (a
       "prompt_tokens": 172,
       "reasoning_tokens": 0,
       "tokens": 180,
+    },
+    "project_id": "<uuid:3>",
+    "root_span_id": "<span:2>",
+    "span_id": "<span:45>",
+    "span_parents": [
+      "<span:23>",
+    ],
+  },
+  {
+    "_is_merge": true,
+    "id": "<span:44>",
+    "log_id": "g",
+    "metadata": {
+      "finish_reason": "tool-calls",
     },
     "output": {
       "content": [
@@ -5541,9 +5761,6 @@ exports[`wrap-ai-sdk-generation-traces captures wrapper and child model spans (a
     "_is_merge": true,
     "id": "<span:48>",
     "log_id": "g",
-    "metadata": {
-      "finish_reason": "tool-calls",
-    },
     "metrics": {
       "completion_reasoning_tokens": 0,
       "completion_tokens": 8,
@@ -5551,6 +5768,20 @@ exports[`wrap-ai-sdk-generation-traces captures wrapper and child model spans (a
       "prompt_tokens": 211,
       "reasoning_tokens": 0,
       "tokens": 219,
+    },
+    "project_id": "<uuid:3>",
+    "root_span_id": "<span:2>",
+    "span_id": "<span:49>",
+    "span_parents": [
+      "<span:23>",
+    ],
+  },
+  {
+    "_is_merge": true,
+    "id": "<span:48>",
+    "log_id": "g",
+    "metadata": {
+      "finish_reason": "tool-calls",
     },
     "output": {
       "content": [
@@ -5863,9 +6094,6 @@ exports[`wrap-ai-sdk-generation-traces captures wrapper and child model spans (a
     "_is_merge": true,
     "id": "<span:54>",
     "log_id": "g",
-    "metrics": {
-      "end": 0,
-    },
     "output": {
       "finishReason": "stop",
       "object": {
@@ -5895,6 +6123,20 @@ exports[`wrap-ai-sdk-generation-traces captures wrapper and child model spans (a
         "totalTokens": 44,
       },
       "warnings": [],
+    },
+    "project_id": "<uuid:3>",
+    "root_span_id": "<span:2>",
+    "span_id": "<span:55>",
+    "span_parents": [
+      "<span:53>",
+    ],
+  },
+  {
+    "_is_merge": true,
+    "id": "<span:54>",
+    "log_id": "g",
+    "metrics": {
+      "end": 0,
     },
     "project_id": "<uuid:3>",
     "root_span_id": "<span:2>",
@@ -5973,9 +6215,6 @@ exports[`wrap-ai-sdk-generation-traces captures wrapper and child model spans (a
     "_is_merge": true,
     "id": "<span:57>",
     "log_id": "g",
-    "metadata": {
-      "finish_reason": "stop",
-    },
     "metrics": {
       "completion_reasoning_tokens": 0,
       "completion_tokens": 6,
@@ -5983,6 +6222,20 @@ exports[`wrap-ai-sdk-generation-traces captures wrapper and child model spans (a
       "prompt_tokens": 38,
       "reasoning_tokens": 0,
       "tokens": 44,
+    },
+    "project_id": "<uuid:3>",
+    "root_span_id": "<span:2>",
+    "span_id": "<span:58>",
+    "span_parents": [
+      "<span:55>",
+    ],
+  },
+  {
+    "_is_merge": true,
+    "id": "<span:57>",
+    "log_id": "g",
+    "metadata": {
+      "finish_reason": "stop",
     },
     "output": {
       "content": [
@@ -6618,9 +6871,6 @@ exports[`wrap-ai-sdk-generation-traces captures wrapper and child model spans (a
     "_is_merge": true,
     "id": "<span:6>",
     "log_id": "g",
-    "metrics": {
-      "end": 0,
-    },
     "output": {
       "_output": "PARIS",
       "finishReason": "stop",
@@ -6774,6 +7024,20 @@ exports[`wrap-ai-sdk-generation-traces captures wrapper and child model spans (a
     ],
   },
   {
+    "_is_merge": true,
+    "id": "<span:6>",
+    "log_id": "g",
+    "metrics": {
+      "end": 0,
+    },
+    "project_id": "<uuid:3>",
+    "root_span_id": "<span:2>",
+    "span_id": "<span:7>",
+    "span_parents": [
+      "<span:5>",
+    ],
+  },
+  {
     "_is_merge": false,
     "context": {
       "caller_filename": "<repo>/e2e/scenarios/wrap-ai-sdk-generation-traces/node_modules/.pnpm/ai@6.0.1_zod@3.25.76/node_modules/ai/dist/index.js",
@@ -6828,17 +7092,28 @@ exports[`wrap-ai-sdk-generation-traces captures wrapper and child model spans (a
     "_is_merge": true,
     "id": "<span:10>",
     "log_id": "g",
-    "metadata": {
-      "finish_reason": {
-        "unified": "stop",
-      },
-    },
     "metrics": {
       "completion_reasoning_tokens": 0,
       "completion_tokens": 3,
       "prompt_cached_tokens": 0,
       "prompt_tokens": 18,
       "reasoning_tokens": 0,
+    },
+    "project_id": "<uuid:3>",
+    "root_span_id": "<span:2>",
+    "span_id": "<span:11>",
+    "span_parents": [
+      "<span:7>",
+    ],
+  },
+  {
+    "_is_merge": true,
+    "id": "<span:10>",
+    "log_id": "g",
+    "metadata": {
+      "finish_reason": {
+        "unified": "stop",
+      },
     },
     "output": {
       "content": [
@@ -7018,9 +7293,6 @@ exports[`wrap-ai-sdk-generation-traces captures wrapper and child model spans (a
     "_is_merge": true,
     "id": "<span:14>",
     "log_id": "g",
-    "metrics": {
-      "end": 0,
-    },
     "output": {
       "content": [
         {
@@ -7198,6 +7470,20 @@ exports[`wrap-ai-sdk-generation-traces captures wrapper and child model spans (a
     ],
   },
   {
+    "_is_merge": true,
+    "id": "<span:14>",
+    "log_id": "g",
+    "metrics": {
+      "end": 0,
+    },
+    "project_id": "<uuid:3>",
+    "root_span_id": "<span:2>",
+    "span_id": "<span:15>",
+    "span_parents": [
+      "<span:13>",
+    ],
+  },
+  {
     "_is_merge": false,
     "context": {
       "caller_filename": "<node-internal>",
@@ -7264,17 +7550,28 @@ exports[`wrap-ai-sdk-generation-traces captures wrapper and child model spans (a
     "_is_merge": true,
     "id": "<span:18>",
     "log_id": "g",
-    "metadata": {
-      "finish_reason": {
-        "unified": "stop",
-      },
-    },
     "metrics": {
       "completion_reasoning_tokens": 0,
       "completion_tokens": 7,
       "prompt_cached_tokens": 0,
       "prompt_tokens": 22,
       "reasoning_tokens": 0,
+    },
+    "project_id": "<uuid:3>",
+    "root_span_id": "<span:2>",
+    "span_id": "<span:19>",
+    "span_parents": [
+      "<span:15>",
+    ],
+  },
+  {
+    "_is_merge": true,
+    "id": "<span:18>",
+    "log_id": "g",
+    "metadata": {
+      "finish_reason": {
+        "unified": "stop",
+      },
     },
     "output": {
       "finishReason": {
@@ -7451,9 +7748,6 @@ exports[`wrap-ai-sdk-generation-traces captures wrapper and child model spans (a
     "_is_merge": true,
     "id": "<span:22>",
     "log_id": "g",
-    "metrics": {
-      "end": 0,
-    },
     "output": {
       "finishReason": "tool-calls",
       "response": {
@@ -8376,6 +8670,20 @@ exports[`wrap-ai-sdk-generation-traces captures wrapper and child model spans (a
     ],
   },
   {
+    "_is_merge": true,
+    "id": "<span:22>",
+    "log_id": "g",
+    "metrics": {
+      "end": 0,
+    },
+    "project_id": "<uuid:3>",
+    "root_span_id": "<span:2>",
+    "span_id": "<span:23>",
+    "span_parents": [
+      "<span:21>",
+    ],
+  },
+  {
     "_is_merge": false,
     "context": {
       "caller_filename": "<node-internal>",
@@ -8458,17 +8766,28 @@ exports[`wrap-ai-sdk-generation-traces captures wrapper and child model spans (a
     "_is_merge": true,
     "id": "<span:36>",
     "log_id": "g",
-    "metadata": {
-      "finish_reason": {
-        "unified": "tool-calls",
-      },
-    },
     "metrics": {
       "completion_reasoning_tokens": 0,
       "completion_tokens": 8,
       "prompt_cached_tokens": 0,
       "prompt_tokens": 94,
       "reasoning_tokens": 0,
+    },
+    "project_id": "<uuid:3>",
+    "root_span_id": "<span:2>",
+    "span_id": "<span:37>",
+    "span_parents": [
+      "<span:23>",
+    ],
+  },
+  {
+    "_is_merge": true,
+    "id": "<span:36>",
+    "log_id": "g",
+    "metadata": {
+      "finish_reason": {
+        "unified": "tool-calls",
+      },
     },
     "output": {
       "content": [
@@ -8708,17 +9027,28 @@ exports[`wrap-ai-sdk-generation-traces captures wrapper and child model spans (a
     "_is_merge": true,
     "id": "<span:40>",
     "log_id": "g",
-    "metadata": {
-      "finish_reason": {
-        "unified": "tool-calls",
-      },
-    },
     "metrics": {
       "completion_reasoning_tokens": 0,
       "completion_tokens": 8,
       "prompt_cached_tokens": 0,
       "prompt_tokens": 133,
       "reasoning_tokens": 0,
+    },
+    "project_id": "<uuid:3>",
+    "root_span_id": "<span:2>",
+    "span_id": "<span:41>",
+    "span_parents": [
+      "<span:23>",
+    ],
+  },
+  {
+    "_is_merge": true,
+    "id": "<span:40>",
+    "log_id": "g",
+    "metadata": {
+      "finish_reason": {
+        "unified": "tool-calls",
+      },
     },
     "output": {
       "content": [
@@ -9032,17 +9362,28 @@ exports[`wrap-ai-sdk-generation-traces captures wrapper and child model spans (a
     "_is_merge": true,
     "id": "<span:44>",
     "log_id": "g",
-    "metadata": {
-      "finish_reason": {
-        "unified": "tool-calls",
-      },
-    },
     "metrics": {
       "completion_reasoning_tokens": 0,
       "completion_tokens": 8,
       "prompt_cached_tokens": 0,
       "prompt_tokens": 172,
       "reasoning_tokens": 0,
+    },
+    "project_id": "<uuid:3>",
+    "root_span_id": "<span:2>",
+    "span_id": "<span:45>",
+    "span_parents": [
+      "<span:23>",
+    ],
+  },
+  {
+    "_is_merge": true,
+    "id": "<span:44>",
+    "log_id": "g",
+    "metadata": {
+      "finish_reason": {
+        "unified": "tool-calls",
+      },
     },
     "output": {
       "content": [
@@ -9430,17 +9771,28 @@ exports[`wrap-ai-sdk-generation-traces captures wrapper and child model spans (a
     "_is_merge": true,
     "id": "<span:48>",
     "log_id": "g",
-    "metadata": {
-      "finish_reason": {
-        "unified": "tool-calls",
-      },
-    },
     "metrics": {
       "completion_reasoning_tokens": 0,
       "completion_tokens": 8,
       "prompt_cached_tokens": 0,
       "prompt_tokens": 211,
       "reasoning_tokens": 0,
+    },
+    "project_id": "<uuid:3>",
+    "root_span_id": "<span:2>",
+    "span_id": "<span:49>",
+    "span_parents": [
+      "<span:23>",
+    ],
+  },
+  {
+    "_is_merge": true,
+    "id": "<span:48>",
+    "log_id": "g",
+    "metadata": {
+      "finish_reason": {
+        "unified": "tool-calls",
+      },
     },
     "output": {
       "content": [
@@ -9785,9 +10137,6 @@ exports[`wrap-ai-sdk-generation-traces captures wrapper and child model spans (a
     "_is_merge": true,
     "id": "<span:54>",
     "log_id": "g",
-    "metrics": {
-      "end": 0,
-    },
     "output": {
       "finishReason": "stop",
       "object": {
@@ -9835,6 +10184,20 @@ exports[`wrap-ai-sdk-generation-traces captures wrapper and child model spans (a
         "totalTokens": 44,
       },
       "warnings": [],
+    },
+    "project_id": "<uuid:3>",
+    "root_span_id": "<span:2>",
+    "span_id": "<span:55>",
+    "span_parents": [
+      "<span:53>",
+    ],
+  },
+  {
+    "_is_merge": true,
+    "id": "<span:54>",
+    "log_id": "g",
+    "metrics": {
+      "end": 0,
     },
     "project_id": "<uuid:3>",
     "root_span_id": "<span:2>",
@@ -9913,17 +10276,28 @@ exports[`wrap-ai-sdk-generation-traces captures wrapper and child model spans (a
     "_is_merge": true,
     "id": "<span:57>",
     "log_id": "g",
-    "metadata": {
-      "finish_reason": {
-        "unified": "stop",
-      },
-    },
     "metrics": {
       "completion_reasoning_tokens": 0,
       "completion_tokens": 6,
       "prompt_cached_tokens": 0,
       "prompt_tokens": 38,
       "reasoning_tokens": 0,
+    },
+    "project_id": "<uuid:3>",
+    "root_span_id": "<span:2>",
+    "span_id": "<span:58>",
+    "span_parents": [
+      "<span:55>",
+    ],
+  },
+  {
+    "_is_merge": true,
+    "id": "<span:57>",
+    "log_id": "g",
+    "metadata": {
+      "finish_reason": {
+        "unified": "stop",
+      },
     },
     "output": {
       "content": [

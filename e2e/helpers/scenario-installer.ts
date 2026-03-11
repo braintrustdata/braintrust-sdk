@@ -92,6 +92,12 @@ export async function installScenarioDependencies({
   if (!(await fileExists(manifestPath))) {
     return { status: "no-manifest" };
   }
+  const lockfilePath = path.join(scenarioDir, "pnpm-lock.yaml");
+  if (!(await fileExists(lockfilePath))) {
+    throw new Error(
+      `Scenario package.json in ${scenarioDir} must also commit pnpm-lock.yaml. Generate it with: pnpm install --dir ${scenarioDir} --ignore-workspace --lockfile-only --strict-peer-dependencies=false`,
+    );
+  }
 
   const manifestRaw = await fs.readFile(manifestPath, "utf8");
   const manifest = JSON.parse(manifestRaw) as Record<string, unknown>;
@@ -110,8 +116,7 @@ export async function installScenarioDependencies({
     "--dir",
     scenarioDir,
     "--ignore-workspace",
-    "--no-lockfile",
-    "--no-frozen-lockfile",
+    "--frozen-lockfile",
     "--strict-peer-dependencies=false",
   ];
   if (preferOffline) {

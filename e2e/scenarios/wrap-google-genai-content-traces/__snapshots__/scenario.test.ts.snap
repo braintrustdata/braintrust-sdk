@@ -128,11 +128,21 @@ exports[`wrap-google-genai-content-traces captures generate, stream, and tool sp
     "metrics": {
       "completion_tokens": 3,
       "duration": 0,
-      "end": 0,
       "prompt_tokens": 5,
       "start": 0,
       "tokens": 8,
     },
+    "project_id": "<uuid:3>",
+    "root_span_id": "<span:2>",
+    "span_id": "<span:7>",
+    "span_parents": [
+      "<span:5>",
+    ],
+  },
+  {
+    "_is_merge": true,
+    "id": "<span:6>",
+    "log_id": "g",
     "output": {
       "candidates": [
         {
@@ -183,6 +193,20 @@ exports[`wrap-google-genai-content-traces captures generate, stream, and tool sp
         ],
         "totalTokenCount": 8,
       },
+    },
+    "project_id": "<uuid:3>",
+    "root_span_id": "<span:2>",
+    "span_id": "<span:7>",
+    "span_parents": [
+      "<span:5>",
+    ],
+  },
+  {
+    "_is_merge": true,
+    "id": "<span:6>",
+    "log_id": "g",
+    "metrics": {
+      "end": 0,
     },
     "project_id": "<uuid:3>",
     "root_span_id": "<span:2>",
@@ -291,12 +315,22 @@ exports[`wrap-google-genai-content-traces captures generate, stream, and tool sp
     "metrics": {
       "completion_tokens": 7,
       "duration": 0,
-      "end": 0,
       "prompt_tokens": 15,
       "start": 0,
       "time_to_first_token": 0,
       "tokens": 22,
     },
+    "project_id": "<uuid:3>",
+    "root_span_id": "<span:2>",
+    "span_id": "<span:12>",
+    "span_parents": [
+      "<span:10>",
+    ],
+  },
+  {
+    "_is_merge": true,
+    "id": "<span:11>",
+    "log_id": "g",
     "output": {
       "candidates": [
         {
@@ -331,6 +365,20 @@ exports[`wrap-google-genai-content-traces captures generate, stream, and tool sp
         ],
         "totalTokenCount": 22,
       },
+    },
+    "project_id": "<uuid:3>",
+    "root_span_id": "<span:2>",
+    "span_id": "<span:12>",
+    "span_parents": [
+      "<span:10>",
+    ],
+  },
+  {
+    "_is_merge": true,
+    "id": "<span:11>",
+    "log_id": "g",
+    "metrics": {
+      "end": 0,
     },
     "project_id": "<uuid:3>",
     "root_span_id": "<span:2>",
@@ -466,11 +514,21 @@ exports[`wrap-google-genai-content-traces captures generate, stream, and tool sp
     "metrics": {
       "completion_tokens": 7,
       "duration": 0,
-      "end": 0,
       "prompt_tokens": 28,
       "start": 0,
       "tokens": 35,
     },
+    "project_id": "<uuid:3>",
+    "root_span_id": "<span:2>",
+    "span_id": "<span:16>",
+    "span_parents": [
+      "<span:14>",
+    ],
+  },
+  {
+    "_is_merge": true,
+    "id": "<span:15>",
+    "log_id": "g",
     "output": {
       "candidates": [
         {
@@ -525,6 +583,20 @@ exports[`wrap-google-genai-content-traces captures generate, stream, and tool sp
         ],
         "totalTokenCount": 35,
       },
+    },
+    "project_id": "<uuid:3>",
+    "root_span_id": "<span:2>",
+    "span_id": "<span:16>",
+    "span_parents": [
+      "<span:14>",
+    ],
+  },
+  {
+    "_is_merge": true,
+    "id": "<span:15>",
+    "log_id": "g",
+    "metrics": {
+      "end": 0,
     },
     "project_id": "<uuid:3>",
     "root_span_id": "<span:2>",
