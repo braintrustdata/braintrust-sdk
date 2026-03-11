@@ -10,7 +10,7 @@
 ## Release Instructions
 
 - Cut a PR that bumps version number in https://github.com/braintrustdata/braintrust-sdk/blob/main/js/package.json#L3 according to [SEMVER](https://semver.org/) principles (e.g., `0.4.3` → `0.4.4`).
-- Make sure the tests & integration tests PR pass.
+- Make sure the tests & integration tests pass on the PR.
 - Merge to main in `braintrust-sdk-javascript` and `braintrust` repos.
 - In the `braintrust-sdk-javascript` repo, check out the correct commit and verify you are in a sane state to release code.
 
