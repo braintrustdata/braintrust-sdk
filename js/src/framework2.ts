@@ -23,7 +23,7 @@ import {
   PromptRowWithId,
   RemoteEvalParameters,
 } from "./logger";
-import { GenericFunction } from "./framework-types";
+import type { BaseFnOpts, GenericFunction } from "./framework-types";
 import type { EvalParameters } from "./eval-parameters";
 import {
   promptDefinitionToPromptData,
@@ -35,14 +35,6 @@ import type {
   StaticParametersSchema,
   SerializedParametersContainer,
 } from "../dev/types";
-
-interface BaseFnOpts {
-  name: string;
-  slug: string;
-  description: string;
-  ifExists: IfExists;
-  metadata?: Record<string, unknown>;
-}
 
 export { toolFunctionDefinitionSchema };
 // ToolFunctionDefinition exported as type-only from main index to avoid namespace issues
@@ -366,6 +358,7 @@ export class CodeFunction<
   public readonly parameters?: z.ZodSchema<Input>;
   public readonly returns?: z.ZodSchema<Output>;
   public readonly ifExists?: IfExists;
+  public readonly tags?: string[];
   public readonly metadata?: Record<string, unknown>;
 
   constructor(
@@ -384,6 +377,7 @@ export class CodeFunction<
     this.type = opts.type;
 
     this.ifExists = opts.ifExists;
+    this.tags = opts.tags;
     this.metadata = opts.metadata;
 
     this.parameters = opts.parameters;
@@ -521,9 +515,8 @@ export type PromptOpts<
   // eslint-disable-next-line @typescript-eslint/no-empty-object-type
   (HasTools extends true ? Partial<PromptTools> : {}) &
   // eslint-disable-next-line @typescript-eslint/no-empty-object-type
-  (HasNoTrace extends true ? Partial<PromptNoTrace> : {}) & {
-    tags?: string[];
-  } & PromptDefinition;
+  (HasNoTrace extends true ? Partial<PromptNoTrace> : {}) &
+  PromptDefinition;
 
 export class PromptBuilder {
   constructor(private readonly project: Project) {}
