@@ -20,12 +20,10 @@
     "test:e2e:update": "turbo run test:e2e:update",
     "playground": "turbo run playground --filter=\"braintrust\"",
     "prepare": "husky || true",
-    "lint:prettier": "prettier --check .",
-    "lint:eslint": "turbo run lint",
-    "fix:prettier": "prettier --write .",
-    "fix:eslint": "turbo run fix:eslint",
-    "lint": "pnpm run lint:prettier && pnpm run lint:eslint",
-    "fix": "pnpm run fix:prettier && pnpm run fix:eslint"
+    "formatting": "prettier --check .",
+    "lint": "turbo run lint",
+    "fix:formatting": "prettier --write .",
+    "fix:lint": "turbo run fix:lint"
   },
   "devDependencies": {
     "eslint": "^9.39.2",
