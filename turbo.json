@@ -3,7 +3,8 @@
   "globalPassThroughEnv": [
     "OPENAI_API_KEY",
     "OPENAI_BASE_URL",
-    "ANTHROPIC_API_KEY"
+    "ANTHROPIC_API_KEY",
+    "GEMINI_API_KEY"
   ],
   "tasks": {
     "build": {
@@ -19,6 +20,7 @@
       "env": [
         "ANTHROPIC_API_KEY",
         "BRAINTRUST_API_KEY",
+        "GEMINI_API_KEY",
         "OPENAI_API_KEY",
         "OPENAI_BASE_URL"
       ],
@@ -29,6 +31,7 @@
       "env": [
         "ANTHROPIC_API_KEY",
         "BRAINTRUST_API_KEY",
+        "GEMINI_API_KEY",
         "OPENAI_API_KEY",
         "OPENAI_BASE_URL"
       ],
@@ -39,6 +42,7 @@
       "env": [
         "ANTHROPIC_API_KEY",
         "BRAINTRUST_API_KEY",
+        "GEMINI_API_KEY",
         "OPENAI_API_KEY",
         "OPENAI_BASE_URL"
       ],
@@ -66,6 +70,7 @@
       "passThroughEnv": [
         "ANTHROPIC_API_KEY",
         "BRAINTRUST_API_KEY",
+        "GEMINI_API_KEY",
         "OPENAI_API_KEY"
       ],
       "dependsOn": ["^build", "build"]

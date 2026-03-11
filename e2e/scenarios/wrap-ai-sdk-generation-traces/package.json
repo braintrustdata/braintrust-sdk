@@ -1,0 +1,9 @@
+{
+  "name": "@braintrust/e2e-wrap-ai-sdk-generation-traces",
+  "private": true,
+  "dependencies": {
+    "@ai-sdk/openai": "3.0.0-beta.44",
+    "ai": "6.0.1",
+    "zod": "4.2.1"
+  }
+}
