@@ -17,7 +17,6 @@ import {
   Experiment,
   BaseMetadata,
   Dataset,
-  type FullInitOptions,
   type ParametersRef,
   RemoteEvalParameters,
 } from "../logger";
@@ -103,7 +102,7 @@ async function initExperiment(
   const parameters = await getExperimentParametersRef(evaluator.parameters);
   // NOTE: This code is duplicated with initExperiment in js/src/framework.ts.
   // Make sure to update that if you change this.
-  const initOptions: FullInitOptions<false> = {
+  const logger = _initExperiment({
     state: evaluator.state,
     ...(evaluator.projectId
       ? { projectId: evaluator.projectId }
@@ -121,8 +120,7 @@ async function initExperiment(
     dataset: Dataset.isDataset(data) ? data : undefined,
     parameters,
     setCurrent: false,
-  };
-  const logger = _initExperiment(initOptions);
+  });
   const info = await logger.summarize({ summarizeScores: false });
   const linkText = info.experimentUrl
     ? terminalLink(info.experimentUrl, info.experimentUrl, {

@@ -431,12 +431,11 @@ function initExperiment<IsOpen extends boolean = false>(
   state: BraintrustState | undefined,
   options: Readonly<FullInitOptions<IsOpen>> = {},
 ) {
-  const initOptions: FullInitOptions<IsOpen> = {
+  return _initExperiment({
     state,
     ...options,
     setCurrent: false,
-  };
-  return _initExperiment(initOptions);
+  });
 }
 
 async function getExperimentParametersRef(
