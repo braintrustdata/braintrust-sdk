@@ -1,4 +1,4 @@
-// Auto-generated file (internal git SHA 7cc4507a2a809d3d0bcaea7cb53cb89c1bde1a91) -- do not modify
+// Auto-generated file (internal git SHA b8ee79dd562a5fad1fe64b716b4a0b00a21e5ff0) -- do not modify
 
 import { z } from "zod/v3";
 
@@ -1265,6 +1265,7 @@ export const FunctionId = z.union([
       version: z.string(),
     }),
     code: z.string(),
+    function_type: FunctionTypeEnum.and(z.unknown()).optional(),
     name: z.union([z.string(), z.null()]).optional(),
   }),
   z.object({
@@ -1534,6 +1535,13 @@ export const TopicAutomationConfig = z.object({
   scope: z.union([SpanScope, TraceScope, GroupScope, z.null()]).optional(),
   data_scope: TopicAutomationDataScope.optional(),
   btql_filter: z.union([z.string(), z.null()]).optional(),
+  backfill_time_range: z
+    .union([
+      z.string(),
+      z.object({ from: z.string(), to: z.string() }),
+      z.null(),
+    ])
+    .optional(),
 });
 export type TopicAutomationConfigType = z.infer<typeof TopicAutomationConfig>;
 export const ProjectAutomation = z.object({
