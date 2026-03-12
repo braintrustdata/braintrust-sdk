@@ -325,6 +325,7 @@ jobs:
         working-directory: js/smoke
         shell: bash
         env:
+          BRAINTRUST_API_KEY: ${{ secrets.BRAINTRUST_API_KEY }}
           CI: true
           BRAINTRUST_TAR: ../artifacts/braintrust-latest.tgz
           BRAINTRUST_BROWSER_TAR: ../artifacts/braintrust-browser-latest.tgz
