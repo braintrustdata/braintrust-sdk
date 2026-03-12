@@ -47,6 +47,7 @@ test("meta (write) is passed to task", async () => {
         return input * 2;
       },
       scores: [],
+      classifications: [],
     },
     new NoopProgressReporter(),
     [],
@@ -85,6 +86,7 @@ test("metadata (read/write) is passed to task", async () => {
         return input * 2;
       },
       scores: [],
+      classifications: [],
     },
     new NoopProgressReporter(),
     [],
@@ -125,6 +127,7 @@ test("expected (read/write) is passed to task", async () => {
         return input * 2;
       },
       scores: [],
+      classifications: [],
     },
     new NoopProgressReporter(),
     [],
@@ -175,6 +178,7 @@ describe("runEvaluator", () => {
           scores: Array.from({ length: 3 }, (_, i) =>
             makeTestScorer(`scorer_${i}`),
           ),
+          classifications: [],
         },
         new NoopProgressReporter(),
         [],
@@ -202,6 +206,7 @@ describe("runEvaluator", () => {
               scores: Array.from({ length: 3 }, (_, i) =>
                 makeTestScorer(`scorer_${i}`),
               ),
+              classifications: [],
               errorScoreHandler: defaultErrorScoreHandler,
             },
             new NoopProgressReporter(),
@@ -232,6 +237,7 @@ describe("runEvaluator", () => {
               scores: Array.from({ length: 3 }, (_, i) =>
                 makeTestScorer(`scorer_${i}`, i === 0),
               ),
+              classifications: [],
               errorScoreHandler: defaultErrorScoreHandler,
             },
             new NoopProgressReporter(),
@@ -266,6 +272,7 @@ describe("runEvaluator", () => {
               scores: Array.from({ length: 3 }, (_, i) =>
                 makeTestScorer(`scorer_${i}`),
               ),
+              classifications: [],
               errorScoreHandler: () => undefined,
             },
             new NoopProgressReporter(),
@@ -292,6 +299,7 @@ describe("runEvaluator", () => {
               scores: Array.from({ length: 3 }, (_, i) =>
                 makeTestScorer(`scorer_${i}`),
               ),
+              classifications: [],
               errorScoreHandler: () => ({ error_score: 1 }),
             },
             new NoopProgressReporter(),
@@ -345,6 +353,7 @@ describe("runEvaluator", () => {
               return input * 2;
             },
             scores: [],
+            classifications: [],
             timeout: 10,
             maxConcurrency: 1,
           },
@@ -394,6 +403,7 @@ describe("runEvaluator", () => {
               return input * 2;
             },
             scores: [],
+            classifications: [],
             signal: abortController.signal,
             maxConcurrency: 1,
           },
@@ -431,6 +441,7 @@ describe("runEvaluator", () => {
             return input * 2;
           },
           scores: [],
+          classifications: [],
         },
         new NoopProgressReporter(),
         [],
@@ -458,6 +469,7 @@ test("trialIndex is passed to task", async () => {
         return input * 2;
       },
       scores: [],
+      classifications: [],
       trialCount: 3,
     },
     new NoopProgressReporter(),
@@ -500,6 +512,7 @@ test("trialIndex with multiple inputs", async () => {
         return input * 2;
       },
       scores: [],
+      classifications: [],
       trialCount: 2,
     },
     new NoopProgressReporter(),
@@ -546,6 +559,7 @@ test("Eval with noSendLogs: true runs locally without creating experiment", asyn
         }),
         () => ({ name: "simple_scorer", score: 0.8 }),
       ],
+      classifications: [],
     },
     { noSendLogs: true, returnResults: true },
   );
@@ -592,6 +606,7 @@ test("Eval with returnResults: false produces empty results but valid summary", 
         () => ({ name: "length_score", score: 0.75 }),
         () => ({ name: "quality_score", score: 0.9 }),
       ],
+      classifications: [],
     },
     { noSendLogs: true, returnResults: false },
   );
@@ -629,6 +644,7 @@ test("Eval with returnResults: true collects all results", async () => {
           score: args.output === args.expected ? 1 : 0,
         }),
       ],
+      classifications: [],
     },
     { noSendLogs: true, returnResults: true },
   );
@@ -672,6 +688,7 @@ test("tags can be appended and logged to root span", async () => {
         return input;
       },
       scores: [() => ({ name: "simple_scorer", score: 0.8 })],
+      classifications: [],
       summarizeScores: false,
     },
     new NoopProgressReporter(),
@@ -721,6 +738,7 @@ test.each([
         return input;
       },
       scores: [() => ({ name: "simple_scorer", score: 0.8 })],
+      classifications: [],
       summarizeScores: false,
     },
     new NoopProgressReporter(),
@@ -761,6 +779,7 @@ test("tags are persisted with a failing scorer", async () => {
           throw new Error("test error");
         },
       ],
+      classifications: [],
       summarizeScores: false,
     },
     new NoopProgressReporter(),
@@ -794,6 +813,7 @@ test("tags remain empty when not set", async () => {
         return input;
       },
       scores: [() => ({ name: "simple_scorer", score: 0.8 })],
+      classifications: [],
       summarizeScores: false,
     },
     new NoopProgressReporter(),
@@ -830,6 +850,7 @@ test("scorer spans have purpose='scorer' attribute", async () => {
           score: args.output === args.expected ? 1 : 0,
         }),
       ],
+      classifications: [],
     },
     new NoopProgressReporter(),
     [],
@@ -1388,6 +1409,7 @@ test("Eval with enableCache: false does not use span cache", async () => {
       data: [{ input: 1, expected: 2 }],
       task: (input) => input * 2,
       scores: [],
+      classifications: [],
       state,
     },
     { noSendLogs: true, enableCache: false },
@@ -1413,6 +1435,7 @@ test("Eval with enableCache: true (default) uses span cache", async () => {
       data: [{ input: 1, expected: 2 }],
       task: (input) => input * 2,
       scores: [],
+      classifications: [],
       state,
     },
     { noSendLogs: true }, // enableCache defaults to true
