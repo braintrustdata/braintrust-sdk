@@ -8,6 +8,8 @@ help:
 	@echo "  make clean                 - Clean build artifacts"
 	@echo "  make install-optional-deps - Install optional dependencies"
 	@echo "  make test               - Run all tests (core + wrappers + ai-sdk)"
+	@echo "  make test-checks        - Run hermetic tests only"
+	@echo "  make test-external      - Run provider-backed tests only"
 	@echo "  make test-core          - Run core tests only"
 	@echo "  make test-openai        - Run OpenAI wrapper tests"
 	@echo "  make test-anthropic     - Run Anthropic wrapper tests"
@@ -20,6 +22,7 @@ help:
 	@echo "  make test-api-compat    - Run API compatibility tests"
 	@echo "  make bench              - Run queue performance benchmarks"
 	@echo "  make test-latest        - Run core + latest versions of wrappers"
+	@echo "  make verify-checks      - Build, docs, and hermetic tests"
 	@echo ""
 	@echo "Smoke tests (mimics CI workflow):"
 	@echo "  make test-smoke         - Run all smoke tests (auto-prepares)"
@@ -28,7 +31,7 @@ help:
 	@echo ""
 	@echo "See smoke/README.md for details on smoke test infrastructure"
 
-.PHONY: help bench build clean test test-core test-openai test-anthropic test-google-genai test-ai-sdk test-ai-sdk-v5 test-ai-sdk-v6 test-claude-agent-sdk test-vitest test-latest install-optional-deps publish-beta-local test-smoke
+.PHONY: help bench build clean test test-checks test-external test-core test-openai test-anthropic test-google-genai test-ai-sdk test-ai-sdk-v5 test-ai-sdk-v6 test-claude-agent-sdk test-vitest test-latest install-optional-deps publish-beta-local test-smoke
 
 # -------------------------------------------------------------------------------------------------	#
 # Anthropic testing
@@ -104,7 +107,7 @@ test-openai-%:
 # common things
 # -------------------------------------------------------------------------------------------------
 
-.PHONY: test-pnpm test test-latest prune installing-optional-deps docs build verify-ci bench test-api-compat
+.PHONY: test-pnpm test test-checks test-external test-latest prune installing-optional-deps docs build verify-checks verify-ci bench test-api-compat
 
 install-optional-deps:
 	npm_config_save=false npm_config_lockfile=false pnpm add \
@@ -121,8 +124,14 @@ test-core:
 test-api-compat:
 	pnpm test:api-compat
 
+# Test only hermetic suites.
+test-checks: test-core test-vitest test-claude-agent-sdk
+
+# Test only provider-backed suites.
+test-external: test-openai test-anthropic test-google-genai test-ai-sdk
+
 # Test everything
-test: test-core test-openai test-anthropic test-google-genai test-ai-sdk test-vitest test-claude-agent-sdk
+test: test-checks test-external
 
 # Test the core and the latest versions of wrappers.
 test-latest: test-core test-anthropic-latest test-openai-latest test-google-genai test-ai-sdk test-vitest test-claude-agent-sdk
@@ -146,7 +155,9 @@ bench:
 
 # note: we don't use the docs in ci, but this makes sure they keep building
 
-verify-ci: build docs test
+verify-checks: build docs test-checks
+
+verify-ci: verify-checks test-external
 
 publish-sdk-js:
 	./scripts/validate-release.sh
