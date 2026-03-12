@@ -125,10 +125,10 @@ test-api-compat:
 	pnpm test:api-compat
 
 # Test only hermetic suites.
-test-checks: test-core test-vitest test-claude-agent-sdk
+test-checks: test-core test-vitest
 
 # Test only provider-backed suites.
-test-external: test-openai test-anthropic test-google-genai test-ai-sdk
+test-external: test-openai test-anthropic test-google-genai test-ai-sdk test-claude-agent-sdk
 
 # Test everything
 test: test-checks test-external
