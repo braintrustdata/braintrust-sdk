@@ -1,4 +1,4 @@
-// Auto-generated file (internal git SHA 7cc4507a2a809d3d0bcaea7cb53cb89c1bde1a91) -- do not modify
+// Auto-generated file (internal git SHA 6581dd50b5eef0bd04f223bd7da07155ece9e3e1) -- do not modify
 
 import { z } from "zod/v3";
 
@@ -175,7 +175,7 @@ export const AsyncScoringControl = z.union([
             z.object({ type: z.literal("trace") }),
           ]),
           idempotency_key: z.string().optional(),
-        }),
+        })
       )
       .min(1),
   }),
@@ -270,7 +270,7 @@ export const BatchedFacetData = z.object({
       model: z.string().optional(),
       embedding_model: z.string().optional(),
       no_match_pattern: z.string().optional(),
-    }),
+    })
   ),
   topic_maps: z
     .record(
@@ -279,8 +279,8 @@ export const BatchedFacetData = z.object({
           function_name: z.string(),
           topic_map_id: z.string().optional(),
           topic_map_data: TopicMapData,
-        }),
-      ),
+        })
+      )
     )
     .optional(),
 });
@@ -622,10 +622,10 @@ export const DatasetEvent = z.object({
                   function_type: FunctionTypeEnum.optional().default("scorer"),
                 }),
                 z.null(),
-              ]),
+              ])
             ).optional(),
-          }),
-        ),
+          })
+        )
       ),
       z.null(),
     ])
@@ -809,10 +809,10 @@ export const ExperimentEvent = z.object({
                   function_type: FunctionTypeEnum.optional().default("scorer"),
                 }),
                 z.null(),
-              ]),
+              ])
             ).optional(),
-          }),
-        ),
+          })
+        )
       ),
       z.null(),
     ])
@@ -985,7 +985,7 @@ export const PromptDataNullish = z.union([
                 .union([z.array(z.string()), z.null()])
                 .optional(),
             }),
-          ]),
+          ])
         ),
         z.null(),
       ]),
@@ -1226,7 +1226,7 @@ export const PromptData = z
             is_disabled: z.boolean().optional(),
             enabled_tools: z.union([z.array(z.string()), z.null()]).optional(),
           }),
-        ]),
+        ])
       ),
       z.null(),
     ]),
@@ -1265,6 +1265,7 @@ export const FunctionId = z.union([
       version: z.string(),
     }),
     code: z.string(),
+    function_type: FunctionTypeEnum.and(z.unknown()).optional(),
     name: z.union([z.string(), z.null()]).optional(),
   }),
   z.object({
@@ -1316,7 +1317,7 @@ export const GitMetadataSettings = z.object({
         "commit_message",
         "commit_time",
         "git_diff",
-      ]),
+      ])
     )
     .optional(),
 });
@@ -1387,7 +1388,7 @@ export const InvokeFunction = FunctionId.and(
       mcp_auth: z.record(z.object({ oauth_token: z.string() }).partial()),
       overrides: z.union([z.object({}).partial().passthrough(), z.null()]),
     })
-    .partial(),
+    .partial()
 );
 export type InvokeFunctionType = z.infer<typeof InvokeFunction>;
 export const MCPServer = z.object({
@@ -1472,7 +1473,7 @@ export const ProjectSettings = z.union([
             layout: z
               .union([z.literal("full"), z.literal("two_column"), z.null()])
               .optional(),
-          }),
+          })
         ),
         z.null(),
       ]),
@@ -1482,7 +1483,7 @@ export const ProjectSettings = z.union([
             url: z.string(),
             name: z.union([z.string(), z.null()]).optional(),
             description: z.union([z.string(), z.null()]).optional(),
-          }),
+          })
         ),
         z.null(),
       ]),
@@ -1534,6 +1535,13 @@ export const TopicAutomationConfig = z.object({
   scope: z.union([SpanScope, TraceScope, GroupScope, z.null()]).optional(),
   data_scope: TopicAutomationDataScope.optional(),
   btql_filter: z.union([z.string(), z.null()]).optional(),
+  backfill_time_range: z
+    .union([
+      z.string(),
+      z.object({ from: z.string(), to: z.string() }),
+      z.null(),
+    ])
+    .optional(),
 });
 export type TopicAutomationConfigType = z.infer<typeof TopicAutomationConfig>;
 export const ProjectAutomation = z.object({
@@ -1670,10 +1678,10 @@ export const ProjectLogsEvent = z.object({
                   function_type: FunctionTypeEnum.optional().default("scorer"),
                 }),
                 z.null(),
-              ]),
+              ])
             ).optional(),
-          }),
-        ),
+          })
+        )
       ),
       z.null(),
     ])
@@ -1798,7 +1806,7 @@ export const Role = z.object({
         z.object({
           permission: Permission,
           restrict_object_type: AclObjectType.optional(),
-        }),
+        })
       ),
       z.null(),
     ])
@@ -1839,7 +1847,7 @@ export const RunEval = z.object({
   base_experiment_name: z.union([z.string(), z.null()]).optional(),
   base_experiment_id: z.union([z.string(), z.null()]).optional(),
   git_metadata_settings: GitMetadataSettings.and(
-    z.union([z.object({}).partial(), z.null()]),
+    z.union([z.object({}).partial(), z.null()])
   ).optional(),
   repo_info: RepoInfo.and(z.unknown()).optional(),
   strict: z.union([z.boolean(), z.null()]).optional(),
@@ -1968,7 +1976,7 @@ export const ViewOptions = z.union([
           z.object({
             type: z.enum(["none", "score", "metric", "metadata"]),
             value: z.string(),
-          }),
+          })
         ),
         z.null(),
       ]),
