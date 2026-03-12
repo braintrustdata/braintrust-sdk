@@ -429,13 +429,20 @@ export type EvaluatorFile = {
 
 function initExperiment<IsOpen extends boolean = false>(
   state: BraintrustState | undefined,
-  options: Readonly<FullInitOptions<IsOpen>> = {},
+  options: Readonly<
+    FullInitOptions<IsOpen> & {
+      parameters?: ParametersRef | RemoteEvalParameters<boolean, boolean>;
+    }
+  > = {},
 ) {
-  return _initExperiment({
+  const initOptions: FullInitOptions<IsOpen> & {
+    parameters?: ParametersRef | RemoteEvalParameters<boolean, boolean>;
+  } = {
     state,
     ...options,
     setCurrent: false,
-  });
+  };
+  return _initExperiment(initOptions);
 }
 
 async function getExperimentParametersRef(
