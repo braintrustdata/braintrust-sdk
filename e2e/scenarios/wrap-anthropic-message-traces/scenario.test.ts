@@ -14,6 +14,81 @@ import {
 const scenarioDir = resolveScenarioDir(import.meta.url);
 const TIMEOUT_MS = 90_000;
 
+function normalizeAnthropicPayloads(payloadRows: unknown[]): unknown[] {
+  const attachmentRowKeys = new Set<string>();
+
+  for (const payload of payloadRows) {
+    if (!payload || typeof payload !== "object") {
+      continue;
+    }
+
+    const row = payload as {
+      id?: string;
+      input?: Array<{
+        content?:
+          | string
+          | Array<{
+              source?: {
+                data?: {
+                  type?: string;
+                };
+              };
+            }>;
+      }>;
+      span_id?: string;
+    };
+
+    const hasAttachmentInput = row.input?.some(
+      (message) =>
+        Array.isArray(message.content) &&
+        message.content.some(
+          (block) => block.source?.data?.type === "braintrust_attachment",
+        ),
+    );
+
+    if (!hasAttachmentInput) {
+      continue;
+    }
+
+    if (typeof row.id === "string") {
+      attachmentRowKeys.add(row.id);
+    }
+    if (typeof row.span_id === "string") {
+      attachmentRowKeys.add(row.span_id);
+    }
+  }
+
+  return payloadRows.map((payload) => {
+    if (!payload || typeof payload !== "object") {
+      return payload;
+    }
+
+    const row = structuredClone(payload) as {
+      id?: string;
+      metadata?: { operation?: string };
+      output?: {
+        content?: Array<{ text?: string; type?: string }>;
+      };
+      span_id?: string;
+    };
+    const isAttachmentRow =
+      row.metadata?.operation === "attachment" ||
+      (typeof row.id === "string" && attachmentRowKeys.has(row.id)) ||
+      (typeof row.span_id === "string" && attachmentRowKeys.has(row.span_id));
+
+    if (isAttachmentRow) {
+      const textBlock = row.output?.content?.find(
+        (block) => block.type === "text" && typeof block.text === "string",
+      );
+      if (textBlock) {
+        textBlock.text = "<anthropic-attachment-description>";
+      }
+    }
+
+    return row;
+  });
+}
+
 beforeAll(async () => {
   await installScenarioDependencies({ scenarioDir });
 });
@@ -202,7 +277,9 @@ test("wrap-anthropic-message-traces captures create, stream, beta, attachment, a
 
     expect(
       normalizeForSnapshot(
-        payloadRowsForRootSpan(payloads(), root?.span.id) as Json,
+        normalizeAnthropicPayloads(
+          payloadRowsForRootSpan(payloads(), root?.span.id),
+        ) as Json,
       ),
     ).toMatchSnapshot("log-payloads");
   });

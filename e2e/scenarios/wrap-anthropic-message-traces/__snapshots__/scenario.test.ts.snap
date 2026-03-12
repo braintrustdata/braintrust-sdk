@@ -302,7 +302,7 @@ exports[`wrap-anthropic-message-traces captures create, stream, beta, attachment
     "output": {
       "content": [
         {
-          "text": "A majestic sailing ship navigates through a tumultuous storm at sea, surrounded by towering waves and dramatic clouds.",
+          "text": "<anthropic-attachment-description>",
           "type": "text",
         },
       ],

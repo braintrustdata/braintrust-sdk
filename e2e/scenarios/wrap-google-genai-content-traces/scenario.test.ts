@@ -14,6 +14,29 @@ import {
 const scenarioDir = resolveScenarioDir(import.meta.url);
 const TIMEOUT_MS = 90_000;
 
+function normalizeGooglePayloads(payloadRows: unknown[]): unknown[] {
+  return payloadRows.map((payload) => {
+    if (!payload || typeof payload !== "object") {
+      return payload;
+    }
+
+    const row = structuredClone(payload) as {
+      output?: {
+        usageMetadata?: {
+          promptTokensDetails?: Array<{ modality?: string }>;
+        };
+      };
+    };
+    const promptTokensDetails = row.output?.usageMetadata?.promptTokensDetails;
+    if (promptTokensDetails) {
+      promptTokensDetails.sort((left, right) =>
+        String(left.modality ?? "").localeCompare(String(right.modality ?? "")),
+      );
+    }
+    return row;
+  });
+}
+
 beforeAll(async () => {
   await installScenarioDependencies({ scenarioDir });
 });
@@ -185,7 +208,9 @@ test("wrap-google-genai-content-traces captures generate, attachment, stream, ea
 
     expect(
       normalizeForSnapshot(
-        payloadRowsForRootSpan(payloads(), root?.span.id) as Json,
+        normalizeGooglePayloads(
+          payloadRowsForRootSpan(payloads(), root?.span.id),
+        ) as Json,
       ),
     ).toMatchSnapshot("log-payloads");
   });

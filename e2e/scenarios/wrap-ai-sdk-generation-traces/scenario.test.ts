@@ -57,6 +57,64 @@ function findModelChildren(
   });
 }
 
+function latestEvent<T>(events: T[]): T | undefined {
+  return events.at(-1);
+}
+
+function normalizeAISDKAgentGeneratePayload(value: unknown): unknown {
+  if (Array.isArray(value)) {
+    return value.map((entry) => normalizeAISDKAgentGeneratePayload(entry));
+  }
+
+  if (!value || typeof value !== "object") {
+    return value;
+  }
+
+  const record = value as Record<string, unknown>;
+  const normalized: Record<string, unknown> = {};
+
+  for (const [key, entry] of Object.entries(record)) {
+    if (key === "text" && typeof entry === "string") {
+      normalized[key] = "<agent-generate-text>";
+      continue;
+    }
+
+    if (
+      (key === "completionTokens" ||
+        key === "completion_tokens" ||
+        key === "outputTokens" ||
+        key === "tokens" ||
+        key === "totalTokens") &&
+      typeof entry === "number"
+    ) {
+      normalized[key] = "<agent-generate-count>";
+      continue;
+    }
+
+    normalized[key] = normalizeAISDKAgentGeneratePayload(entry);
+  }
+
+  return normalized;
+}
+
+function normalizeAISDKPayloads(payloadRows: unknown[]): unknown[] {
+  return payloadRows.map((payload) => {
+    if (!payload || typeof payload !== "object") {
+      return payload;
+    }
+
+    const row = structuredClone(payload) as {
+      metadata?: { operation?: string };
+    } & Record<string, unknown>;
+
+    if (row.metadata?.operation === "agent-generate") {
+      return normalizeAISDKAgentGeneratePayload(row);
+    }
+
+    return row;
+  });
+}
+
 test.each(WRAP_AI_SDK_SCENARIOS)(
   "wrap-ai-sdk-generation-traces captures wrapper and child model spans (ai $version)",
   async ({
@@ -240,6 +298,8 @@ test.each(WRAP_AI_SDK_SCENARIOS)(
       const agentStreamChildren = agentStreamParent
         ? findModelChildren(capturedEvents, agentStreamParent.span.id)
         : [];
+      const latestAgentGenerateChild = latestEvent(agentGenerateChildren);
+      const latestAgentStreamChild = latestEvent(agentStreamChildren);
 
       expect(generateChild?.metrics?.prompt_tokens).toEqual(expect.any(Number));
       expect(generateChild?.metrics?.completion_tokens).toEqual(
@@ -309,6 +369,8 @@ test.each(WRAP_AI_SDK_SCENARIOS)(
           expect.any(Number),
         );
         expect(agentStreamChildren.length).toBeGreaterThanOrEqual(1);
+        expect(latestAgentGenerateChild?.output).toBeDefined();
+        expect(latestAgentStreamChild?.output).toBeDefined();
       } else {
         expect(agentGenerateOperation).toBeUndefined();
         expect(agentStreamOperation).toBeUndefined();
@@ -326,7 +388,6 @@ test.each(WRAP_AI_SDK_SCENARIOS)(
             streamChild,
             toolOperation,
             toolParent,
-            ...toolModelSpans,
             ...toolSpans,
             generateObjectOperation,
             generateObjectParent,
@@ -336,10 +397,10 @@ test.each(WRAP_AI_SDK_SCENARIOS)(
             streamObjectChild,
             agentGenerateOperation,
             agentGenerateParent,
-            ...agentGenerateChildren,
+            latestAgentGenerateChild,
             agentStreamOperation,
             agentStreamParent,
-            ...agentStreamChildren,
+            latestAgentStreamChild,
           ]
             .filter((value) => value !== undefined)
             .map((event) =>
@@ -357,7 +418,9 @@ test.each(WRAP_AI_SDK_SCENARIOS)(
 
       expect(
         normalizeForSnapshot(
-          payloadRowsForRootSpan(payloads(), root?.span.id) as Json,
+          normalizeAISDKPayloads(
+            payloadRowsForRootSpan(payloads(), root?.span.id),
+          ) as Json,
         ),
       ).toMatchSnapshot("log-payloads");
     });
