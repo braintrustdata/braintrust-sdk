@@ -3351,10 +3351,16 @@ export interface DatasetRef {
   version?: string;
 }
 
+export interface ParametersRef {
+  id: string;
+  version?: string;
+}
+
 export type InitOptions<IsOpen extends boolean> = FullLoginOptions & {
   experiment?: string;
   description?: string;
   dataset?: AnyDataset | DatasetRef;
+  parameters?: ParametersRef | RemoteEvalParameters<boolean, boolean>;
   update?: boolean;
   baseExperiment?: string;
   isPublic?: boolean;
@@ -3438,6 +3444,7 @@ export function init<IsOpen extends boolean = false>(
     experiment,
     description,
     dataset,
+    parameters,
     baseExperiment,
     isPublic,
     open,
@@ -3582,6 +3589,18 @@ export function init<IsOpen extends boolean = false>(
           // Full Dataset object
           args["dataset_id"] = await (dataset as AnyDataset).id;
           args["dataset_version"] = await (dataset as AnyDataset).version();
+        }
+      }
+
+      if (parameters !== undefined) {
+        if (RemoteEvalParameters.isParameters(parameters)) {
+          args["parameters_id"] = parameters.id;
+          args["parameters_version"] = parameters.version;
+        } else {
+          args["parameters_id"] = parameters.id;
+          if (parameters.version !== undefined) {
+            args["parameters_version"] = parameters.version;
+          }
         }
       }
 
@@ -5579,9 +5598,9 @@ export type WithTransactionId<R> = R & {
 export const DEFAULT_FETCH_BATCH_SIZE = 1000;
 export const MAX_BTQL_ITERATIONS = 10000;
 
-export class ObjectFetcher<RecordType> implements AsyncIterable<
-  WithTransactionId<RecordType>
-> {
+export class ObjectFetcher<RecordType>
+  implements AsyncIterable<WithTransactionId<RecordType>>
+{
   private _fetchedData: WithTransactionId<RecordType>[] | undefined = undefined;
 
   constructor(

@@ -705,6 +705,8 @@ export const Experiment = z.object({
   deleted_at: z.union([z.string(), z.null()]).optional(),
   dataset_id: z.union([z.string(), z.null()]).optional(),
   dataset_version: z.union([z.string(), z.null()]).optional(),
+  parameters_id: z.union([z.string(), z.null()]).optional(),
+  parameters_version: z.union([z.string(), z.null()]).optional(),
   public: z.boolean(),
   user_id: z.union([z.string(), z.null()]).optional(),
   metadata: z

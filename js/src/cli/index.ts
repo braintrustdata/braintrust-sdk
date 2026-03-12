@@ -17,6 +17,8 @@ import {
   Experiment,
   BaseMetadata,
   Dataset,
+  type ParametersRef,
+  RemoteEvalParameters,
 } from "../logger";
 import type { ProgressReporter } from "../reporters/types";
 import {
@@ -97,6 +99,7 @@ async function initExperiment(
   },
 ) {
   const { data, baseExperiment: defaultBaseExperiment } = evaluatorData;
+  const parameters = await getExperimentParametersRef(evaluator.parameters);
   // NOTE: This code is duplicated with initExperiment in js/src/framework.ts.
   // Make sure to update that if you change this.
   const logger = _initExperiment({
@@ -115,6 +118,7 @@ async function initExperiment(
     gitMetadataSettings: evaluator.gitMetadataSettings,
     repoInfo: evaluator.repoInfo,
     dataset: Dataset.isDataset(data) ? data : undefined,
+    parameters,
     setCurrent: false,
   });
   const info = await logger.summarize({ summarizeScores: false });
@@ -128,6 +132,34 @@ async function initExperiment(
       ` Experiment ${chalk.bold(info.experimentName)} is running at ${linkText}`,
   );
   return logger;
+}
+
+async function getExperimentParametersRef(
+  parameters:
+    | Record<string, unknown>
+    | RemoteEvalParameters<boolean, boolean>
+    | Promise<RemoteEvalParameters<boolean, boolean>>
+    | undefined,
+): Promise<ParametersRef | undefined> {
+  if (!parameters) {
+    return undefined;
+  }
+
+  const resolvedParameters =
+    parameters instanceof Promise ? await parameters : parameters;
+
+  if (!RemoteEvalParameters.isParameters(resolvedParameters)) {
+    return undefined;
+  }
+
+  if (resolvedParameters.id === undefined) {
+    return undefined;
+  }
+
+  return {
+    id: resolvedParameters.id,
+    version: resolvedParameters.version,
+  };
 }
 
 function resolveReporter(
