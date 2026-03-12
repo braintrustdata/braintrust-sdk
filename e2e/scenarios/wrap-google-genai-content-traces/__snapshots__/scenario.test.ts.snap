@@ -1,6 +1,6 @@
 // Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
 
-exports[`wrap-google-genai-content-traces captures generate, stream, and tool spans > log-payloads 1`] = `
+exports[`wrap-google-genai-content-traces captures generate, attachment, stream, early-return, and tool spans > log-payloads 1`] = `
 [
   {
     "_is_merge": false,
@@ -237,7 +237,7 @@ exports[`wrap-google-genai-content-traces captures generate, stream, and tool sp
     "id": "<span:9>",
     "log_id": "g",
     "metadata": {
-      "operation": "stream",
+      "operation": "attachment",
       "testRunId": "<run:1>",
     },
     "metrics": {
@@ -247,7 +247,7 @@ exports[`wrap-google-genai-content-traces captures generate, stream, and tool sp
     "root_span_id": "<span:2>",
     "span_attributes": {
       "exec_counter": 3,
-      "name": "google-stream-operation",
+      "name": "google-attachment-operation",
     },
     "span_id": "<span:10>",
     "span_parents": [
@@ -271,12 +271,220 @@ exports[`wrap-google-genai-content-traces captures generate, stream, and tool sp
   {
     "_is_merge": false,
     "context": {
+      "caller_filename": "<node-internal>",
+      "caller_functionname": "<node-internal>",
+      "caller_lineno": 0,
+    },
+    "created": "<timestamp>",
+    "id": "<span:11>",
+    "input": {
+      "config": {
+        "maxOutputTokens": 24,
+        "temperature": 0,
+      },
+      "contents": [
+        {
+          "parts": [
+            {
+              "image_url": {
+                "url": {
+                  "content_type": "image/png",
+                  "filename": "file.png",
+                  "key": "<uuid:13>",
+                  "type": "braintrust_attachment",
+                },
+              },
+            },
+            {
+              "text": "Describe the attached image in one short sentence.",
+            },
+          ],
+          "role": "user",
+        },
+      ],
+      "model": "gemini-2.0-flash-001",
+    },
+    "log_id": "g",
+    "metadata": {
+      "maxOutputTokens": 24,
+      "model": "gemini-2.0-flash-001",
+      "temperature": 0,
+    },
+    "metrics": {
+      "start": 0,
+    },
+    "project_id": "<uuid:3>",
+    "root_span_id": "<span:2>",
+    "span_attributes": {
+      "exec_counter": 4,
+      "name": "generate_content",
+      "type": "llm",
+    },
+    "span_id": "<span:12>",
+    "span_parents": [
+      "<span:10>",
+    ],
+  },
+  {
+    "_is_merge": true,
+    "id": "<span:11>",
+    "log_id": "g",
+    "metrics": {
+      "completion_tokens": 16,
+      "duration": 0,
+      "prompt_tokens": 1299,
+      "start": 0,
+      "tokens": 1315,
+    },
+    "project_id": "<uuid:3>",
+    "root_span_id": "<span:2>",
+    "span_id": "<span:12>",
+    "span_parents": [
+      "<span:10>",
+    ],
+  },
+  {
+    "_is_merge": true,
+    "id": "<span:11>",
+    "log_id": "g",
+    "output": {
+      "candidates": [
+        {
+          "avgLogprobs": 0,
+          "content": {
+            "parts": [
+              {
+                "text": "A tall ship braves a stormy sea with lightning flashing in the background.
+",
+              },
+            ],
+            "role": "model",
+          },
+          "finishReason": "STOP",
+        },
+      ],
+      "modelVersion": "gemini-2.0-flash-001",
+      "responseId": "<responseId:14>",
+      "sdkHttpResponse": {
+        "headers": {
+          "alt-svc": "h3=":443"; ma=2592000,h3-29=":443"; ma=2592000",
+          "content-encoding": "gzip",
+          "content-type": "application/json; charset=UTF-8",
+          "date": "<timestamp>",
+          "server": "scaffolding on HTTPServer2",
+          "server-timing": "<server-timing>",
+          "transfer-encoding": "chunked",
+          "vary": "Origin, X-Origin, Referer",
+          "x-content-type-options": "nosniff",
+          "x-frame-options": "SAMEORIGIN",
+          "x-xss-protection": "0",
+        },
+      },
+      "usageMetadata": {
+        "candidatesTokenCount": 16,
+        "candidatesTokensDetails": [
+          {
+            "modality": "TEXT",
+            "tokenCount": 16,
+          },
+        ],
+        "promptTokenCount": 1299,
+        "promptTokensDetails": [
+          {
+            "modality": "IMAGE",
+            "tokenCount": 1290,
+          },
+          {
+            "modality": "TEXT",
+            "tokenCount": 9,
+          },
+        ],
+        "totalTokenCount": 1315,
+      },
+    },
+    "project_id": "<uuid:3>",
+    "root_span_id": "<span:2>",
+    "span_id": "<span:12>",
+    "span_parents": [
+      "<span:10>",
+    ],
+  },
+  {
+    "_is_merge": true,
+    "id": "<span:11>",
+    "log_id": "g",
+    "metrics": {
+      "end": 0,
+    },
+    "project_id": "<uuid:3>",
+    "root_span_id": "<span:2>",
+    "span_id": "<span:12>",
+    "span_parents": [
+      "<span:10>",
+    ],
+  },
+  {
+    "_is_merge": true,
+    "id": "<span:11>",
+    "log_id": "g",
+    "project_id": "<uuid:3>",
+    "root_span_id": "<span:2>",
+    "span_id": "<span:12>",
+    "span_parents": [
+      "<span:10>",
+    ],
+  },
+  {
+    "_is_merge": false,
+    "context": {
+      "caller_filename": "<repo>/e2e/scenarios/wrap-google-genai-content-traces/scenario.ts",
+      "caller_functionname": "logger.traced.name",
+      "caller_lineno": 0,
+    },
+    "created": "<timestamp>",
+    "id": "<span:15>",
+    "log_id": "g",
+    "metadata": {
+      "operation": "stream",
+      "testRunId": "<run:1>",
+    },
+    "metrics": {
+      "start": 0,
+    },
+    "project_id": "<uuid:3>",
+    "root_span_id": "<span:2>",
+    "span_attributes": {
+      "exec_counter": 5,
+      "name": "google-stream-operation",
+    },
+    "span_id": "<span:16>",
+    "span_parents": [
+      "<span:2>",
+    ],
+  },
+  {
+    "_is_merge": true,
+    "id": "<span:15>",
+    "log_id": "g",
+    "metrics": {
+      "end": 0,
+    },
+    "project_id": "<uuid:3>",
+    "root_span_id": "<span:2>",
+    "span_id": "<span:16>",
+    "span_parents": [
+      "<span:2>",
+    ],
+  },
+  {
+    "_is_merge": false,
+    "context": {
       "caller_filename": "<repo>/e2e/helpers/scenario-runtime.ts",
       "caller_functionname": "collectAsync",
       "caller_lineno": 0,
     },
     "created": "<timestamp>",
-    "id": "<span:11>",
+    "id": "<span:17>",
     "input": {
       "config": {
         "maxOutputTokens": 32,
@@ -299,18 +507,18 @@ exports[`wrap-google-genai-content-traces captures generate, stream, and tool sp
     "project_id": "<uuid:3>",
     "root_span_id": "<span:2>",
     "span_attributes": {
-      "exec_counter": 4,
+      "exec_counter": 6,
       "name": "generate_content_stream",
       "type": "llm",
     },
-    "span_id": "<span:12>",
+    "span_id": "<span:18>",
     "span_parents": [
-      "<span:10>",
+      "<span:16>",
     ],
   },
   {
     "_is_merge": true,
-    "id": "<span:11>",
+    "id": "<span:17>",
     "log_id": "g",
     "metrics": {
       "completion_tokens": 7,
@@ -322,14 +530,14 @@ exports[`wrap-google-genai-content-traces captures generate, stream, and tool sp
     },
     "project_id": "<uuid:3>",
     "root_span_id": "<span:2>",
-    "span_id": "<span:12>",
+    "span_id": "<span:18>",
     "span_parents": [
-      "<span:10>",
+      "<span:16>",
     ],
   },
   {
     "_is_merge": true,
-    "id": "<span:11>",
+    "id": "<span:17>",
     "log_id": "g",
     "output": {
       "candidates": [
@@ -368,23 +576,23 @@ exports[`wrap-google-genai-content-traces captures generate, stream, and tool sp
     },
     "project_id": "<uuid:3>",
     "root_span_id": "<span:2>",
-    "span_id": "<span:12>",
+    "span_id": "<span:18>",
     "span_parents": [
-      "<span:10>",
+      "<span:16>",
     ],
   },
   {
     "_is_merge": true,
-    "id": "<span:11>",
+    "id": "<span:17>",
     "log_id": "g",
     "metrics": {
       "end": 0,
     },
     "project_id": "<uuid:3>",
     "root_span_id": "<span:2>",
-    "span_id": "<span:12>",
+    "span_id": "<span:18>",
     "span_parents": [
-      "<span:10>",
+      "<span:16>",
     ],
   },
   {
@@ -395,10 +603,10 @@ exports[`wrap-google-genai-content-traces captures generate, stream, and tool sp
       "caller_lineno": 0,
     },
     "created": "<timestamp>",
-    "id": "<span:13>",
+    "id": "<span:19>",
     "log_id": "g",
     "metadata": {
-      "operation": "tool",
+      "operation": "stream-return",
       "testRunId": "<run:1>",
     },
     "metrics": {
@@ -407,24 +615,24 @@ exports[`wrap-google-genai-content-traces captures generate, stream, and tool sp
     "project_id": "<uuid:3>",
     "root_span_id": "<span:2>",
     "span_attributes": {
-      "exec_counter": 5,
-      "name": "google-tool-operation",
+      "exec_counter": 7,
+      "name": "google-stream-return-operation",
     },
-    "span_id": "<span:14>",
+    "span_id": "<span:20>",
     "span_parents": [
       "<span:2>",
     ],
   },
   {
     "_is_merge": true,
-    "id": "<span:13>",
+    "id": "<span:19>",
     "log_id": "g",
     "metrics": {
       "end": 0,
     },
     "project_id": "<uuid:3>",
     "root_span_id": "<span:2>",
-    "span_id": "<span:14>",
+    "span_id": "<span:20>",
     "span_parents": [
       "<span:2>",
     ],
@@ -437,7 +645,157 @@ exports[`wrap-google-genai-content-traces captures generate, stream, and tool sp
       "caller_lineno": 0,
     },
     "created": "<timestamp>",
-    "id": "<span:15>",
+    "id": "<span:21>",
+    "input": {
+      "config": {
+        "maxOutputTokens": 48,
+        "temperature": 0,
+      },
+      "contents": {
+        "text": "Write a short poem about Paris.",
+      },
+      "model": "gemini-2.0-flash-001",
+    },
+    "log_id": "g",
+    "metadata": {
+      "maxOutputTokens": 48,
+      "model": "gemini-2.0-flash-001",
+      "temperature": 0,
+    },
+    "metrics": {
+      "start": 0,
+    },
+    "project_id": "<uuid:3>",
+    "root_span_id": "<span:2>",
+    "span_attributes": {
+      "exec_counter": 8,
+      "name": "generate_content_stream",
+      "type": "llm",
+    },
+    "span_id": "<span:22>",
+    "span_parents": [
+      "<span:20>",
+    ],
+  },
+  {
+    "_is_merge": true,
+    "id": "<span:21>",
+    "log_id": "g",
+    "metrics": {
+      "duration": 0,
+      "prompt_tokens": 8,
+      "start": 0,
+      "time_to_first_token": 0,
+      "tokens": 8,
+    },
+    "project_id": "<uuid:3>",
+    "root_span_id": "<span:2>",
+    "span_id": "<span:22>",
+    "span_parents": [
+      "<span:20>",
+    ],
+  },
+  {
+    "_is_merge": true,
+    "id": "<span:21>",
+    "log_id": "g",
+    "output": {
+      "candidates": [
+        {
+          "content": {
+            "parts": [
+              {
+                "text": "City",
+              },
+            ],
+            "role": "model",
+          },
+        },
+      ],
+      "text": "City",
+      "usageMetadata": {
+        "promptTokenCount": 8,
+        "promptTokensDetails": [
+          {
+            "modality": "TEXT",
+            "tokenCount": 8,
+          },
+        ],
+        "totalTokenCount": 8,
+      },
+    },
+    "project_id": "<uuid:3>",
+    "root_span_id": "<span:2>",
+    "span_id": "<span:22>",
+    "span_parents": [
+      "<span:20>",
+    ],
+  },
+  {
+    "_is_merge": true,
+    "id": "<span:21>",
+    "log_id": "g",
+    "metrics": {
+      "end": 0,
+    },
+    "project_id": "<uuid:3>",
+    "root_span_id": "<span:2>",
+    "span_id": "<span:22>",
+    "span_parents": [
+      "<span:20>",
+    ],
+  },
+  {
+    "_is_merge": false,
+    "context": {
+      "caller_filename": "<repo>/e2e/scenarios/wrap-google-genai-content-traces/scenario.ts",
+      "caller_functionname": "logger.traced.name",
+      "caller_lineno": 0,
+    },
+    "created": "<timestamp>",
+    "id": "<span:23>",
+    "log_id": "g",
+    "metadata": {
+      "operation": "tool",
+      "testRunId": "<run:1>",
+    },
+    "metrics": {
+      "start": 0,
+    },
+    "project_id": "<uuid:3>",
+    "root_span_id": "<span:2>",
+    "span_attributes": {
+      "exec_counter": 9,
+      "name": "google-tool-operation",
+    },
+    "span_id": "<span:24>",
+    "span_parents": [
+      "<span:2>",
+    ],
+  },
+  {
+    "_is_merge": true,
+    "id": "<span:23>",
+    "log_id": "g",
+    "metrics": {
+      "end": 0,
+    },
+    "project_id": "<uuid:3>",
+    "root_span_id": "<span:2>",
+    "span_id": "<span:24>",
+    "span_parents": [
+      "<span:2>",
+    ],
+  },
+  {
+    "_is_merge": false,
+    "context": {
+      "caller_filename": "<node-internal>",
+      "caller_functionname": "<node-internal>",
+      "caller_lineno": 0,
+    },
+    "created": "<timestamp>",
+    "id": "<span:25>",
     "input": {
       "config": {
         "maxOutputTokens": 128,
@@ -498,18 +856,18 @@ exports[`wrap-google-genai-content-traces captures generate, stream, and tool sp
     "project_id": "<uuid:3>",
     "root_span_id": "<span:2>",
     "span_attributes": {
-      "exec_counter": 6,
+      "exec_counter": 10,
       "name": "generate_content",
       "type": "llm",
     },
-    "span_id": "<span:16>",
+    "span_id": "<span:26>",
     "span_parents": [
-      "<span:14>",
+      "<span:24>",
     ],
   },
   {
     "_is_merge": true,
-    "id": "<span:15>",
+    "id": "<span:25>",
     "log_id": "g",
     "metrics": {
       "completion_tokens": 7,
@@ -520,14 +878,14 @@ exports[`wrap-google-genai-content-traces captures generate, stream, and tool sp
     },
     "project_id": "<uuid:3>",
     "root_span_id": "<span:2>",
-    "span_id": "<span:16>",
+    "span_id": "<span:26>",
     "span_parents": [
-      "<span:14>",
+      "<span:24>",
     ],
   },
   {
     "_is_merge": true,
-    "id": "<span:15>",
+    "id": "<span:25>",
     "log_id": "g",
     "output": {
       "candidates": [
@@ -550,7 +908,7 @@ exports[`wrap-google-genai-content-traces captures generate, stream, and tool sp
         },
       ],
       "modelVersion": "gemini-2.0-flash-001",
-      "responseId": "<responseId:17>",
+      "responseId": "<responseId:27>",
       "sdkHttpResponse": {
         "headers": {
           "alt-svc": "h3=":443"; ma=2592000,h3-29=":443"; ma=2592000",
@@ -586,40 +944,40 @@ exports[`wrap-google-genai-content-traces captures generate, stream, and tool sp
     },
     "project_id": "<uuid:3>",
     "root_span_id": "<span:2>",
-    "span_id": "<span:16>",
+    "span_id": "<span:26>",
     "span_parents": [
-      "<span:14>",
+      "<span:24>",
     ],
   },
   {
     "_is_merge": true,
-    "id": "<span:15>",
+    "id": "<span:25>",
     "log_id": "g",
     "metrics": {
       "end": 0,
     },
     "project_id": "<uuid:3>",
     "root_span_id": "<span:2>",
-    "span_id": "<span:16>",
+    "span_id": "<span:26>",
     "span_parents": [
-      "<span:14>",
+      "<span:24>",
     ],
   },
   {
     "_is_merge": true,
-    "id": "<span:15>",
+    "id": "<span:25>",
     "log_id": "g",
     "project_id": "<uuid:3>",
     "root_span_id": "<span:2>",
-    "span_id": "<span:16>",
+    "span_id": "<span:26>",
     "span_parents": [
-      "<span:14>",
+      "<span:24>",
     ],
   },
 ]
 `;
 
-exports[`wrap-google-genai-content-traces captures generate, stream, and tool spans > span-events 1`] = `
+exports[`wrap-google-genai-content-traces captures generate, attachment, stream, early-return, and tool spans > span-events 1`] = `
 [
   {
     "has_input": false,
@@ -673,12 +1031,47 @@ exports[`wrap-google-genai-content-traces captures generate, stream, and tool sp
     "has_input": false,
     "has_output": false,
     "metadata": {
+      "operation": "attachment",
+    },
+    "metric_keys": [],
+    "name": "google-attachment-operation",
+    "root_span_id": "<span:1>",
+    "span_id": "<span:4>",
+    "span_parents": [
+      "<span:1>",
+    ],
+    "type": null,
+  },
+  {
+    "has_input": true,
+    "has_output": true,
+    "metadata": {
+      "model": "gemini-2.0-flash-001",
+    },
+    "metric_keys": [
+      "completion_tokens",
+      "duration",
+      "prompt_tokens",
+      "tokens",
+    ],
+    "name": "generate_content",
+    "root_span_id": "<span:1>",
+    "span_id": "<span:5>",
+    "span_parents": [
+      "<span:4>",
+    ],
+    "type": "llm",
+  },
+  {
+    "has_input": false,
+    "has_output": false,
+    "metadata": {
       "operation": "stream",
     },
     "metric_keys": [],
     "name": "google-stream-operation",
     "root_span_id": "<span:1>",
-    "span_id": "<span:4>",
+    "span_id": "<span:6>",
     "span_parents": [
       "<span:1>",
     ],
@@ -699,9 +1092,44 @@ exports[`wrap-google-genai-content-traces captures generate, stream, and tool sp
     ],
     "name": "generate_content_stream",
     "root_span_id": "<span:1>",
-    "span_id": "<span:5>",
+    "span_id": "<span:7>",
     "span_parents": [
-      "<span:4>",
+      "<span:6>",
+    ],
+    "type": "llm",
+  },
+  {
+    "has_input": false,
+    "has_output": false,
+    "metadata": {
+      "operation": "stream-return",
+    },
+    "metric_keys": [],
+    "name": "google-stream-return-operation",
+    "root_span_id": "<span:1>",
+    "span_id": "<span:8>",
+    "span_parents": [
+      "<span:1>",
+    ],
+    "type": null,
+  },
+  {
+    "has_input": true,
+    "has_output": true,
+    "metadata": {
+      "model": "gemini-2.0-flash-001",
+    },
+    "metric_keys": [
+      "duration",
+      "prompt_tokens",
+      "time_to_first_token",
+      "tokens",
+    ],
+    "name": "generate_content_stream",
+    "root_span_id": "<span:1>",
+    "span_id": "<span:9>",
+    "span_parents": [
+      "<span:8>",
     ],
     "type": "llm",
   },
@@ -714,7 +1142,7 @@ exports[`wrap-google-genai-content-traces captures generate, stream, and tool sp
     "metric_keys": [],
     "name": "google-tool-operation",
     "root_span_id": "<span:1>",
-    "span_id": "<span:6>",
+    "span_id": "<span:10>",
     "span_parents": [
       "<span:1>",
     ],
@@ -734,9 +1162,9 @@ exports[`wrap-google-genai-content-traces captures generate, stream, and tool sp
     ],
     "name": "generate_content",
     "root_span_id": "<span:1>",
-    "span_id": "<span:7>",
+    "span_id": "<span:11>",
     "span_parents": [
-      "<span:6>",
+      "<span:10>",
     ],
     "type": "llm",
   },

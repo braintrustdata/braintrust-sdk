@@ -213,6 +213,67 @@ const mockSDK = {
         return;
       }
 
+      if (typeof params.prompt === "string" && params.prompt.includes("FAIL")) {
+        const toolUseId = "failure-tool-1";
+
+        yield makeAssistantMessage({
+          content: [
+            {
+              id: toolUseId,
+              input: {
+                a: 2,
+                b: 0,
+                operation: "divide",
+              },
+              name: "mcp__calculator__calculator",
+              type: "tool_use",
+            },
+          ],
+          id: "failure-assistant-1",
+        });
+
+        await invokeHooks(
+          options,
+          "PreToolUse",
+          {
+            cwd: "/tmp",
+            hook_event_name: "PreToolUse",
+            session_id: "session-failure",
+            tool_input: {
+              a: 2,
+              b: 0,
+              operation: "divide",
+            },
+            tool_name: "mcp__calculator__calculator",
+            transcript_path: "/tmp/transcript",
+          },
+          toolUseId,
+        );
+
+        await invokeHooks(
+          options,
+          "PostToolUseFailure",
+          {
+            cwd: "/tmp",
+            error: "division by zero",
+            hook_event_name: "PostToolUseFailure",
+            is_interrupt: false,
+            session_id: "session-failure",
+            tool_input: {
+              a: 2,
+              b: 0,
+              operation: "divide",
+            },
+            tool_name: "mcp__calculator__calculator",
+            transcript_path: "/tmp/transcript",
+          },
+          toolUseId,
+        );
+
+        yield makeResultMessage();
+        return;
+      }
+
       const toolUseId = "basic-tool-1";
 
       yield makeAssistantMessage({
@@ -373,6 +434,28 @@ async function main() {
         );
       });
       subAgentOperation.end();
+
+      const failureOperation = startSpan({
+        name: "claude-agent-failure-operation",
+        event: {
+          metadata: {
+            operation: "failure",
+            scenario: "wrap-claude-agent-sdk-traces",
+            testRunId,
+          },
+        },
+      });
+      await withCurrent(failureOperation, async () => {
+        await collectAsync(
+          query({
+            prompt: "FAIL the calculator tool call.",
+            options: {
+              model: "claude-e2e-mock",
+            },
+          }),
+        );
+      });
+      failureOperation.end();
     },
     {
       name: "claude-agent-sdk-wrapper-root",

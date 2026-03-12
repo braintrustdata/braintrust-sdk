@@ -5,11 +5,13 @@ import { runWrapAISDKGenerationTraces } from "./scenario.impl";
 
 runMain(() =>
   runWrapAISDKGenerationTraces({
+    agentClassExport: "ToolLoopAgent",
     ai,
     maxTokensKey: "maxOutputTokens",
     openai,
     sdkVersion: "6.0.1",
     supportsGenerateObject: true,
+    supportsStreamObject: true,
     supportsToolExecution: true,
     toolSchemaKey: "inputSchema",
   }),
