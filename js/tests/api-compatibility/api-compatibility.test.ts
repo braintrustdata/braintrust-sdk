@@ -785,14 +785,180 @@ function normalizeTypeReference(type: string): string {
   return type;
 }
 
+function parseObjectTypeProps(
+  def: string,
+): Map<string, { type: string; optional: boolean }> {
+  const props = new Map<string, { type: string; optional: boolean }>();
+
+  let braceDepth = 0;
+  let startIdx = -1;
+  for (let i = 0; i < def.length; i++) {
+    if (def[i] === "{") {
+      if (braceDepth === 0) startIdx = i + 1;
+      braceDepth++;
+    } else if (def[i] === "}") {
+      braceDepth--;
+      if (braceDepth === 0 && startIdx !== -1) {
+        const body = def.substring(startIdx, i);
+
+        let depth = 0;
+        let current = "";
+        let propName = "";
+        let isOptional = false;
+        let inPropName = true;
+
+        for (let j = 0; j < body.length; j++) {
+          const char = body[j];
+
+          if (char === "<" || char === "{" || char === "(") {
+            depth++;
+            if (!inPropName) current += char;
+          } else if (char === ">" || char === "}" || char === ")") {
+            depth--;
+            if (!inPropName) current += char;
+          } else if (char === "?" && depth === 0 && inPropName) {
+            isOptional = true;
+          } else if (char === ":" && depth === 0 && inPropName) {
+            inPropName = false;
+            propName = current.trim();
+            current = "";
+          } else if (char === ";" && depth === 0) {
+            if (propName) {
+              props.set(propName, {
+                type: current.trim(),
+                optional: isOptional,
+              });
+            }
+            current = "";
+            propName = "";
+            isOptional = false;
+            inPropName = true;
+          } else {
+            if (inPropName) {
+              if (char.trim()) current += char;
+            } else {
+              current += char;
+            }
+          }
+        }
+
+        if (propName && current.trim()) {
+          props.set(propName, {
+            type: current.trim(),
+            optional: isOptional,
+          });
+        }
+
+        break;
+      }
+    }
+  }
+
+  return props;
+}
+
+function areObjectTypeDefinitionsCompatible(
+  oldDef: string,
+  newDef: string,
+): boolean {
+  const oldProps = parseObjectTypeProps(oldDef);
+  const newProps = parseObjectTypeProps(newDef);
+
+  for (const [propName, oldProp] of oldProps) {
+    const newProp = newProps.get(propName);
+
+    if (!newProp) {
+      return false;
+    }
+
+    const normalizeType = (type: string) =>
+      normalizeTypeReference(type.replace(/\s+/g, " ").trim());
+    const oldTypeNorm = normalizeType(oldProp.type);
+    const newTypeNorm = normalizeType(newProp.type);
+
+    if (oldTypeNorm !== newTypeNorm) {
+      if (!isUnionTypeWidening(oldTypeNorm, newTypeNorm)) {
+        return false;
+      }
+    }
+
+    if (oldProp.optional && !newProp.optional) {
+      return false;
+    }
+  }
+
+  for (const [propName, newProp] of newProps) {
+    if (!oldProps.has(propName) && !newProp.optional) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
+function parseTypeAliasDefinitionNode(def: string): ts.TypeNode | null {
+  const sourceFile = ts.createSourceFile(
+    "type-alias.ts",
+    `type __ApiCompatAlias = ${def};`,
+    ts.ScriptTarget.Latest,
+    true,
+    ts.ScriptKind.TS,
+  );
+
+  let declaration: ts.TypeAliasDeclaration | undefined;
+  ts.forEachChild(sourceFile, (node) => {
+    if (ts.isTypeAliasDeclaration(node) && !declaration) {
+      declaration = node;
+    }
+  });
+
+  return declaration?.type ?? null;
+}
+
+function getIntersectionParts(def: string): string[] {
+  const typeNode = parseTypeAliasDefinitionNode(def);
+  if (!typeNode) {
+    return [def.trim()];
+  }
+
+  if (ts.isIntersectionTypeNode(typeNode)) {
+    return typeNode.types.map((type) => type.getText());
+  }
+
+  return [typeNode.getText()];
+}
+
+function getTypeLiteralPart(def: string): string | null {
+  const typeNode = parseTypeAliasDefinitionNode(def);
+  if (!typeNode) {
+    return null;
+  }
+
+  if (ts.isTypeLiteralNode(typeNode)) {
+    return typeNode.getText();
+  }
+
+  if (ts.isIntersectionTypeNode(typeNode)) {
+    const literalPart = typeNode.types.find((type) =>
+      ts.isTypeLiteralNode(type),
+    );
+    return literalPart?.getText() ?? null;
+  }
+
+  return null;
+}
+
 function areTypeAliasSignaturesCompatible(
   oldType: string,
   newType: string,
 ): boolean {
   // Extract type name and definition
   const parseTypeSig = (sig: string) => {
-    // Match: export type Name = Definition OR type Name = Definition (for re-exports)
-    const match = sig.match(/(?:export\s+)?type\s+(\w+)\s*=\s*(.+)$/);
+    // Match: export type Name = Definition or export type Name<T> = Definition
+    // Also handles non-exported aliases for re-exports.
+    const match = sig.match(
+      /(?:export\s+)?type\s+(\w+)(?:<[^>]+>)?\s*=\s*(.+)$/s,
+    );
     if (!match) return null;
 
     return {
@@ -878,120 +1044,63 @@ function areTypeAliasSignaturesCompatible(
   const isObjectType = (def: string) => def.trim().startsWith("{");
 
   if (isObjectType(oldDef) && isObjectType(newDef)) {
-    // Parse object properties
-    const parseObjectProps = (
-      def: string,
-    ): Map<string, { type: string; optional: boolean }> => {
-      const props = new Map<string, { type: string; optional: boolean }>();
+    return areObjectTypeDefinitionsCompatible(oldDef, newDef);
+  }
 
-      // Extract content between { and } (handle nested braces)
-      let braceDepth = 0;
-      let startIdx = -1;
-      for (let i = 0; i < def.length; i++) {
-        if (def[i] === "{") {
-          if (braceDepth === 0) startIdx = i + 1;
-          braceDepth++;
-        } else if (def[i] === "}") {
-          braceDepth--;
-          if (braceDepth === 0 && startIdx !== -1) {
-            const body = def.substring(startIdx, i);
+  const oldTypeLiteralPart = getTypeLiteralPart(oldDef);
+  const newTypeLiteralPart = getTypeLiteralPart(newDef);
 
-            // Parse properties from body
-            let depth = 0;
-            let current = "";
-            let propName = "";
-            let isOptional = false;
-            let inPropName = true;
+  if (oldTypeLiteralPart && newTypeLiteralPart) {
+    return areObjectTypeDefinitionsCompatible(
+      oldTypeLiteralPart,
+      newTypeLiteralPart,
+    );
+  }
 
-            for (let j = 0; j < body.length; j++) {
-              const char = body[j];
+  const oldIntersectionParts = getIntersectionParts(oldDef);
+  const newIntersectionParts = getIntersectionParts(newDef);
 
-              if (char === "<" || char === "{" || char === "(") {
-                depth++;
-                if (!inPropName) current += char;
-              } else if (char === ">" || char === "}" || char === ")") {
-                depth--;
-                if (!inPropName) current += char;
-              } else if (char === "?" && depth === 0 && inPropName) {
-                isOptional = true;
-              } else if (char === ":" && depth === 0 && inPropName) {
-                inPropName = false;
-                propName = current.trim();
-                current = "";
-              } else if (char === ";" && depth === 0) {
-                if (propName) {
-                  props.set(propName, {
-                    type: current.trim(),
-                    optional: isOptional,
-                  });
-                }
-                current = "";
-                propName = "";
-                isOptional = false;
-                inPropName = true;
-              } else {
-                if (inPropName) {
-                  if (char.trim()) current += char;
-                } else {
-                  current += char;
-                }
-              }
-            }
-
-            if (propName && current.trim()) {
-              props.set(propName, {
-                type: current.trim(),
-                optional: isOptional,
-              });
-            }
-
-            break;
-          }
-        }
-      }
-
-      return props;
-    };
-
-    const oldProps = parseObjectProps(oldDef);
-    const newProps = parseObjectProps(newDef);
-
-    // Check all old properties exist in new with same types
-    for (const [propName, oldProp] of oldProps) {
-      const newProp = newProps.get(propName);
-
-      if (!newProp) {
-        // Property removed - breaking change
-        return false;
-      }
-
-      // Normalize types for comparison
-      const normalizeType = (type: string) => type.replace(/\s+/g, " ").trim();
-      const oldTypeNorm = normalizeType(oldProp.type);
-      const newTypeNorm = normalizeType(newProp.type);
-
-      if (oldTypeNorm !== newTypeNorm) {
-        // Check if it's a union type widening (backwards compatible)
-        if (!isUnionTypeWidening(oldTypeNorm, newTypeNorm)) {
-          // Property type changed in an incompatible way - breaking change
-          return false;
-        }
-      }
-
-      // If old prop was required, new can be required or optional (compatible)
-      // If old prop was optional, new must be optional (making required is breaking)
-      if (oldProp.optional && !newProp.optional) {
-        return false;
-      }
+  if (oldIntersectionParts.length > 1 || newIntersectionParts.length > 1) {
+    if (oldIntersectionParts.length !== newIntersectionParts.length) {
+      return false;
     }
 
-    // Check new properties
-    for (const [propName, newProp] of newProps) {
-      if (!oldProps.has(propName)) {
-        // New property must be optional
-        if (!newProp.optional) {
-          return false;
+    const usedNewIndices = new Set<number>();
+
+    for (const oldPart of oldIntersectionParts) {
+      const oldPartNorm = normalizeTypeReference(
+        oldPart.replace(/\s+/g, " ").trim(),
+      );
+
+      let matched = false;
+      for (const [index, newPart] of newIntersectionParts.entries()) {
+        if (usedNewIndices.has(index)) {
+          continue;
         }
+
+        const newPartNorm = normalizeTypeReference(
+          newPart.replace(/\s+/g, " ").trim(),
+        );
+
+        if (oldPartNorm === newPartNorm) {
+          usedNewIndices.add(index);
+          matched = true;
+          break;
+        }
+
+        if (
+          isObjectType(oldPart) &&
+          isObjectType(newPart) &&
+          areObjectTypeDefinitionsCompatible(oldPart, newPart)
+        ) {
+          usedNewIndices.add(index);
+          matched = true;
+          break;
+        }
+      }
+
+      if (!matched) {
+        return false;
       }
     }
 
@@ -1837,6 +1946,12 @@ describe("areTypeAliasSignaturesCompatible", () => {
   test("should allow adding optional field to object type (EvaluatorFile scenario)", () => {
     const oldType = `export type EvaluatorFile = { functions: CodeFunction[]; prompts: CodePrompt[]; evaluators: { [evalName: string]: { evaluator: EvaluatorDef; }; }; reporters: { [reporterName: string]: ReporterDef; }; }`;
     const newType = `export type EvaluatorFile = { functions: CodeFunction[]; prompts: CodePrompt[]; parameters?: CodeParameters[]; evaluators: { [evalName: string]: { evaluator: EvaluatorDef; }; }; reporters: { [reporterName: string]: ReporterDef; }; }`;
+    expect(areTypeAliasSignaturesCompatible(oldType, newType)).toBe(true);
+  });
+
+  test("should allow adding optional properties inside an intersection object member", () => {
+    const oldType = `export type InitOptions<IsOpen extends boolean> = FullLoginOptions & { experiment?: string; description?: string; dataset?: AnyDataset | DatasetRef; update?: boolean; } & InitOpenOption<IsOpen>`;
+    const newType = `export type InitOptions<IsOpen extends boolean> = FullLoginOptions & { experiment?: string; description?: string; dataset?: AnyDataset | DatasetRef; parameters?: ParametersRef | RemoteEvalParameters<boolean, boolean>; update?: boolean; } & InitOpenOption<IsOpen>`;
     expect(areTypeAliasSignaturesCompatible(oldType, newType)).toBe(true);
   });
 });
