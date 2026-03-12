@@ -103,9 +103,7 @@ async function initExperiment(
   const parameters = await getExperimentParametersRef(evaluator.parameters);
   // NOTE: This code is duplicated with initExperiment in js/src/framework.ts.
   // Make sure to update that if you change this.
-  const initOptions: FullInitOptions<false> & {
-    parameters?: ParametersRef | RemoteEvalParameters<boolean, boolean>;
-  } = {
+  const initOptions: FullInitOptions<false> = {
     state: evaluator.state,
     ...(evaluator.projectId
       ? { projectId: evaluator.projectId }

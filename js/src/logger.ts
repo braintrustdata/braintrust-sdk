@@ -3360,6 +3360,7 @@ export type InitOptions<IsOpen extends boolean> = FullLoginOptions & {
   experiment?: string;
   description?: string;
   dataset?: AnyDataset | DatasetRef;
+  parameters?: ParametersRef | RemoteEvalParameters<boolean, boolean>;
   update?: boolean;
   baseExperiment?: string;
   isPublic?: boolean;
@@ -3376,14 +3377,6 @@ export type InitOptions<IsOpen extends boolean> = FullLoginOptions & {
 export type FullInitOptions<IsOpen extends boolean> = {
   project?: string;
 } & InitOptions<IsOpen>;
-
-type InternalInitOptions<IsOpen extends boolean> = InitOptions<IsOpen> & {
-  parameters?: ParametersRef | RemoteEvalParameters<boolean, boolean>;
-};
-
-type InternalFullInitOptions<IsOpen extends boolean> = {
-  project?: string;
-} & InternalInitOptions<IsOpen>;
 
 type InitializedExperiment<IsOpen extends boolean | undefined> =
   IsOpen extends true ? ReadonlyExperiment : Experiment;
@@ -3433,7 +3426,7 @@ export function init<IsOpen extends boolean = false>(
   projectOrOptions: string | Readonly<FullInitOptions<IsOpen>>,
   optionalOptions?: Readonly<InitOptions<IsOpen>>,
 ): InitializedExperiment<IsOpen> {
-  const options = ((): Readonly<InternalFullInitOptions<IsOpen>> => {
+  const options = ((): Readonly<FullInitOptions<IsOpen>> => {
     if (typeof projectOrOptions === "string") {
       return { ...optionalOptions, project: projectOrOptions };
     } else {
@@ -3699,7 +3692,7 @@ export function initExperiment<IsOpen extends boolean = false>(
   projectOrOptions: string | Readonly<InitOptions<IsOpen>>,
   optionalOptions?: Readonly<InitOptions<IsOpen>>,
 ): InitializedExperiment<IsOpen> {
-  const options = ((): Readonly<InternalFullInitOptions<IsOpen>> => {
+  const options = ((): Readonly<FullInitOptions<IsOpen>> => {
     if (typeof projectOrOptions === "string") {
       return { ...optionalOptions, project: projectOrOptions };
     } else {
