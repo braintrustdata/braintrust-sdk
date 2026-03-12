@@ -1,4 +1,3 @@
-import { Expr } from "../btql/ast";
 import { BraintrustState, ObjectFetcher, WithTransactionId } from "./logger";
 import { invoke } from "./functions/invoke";
 
@@ -37,7 +36,7 @@ export class SpanFetcher extends ObjectFetcher<SpanRecord> {
     rootSpanId: string,
     spanTypeFilter?: string[],
   ): Record<string, unknown> {
-    const children: Expr[] = [
+    const children: Record<string, unknown>[] = [
       // Base filter: root_span_id = 'value'
       {
         op: "eq",
