@@ -15,6 +15,16 @@ if ! gh auth status >/dev/null 2>&1; then
 fi
 
 BRANCH="${BRANCH:-$(git rev-parse --abbrev-ref HEAD)}"
+RELEASE_TYPE="${RELEASE_TYPE:-stable}"
+
+case "$RELEASE_TYPE" in
+  stable|prerelease|canary)
+    ;;
+  *)
+    echo "ERROR: RELEASE_TYPE must be one of: stable, prerelease, canary"
+    exit 1
+    ;;
+esac
 
 if [ "$BRANCH" = "HEAD" ]; then
   echo "ERROR: Could not determine the current branch. Set BRANCH=<branch> and retry."
@@ -26,7 +36,7 @@ if ! git ls-remote --exit-code --heads origin "$BRANCH" >/dev/null 2>&1; then
   exit 1
 fi
 
-echo "Dispatching publish-js-sdk workflow for branch '$BRANCH'..."
-gh workflow run publish-js-sdk.yaml --ref "$BRANCH" -f release_type=stable -f branch="$BRANCH"
+echo "Dispatching publish-js-sdk workflow for branch '$BRANCH' with release_type='$RELEASE_TYPE'..."
+gh workflow run publish-js-sdk.yaml --ref "$BRANCH" -f release_type="$RELEASE_TYPE" -f branch="$BRANCH"
 echo "Workflow dispatched:"
 echo "https://github.com/braintrustdata/braintrust-sdk-javascript/actions/workflows/publish-js-sdk.yaml"

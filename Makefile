@@ -62,7 +62,7 @@ js-test-otel-docker:
 # -------------------------------------------------------------------------------------------------
 # Stable release publishing
 # Preferred: trigger publish-js-sdk.yaml from GitHub Actions UI
-# Fallback: make release-js-sdk [BRANCH=<branch>] dispatches the same workflow via gh
+# Fallback: make release-js-sdk [RELEASE_TYPE=stable|prerelease|canary] [BRANCH=<branch>] dispatches the same workflow via gh
 # -------------------------------------------------------------------------------------------------
 .PHONY: release-js-sdk
 
