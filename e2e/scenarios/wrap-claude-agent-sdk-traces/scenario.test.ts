@@ -43,6 +43,10 @@ test(
         capturedEvents,
         "claude-agent-subagent-operation",
       );
+      const failureOperation = findLatestSpan(
+        capturedEvents,
+        "claude-agent-failure-operation",
+      );
 
       expect(root).toBeDefined();
       expect(root?.row.metadata).toMatchObject({
@@ -53,6 +57,7 @@ test(
         basicOperation,
         asyncPromptOperation,
         subAgentOperation,
+        failureOperation,
       ]) {
         expect(operation).toBeDefined();
         expect(operation?.span.parentIds).toEqual([root?.span.id ?? ""]);
@@ -73,10 +78,16 @@ test(
         "Claude Agent",
         subAgentOperation?.span.id,
       );
+      const failureTask = findLatestChildSpan(
+        capturedEvents,
+        "Claude Agent",
+        failureOperation?.span.id,
+      );
 
       expect(basicTask).toBeDefined();
       expect(asyncPromptTask).toBeDefined();
       expect(subAgentTaskRoot).toBeDefined();
+      expect(failureTask).toBeDefined();
 
       const basicLlmSpans = findChildSpans(
         capturedEvents,
@@ -147,6 +158,17 @@ test(
         );
       }
 
+      const failureToolSpan = findAllSpans(
+        capturedEvents,
+        "tool: calculator/calculator",
+      ).find(
+        (event) =>
+          event.span.rootId === failureTask?.span.rootId &&
+          event.span.parentIds.includes(failureTask?.span.id ?? ""),
+      );
+      expect(failureToolSpan).toBeDefined();
+      expect(failureToolSpan?.row.error).toBe("division by zero");
+
       expect(
         normalizeForSnapshot(
           [
@@ -163,6 +185,9 @@ test(
             subAgentTask,
             subAgentLlmSpans[0],
             subAgentToolSpans[0],
+            failureOperation,
+            failureTask,
+            failureToolSpan,
           ].map((event) =>
             summarizeWrapperContract(event!, [
               "provider",

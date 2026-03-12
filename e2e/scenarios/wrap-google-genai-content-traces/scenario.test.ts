@@ -18,7 +18,7 @@ beforeAll(async () => {
   await installScenarioDependencies({ scenarioDir });
 });
 
-test("wrap-google-genai-content-traces captures generate, stream, and tool spans", async () => {
+test("wrap-google-genai-content-traces captures generate, attachment, stream, early-return, and tool spans", async () => {
   await withScenarioHarness(async ({ events, payloads, runScenarioDir }) => {
     await runScenarioDir({ scenarioDir, timeoutMs: TIMEOUT_MS });
 
@@ -32,22 +32,36 @@ test("wrap-google-genai-content-traces captures generate, stream, and tool spans
       capturedEvents,
       "google-stream-operation",
     );
+    const streamReturnOperation = findLatestSpan(
+      capturedEvents,
+      "google-stream-return-operation",
+    );
     const toolOperation = findLatestSpan(
       capturedEvents,
       "google-tool-operation",
+    );
+    const attachmentOperation = findLatestSpan(
+      capturedEvents,
+      "google-attachment-operation",
     );
 
     expect(root).toBeDefined();
     expect(generateOperation).toBeDefined();
     expect(streamOperation).toBeDefined();
+    expect(streamReturnOperation).toBeDefined();
     expect(toolOperation).toBeDefined();
+    expect(attachmentOperation).toBeDefined();
 
     expect(root?.row.metadata).toMatchObject({
       scenario: "wrap-google-genai-content-traces",
     });
     expect(generateOperation?.span.parentIds).toEqual([root?.span.id ?? ""]);
     expect(streamOperation?.span.parentIds).toEqual([root?.span.id ?? ""]);
+    expect(streamReturnOperation?.span.parentIds).toEqual([
+      root?.span.id ?? "",
+    ]);
     expect(toolOperation?.span.parentIds).toEqual([root?.span.id ?? ""]);
+    expect(attachmentOperation?.span.parentIds).toEqual([root?.span.id ?? ""]);
 
     const generateChildren = findChildSpans(
       capturedEvents,
@@ -59,21 +73,41 @@ test("wrap-google-genai-content-traces captures generate, stream, and tool spans
       "generate_content_stream",
       streamOperation?.span.id,
     );
+    const streamReturnChildren = findChildSpans(
+      capturedEvents,
+      "generate_content_stream",
+      streamReturnOperation?.span.id,
+    );
     const toolChildren = findChildSpans(
       capturedEvents,
       "generate_content",
       toolOperation?.span.id,
     );
+    const attachmentChildren = findChildSpans(
+      capturedEvents,
+      "generate_content",
+      attachmentOperation?.span.id,
+    );
 
     expect(generateChildren).toHaveLength(1);
     expect(streamChildren).toHaveLength(1);
+    expect(streamReturnChildren).toHaveLength(1);
     expect(toolChildren).toHaveLength(1);
+    expect(attachmentChildren).toHaveLength(1);
 
     const generateSpan = generateChildren[0];
     const streamSpan = streamChildren[0];
+    const streamReturnSpan = streamReturnChildren[0];
     const toolSpan = toolChildren[0];
+    const attachmentSpan = attachmentChildren[0];
 
-    for (const wrapperSpan of [generateSpan, streamSpan, toolSpan]) {
+    for (const wrapperSpan of [
+      generateSpan,
+      streamSpan,
+      streamReturnSpan,
+      toolSpan,
+      attachmentSpan,
+    ]) {
       expect(wrapperSpan?.row.metadata).toMatchObject({
         model: "gemini-2.0-flash-001",
       });
@@ -84,6 +118,12 @@ test("wrap-google-genai-content-traces captures generate, stream, and tool spans
       prompt_tokens: expect.any(Number),
       completion_tokens: expect.any(Number),
     });
+    expect(streamReturnSpan?.metrics).toMatchObject({
+      time_to_first_token: expect.any(Number),
+      prompt_tokens: expect.any(Number),
+    });
+
+    expect(JSON.stringify(attachmentSpan?.input)).toContain("file.png");
 
     const toolInput = toolSpan?.input as
       | {
@@ -129,8 +169,12 @@ test("wrap-google-genai-content-traces captures generate, stream, and tool spans
           root,
           generateOperation,
           generateSpan,
+          attachmentOperation,
+          attachmentSpan,
           streamOperation,
           streamSpan,
+          streamReturnOperation,
+          streamReturnSpan,
           toolOperation,
           toolSpan,
         ].map((event) =>
