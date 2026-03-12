@@ -255,6 +255,15 @@ export async function startMockBraintrustServer(
   const events: CapturedLogEvent[] = [];
   const mergedRows = new Map<string, CapturedLogRow>();
   const projectsByName = new Map<string, { id: string; name: string }>();
+  const experimentsByProjectAndName = new Map<
+    string,
+    {
+      created: string;
+      id: string;
+      name: string;
+      projectId: string;
+    }
+  >();
   let serverUrl = "";
   let xactCursor = 0;
 
@@ -289,6 +298,31 @@ export async function startMockBraintrustServer(
 
     const created = { id: randomUUID(), name };
     projectsByName.set(name, created);
+    return created;
+  }
+
+  function experimentForProject(
+    project: { id: string; name: string },
+    name: string,
+  ): {
+    created: string;
+    id: string;
+    name: string;
+    projectId: string;
+  } {
+    const key = `${project.id}:${name}`;
+    const existing = experimentsByProjectAndName.get(key);
+    if (existing) {
+      return existing;
+    }
+
+    const created = {
+      created: new Date().toISOString(),
+      id: randomUUID(),
+      name,
+      projectId: project.id,
+    };
+    experimentsByProjectAndName.set(key, created);
     return created;
   }
 
@@ -343,10 +377,55 @@ export async function startMockBraintrustServer(
         }
 
         if (
+          capturedRequest.method === "POST" &&
+          capturedRequest.path === "/api/experiment/register"
+        ) {
+          const projectName =
+            isRecord(capturedRequest.jsonBody) &&
+            typeof capturedRequest.jsonBody.project_name === "string"
+              ? capturedRequest.jsonBody.project_name
+              : "project";
+          const experimentName =
+            isRecord(capturedRequest.jsonBody) &&
+            typeof capturedRequest.jsonBody.experiment_name === "string"
+              ? capturedRequest.jsonBody.experiment_name
+              : "experiment";
+          const project = projectForName(projectName);
+          const experiment = experimentForProject(project, experimentName);
+
+          respondJson(res, 200, {
+            experiment,
+            project,
+          });
+          return;
+        }
+
+        if (
           capturedRequest.method === "GET" &&
           capturedRequest.path === "/version"
         ) {
           respondJson(res, 200, {});
+          return;
+        }
+
+        if (
+          capturedRequest.method === "POST" &&
+          capturedRequest.path === "/api/base_experiment/get_id"
+        ) {
+          respondJson(res, 400, {
+            error: "No base experiment",
+          });
+          return;
+        }
+
+        if (
+          capturedRequest.method === "GET" &&
+          capturedRequest.path === "/experiment-comparison2"
+        ) {
+          respondJson(res, 200, {
+            metrics: {},
+            scores: {},
+          });
           return;
         }
 

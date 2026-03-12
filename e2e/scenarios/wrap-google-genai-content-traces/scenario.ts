@@ -1,3 +1,4 @@
+import { readFile } from "node:fs/promises";
 import * as googleGenAI from "@google/genai";
 import {
   initLogger,
@@ -13,12 +14,14 @@ import {
 } from "../../helpers/scenario-runtime";
 
 const GOOGLE_MODEL = "gemini-2.0-flash-001";
+const TEST_IMAGE_URL = new URL("./test-image.png", import.meta.url);
 
 async function main() {
   const testRunId = getTestRunId();
   const logger = initLogger({
     projectName: scopedName("e2e-wrap-google-genai", testRunId),
   });
+  const imageBase64 = (await readFile(TEST_IMAGE_URL)).toString("base64");
   const { GoogleGenAI } = wrapGoogleGenAI(googleGenAI);
   const client = new GoogleGenAI({
     apiKey: process.env.GOOGLE_API_KEY || process.env.GEMINI_API_KEY,
@@ -47,6 +50,42 @@ async function main() {
       });
       generateSpan.end();
 
+      const attachmentSpan = startSpan({
+        name: "google-attachment-operation",
+        event: {
+          metadata: {
+            operation: "attachment",
+            testRunId,
+          },
+        },
+      });
+      await withCurrent(attachmentSpan, async () => {
+        await client.models.generateContent({
+          model: GOOGLE_MODEL,
+          contents: [
+            {
+              parts: [
+                {
+                  inlineData: {
+                    data: imageBase64,
+                    mimeType: "image/png",
+                  },
+                },
+                {
+                  text: "Describe the attached image in one short sentence.",
+                },
+              ],
+              role: "user",
+            },
+          ],
+          config: {
+            maxOutputTokens: 24,
+            temperature: 0,
+          },
+        });
+      });
+      attachmentSpan.end();
+
       const streamSpan = startSpan({
         name: "google-stream-operation",
         event: {
@@ -68,6 +107,31 @@ async function main() {
         await collectAsync(stream);
       });
       streamSpan.end();
+
+      const streamReturnSpan = startSpan({
+        name: "google-stream-return-operation",
+        event: {
+          metadata: {
+            operation: "stream-return",
+            testRunId,
+          },
+        },
+      });
+      await withCurrent(streamReturnSpan, async () => {
+        const stream = await client.models.generateContentStream({
+          model: GOOGLE_MODEL,
+          contents: "Write a short poem about Paris.",
+          config: {
+            maxOutputTokens: 48,
+            temperature: 0,
+          },
+        });
+
+        for await (const _chunk of stream) {
+          break;
+        }
+      });
+      streamReturnSpan.end();
 
       const toolSpan = startSpan({
         name: "google-tool-operation",
