@@ -20,7 +20,9 @@ This repository uses `pnpm` workspaces.
 pnpm install        # Install dependencies
 pnpm run build      # Build all workspace packages
 pnpm run test       # Run workspace tests (via turbo)
-pnpm run lint       # Prettier + ESLint checks
-pnpm run fix        # Auto-fix Prettier + ESLint
+pnpm run formatting # Check formatting
+pnpm run lint       # Run lint checks
+pnpm run fix:formatting # Auto-fix formatting
+pnpm run fix:lint   # Auto-fix lint issues
 make test           # Full JS-oriented test flow used in this repo
 ```

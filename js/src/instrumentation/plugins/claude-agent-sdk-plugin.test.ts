@@ -1,11 +1,16 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { ClaudeAgentSDKPlugin } from "./claude-agent-sdk-plugin";
-import { tracingChannel } from "dc-browser";
 
-// Mock the dc-browser module
-vi.mock("dc-browser", () => ({
-  tracingChannel: vi.fn(),
+// Mock iso's newTracingChannel - must be before any imports that use it
+vi.mock("../../isomorph", () => ({
+  default: {
+    newTracingChannel: vi.fn(),
+  },
 }));
+
+import { ClaudeAgentSDKPlugin } from "./claude-agent-sdk-plugin";
+import iso from "../../isomorph";
+
+const mockNewTracingChannel = iso.newTracingChannel as ReturnType<typeof vi.fn>;
 
 // Mock the logger module
 vi.mock("../../logger", () => ({
@@ -48,47 +53,52 @@ vi.mock("../../wrappers/anthropic-tokens-util", () => ({
   })),
 }));
 
-vi.mock("../core", () => ({
-  BasePlugin: class BasePlugin {
-    protected enabled = false;
-    protected unsubscribers: Array<() => void> = [];
+vi.mock("../core", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../core")>();
 
-    enable(): void {
-      if (this.enabled) {
-        return;
+  return {
+    ...actual,
+    BasePlugin: class BasePlugin {
+      protected enabled = false;
+      protected unsubscribers: Array<() => void> = [];
+
+      enable(): void {
+        if (this.enabled) {
+          return;
+        }
+        this.enabled = true;
+        this.onEnable();
       }
-      this.enabled = true;
-      this.onEnable();
-    }
 
-    disable(): void {
-      if (!this.enabled) {
-        return;
+      disable(): void {
+        if (!this.enabled) {
+          return;
+        }
+        this.enabled = false;
+        this.onDisable();
       }
-      this.enabled = false;
-      this.onDisable();
-    }
 
-    protected onEnable(): void {
-      // To be implemented by subclass
-    }
+      protected onEnable(): void {
+        // To be implemented by subclass
+      }
 
-    protected onDisable(): void {
-      // To be implemented by subclass
-    }
-  },
-  isAsyncIterable: vi.fn(
-    (val: unknown) =>
-      val !== null &&
-      typeof val === "object" &&
-      Symbol.asyncIterator in val &&
-      typeof (val as any)[Symbol.asyncIterator] === "function",
-  ),
-  patchStreamIfNeeded: vi.fn((stream, callbacks) => {
-    // Return the stream unchanged for simple tests
-    return stream;
-  }),
-}));
+      protected onDisable(): void {
+        // To be implemented by subclass
+      }
+    },
+    isAsyncIterable: vi.fn(
+      (val: unknown) =>
+        val !== null &&
+        typeof val === "object" &&
+        Symbol.asyncIterator in val &&
+        typeof (val as any)[Symbol.asyncIterator] === "function",
+    ),
+    patchStreamIfNeeded: vi.fn((stream, _callbacks) => {
+      // Return the stream unchanged for simple tests
+      return stream;
+    }),
+  };
+});
 
 describe("ClaudeAgentSDKPlugin", () => {
   let plugin: ClaudeAgentSDKPlugin;
@@ -100,9 +110,10 @@ describe("ClaudeAgentSDKPlugin", () => {
     mockChannel = {
       subscribe: vi.fn(),
       unsubscribe: mockUnsubscribe,
+      hasSubscribers: false,
     };
 
-    (tracingChannel as any).mockReturnValue(mockChannel);
+    mockNewTracingChannel.mockReturnValue(mockChannel);
 
     plugin = new ClaudeAgentSDKPlugin();
   });
@@ -115,8 +126,8 @@ describe("ClaudeAgentSDKPlugin", () => {
     it("should enable the plugin and subscribe to channels", () => {
       plugin.enable();
 
-      expect(tracingChannel).toHaveBeenCalledWith(
-        "orchestrion:claude-agent-sdk:query",
+      expect(mockNewTracingChannel).toHaveBeenCalledWith(
+        "orchestrion:@anthropic-ai/claude-agent-sdk:query",
       );
       expect(mockChannel.subscribe).toHaveBeenCalledTimes(1);
       expect(mockChannel.subscribe).toHaveBeenCalledWith(

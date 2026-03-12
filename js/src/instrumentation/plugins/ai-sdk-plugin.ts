@@ -1,11 +1,15 @@
-import { tracingChannel } from "dc-browser";
-import { BasePlugin, isAsyncIterable, patchStreamIfNeeded } from "../core";
-import type { StartEvent } from "../core";
-import { startSpan } from "../../logger";
-import type { Span } from "../../logger";
+import { BasePlugin } from "../core";
+import { traceStreamingChannel, unsubscribeAll } from "../core/channel-tracing";
 import { SpanTypeAttribute } from "../../../util/index";
 import { getCurrentUnixTimestamp } from "../../util";
 import { processInputAttachments } from "../../wrappers/attachment-utils";
+import { aiSDKChannels } from "./ai-sdk-channels";
+import type {
+  AISDKCallParams,
+  AISDKModel,
+  AISDKResult,
+  AISDKUsage,
+} from "../../vendor-sdk-types/ai-sdk";
 
 export interface AISDKPluginConfig {
   /**
@@ -53,7 +57,6 @@ const DEFAULT_DENY_OUTPUT_PATHS: string[] = [
  * - Streaming responses with time-to-first-token
  */
 export class AISDKPlugin extends BasePlugin {
-  protected unsubscribers: Array<() => void> = [];
   private config: AISDKPluginConfig;
 
   constructor(config: AISDKPluginConfig = {}) {
@@ -66,10 +69,7 @@ export class AISDKPlugin extends BasePlugin {
   }
 
   protected onDisable(): void {
-    for (const unsubscribe of this.unsubscribers) {
-      unsubscribe();
-    }
-    this.unsubscribers = [];
+    this.unsubscribers = unsubscribeAll(this.unsubscribers);
   }
 
   private subscribeToAISDK(): void {
@@ -77,300 +77,161 @@ export class AISDKPlugin extends BasePlugin {
       this.config.denyOutputPaths || DEFAULT_DENY_OUTPUT_PATHS;
 
     // generateText - async function that may return streams
-    this.subscribeToStreamingChannel("orchestrion:ai-sdk:generateText", {
-      name: "generateText",
-      type: SpanTypeAttribute.LLM,
-      extractInput: (args: any[]) => {
-        const params = args[0] || {};
-        return {
-          input: processAISDKInput(params),
-          metadata: extractMetadataFromParams(params),
-        };
-      },
-      extractOutput: (result: any) => {
-        return processAISDKOutput(result, denyOutputPaths);
-      },
-      extractMetrics: (result: any, startTime?: number) => {
-        const metrics = extractTokenMetrics(result);
-        if (startTime) {
-          metrics.time_to_first_token = getCurrentUnixTimestamp() - startTime;
-        }
-        return metrics;
-      },
-      aggregateChunks: aggregateAISDKChunks,
-    });
+    this.unsubscribers.push(
+      traceStreamingChannel(aiSDKChannels.generateText, {
+        name: "generateText",
+        type: SpanTypeAttribute.LLM,
+        extractInput: ([params]) => {
+          return {
+            input: processAISDKInput(params),
+            metadata: extractMetadataFromParams(params),
+          };
+        },
+        extractOutput: (result) => {
+          return processAISDKOutput(result, denyOutputPaths);
+        },
+        extractMetrics: (result, startTime) => {
+          const metrics = extractTokenMetrics(result);
+          if (startTime) {
+            metrics.time_to_first_token = getCurrentUnixTimestamp() - startTime;
+          }
+          return metrics;
+        },
+        aggregateChunks: aggregateAISDKChunks,
+      }),
+    );
 
     // streamText - async function returning stream
-    this.subscribeToStreamingChannel("orchestrion:ai-sdk:streamText", {
-      name: "streamText",
-      type: SpanTypeAttribute.LLM,
-      extractInput: (args: any[]) => {
-        const params = args[0] || {};
-        return {
-          input: processAISDKInput(params),
-          metadata: extractMetadataFromParams(params),
-        };
-      },
-      extractOutput: (result: any) => {
-        return processAISDKOutput(result, denyOutputPaths);
-      },
-      extractMetrics: (result: any, startTime?: number) => {
-        const metrics = extractTokenMetrics(result);
-        if (startTime) {
-          metrics.time_to_first_token = getCurrentUnixTimestamp() - startTime;
-        }
-        return metrics;
-      },
-      aggregateChunks: aggregateAISDKChunks,
-    });
+    this.unsubscribers.push(
+      traceStreamingChannel(aiSDKChannels.streamText, {
+        name: "streamText",
+        type: SpanTypeAttribute.LLM,
+        extractInput: ([params]) => {
+          return {
+            input: processAISDKInput(params),
+            metadata: extractMetadataFromParams(params),
+          };
+        },
+        extractOutput: (result) => {
+          return processAISDKOutput(result, denyOutputPaths);
+        },
+        extractMetrics: (result, startTime) => {
+          const metrics = extractTokenMetrics(result);
+          if (startTime) {
+            metrics.time_to_first_token = getCurrentUnixTimestamp() - startTime;
+          }
+          return metrics;
+        },
+        aggregateChunks: aggregateAISDKChunks,
+      }),
+    );
 
     // generateObject - async function that may return streams
-    this.subscribeToStreamingChannel("orchestrion:ai-sdk:generateObject", {
-      name: "generateObject",
-      type: SpanTypeAttribute.LLM,
-      extractInput: (args: any[]) => {
-        const params = args[0] || {};
-        return {
-          input: processAISDKInput(params),
-          metadata: extractMetadataFromParams(params),
-        };
-      },
-      extractOutput: (result: any) => {
-        return processAISDKOutput(result, denyOutputPaths);
-      },
-      extractMetrics: (result: any, startTime?: number) => {
-        const metrics = extractTokenMetrics(result);
-        if (startTime) {
-          metrics.time_to_first_token = getCurrentUnixTimestamp() - startTime;
-        }
-        return metrics;
-      },
-      aggregateChunks: aggregateAISDKChunks,
-    });
+    this.unsubscribers.push(
+      traceStreamingChannel(aiSDKChannels.generateObject, {
+        name: "generateObject",
+        type: SpanTypeAttribute.LLM,
+        extractInput: ([params]) => {
+          return {
+            input: processAISDKInput(params),
+            metadata: extractMetadataFromParams(params),
+          };
+        },
+        extractOutput: (result) => {
+          return processAISDKOutput(result, denyOutputPaths);
+        },
+        extractMetrics: (result, startTime) => {
+          const metrics = extractTokenMetrics(result);
+          if (startTime) {
+            metrics.time_to_first_token = getCurrentUnixTimestamp() - startTime;
+          }
+          return metrics;
+        },
+        aggregateChunks: aggregateAISDKChunks,
+      }),
+    );
 
     // streamObject - async function returning stream
-    this.subscribeToStreamingChannel("orchestrion:ai-sdk:streamObject", {
-      name: "streamObject",
-      type: SpanTypeAttribute.LLM,
-      extractInput: (args: any[]) => {
-        const params = args[0] || {};
-        return {
-          input: processAISDKInput(params),
-          metadata: extractMetadataFromParams(params),
-        };
-      },
-      extractOutput: (result: any) => {
-        return processAISDKOutput(result, denyOutputPaths);
-      },
-      extractMetrics: (result: any, startTime?: number) => {
-        const metrics = extractTokenMetrics(result);
-        if (startTime) {
-          metrics.time_to_first_token = getCurrentUnixTimestamp() - startTime;
-        }
-        return metrics;
-      },
-      aggregateChunks: aggregateAISDKChunks,
-    });
+    this.unsubscribers.push(
+      traceStreamingChannel(aiSDKChannels.streamObject, {
+        name: "streamObject",
+        type: SpanTypeAttribute.LLM,
+        extractInput: ([params]) => {
+          return {
+            input: processAISDKInput(params),
+            metadata: extractMetadataFromParams(params),
+          };
+        },
+        extractOutput: (result) => {
+          return processAISDKOutput(result, denyOutputPaths);
+        },
+        extractMetrics: (result, startTime) => {
+          const metrics = extractTokenMetrics(result);
+          if (startTime) {
+            metrics.time_to_first_token = getCurrentUnixTimestamp() - startTime;
+          }
+          return metrics;
+        },
+        aggregateChunks: aggregateAISDKChunks,
+      }),
+    );
 
     // Agent.generate - async method
-    this.subscribeToStreamingChannel("orchestrion:ai-sdk:Agent.generate", {
-      name: "Agent.generate",
-      type: SpanTypeAttribute.LLM,
-      extractInput: (args: any[]) => {
-        const params = args[0] || {};
-        return {
-          input: processAISDKInput(params),
-          metadata: extractMetadataFromParams(params),
-        };
-      },
-      extractOutput: (result: any) => {
-        return processAISDKOutput(result, denyOutputPaths);
-      },
-      extractMetrics: (result: any, startTime?: number) => {
-        const metrics = extractTokenMetrics(result);
-        if (startTime) {
-          metrics.time_to_first_token = getCurrentUnixTimestamp() - startTime;
-        }
-        return metrics;
-      },
-      aggregateChunks: aggregateAISDKChunks,
-    });
+    this.unsubscribers.push(
+      traceStreamingChannel(aiSDKChannels.agentGenerate, {
+        name: "Agent.generate",
+        type: SpanTypeAttribute.LLM,
+        extractInput: ([params]) => {
+          return {
+            input: processAISDKInput(params),
+            metadata: extractMetadataFromParams(params),
+          };
+        },
+        extractOutput: (result) => {
+          return processAISDKOutput(result, denyOutputPaths);
+        },
+        extractMetrics: (result, startTime) => {
+          const metrics = extractTokenMetrics(result);
+          if (startTime) {
+            metrics.time_to_first_token = getCurrentUnixTimestamp() - startTime;
+          }
+          return metrics;
+        },
+        aggregateChunks: aggregateAISDKChunks,
+      }),
+    );
 
     // Agent.stream - async method returning stream
-    this.subscribeToStreamingChannel("orchestrion:ai-sdk:Agent.stream", {
-      name: "Agent.stream",
-      type: SpanTypeAttribute.LLM,
-      extractInput: (args: any[]) => {
-        const params = args[0] || {};
-        return {
-          input: processAISDKInput(params),
-          metadata: extractMetadataFromParams(params),
-        };
-      },
-      extractOutput: (result: any) => {
-        return processAISDKOutput(result, denyOutputPaths);
-      },
-      extractMetrics: (result: any, startTime?: number) => {
-        const metrics = extractTokenMetrics(result);
-        if (startTime) {
-          metrics.time_to_first_token = getCurrentUnixTimestamp() - startTime;
-        }
-        return metrics;
-      },
-      aggregateChunks: aggregateAISDKChunks,
-    });
-  }
-
-  /**
-   * Subscribe to a channel for async methods that may return streams.
-   * Handles both streaming and non-streaming responses.
-   */
-  protected subscribeToStreamingChannel(
-    channelName: string,
-    config: {
-      name: string;
-      type: string;
-      extractInput: (args: any[]) => { input: any; metadata: any };
-      extractOutput: (result: any) => any;
-      extractMetrics: (
-        result: any,
-        startTime?: number,
-      ) => Record<string, number>;
-      aggregateChunks?: (chunks: any[]) => {
-        output: any;
-        metrics: Record<string, number>;
-      };
-    },
-  ): void {
-    const channel = tracingChannel(channelName);
-
-    const spans = new WeakMap<any, { span: Span; startTime: number }>();
-
-    const handlers = {
-      start: (event: StartEvent) => {
-        const span = startSpan({
-          name: config.name,
-          spanAttributes: {
-            type: config.type,
-          },
-        });
-
-        const startTime = getCurrentUnixTimestamp();
-        spans.set(event, { span, startTime });
-
-        try {
-          const { input, metadata } = config.extractInput(event.arguments);
-          span.log({
-            input,
-            metadata,
-          });
-        } catch (error) {
-          console.error(`Error extracting input for ${channelName}:`, error);
-        }
-      },
-
-      asyncEnd: (event: any) => {
-        const spanData = spans.get(event);
-        if (!spanData) {
-          return;
-        }
-
-        const { span, startTime } = spanData;
-
-        // Check if result is a stream
-        if (isAsyncIterable(event.result)) {
-          // Patch the stream to collect chunks
-          patchStreamIfNeeded(event.result, {
-            onComplete: (chunks: any[]) => {
-              try {
-                let output: any;
-                let metrics: Record<string, number>;
-
-                if (config.aggregateChunks) {
-                  const aggregated = config.aggregateChunks(chunks);
-                  output = aggregated.output;
-                  metrics = aggregated.metrics;
-                } else {
-                  output = config.extractOutput(chunks);
-                  metrics = config.extractMetrics(chunks, startTime);
-                }
-
-                // Add time_to_first_token if not already present
-                if (!metrics.time_to_first_token && chunks.length > 0) {
-                  metrics.time_to_first_token =
-                    getCurrentUnixTimestamp() - startTime;
-                }
-
-                span.log({
-                  output,
-                  metrics,
-                });
-              } catch (error) {
-                console.error(
-                  `Error extracting output for ${channelName}:`,
-                  error,
-                );
-              } finally {
-                span.end();
-              }
-            },
-            onError: (error: Error) => {
-              span.log({
-                error: error.message,
-              });
-              span.end();
-            },
-          });
-
-          // Don't delete the span from the map yet - it will be ended by the stream
-        } else {
-          // Non-streaming response
-          try {
-            const output = config.extractOutput(event.result);
-            const metrics = config.extractMetrics(event.result, startTime);
-
-            span.log({
-              output,
-              metrics,
-            });
-          } catch (error) {
-            console.error(`Error extracting output for ${channelName}:`, error);
-          } finally {
-            span.end();
-            spans.delete(event);
+    this.unsubscribers.push(
+      traceStreamingChannel(aiSDKChannels.agentStream, {
+        name: "Agent.stream",
+        type: SpanTypeAttribute.LLM,
+        extractInput: ([params]) => {
+          return {
+            input: processAISDKInput(params),
+            metadata: extractMetadataFromParams(params),
+          };
+        },
+        extractOutput: (result) => {
+          return processAISDKOutput(result, denyOutputPaths);
+        },
+        extractMetrics: (result, startTime) => {
+          const metrics = extractTokenMetrics(result);
+          if (startTime) {
+            metrics.time_to_first_token = getCurrentUnixTimestamp() - startTime;
           }
-        }
-      },
-
-      error: (event: any) => {
-        const spanData = spans.get(event);
-        if (!spanData) {
-          return;
-        }
-
-        const { span } = spanData;
-
-        span.log({
-          error: event.error.message,
-        });
-        span.end();
-        spans.delete(event);
-      },
-    };
-
-    channel.subscribe(handlers);
-
-    // Store unsubscribe function
-    this.unsubscribers.push(() => {
-      channel.unsubscribe(handlers);
-    });
+          return metrics;
+        },
+        aggregateChunks: aggregateAISDKChunks,
+      }),
+    );
   }
 }
 
 /**
  * Process AI SDK input parameters, converting attachments as needed.
  */
-function processAISDKInput(params: any): any {
+function processAISDKInput(params: AISDKCallParams): unknown {
   if (!params) return params;
 
   // Use the attachment processing from the manual wrapper
@@ -381,8 +242,10 @@ function processAISDKInput(params: any): any {
  * Extract metadata from AI SDK parameters.
  * Includes model, provider, and integration info.
  */
-function extractMetadataFromParams(params: any): Record<string, any> {
-  const metadata: Record<string, any> = {
+function extractMetadataFromParams(
+  params: AISDKCallParams,
+): Record<string, unknown> {
+  const metadata: Record<string, unknown> = {
     braintrust: {
       integration_name: "ai-sdk",
       sdk_language: "typescript",
@@ -404,7 +267,10 @@ function extractMetadataFromParams(params: any): Record<string, any> {
 /**
  * Process AI SDK output, omitting specified paths.
  */
-function processAISDKOutput(output: any, denyOutputPaths: string[]): any {
+function processAISDKOutput(
+  output: AISDKResult,
+  denyOutputPaths: string[],
+): Record<string, unknown> | AISDKResult {
   if (!output) return output;
 
   // Extract getter values from result objects
@@ -420,11 +286,11 @@ function processAISDKOutput(output: any, denyOutputPaths: string[]): any {
 /**
  * Extract token metrics from AI SDK result.
  */
-function extractTokenMetrics(result: any): Record<string, number> {
+function extractTokenMetrics(result: AISDKResult): Record<string, number> {
   const metrics: Record<string, number> = {};
 
   // Agent results use totalUsage, other results use usage
-  let usage = result?.totalUsage || result?.usage;
+  let usage: AISDKUsage | undefined = result?.totalUsage || result?.usage;
 
   // Try as getter if not directly accessible
   if (!usage && result) {
@@ -485,15 +351,15 @@ function extractTokenMetrics(result: any): Record<string, number> {
 /**
  * Aggregate AI SDK streaming chunks into a single response.
  */
-function aggregateAISDKChunks(chunks: any[]): {
-  output: any;
+function aggregateAISDKChunks(chunks: unknown[]): {
+  output: Record<string, unknown>;
   metrics: Record<string, number>;
 } {
   // For AI SDK streams, the chunks are typically delta objects
   // We'll return the last chunk which usually contains the final state
-  const lastChunk = chunks[chunks.length - 1];
+  const lastChunk = chunks[chunks.length - 1] as AISDKResult | undefined;
 
-  const output: any = {};
+  const output: Record<string, unknown> = {};
   let metrics: Record<string, number> = {};
 
   // Extract usage from last chunk
@@ -521,8 +387,10 @@ function aggregateAISDKChunks(chunks: any[]): {
 /**
  * Extract getter values from AI SDK result objects.
  */
-function extractGetterValues(obj: any): any {
-  const getterValues: Record<string, any> = {};
+function extractGetterValues(
+  obj: AISDKResult,
+): Partial<Record<string, unknown>> {
+  const getterValues: Record<string, unknown> = {};
 
   const getterNames = [
     "text",
@@ -555,8 +423,8 @@ function extractGetterValues(obj: any): any {
 /**
  * Extracts model ID and provider from a model object or string.
  */
-function serializeModelWithProvider(model: any): {
-  model: string;
+function serializeModelWithProvider(model: AISDKModel | undefined): {
+  model: string | undefined;
   provider?: string;
 } {
   const modelId = typeof model === "string" ? model : model?.modelId;
@@ -598,7 +466,7 @@ function parseGatewayModelString(modelString: string): {
 /**
  * Extract cost from result's providerMetadata.
  */
-function extractCostFromResult(result: any): number | undefined {
+function extractCostFromResult(result: AISDKResult): number | undefined {
   // Check for cost in steps (multi-step results)
   if (result?.steps && Array.isArray(result.steps) && result.steps.length > 0) {
     let totalCost = 0;
@@ -714,7 +582,10 @@ function parsePath(path: string): (string | number)[] {
 /**
  * Omit a value at a specific path in an object.
  */
-function omitAtPath(obj: any, keys: (string | number)[]): void {
+function omitAtPath(
+  obj: Record<string, unknown> | unknown[] | undefined,
+  keys: (string | number)[],
+): void {
   if (keys.length === 0) return;
 
   const firstKey = keys[0];
@@ -724,17 +595,26 @@ function omitAtPath(obj: any, keys: (string | number)[]): void {
     if (Array.isArray(obj)) {
       obj.forEach((item) => {
         if (remainingKeys.length > 0) {
-          omitAtPath(item, remainingKeys);
+          omitAtPath(
+            item as Record<string, unknown> | unknown[] | undefined,
+            remainingKeys,
+          );
         }
       });
     }
   } else if (remainingKeys.length === 0) {
     if (obj && typeof obj === "object" && firstKey in obj) {
-      obj[firstKey] = "<omitted>";
+      (obj as Record<string | number, unknown>)[firstKey] = "<omitted>";
     }
   } else {
     if (obj && typeof obj === "object" && firstKey in obj) {
-      omitAtPath(obj[firstKey], remainingKeys);
+      omitAtPath(
+        (obj as Record<string | number, unknown>)[firstKey] as
+          | Record<string, unknown>
+          | unknown[]
+          | undefined,
+        remainingKeys,
+      );
     }
   }
 }

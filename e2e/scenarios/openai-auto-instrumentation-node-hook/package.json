@@ -1,0 +1,9 @@
+{
+  "name": "@braintrust/e2e-openai-auto-instrumentation-node-hook",
+  "private": true,
+  "dependencies": {
+    "openai": "6.25.0",
+    "openai-v4": "npm:openai@4.104.0",
+    "openai-v5": "npm:openai@5.11.0"
+  }
+}

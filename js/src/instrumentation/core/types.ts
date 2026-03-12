@@ -10,6 +10,20 @@
  * - error: Called if the function throws or the promise rejects
  */
 
+export type EventArguments = readonly unknown[];
+
+export type ChannelSpanInfo = {
+  name?: string;
+  spanAttributes?: Record<string, unknown>;
+  metadata?: Record<string, unknown>;
+};
+
+export type SpanInfoCarrier<
+  TSpanInfo extends ChannelSpanInfo = ChannelSpanInfo,
+> = {
+  span_info?: TSpanInfo;
+};
+
 /**
  * Base context object shared across all events in a trace.
  */
@@ -74,14 +88,59 @@ export interface ErrorEvent extends BaseContext {
  * Event emitted when a promise begins to settle.
  * This fires after the synchronous portion and when the async continuation starts.
  */
-export type AsyncStartEvent<TInput = unknown> = StartEvent<TInput>;
+export interface TypedStartEvent<
+  TArguments extends EventArguments = unknown[],
+> extends BaseContext {
+  arguments: [...TArguments];
+}
+
+export interface TypedEndEvent<
+  TResult = unknown,
+  TArguments extends EventArguments = unknown[],
+> extends BaseContext {
+  result: TResult;
+  arguments?: [...TArguments];
+}
+
+export interface TypedErrorEvent<
+  TArguments extends EventArguments = unknown[],
+> extends BaseContext {
+  error: Error;
+  arguments?: [...TArguments];
+}
+
+// eslint-disable-next-line @typescript-eslint/no-empty-object-type
+export interface AsyncStartEvent<TInput = unknown> extends StartEvent<TInput> {}
 
 /**
  * Event emitted when a promise finishes settling.
  * This fires BEFORE control returns to user code after await.
  * This is where you should extract output data and finalize spans.
  */
-export type AsyncEndEvent<TResult = unknown> = EndEvent<TResult>;
+// eslint-disable-next-line @typescript-eslint/no-empty-object-type
+export interface AsyncEndEvent<TResult = unknown> extends EndEvent<TResult> {}
+
+export type StartEventWith<
+  TArguments extends EventArguments = unknown[],
+  TExtra extends object = Record<string, never>,
+> = TypedStartEvent<TArguments> & TExtra;
+
+export type EndEventWith<
+  TResult = unknown,
+  TArguments extends EventArguments = unknown[],
+  TExtra extends object = Record<string, never>,
+> = TypedEndEvent<TResult, TArguments> & TExtra;
+
+export type AsyncEndEventWith<
+  TResult = unknown,
+  TArguments extends EventArguments = unknown[],
+  TExtra extends object = Record<string, never>,
+> = TypedEndEvent<TResult, TArguments> & TExtra;
+
+export type ErrorEventWith<
+  TArguments extends EventArguments = unknown[],
+  TExtra extends object = Record<string, never>,
+> = TypedErrorEvent<TArguments> & TExtra;
 
 /**
  * Subscription handlers for a TracingChannel.

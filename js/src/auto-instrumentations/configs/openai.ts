@@ -1,4 +1,5 @@
 import type { InstrumentationConfig } from "@apm-js-collab/code-transformer";
+import { openAIChannels } from "../../instrumentation/plugins/openai-channels";
 
 /**
  * Instrumentation configurations for the OpenAI SDK.
@@ -7,18 +8,46 @@ import type { InstrumentationConfig } from "@apm-js-collab/code-transformer";
  * to emit events on. They are used by orchestrion-js to perform AST
  * transformation at build-time or load-time.
  *
- * NOTE: Channel names should NOT include the braintrust: prefix. The code-transformer
- * will prepend "orchestrion:openai:" to these names, resulting in final channel names like:
+ * NOTE: Channel names should NOT include the orchestrion: prefix. The code-transformer
+ * will prepend "orchestrion:" + module.name + ":" to these names, resulting in final channel names like:
  * "orchestrion:openai:chat.completions.create"
  */
 export const openaiConfigs: InstrumentationConfig[] = [
   // Chat Completions
   {
-    channelName: "chat.completions.create",
+    channelName: openAIChannels.chatCompletionsCreate.channelName,
     module: {
       name: "openai",
-      versionRange: ">=4.0.0",
+      versionRange: ">=4.0.0 <5.0.0",
       filePath: "resources/chat/completions.mjs",
+    },
+    functionQuery: {
+      className: "Completions",
+      methodName: "create",
+      kind: "Async",
+    },
+  },
+
+  {
+    channelName: openAIChannels.chatCompletionsCreate.channelName,
+    module: {
+      name: "openai",
+      versionRange: ">=4.0.0 <5.0.0",
+      filePath: "resources/chat/completions/completions.mjs",
+    },
+    functionQuery: {
+      className: "Completions",
+      methodName: "create",
+      kind: "Async",
+    },
+  },
+
+  {
+    channelName: openAIChannels.chatCompletionsCreate.channelName,
+    module: {
+      name: "openai",
+      versionRange: ">=5.0.0",
+      filePath: "resources/chat/completions/completions.mjs",
     },
     functionQuery: {
       className: "Completions",
@@ -29,7 +58,7 @@ export const openaiConfigs: InstrumentationConfig[] = [
 
   // Embeddings
   {
-    channelName: "embeddings.create",
+    channelName: openAIChannels.embeddingsCreate.channelName,
     module: {
       name: "openai",
       versionRange: ">=4.0.0",
@@ -44,11 +73,25 @@ export const openaiConfigs: InstrumentationConfig[] = [
 
   // Beta Chat Completions Parse
   {
-    channelName: "beta.chat.completions.parse",
+    channelName: openAIChannels.betaChatCompletionsParse.channelName,
     module: {
       name: "openai",
-      versionRange: ">=4.0.0",
+      versionRange: ">=4.0.0 <5.0.0",
       filePath: "resources/beta/chat/completions.mjs",
+    },
+    functionQuery: {
+      className: "Completions",
+      methodName: "parse",
+      kind: "Async",
+    },
+  },
+
+  {
+    channelName: openAIChannels.betaChatCompletionsParse.channelName,
+    module: {
+      name: "openai",
+      versionRange: ">=5.0.0",
+      filePath: "resources/chat/completions/completions.mjs",
     },
     functionQuery: {
       className: "Completions",
@@ -59,7 +102,7 @@ export const openaiConfigs: InstrumentationConfig[] = [
 
   // Moderations
   {
-    channelName: "moderations.create",
+    channelName: openAIChannels.moderationsCreate.channelName,
     module: {
       name: "openai",
       versionRange: ">=4.0.0",
@@ -74,11 +117,25 @@ export const openaiConfigs: InstrumentationConfig[] = [
 
   // Beta Chat Completions Stream
   {
-    channelName: "beta.chat.completions.stream",
+    channelName: openAIChannels.betaChatCompletionsStream.channelName,
     module: {
       name: "openai",
-      versionRange: ">=4.0.0",
+      versionRange: ">=4.0.0 <5.0.0",
       filePath: "resources/beta/chat/completions.mjs",
+    },
+    functionQuery: {
+      className: "Completions",
+      methodName: "stream",
+      kind: "Sync",
+    },
+  },
+
+  {
+    channelName: openAIChannels.betaChatCompletionsStream.channelName,
+    module: {
+      name: "openai",
+      versionRange: ">=5.0.0",
+      filePath: "resources/chat/completions/completions.mjs",
     },
     functionQuery: {
       className: "Completions",
@@ -89,7 +146,7 @@ export const openaiConfigs: InstrumentationConfig[] = [
 
   // Responses API (v4.87.0+)
   {
-    channelName: "responses.create",
+    channelName: openAIChannels.responsesCreate.channelName,
     module: {
       name: "openai",
       versionRange: ">=4.87.0",
@@ -103,7 +160,7 @@ export const openaiConfigs: InstrumentationConfig[] = [
   },
 
   {
-    channelName: "responses.stream",
+    channelName: openAIChannels.responsesStream.channelName,
     module: {
       name: "openai",
       versionRange: ">=4.87.0",
@@ -117,7 +174,7 @@ export const openaiConfigs: InstrumentationConfig[] = [
   },
 
   {
-    channelName: "responses.parse",
+    channelName: openAIChannels.responsesParse.channelName,
     module: {
       name: "openai",
       versionRange: ">=4.87.0",

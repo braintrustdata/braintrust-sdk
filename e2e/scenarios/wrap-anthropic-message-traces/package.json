@@ -1,0 +1,7 @@
+{
+  "name": "@braintrust/e2e-wrap-anthropic-message-traces",
+  "private": true,
+  "dependencies": {
+    "@anthropic-ai/sdk": "0.60.0"
+  }
+}

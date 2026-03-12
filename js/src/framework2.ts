@@ -23,7 +23,7 @@ import {
   PromptRowWithId,
   RemoteEvalParameters,
 } from "./logger";
-import { GenericFunction } from "./framework-types";
+import type { BaseFnOpts, GenericFunction } from "./framework-types";
 import type { EvalParameters } from "./eval-parameters";
 import {
   promptDefinitionToPromptData,
@@ -35,14 +35,6 @@ import type {
   StaticParametersSchema,
   SerializedParametersContainer,
 } from "../dev/types";
-
-interface BaseFnOpts {
-  name: string;
-  slug: string;
-  description: string;
-  ifExists: IfExists;
-  metadata?: Record<string, unknown>;
-}
 
 export { toolFunctionDefinitionSchema };
 // ToolFunctionDefinition exported as type-only from main index to avoid namespace issues
@@ -366,6 +358,7 @@ export class CodeFunction<
   public readonly parameters?: z.ZodSchema<Input>;
   public readonly returns?: z.ZodSchema<Output>;
   public readonly ifExists?: IfExists;
+  public readonly tags?: string[];
   public readonly metadata?: Record<string, unknown>;
 
   constructor(
@@ -384,6 +377,7 @@ export class CodeFunction<
     this.type = opts.type;
 
     this.ifExists = opts.ifExists;
+    this.tags = opts.tags;
     this.metadata = opts.metadata;
 
     this.parameters = opts.parameters;
@@ -424,6 +418,7 @@ export class CodePrompt {
   public readonly id?: string;
   public readonly functionType?: FunctionType;
   public readonly toolFunctions: (SavedFunctionId | GenericCodeFunction)[];
+  public readonly tags?: string[];
   public readonly metadata?: Record<string, unknown>;
   public readonly environmentSlugs?: string[];
 
@@ -446,6 +441,7 @@ export class CodePrompt {
     this.description = opts.description;
     this.id = opts.id;
     this.functionType = functionType;
+    this.tags = opts.tags;
     this.metadata = opts.metadata;
     this.environmentSlugs = opts.environments;
   }
@@ -488,6 +484,7 @@ export class CodePrompt {
       function_type: this.functionType,
       prompt_data,
       if_exists: this.ifExists,
+      tags: this.tags,
       metadata: this.metadata,
       environments:
         this.environmentSlugs && this.environmentSlugs.length > 0
@@ -558,6 +555,7 @@ export class PromptBuilder {
       name: opts.name,
       slug: slug,
       prompt_data: promptData,
+      tags: opts.tags,
       ...(this.project.id !== undefined ? { project_id: this.project.id } : {}),
     } as PromptRowWithId<HasId, HasVersion>;
 
@@ -636,7 +634,7 @@ export class CodeParameters {
   }
 }
 
-export class ParametersBuilder {
+class ParametersBuilder {
   constructor(private readonly project: Project) {}
 
   public create<S extends EvalParameters>(opts: ParametersOpts<S>): S {
@@ -673,6 +671,15 @@ export function serializeEvalParametersToStaticParametersSchema(
             description: value.description,
           },
         ];
+      } else if ("type" in value && value.type === "model") {
+        return [
+          name,
+          {
+            type: "model",
+            default: value.default,
+            description: value.description,
+          },
+        ];
       } else {
         // Since this schema is bundled, it won't pass an instanceof check. For
         // some reason, aliasing it to `z.ZodSchema` leads to `error TS2589:
@@ -695,7 +702,7 @@ export function serializeEvalParametersToStaticParametersSchema(
   );
 }
 
-export function serializeEvalParameterstoParametersSchema(
+function serializeEvalParameterstoParametersSchema(
   parameters: EvalParameters,
 ): ParametersSchema {
   const properties: Record<string, Record<string, unknown>> = {};
@@ -715,6 +722,17 @@ export function serializeEvalParameterstoParametersSchema(
       };
 
       if (!defaultPromptData) {
+        required.push(name);
+      }
+    } else if ("type" in value && value.type === "model") {
+      properties[name] = {
+        type: "string",
+        "x-bt-type": "model",
+        ...(value.description ? { description: value.description } : {}),
+        ...("default" in value ? { default: value.default } : {}),
+      };
+
+      if (!("default" in value)) {
         required.push(name);
       }
     } else {
@@ -788,6 +806,7 @@ export interface FunctionEvent {
   function_data: z.infer<typeof functionDataSchema>;
   function_type?: FunctionType;
   if_exists?: IfExists;
+  tags?: string[];
   metadata?: Record<string, unknown>;
   environments?: { slug: string }[];
 }

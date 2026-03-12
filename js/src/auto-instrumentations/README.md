@@ -28,7 +28,15 @@ Each SDK integration defines **instrumentation configs** that specify which func
 }
 ```
 
-**Note:** The `channelName` should NOT include the `braintrust:` prefix. The code-transformer automatically prepends `orchestrion:openai:` to these names, resulting in final channel names like `orchestrion:openai:chat.completions.create`.
+**Note:** The `channelName` should NOT include the `orchestrion:` prefix. The code-transformer automatically prepends `orchestrion:` + `module.name` + `:` to these names.
+
+**Important:** The code-transformer uses the **exact module name** from the config. For example:
+
+- Module `openai` → Channel `orchestrion:openai:chat.completions.create`
+- Module `@anthropic-ai/sdk` → Channel `orchestrion:@anthropic-ai/sdk:messages.create`
+- Module `@google/genai` → Channel `orchestrion:@google/genai:models.generateContent`
+
+Plugin subscriptions must match these **exact** channel names for instrumentation to work.
 
 ### 2. AST Transformation
 
@@ -205,13 +213,71 @@ protected onEnable() {
 }
 ```
 
-## Browser Compatibility
+## Environment Support: Node.js vs Browser
 
-For browser environments:
+### Isomorphic Pattern
 
-- The bundler plugins automatically use `dc-browser` instead of `dc-polyfill`
-- `dc-browser` provides browser-compatible implementations of Node.js's `diagnostics_channel` API
-- The `BraintrustPlugin` works the same in both environments
+The instrumentation system uses an **isomorphic pattern** to work seamlessly across environments:
+
+- **Node.js**: Uses native `node:diagnostics_channel` for optimal performance
+- **Browser**: Uses `dc-browser` polyfill for compatibility
+- **Plugin Code**: Uses `iso.newTracingChannel()` which abstracts the environment difference
+
+This ensures that:
+
+1. Both plugin subscription code AND transformed SDK code use the same channel implementation
+2. Events properly propagate between emitters and subscribers
+3. No channel registry mismatches occur
+
+### Node.js Setup
+
+**For runtime applications using the loader hook:**
+
+```bash
+node --import @braintrust/auto-instrumentations/hook.mjs app.js
+```
+
+The hook automatically uses `node:diagnostics_channel`.
+
+**For bundled applications:**
+
+When using bundler plugins (Vite, Webpack, etc.) in Node.js:
+
+```javascript
+// vite.config.js
+import { vitePlugin } from "@braintrust/auto-instrumentations/bundler/vite";
+
+export default {
+  plugins: [
+    vitePlugin({ browser: false }), // IMPORTANT: Set browser: false for Node.js
+  ],
+};
+```
+
+Setting `browser: false` ensures the code-transformer injects `node:diagnostics_channel` imports, not `dc-browser`.
+
+### Browser Setup
+
+**For browser/edge builds:**
+
+```javascript
+// vite.config.js
+import { vitePlugin } from "@braintrust/auto-instrumentations/bundler/vite";
+
+export default {
+  plugins: [
+    vitePlugin({ browser: true }), // Use browser: true for browser builds
+  ],
+};
+```
+
+Setting `browser: true` ensures the code-transformer injects `dc-browser` imports.
+
+**Important:** The `browser` option must match your target environment:
+
+- Mismatch (e.g., `browser: true` but running in Node.js) causes channel registry conflicts
+- Plugin code uses the iso pattern and adapts automatically
+- Only the transformed SDK code is affected by the `browser` option
 
 ## Advanced: Custom Plugins
 
@@ -248,8 +314,199 @@ Note: Plugins must be constructed and enabled within the core Braintrust library
 The test suite covers:
 
 - **Config validation** (`src/configs/*.test.ts`) - Verify config structure
-- **AST transformation** (`test/transformation.test.ts`) - Verify orchestrion-js transforms code correctly
-- **Runtime execution** (`test/runtime-execution.test.ts`) - Verify transformed code executes correctly
-- **Event content** (`test/event-content.test.ts`) - Verify events contain expected data
-- **Error handling** (`test/error-handling.test.ts`) - Verify errors propagate correctly
-- **Loader hooks** (`test/loader-hook.test.ts`) - Verify Node.js hooks work
+- **AST transformation** (`tests/auto-instrumentations/transformation.test.ts`) - Verify orchestrion-js transforms code correctly
+- **Runtime execution** (`tests/auto-instrumentations/runtime-execution.test.ts`) - Verify transformed code executes correctly
+- **Integration tests** (`tests/auto-instrumentations/integration.test.ts`) - Verify channel name alignment and event flow
+- **Error handling** (`tests/auto-instrumentations/error-handling.test.ts`) - Verify errors propagate correctly
+- **Plugin tests** (`src/instrumentation/plugins/*.test.ts`) - Unit tests for each plugin
+
+## Troubleshooting
+
+### No Traces Appearing
+
+If auto-instrumentation isn't creating traces, check the following:
+
+#### 1. Channel Name Alignment
+
+**Problem:** Plugin subscriptions don't match the channel names emitted by code-transformer.
+
+**Symptoms:** SDK calls execute normally but no spans appear in Braintrust.
+
+**Solution:** Verify channel names match exactly:
+
+```javascript
+// Config (in src/configs/anthropic.ts)
+module: {
+  name: "@anthropic-ai/sdk";
+}
+channelName: "messages.create";
+
+// Results in emitted channel:
+("orchestrion:@anthropic-ai/sdk:messages.create"); // Full scoped package name
+
+// Plugin MUST subscribe to the exact same name:
+iso.newTracingChannel("orchestrion:@anthropic-ai/sdk:messages.create");
+```
+
+**Common mistakes:**
+
+- Using shortened names (e.g., `anthropic` instead of `@anthropic-ai/sdk`)
+- Missing the `@` scope prefix
+- Wrong package name entirely
+
+Run integration tests to verify alignment:
+
+```bash
+pnpm test -- tests/auto-instrumentations/integration.test.ts
+```
+
+#### 2. Browser/Node.js Mismatch
+
+**Problem:** Bundler `browser` option doesn't match runtime environment.
+
+**Symptoms:**
+
+- "Cannot find module 'node:diagnostics_channel'" errors in browser
+- Events not propagating in Node.js
+
+**Solution:**
+
+- For Node.js apps: Use `browser: false` in bundler config
+- For browser apps: Use `browser: true` in bundler config
+- For Node.js runtime apps: Use the loader hook instead of bundling
+
+#### 3. APIPromise Compatibility (Anthropic SDK)
+
+**Problem:** Anthropic's `APIPromise` has incompatible constructor with `Promise`.
+
+**Symptoms:**
+
+- Errors like "APIPromise constructor called with wrong arguments"
+- Traces failing specifically with Anthropic SDK
+
+**Solution:** The auto-instrumentation hook automatically patches `APIPromise` to fix this. Ensure you're using the hook:
+
+```bash
+node --import @braintrust/auto-instrumentations/hook.mjs app.js
+```
+
+Or when using bundlers, the patch is applied automatically when plugins are enabled.
+
+#### 4. Import Order Issues
+
+**Problem:** SDK imported before Braintrust is configured.
+
+**Solution:** Import and configure Braintrust before importing AI SDKs:
+
+```javascript
+// CORRECT
+import { configureNode } from "braintrust";
+configureNode();
+
+import Anthropic from "@anthropic-ai/sdk"; // Now instrumented
+
+// INCORRECT
+import Anthropic from "@anthropic-ai/sdk"; // Not instrumented yet
+
+import { configureNode } from "braintrust";
+configureNode(); // Too late!
+```
+
+### Debugging Channel Events
+
+To debug channel event flow, enable debug logging:
+
+```bash
+DEBUG=braintrust:* node --import @braintrust/auto-instrumentations/hook.mjs app.js
+```
+
+Or add manual logging in your code:
+
+```javascript
+import iso from "braintrust/isomorph";
+
+const channel = iso.newTracingChannel(
+  "orchestrion:@anthropic-ai/sdk:messages.create",
+);
+
+channel.subscribe({
+  start: (event) => {
+    console.log("Channel event received:", event);
+  },
+});
+```
+
+### Known Issues
+
+#### TypeScript Errors with Bundler Plugins
+
+Some bundlers may have TypeScript resolution issues with the plugin imports. Use `.js` extension in imports:
+
+```javascript
+// Instead of:
+import { vitePlugin } from "@braintrust/auto-instrumentations/bundler/vite";
+
+// Use:
+import { vitePlugin } from "@braintrust/auto-instrumentations/bundler/vite.js";
+```
+
+#### ESM vs CJS Mixing
+
+The loader hook works best with pure ESM projects. For CJS projects:
+
+- Use the bundler plugin approach
+- Or ensure all instrumented SDKs are ESM
+
+## Migration Guide
+
+### From dc-browser to Isomorphic Pattern
+
+If you have custom plugins that import `dc-browser` directly:
+
+**Before:**
+
+```javascript
+import { tracingChannel } from "dc-browser";
+
+const channel = tracingChannel("my-channel");
+```
+
+**After:**
+
+```javascript
+import iso from "braintrust/isomorph";
+
+const channel = iso.newTracingChannel("my-channel");
+```
+
+This ensures your plugin works in both Node.js (using `node:diagnostics_channel`) and browser (using `dc-browser`) environments.
+
+### Channel Name Updates
+
+If you created custom instrumentations before the channel name fixes:
+
+**Before:**
+
+```javascript
+// Plugin incorrectly used shortened names
+channel.subscribe("orchestrion:anthropic:messages.create");
+
+// Config used full name
+module: {
+  name: "@anthropic-ai/sdk";
+}
+// ❌ Mismatch - events won't be received!
+```
+
+**After:**
+
+```javascript
+// Plugin uses EXACT module name from config
+channel.subscribe("orchestrion:@anthropic-ai/sdk:messages.create");
+
+// Config uses full name
+module: {
+  name: "@anthropic-ai/sdk";
+}
+// ✅ Match - events will be received
+```

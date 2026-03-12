@@ -1,10 +1,14 @@
-import { tracingChannel } from "dc-browser";
-import type { ChannelHandlers as DCChannelHandlers } from "dc-browser";
+import iso from "../../isomorph";
+import type { IsoChannelHandlers } from "../../isomorph";
 import { isAsyncIterable, patchStreamIfNeeded } from "./stream-patcher";
 import type { StartEvent } from "./types";
 import { startSpan } from "../../logger";
 import type { Span } from "../../logger";
 import { getCurrentUnixTimestamp } from "../../util";
+import {
+  buildStartSpanArgs,
+  mergeInputMetadata,
+} from "./channel-tracing-utils";
 
 /**
  * Base class for creating instrumentation plugins.
@@ -56,8 +60,8 @@ export abstract class BasePlugin {
    * @param channelName - The channel name to subscribe to
    * @param handlers - Event handlers
    */
-  protected subscribe(channelName: string, handlers: DCChannelHandlers): void {
-    const channel = tracingChannel(channelName);
+  protected subscribe(channelName: string, handlers: IsoChannelHandlers): void {
+    const channel = iso.newTracingChannel(channelName);
     channel.subscribe(handlers);
   }
 
@@ -71,24 +75,28 @@ export abstract class BasePlugin {
       name: string;
       type: string;
       extractInput: (args: any[]) => { input: any; metadata: any };
-      extractOutput: (result: any) => any;
+      extractOutput: (result: any, endEvent?: any) => any;
+      extractMetadata?: (result: any, endEvent?: any) => any;
       extractMetrics: (
         result: any,
         startTime?: number,
+        endEvent?: any,
       ) => Record<string, number>;
     },
   ): void {
-    const channel = tracingChannel(channelName);
+    const channel = iso.newTracingChannel(channelName);
 
     const spans = new WeakMap<any, { span: Span; startTime: number }>();
 
     const handlers = {
       start: (event: StartEvent) => {
+        const { name, spanAttributes, spanInfoMetadata } = buildStartSpanArgs(
+          config,
+          event,
+        );
         const span = startSpan({
-          name: config.name,
-          spanAttributes: {
-            type: config.type,
-          },
+          name,
+          spanAttributes,
         });
 
         const startTime = getCurrentUnixTimestamp();
@@ -98,7 +106,7 @@ export abstract class BasePlugin {
           const { input, metadata } = config.extractInput(event.arguments);
           span.log({
             input,
-            metadata,
+            metadata: mergeInputMetadata(metadata, spanInfoMetadata),
           });
         } catch (error) {
           console.error(`Error extracting input for ${channelName}:`, error);
@@ -114,11 +122,13 @@ export abstract class BasePlugin {
         const { span, startTime } = spanData;
 
         try {
-          const output = config.extractOutput(event.result);
-          const metrics = config.extractMetrics(event.result, startTime);
+          const output = config.extractOutput(event.result, event);
+          const metrics = config.extractMetrics(event.result, startTime, event);
+          const metadata = config.extractMetadata?.(event.result, event);
 
           span.log({
             output,
+            ...(metadata !== undefined ? { metadata } : {}),
             metrics,
           });
         } catch (error) {
@@ -163,28 +173,37 @@ export abstract class BasePlugin {
       name: string;
       type: string;
       extractInput: (args: any[]) => { input: any; metadata: any };
-      extractOutput: (result: any) => any;
+      extractOutput: (result: any, endEvent?: any) => any;
+      extractMetadata?: (result: any, endEvent?: any) => any;
       extractMetrics: (
         result: any,
         startTime?: number,
+        endEvent?: any,
       ) => Record<string, number>;
-      aggregateChunks?: (chunks: any[]) => {
+      aggregateChunks?: (
+        chunks: any[],
+        result?: any,
+        endEvent?: any,
+      ) => {
         output: any;
         metrics: Record<string, number>;
+        metadata?: any;
       };
     },
   ): void {
-    const channel = tracingChannel(channelName);
+    const channel = iso.newTracingChannel(channelName);
 
     const spans = new WeakMap<any, { span: Span; startTime: number }>();
 
     const handlers = {
       start: (event: StartEvent) => {
+        const { name, spanAttributes, spanInfoMetadata } = buildStartSpanArgs(
+          config,
+          event,
+        );
         const span = startSpan({
-          name: config.name,
-          spanAttributes: {
-            type: config.type,
-          },
+          name,
+          spanAttributes,
         });
 
         const startTime = getCurrentUnixTimestamp();
@@ -194,7 +213,7 @@ export abstract class BasePlugin {
           const { input, metadata } = config.extractInput(event.arguments);
           span.log({
             input,
-            metadata,
+            metadata: mergeInputMetadata(metadata, spanInfoMetadata),
           });
         } catch (error) {
           console.error(`Error extracting input for ${channelName}:`, error);
@@ -211,30 +230,52 @@ export abstract class BasePlugin {
 
         // Check if result is a stream
         if (isAsyncIterable(event.result)) {
+          let firstChunkTime: number | undefined;
+
           // Patch the stream to collect chunks
           patchStreamIfNeeded(event.result, {
+            onChunk: () => {
+              if (firstChunkTime === undefined) {
+                firstChunkTime = getCurrentUnixTimestamp();
+              }
+            },
             onComplete: (chunks: any[]) => {
               try {
                 let output: any;
                 let metrics: Record<string, number>;
+                let metadata: any;
 
                 if (config.aggregateChunks) {
-                  const aggregated = config.aggregateChunks(chunks);
+                  const aggregated = config.aggregateChunks(
+                    chunks,
+                    event.result,
+                    event,
+                  );
                   output = aggregated.output;
                   metrics = aggregated.metrics;
+                  metadata = aggregated.metadata;
                 } else {
-                  output = config.extractOutput(chunks);
-                  metrics = config.extractMetrics(chunks, startTime);
+                  output = config.extractOutput(chunks, event);
+                  metrics = config.extractMetrics(chunks, startTime, event);
                 }
 
                 // Add time_to_first_token if not already present
-                if (!metrics.time_to_first_token && chunks.length > 0) {
+                if (
+                  metrics.time_to_first_token === undefined &&
+                  firstChunkTime !== undefined
+                ) {
+                  metrics.time_to_first_token = firstChunkTime - startTime;
+                } else if (
+                  metrics.time_to_first_token === undefined &&
+                  chunks.length > 0
+                ) {
                   metrics.time_to_first_token =
                     getCurrentUnixTimestamp() - startTime;
                 }
 
                 span.log({
                   output,
+                  ...(metadata !== undefined ? { metadata } : {}),
                   metrics,
                 });
               } catch (error) {
@@ -258,11 +299,19 @@ export abstract class BasePlugin {
         } else {
           // Non-streaming response
           try {
-            const output = config.extractOutput(event.result);
-            const metrics = config.extractMetrics(event.result, startTime);
+            const output = config.extractOutput(event.result, event);
+            const metadata = config.extractMetadata
+              ? config.extractMetadata(event.result, event)
+              : undefined;
+            const metrics = config.extractMetrics(
+              event.result,
+              startTime,
+              event,
+            );
 
             span.log({
               output,
+              ...(metadata !== undefined ? { metadata } : {}),
               metrics,
             });
           } catch (error) {
@@ -315,17 +364,19 @@ export abstract class BasePlugin {
       };
     },
   ): void {
-    const channel = tracingChannel(channelName);
+    const channel = iso.newTracingChannel(channelName);
 
     const spans = new WeakMap<any, { span: Span; startTime: number }>();
 
     const handlers = {
       start: (event: StartEvent) => {
+        const { name, spanAttributes, spanInfoMetadata } = buildStartSpanArgs(
+          config,
+          event,
+        );
         const span = startSpan({
-          name: config.name,
-          spanAttributes: {
-            type: config.type,
-          },
+          name,
+          spanAttributes,
         });
 
         const startTime = getCurrentUnixTimestamp();
@@ -335,7 +386,7 @@ export abstract class BasePlugin {
           const { input, metadata } = config.extractInput(event.arguments);
           span.log({
             input,
-            metadata,
+            metadata: mergeInputMetadata(metadata, spanInfoMetadata),
           });
         } catch (error) {
           console.error(`Error extracting input for ${channelName}:`, error);

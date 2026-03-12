@@ -16,6 +16,7 @@
   },
   "scripts": {
     "build": "tsup",
+    "check:typings": "tsc --noEmit",
     "watch": "tsup --watch",
     "clean": "rm -r dist/*",
     "test": "vitest run"

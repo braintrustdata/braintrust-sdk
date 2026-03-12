@@ -1,21 +1,58 @@
 {
   "$schema": "https://turbo.build/schema.json",
-  "globalPassThroughEnv": ["OPENAI_API_KEY", "ANTHROPIC_API_KEY"],
+  "globalPassThroughEnv": [
+    "OPENAI_API_KEY",
+    "OPENAI_BASE_URL",
+    "ANTHROPIC_API_KEY",
+    "GEMINI_API_KEY"
+  ],
   "tasks": {
     "build": {
       "dependsOn": ["^build"],
       "outputs": [".next/**", "!.next/cache/**", "dist/**"],
       "env": []
     },
+    "check:typings": {
+      "dependsOn": ["^build"],
+      "outputs": []
+    },
     "test": {
-      "env": ["ANTHROPIC_API_KEY", "BRAINTRUST_API_KEY", "OPENAI_API_KEY"],
+      "env": [
+        "ANTHROPIC_API_KEY",
+        "BRAINTRUST_API_KEY",
+        "GEMINI_API_KEY",
+        "OPENAI_API_KEY",
+        "OPENAI_BASE_URL"
+      ],
+      "dependsOn": ["^build"],
+      "outputs": []
+    },
+    "test:e2e": {
+      "env": [
+        "ANTHROPIC_API_KEY",
+        "BRAINTRUST_API_KEY",
+        "GEMINI_API_KEY",
+        "OPENAI_API_KEY",
+        "OPENAI_BASE_URL"
+      ],
+      "dependsOn": ["^build"],
+      "outputs": []
+    },
+    "test:e2e:update": {
+      "env": [
+        "ANTHROPIC_API_KEY",
+        "BRAINTRUST_API_KEY",
+        "GEMINI_API_KEY",
+        "OPENAI_API_KEY",
+        "OPENAI_BASE_URL"
+      ],
       "dependsOn": ["^build"],
       "outputs": []
     },
     "lint": {
       "outputs": []
     },
-    "fix:eslint": {
+    "fix:lint": {
       "outputs": []
     },
     "dev": {
@@ -33,6 +70,7 @@
       "passThroughEnv": [
         "ANTHROPIC_API_KEY",
         "BRAINTRUST_API_KEY",
+        "GEMINI_API_KEY",
         "OPENAI_API_KEY"
       ],
       "dependsOn": ["^build", "build"]

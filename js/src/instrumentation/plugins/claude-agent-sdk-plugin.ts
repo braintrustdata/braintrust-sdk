@@ -1,6 +1,7 @@
-import { tracingChannel } from "dc-browser";
-import { BasePlugin, isAsyncIterable, patchStreamIfNeeded } from "../core";
-import type { StartEvent } from "../core";
+import { BasePlugin } from "../core";
+import type { ChannelMessage } from "../core/channel-definitions";
+import { isAsyncIterable, patchStreamIfNeeded } from "../core/stream-patcher";
+import type { IsoChannelHandlers } from "../../isomorph";
 import { startSpan } from "../../logger";
 import type { Span } from "../../logger";
 import { SpanTypeAttribute } from "../../../util/index";
@@ -9,59 +10,17 @@ import {
   extractAnthropicCacheTokens,
   finalizeAnthropicTokens,
 } from "../../wrappers/anthropic-tokens-util";
-
-/**
- * Types from @anthropic-ai/claude-agent-sdk
- */
-type SDKMessage = {
-  type: string;
-  message?: {
-    id?: string;
-    role?: string;
-    content?: unknown;
-    model?: string;
-    usage?: {
-      input_tokens?: number;
-      output_tokens?: number;
-      cache_read_input_tokens?: number;
-      cache_creation_input_tokens?: number;
-    };
-  };
-  usage?: {
-    input_tokens?: number;
-    output_tokens?: number;
-    cache_read_input_tokens?: number;
-    cache_creation_input_tokens?: number;
-  };
-  num_turns?: number;
-  session_id?: string;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  [key: string]: any;
-};
-
-type QueryOptions = {
-  model?: string;
-  maxTurns?: number;
-  cwd?: string;
-  continue?: boolean;
-  allowedTools?: string[];
-  disallowedTools?: string[];
-  additionalDirectories?: string[];
-  permissionMode?: string;
-  debug?: boolean;
-  apiKey?: string;
-  apiKeySource?: string;
-  agentName?: string;
-  instructions?: string;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  [key: string]: any;
-};
+import { claudeAgentSDKChannels } from "./claude-agent-sdk-channels";
+import type {
+  ClaudeAgentSDKMessage,
+  ClaudeAgentSDKQueryOptions,
+} from "../../vendor-sdk-types/claude-agent-sdk";
 
 /**
  * Filters options to include only specific serializable fields for logging.
  */
 function filterSerializableOptions(
-  options: QueryOptions,
+  options: ClaudeAgentSDKQueryOptions,
 ): Record<string, unknown> {
   const allowedKeys = [
     "model",
@@ -104,7 +63,9 @@ function getNumberProperty(obj: unknown, key: string): number | undefined {
 /**
  * Extract and normalize usage metrics from a Claude Agent SDK message.
  */
-function extractUsageFromMessage(message: SDKMessage): Record<string, number> {
+function extractUsageFromMessage(
+  message: ClaudeAgentSDKMessage,
+): Record<string, number> {
   const metrics: Record<string, number> = {};
 
   // Assistant messages contain usage in message.message.usage
@@ -157,7 +118,7 @@ function extractUsageFromMessage(message: SDKMessage): Record<string, number> {
  * Builds the input array for an LLM span from the initial prompt and conversation history.
  */
 function buildLLMInput(
-  prompt: string | AsyncIterable<SDKMessage> | undefined,
+  prompt: string | AsyncIterable<ClaudeAgentSDKMessage> | undefined,
   conversationHistory: Array<{ content: unknown; role: string }>,
 ): Array<{ content: unknown; role: string }> | undefined {
   const promptMessage =
@@ -176,10 +137,10 @@ function buildLLMInput(
  * Returns the final message content to add to conversation history.
  */
 async function createLLMSpanForMessages(
-  messages: SDKMessage[],
-  prompt: string | AsyncIterable<SDKMessage> | undefined,
+  messages: ClaudeAgentSDKMessage[],
+  prompt: string | AsyncIterable<ClaudeAgentSDKMessage> | undefined,
   conversationHistory: Array<{ content: unknown; role: string }>,
-  options: QueryOptions,
+  options: ClaudeAgentSDKQueryOptions,
   startTime: number,
   parentSpan: Awaited<ReturnType<typeof startSpan>>["export"] extends (
     ...args: infer _
@@ -203,7 +164,10 @@ async function createLLMSpanForMessages(
         ? { content: m.message.content, role: m.message.role }
         : undefined,
     )
-    .filter((c): c is { content: any; role: string } => c !== undefined);
+    .filter(
+      (c): c is { content: NonNullable<unknown>; role: string } =>
+        c !== undefined,
+    );
 
   // Use traced pattern for LLM spans
   const span = startSpan({
@@ -240,8 +204,6 @@ async function createLLMSpanForMessages(
  * are traced separately as LLM spans.
  */
 export class ClaudeAgentSDKPlugin extends BasePlugin {
-  protected unsubscribers: Array<() => void> = [];
-
   protected onEnable(): void {
     this.subscribeToQuery();
   }
@@ -259,29 +221,27 @@ export class ClaudeAgentSDKPlugin extends BasePlugin {
    * and individual LLM calls.
    */
   private subscribeToQuery(): void {
-    const channel = tracingChannel("orchestrion:claude-agent-sdk:query");
-
+    const channel = claudeAgentSDKChannels.query.tracingChannel();
     const spans = new WeakMap<
-      any,
+      object,
       {
         span: Span;
         startTime: number;
         conversationHistory: Array<{ content: unknown; role: string }>;
-        currentMessages: SDKMessage[];
+        currentMessages: ClaudeAgentSDKMessage[];
         currentMessageId: string | undefined;
         currentMessageStartTime: number;
         accumulatedOutputTokens: number;
       }
     >();
 
-    const handlers = {
-      start: (event: StartEvent) => {
-        const params = (event.arguments[0] ?? {}) as {
-          prompt?: string | AsyncIterable<SDKMessage>;
-          options?: QueryOptions;
-        };
-
-        const { prompt, options = {} } = params;
+    const handlers: IsoChannelHandlers<
+      ChannelMessage<typeof claudeAgentSDKChannels.query>
+    > = {
+      start: (event) => {
+        const params = event.arguments[0];
+        const prompt = params?.prompt;
+        const options = params?.options ?? {};
 
         const span = startSpan({
           name: "Claude Agent",
@@ -299,7 +259,7 @@ export class ClaudeAgentSDKPlugin extends BasePlugin {
                 ? prompt
                 : {
                     type: "streaming",
-                    description: "AsyncIterable<SDKMessage>",
+                    description: "AsyncIterable<ClaudeAgentSDKMessage>",
                   },
             metadata: filterSerializableOptions(options),
           });
@@ -318,23 +278,28 @@ export class ClaudeAgentSDKPlugin extends BasePlugin {
         });
       },
 
-      asyncEnd: (event: any) => {
+      asyncEnd: (event) => {
         const spanData = spans.get(event);
         if (!spanData) {
           return;
         }
 
+        const eventResult = event.result;
+        if (eventResult === undefined) {
+          spanData.span.end();
+          spans.delete(event);
+          return;
+        }
+
         // Check if result is a stream
-        if (isAsyncIterable(event.result)) {
+        if (isAsyncIterable(eventResult)) {
           // Patch the stream to collect chunks and trace them
-          patchStreamIfNeeded(event.result, {
-            onChunk: async (message: SDKMessage) => {
+          patchStreamIfNeeded(eventResult, {
+            onChunk: async (message: ClaudeAgentSDKMessage) => {
               const currentTime = getCurrentUnixTimestamp();
-              const params: {
-                prompt?: string | AsyncIterable<SDKMessage>;
-                options?: QueryOptions;
-              } = event.arguments[0];
-              const { prompt, options = {} } = params;
+              const params = event.arguments[0];
+              const prompt = params?.prompt;
+              const options = params?.options ?? {};
 
               const messageId = message.message?.id;
 
@@ -423,11 +388,9 @@ export class ClaudeAgentSDKPlugin extends BasePlugin {
             },
             onComplete: async () => {
               try {
-                const params: {
-                  prompt?: string | AsyncIterable<SDKMessage>;
-                  options?: QueryOptions;
-                } = event.arguments[0];
-                const { prompt, options = {} } = params;
+                const params = event.arguments[0];
+                const prompt = params?.prompt;
+                const options = params?.options ?? {};
 
                 // Create span for final message group
                 if (spanData.currentMessages.length > 0) {
@@ -478,7 +441,7 @@ export class ClaudeAgentSDKPlugin extends BasePlugin {
           // Non-streaming response (shouldn't happen for query, but handle gracefully)
           try {
             spanData.span.log({
-              output: event.result,
+              output: eventResult,
             });
           } catch (error) {
             console.error(
@@ -492,9 +455,9 @@ export class ClaudeAgentSDKPlugin extends BasePlugin {
         }
       },
 
-      error: (event: any) => {
+      error: (event) => {
         const spanData = spans.get(event);
-        if (!spanData) {
+        if (!spanData || !event.error) {
           return;
         }
 
@@ -509,8 +472,6 @@ export class ClaudeAgentSDKPlugin extends BasePlugin {
     };
 
     channel.subscribe(handlers);
-
-    // Store unsubscribe function
     this.unsubscribers.push(() => {
       channel.unsubscribe(handlers);
     });

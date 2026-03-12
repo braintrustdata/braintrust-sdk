@@ -1,6 +1,6 @@
 {
   "name": "braintrust",
-  "version": "3.3.0",
+  "version": "3.4.0",
   "description": "SDK for integrating Braintrust",
   "repository": {
     "type": "git",
@@ -107,6 +107,7 @@
   ],
   "scripts": {
     "build": "cross-env NODE_OPTIONS=\"--max-old-space-size=8192\" tsup",
+    "check:typings": "tsc --noEmit",
     "watch": "tsup --watch",
     "clean": "rm -r dist/* && rm -r dev/dist/*",
     "docs": "npx typedoc --options typedoc.json src/node/index.ts",
@@ -127,7 +128,7 @@
     "test:vitest": "pnpm --filter @braintrust/vitest-wrapper-tests test",
     "test:output": "tsx scripts/test-output.ts --with-comparison --with-metrics --with-progress",
     "lint": "eslint .",
-    "fix:eslint": "eslint --fix .",
+    "fix:lint": "eslint --fix .",
     "playground": "tsx playground.ts"
   },
   "author": "",
@@ -159,6 +160,7 @@
     "cross-env": "^7.0.3",
     "eslint-plugin-node-import": "^1.0.5",
     "jiti": "^2.6.1",
+    "openai": "6.25.0",
     "openapi-zod-client": "^1.18.3",
     "rollup": "^4.28.1",
     "vite": "^5.4.14",
@@ -187,7 +189,7 @@
     "cli-progress": "^3.12.0",
     "cli-table3": "^0.6.5",
     "cors": "^2.8.5",
-    "dc-browser": "^1.0.2",
+    "dc-browser": "^1.0.3",
     "dotenv": "^16.4.5",
     "esbuild": "^0.27.0",
     "eventsource-parser": "^1.1.2",

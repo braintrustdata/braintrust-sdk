@@ -198,7 +198,7 @@ export const CHAT_BEAR_POEM = {
   system_fingerprint: "fp_bba3c8e70b",
 };
 
-export const EMBEDDING_HELLO_WORLD = {
+const EMBEDDING_HELLO_WORLD = {
   object: "list",
   data: [
     {
@@ -837,7 +837,7 @@ export const EMBEDDING_HELLO_WORLD = {
   },
 };
 
-export const EMBEDDING_BYE_WORLD = {
+const EMBEDDING_BYE_WORLD = {
   object: "list",
   data: [
     {

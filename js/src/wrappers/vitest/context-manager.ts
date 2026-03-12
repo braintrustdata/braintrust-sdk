@@ -39,7 +39,7 @@ export interface VitestExperimentContext {
  * ```
  *
  */
-export class VitestContextManager {
+class VitestContextManager {
   /**
    * AsyncLocalStorage for experiment context isolation.
    * Each async execution flow (test, concurrent test, worker thread) gets its own context.

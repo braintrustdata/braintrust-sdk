@@ -1,11 +1,18 @@
-import { tracingChannel } from "dc-browser";
-import { BasePlugin, isAsyncIterable, patchStreamIfNeeded } from "../core";
-import type { StartEvent } from "../core";
-import { startSpan, Attachment } from "../../logger";
-import type { Span } from "../../logger";
+import { BasePlugin } from "../core";
+import { traceStreamingChannel, unsubscribeAll } from "../core/channel-tracing";
+import { Attachment } from "../../logger";
 import { SpanTypeAttribute, isObject } from "../../../util/index";
 import { getCurrentUnixTimestamp } from "../../util";
 import { finalizeAnthropicTokens } from "../../wrappers/anthropic-tokens-util";
+import { anthropicChannels } from "./anthropic-channels";
+import type {
+  AnthropicBase64Source,
+  AnthropicCreateParams,
+  AnthropicInputMessage,
+  AnthropicMessage,
+  AnthropicStreamEvent,
+  AnthropicUsage,
+} from "../../vendor-sdk-types/anthropic";
 
 /**
  * Auto-instrumentation plugin for the Anthropic SDK.
@@ -22,26 +29,20 @@ import { finalizeAnthropicTokens } from "../../wrappers/anthropic-tokens-util";
  * - Streaming and non-streaming responses
  */
 export class AnthropicPlugin extends BasePlugin {
-  protected unsubscribers: Array<() => void> = [];
-
   protected onEnable(): void {
     this.subscribeToAnthropicChannels();
   }
 
   protected onDisable(): void {
-    for (const unsubscribe of this.unsubscribers) {
-      unsubscribe();
-    }
-    this.unsubscribers = [];
+    this.unsubscribers = unsubscribeAll(this.unsubscribers);
   }
 
   private subscribeToAnthropicChannels(): void {
-    // Messages API - supports streaming via stream=true parameter
-    this.subscribeToStreamingChannel("orchestrion:anthropic:messages.create", {
+    const anthropicConfig = {
       name: "anthropic.messages.create",
       type: SpanTypeAttribute.LLM,
-      extractInput: (args: any[]) => {
-        const params = args[0] || {};
+      extractInput: (args: unknown[]) => {
+        const params = (args[0] || {}) as AnthropicCreateParams;
         const input = coalesceInput(params.messages || [], params.system);
         const metadata = filterFrom(params, ["messages", "system"]);
         return {
@@ -49,11 +50,13 @@ export class AnthropicPlugin extends BasePlugin {
           metadata: { ...metadata, provider: "anthropic" },
         };
       },
-      extractOutput: (result: any) => {
-        return result ? { role: result.role, content: result.content } : null;
+      extractOutput: (message: AnthropicMessage) => {
+        return message
+          ? { role: message.role, content: message.content }
+          : null;
       },
-      extractMetrics: (result: any, startTime?: number) => {
-        const metrics = parseMetricsFromUsage(result?.usage);
+      extractMetrics: (message: AnthropicMessage, startTime?: number) => {
+        const metrics = parseMetricsFromUsage(message?.usage);
         if (startTime) {
           metrics.time_to_first_token = getCurrentUnixTimestamp() - startTime;
         }
@@ -65,232 +68,32 @@ export class AnthropicPlugin extends BasePlugin {
           ),
         );
       },
-      extractMetadata: (result: any) => {
+      extractMetadata: (message: AnthropicMessage) => {
         const metadata: Record<string, unknown> = {};
-        const metas = ["stop_reason", "stop_sequence"];
+        const metas = ["stop_reason", "stop_sequence"] as const;
         for (const m of metas) {
-          if (result?.[m] !== undefined) {
-            metadata[m] = result[m];
+          if (message?.[m] !== undefined) {
+            metadata[m] = message[m];
           }
         }
         return metadata;
       },
-      aggregateChunks: aggregateAnthropicStreamChunks,
-      isStreaming: (args: any[]) => {
-        return args[0]?.stream === true;
-      },
-    });
-
-    // Beta Messages API - supports streaming via stream=true parameter
-    this.subscribeToStreamingChannel(
-      "orchestrion:anthropic:beta.messages.create",
-      {
-        name: "anthropic.beta.messages.create",
-        type: SpanTypeAttribute.LLM,
-        extractInput: (args: any[]) => {
-          const params = args[0] || {};
-          const input = coalesceInput(params.messages || [], params.system);
-          const metadata = filterFrom(params, ["messages", "system"]);
-          return {
-            input: processAttachmentsInInput(input),
-            metadata: { ...metadata, provider: "anthropic" },
-          };
-        },
-        extractOutput: (result: any) => {
-          return result ? { role: result.role, content: result.content } : null;
-        },
-        extractMetrics: (result: any, startTime?: number) => {
-          const metrics = parseMetricsFromUsage(result?.usage);
-          if (startTime) {
-            metrics.time_to_first_token = getCurrentUnixTimestamp() - startTime;
-          }
-          const finalized = finalizeAnthropicTokens(metrics);
-          // Filter out undefined values to match Record<string, number> type
-          return Object.fromEntries(
-            Object.entries(finalized).filter(
-              (entry): entry is [string, number] => entry[1] !== undefined,
-            ),
-          );
-        },
-        extractMetadata: (result: any) => {
-          const metadata: Record<string, unknown> = {};
-          const metas = ["stop_reason", "stop_sequence"];
-          for (const m of metas) {
-            if (result?.[m] !== undefined) {
-              metadata[m] = result[m];
-            }
-          }
-          return metadata;
-        },
-        aggregateChunks: aggregateAnthropicStreamChunks,
-        isStreaming: (args: any[]) => {
-          return args[0]?.stream === true;
-        },
-      },
-    );
-  }
-
-  /**
-   * Subscribe to a channel for async methods that may return streams.
-   * Handles both streaming and non-streaming responses based on the stream parameter.
-   */
-  protected subscribeToStreamingChannel(
-    channelName: string,
-    config: {
-      name: string;
-      type: string;
-      extractInput: (args: any[]) => { input: any; metadata: any };
-      extractOutput: (result: any) => any;
-      extractMetrics: (
-        result: any,
-        startTime?: number,
-      ) => Record<string, number>;
-      extractMetadata?: (result: any) => Record<string, unknown>;
-      aggregateChunks?: (chunks: any[]) => {
-        output: any;
-        metrics: Record<string, number>;
-        metadata?: Record<string, unknown>;
-      };
-      isStreaming?: (args: any[]) => boolean;
-    },
-  ): void {
-    const channel = tracingChannel(channelName);
-
-    const spans = new WeakMap<any, { span: Span; startTime: number }>();
-
-    const handlers = {
-      start: (event: StartEvent) => {
-        const span = startSpan({
-          name: config.name,
-          spanAttributes: {
-            type: config.type,
-          },
-        });
-
-        const startTime = getCurrentUnixTimestamp();
-        spans.set(event, { span, startTime });
-
-        try {
-          const { input, metadata } = config.extractInput(event.arguments);
-          span.log({
-            input,
-            metadata,
-          });
-        } catch (error) {
-          console.error(`Error extracting input for ${channelName}:`, error);
-        }
-      },
-
-      asyncEnd: (event: any) => {
-        const spanData = spans.get(event);
-        if (!spanData) {
-          return;
-        }
-
-        const { span, startTime } = spanData;
-
-        // Check if this is a streaming request based on parameters
-        const isStreaming = config.isStreaming
-          ? config.isStreaming(event.arguments)
-          : isAsyncIterable(event.result);
-
-        // Check if result is a stream
-        if (isStreaming && isAsyncIterable(event.result)) {
-          // Patch the stream to collect chunks
-          patchStreamIfNeeded(event.result, {
-            onComplete: (chunks: any[]) => {
-              try {
-                let output: any;
-                let metrics: Record<string, number>;
-                let metadata: Record<string, unknown> = {};
-
-                if (config.aggregateChunks) {
-                  const aggregated = config.aggregateChunks(chunks);
-                  output = aggregated.output;
-                  metrics = aggregated.metrics;
-                  metadata = aggregated.metadata || {};
-                } else {
-                  output = config.extractOutput(chunks);
-                  metrics = config.extractMetrics(chunks, startTime);
-                  if (config.extractMetadata) {
-                    metadata = config.extractMetadata(chunks);
-                  }
-                }
-
-                // Add time_to_first_token if not already present
-                if (!metrics.time_to_first_token && chunks.length > 0) {
-                  metrics.time_to_first_token =
-                    getCurrentUnixTimestamp() - startTime;
-                }
-
-                span.log({
-                  output,
-                  metrics,
-                  metadata,
-                });
-              } catch (error) {
-                console.error(
-                  `Error extracting output for ${channelName}:`,
-                  error,
-                );
-              } finally {
-                span.end();
-              }
-            },
-            onError: (error: Error) => {
-              span.log({
-                error: error.message,
-              });
-              span.end();
-            },
-          });
-
-          // Don't delete the span from the map yet - it will be ended by the stream
-        } else {
-          // Non-streaming response
-          try {
-            const output = config.extractOutput(event.result);
-            const metrics = config.extractMetrics(event.result, startTime);
-            const metadata = config.extractMetadata
-              ? config.extractMetadata(event.result)
-              : {};
-
-            span.log({
-              output,
-              metrics,
-              metadata,
-            });
-          } catch (error) {
-            console.error(`Error extracting output for ${channelName}:`, error);
-          } finally {
-            span.end();
-            spans.delete(event);
-          }
-        }
-      },
-
-      error: (event: any) => {
-        const spanData = spans.get(event);
-        if (!spanData) {
-          return;
-        }
-
-        const { span } = spanData;
-
-        span.log({
-          error: event.error.message,
-        });
-        span.end();
-        spans.delete(event);
-      },
+      aggregateChunks: (chunks: AnthropicStreamEvent[]) =>
+        aggregateAnthropicStreamChunks(chunks),
     };
 
-    channel.subscribe(handlers);
+    // Messages API - supports streaming via stream=true parameter
+    this.unsubscribers.push(
+      traceStreamingChannel(anthropicChannels.messagesCreate, anthropicConfig),
+    );
 
-    // Store unsubscribe function
-    this.unsubscribers.push(() => {
-      channel.unsubscribe(handlers);
-    });
+    // Beta Messages API - supports streaming via stream=true parameter
+    this.unsubscribers.push(
+      traceStreamingChannel(anthropicChannels.betaMessagesCreate, {
+        ...anthropicConfig,
+        name: "anthropic.beta.messages.create",
+      }),
+    );
   }
 }
 
@@ -298,15 +101,17 @@ export class AnthropicPlugin extends BasePlugin {
  * Parse metrics from Anthropic usage object.
  * Maps Anthropic's token names to Braintrust's standard names.
  */
-export function parseMetricsFromUsage(usage: any): Record<string, number> {
+export function parseMetricsFromUsage(
+  usage: AnthropicUsage | undefined,
+): Record<string, number> {
   if (!usage) {
     return {};
   }
 
   const metrics: Record<string, number> = {};
 
-  function saveIfExistsTo(source: string, target: string) {
-    const value = usage[source];
+  function saveIfExistsTo(source: keyof AnthropicUsage, target: string) {
+    const value = usage![source];
     if (value !== undefined && value !== null && typeof value === "number") {
       metrics[target] = value;
     }
@@ -330,8 +135,10 @@ export function parseMetricsFromUsage(usage: any): Record<string, number> {
  * - message_delta: Final usage stats and metadata
  * - message_stop: End of stream
  */
-export function aggregateAnthropicStreamChunks(chunks: any[]): {
-  output: any;
+export function aggregateAnthropicStreamChunks(
+  chunks: AnthropicStreamEvent[],
+): {
+  output: string;
   metrics: Record<string, number>;
   metadata: Record<string, unknown>;
 } {
@@ -339,20 +146,20 @@ export function aggregateAnthropicStreamChunks(chunks: any[]): {
   let metrics: Record<string, number> = {};
   let metadata: Record<string, unknown> = {};
 
-  for (const chunk of chunks) {
-    switch (chunk?.type) {
+  for (const event of chunks) {
+    switch (event?.type) {
       case "message_start":
         // Collect initial metrics from message
-        if (chunk.message?.usage) {
-          const initialMetrics = parseMetricsFromUsage(chunk.message.usage);
+        if (event.message?.usage) {
+          const initialMetrics = parseMetricsFromUsage(event.message.usage);
           metrics = { ...metrics, ...initialMetrics };
         }
         break;
 
       case "content_block_delta":
         // Collect text deltas
-        if (chunk.delta?.type === "text_delta") {
-          const text = chunk.delta?.text;
+        if (event.delta?.type === "text_delta") {
+          const text = event.delta.text;
           if (text) {
             deltas.push(text);
           }
@@ -361,13 +168,13 @@ export function aggregateAnthropicStreamChunks(chunks: any[]): {
 
       case "message_delta":
         // Collect final usage stats and metadata
-        if (chunk.usage) {
-          const finalMetrics = parseMetricsFromUsage(chunk.usage);
+        if (event.usage) {
+          const finalMetrics = parseMetricsFromUsage(event.usage);
           metrics = { ...metrics, ...finalMetrics };
         }
-        if (chunk.delta) {
+        if (event.delta) {
           // stop_reason, stop_sequence, etc.
-          metadata = { ...metadata, ...chunk.delta };
+          metadata = { ...metadata, ...event.delta };
         }
         break;
     }
@@ -390,13 +197,26 @@ export function aggregateAnthropicStreamChunks(chunks: any[]): {
   };
 }
 
+function isAnthropicBase64ContentBlock(
+  input: Record<string, unknown>,
+): input is Record<string, unknown> & {
+  source: AnthropicBase64Source;
+  type: "image" | "document";
+} {
+  return (
+    (input.type === "image" || input.type === "document") &&
+    isObject(input.source) &&
+    input.source.type === "base64"
+  );
+}
+
 /**
  * Helper function to convert base64 content to an Attachment.
  */
 function convertBase64ToAttachment(
-  source: any,
+  source: AnthropicBase64Source,
   contentType: "image" | "document",
-): any {
+): Record<string, unknown> {
   const mediaType =
     typeof source.media_type === "string" ? source.media_type : "image/png";
   const base64Data = source.data;
@@ -428,13 +248,13 @@ function convertBase64ToAttachment(
     };
   }
 
-  return source;
+  return { ...source };
 }
 
 /**
  * Process input to convert base64 attachments (images, PDFs, etc.) to Attachment objects.
  */
-export function processAttachmentsInInput(input: any): any {
+export function processAttachmentsInInput(input: unknown): unknown {
   if (Array.isArray(input)) {
     return input.map(processAttachmentsInInput);
   }
@@ -442,11 +262,7 @@ export function processAttachmentsInInput(input: any): any {
   if (isObject(input)) {
     // Check for Anthropic's content blocks with base64 data
     // Supports both "image" and "document" types (for PDFs, etc.)
-    if (
-      (input.type === "image" || input.type === "document") &&
-      isObject(input.source) &&
-      input.source.type === "base64"
-    ) {
+    if (isAnthropicBase64ContentBlock(input)) {
       return {
         ...input,
         source: convertBase64ToAttachment(input.source, input.type),
@@ -454,7 +270,7 @@ export function processAttachmentsInInput(input: any): any {
     }
 
     // Recursively process nested objects
-    const processed: any = {};
+    const processed: Record<string, unknown> = {};
     for (const [key, value] of Object.entries(input)) {
       processed[key] = processAttachmentsInInput(value);
     }
@@ -468,7 +284,10 @@ export function processAttachmentsInInput(input: any): any {
  * Convert Anthropic args to the single "input" field Braintrust expects.
  * Combines messages array with system message if present.
  */
-function coalesceInput(messages: any[], system: string | undefined): any[] {
+function coalesceInput(
+  messages: AnthropicInputMessage[],
+  system: AnthropicCreateParams["system"],
+): AnthropicInputMessage[] {
   // Make a copy because we're going to mutate it
   const input = (messages || []).slice();
   if (system) {
@@ -480,8 +299,11 @@ function coalesceInput(messages: any[], system: string | undefined): any[] {
 /**
  * Filter out specified fields from an object.
  */
-function filterFrom(obj: any, fieldsToRemove: string[]): any {
-  const result: any = {};
+function filterFrom(
+  obj: Record<string, unknown>,
+  fieldsToRemove: string[],
+): Record<string, unknown> {
+  const result: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(obj)) {
     if (!fieldsToRemove.includes(key)) {
       result[key] = value;

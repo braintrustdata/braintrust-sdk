@@ -81,102 +81,143 @@ export function processInputAttachments(input: any): any {
 
   let attachmentIndex = 0;
 
-  // Helper to process a single content part
-  const processContentPart = (part: any): any => {
-    if (!part || typeof part !== "object") {
-      return part;
+  const inferMediaTypeFromDataUrl = (
+    value: string,
+    fallback: string,
+  ): string => {
+    const mediaTypeMatch = value.match(/^data:([^;]+);/);
+    return mediaTypeMatch?.[1] || fallback;
+  };
+
+  const toAttachment = (
+    value: unknown,
+    mediaType: string,
+    filename: string,
+  ): Attachment | null => {
+    const blob = convertDataToBlob(value, mediaType);
+    if (!blob) {
+      return null;
     }
 
-    // Handle image content parts
-    if (part.type === "image" && part.image) {
-      // Try to infer media type from data URL or use provided mediaType
-      let mediaType = "image/png"; // Default fallback
+    return new Attachment({
+      data: blob,
+      filename,
+      contentType: mediaType,
+    });
+  };
 
-      if (typeof part.image === "string" && part.image.startsWith("data:")) {
-        // Extract media type from data URL (e.g., "data:image/jpeg;base64,...")
-        const mediaTypeMatch = part.image.match(/^data:([^;]+);/);
-        if (mediaTypeMatch) {
-          mediaType = mediaTypeMatch[1];
-        }
-      } else if (part.mediaType) {
-        // Use explicit mediaType if provided
-        mediaType = part.mediaType;
+  const processNode = (node: any): any => {
+    if (Array.isArray(node)) {
+      return node.map(processNode);
+    }
+
+    if (!node || typeof node !== "object") {
+      return node;
+    }
+
+    // OpenAI chat image_url content format
+    if (
+      node.type === "image_url" &&
+      node.image_url &&
+      typeof node.image_url === "object" &&
+      typeof node.image_url.url === "string" &&
+      node.image_url.url.startsWith("data:")
+    ) {
+      const mediaType = inferMediaTypeFromDataUrl(
+        node.image_url.url,
+        "image/png",
+      );
+      const filename = `image.${getExtensionFromMediaType(mediaType)}`;
+      const attachment = toAttachment(node.image_url.url, mediaType, filename);
+
+      if (attachment) {
+        return {
+          ...node,
+          image_url: {
+            ...node.image_url,
+            url: attachment,
+          },
+        };
+      }
+    }
+
+    // OpenAI chat file content format
+    if (
+      node.type === "file" &&
+      node.file &&
+      typeof node.file === "object" &&
+      typeof node.file.file_data === "string" &&
+      node.file.file_data.startsWith("data:")
+    ) {
+      const mediaType = inferMediaTypeFromDataUrl(
+        node.file.file_data,
+        "application/octet-stream",
+      );
+      const filename =
+        typeof node.file.filename === "string" && node.file.filename
+          ? node.file.filename
+          : `document.${getExtensionFromMediaType(mediaType)}`;
+      const attachment = toAttachment(node.file.file_data, mediaType, filename);
+
+      if (attachment) {
+        return {
+          ...node,
+          file: {
+            ...node.file,
+            file_data: attachment,
+          },
+        };
+      }
+    }
+
+    // AI SDK image content format
+    if (node.type === "image" && node.image) {
+      let mediaType = "image/png";
+      if (typeof node.image === "string" && node.image.startsWith("data:")) {
+        mediaType = inferMediaTypeFromDataUrl(node.image, mediaType);
+      } else if (node.mediaType) {
+        mediaType = node.mediaType;
       }
 
-      const blob = convertDataToBlob(part.image, mediaType);
+      const filename = `input_image_${attachmentIndex}.${getExtensionFromMediaType(mediaType)}`;
+      const attachment = toAttachment(node.image, mediaType, filename);
 
-      if (blob) {
-        const filename = `input_image_${attachmentIndex}.${getExtensionFromMediaType(mediaType)}`;
+      if (attachment) {
         attachmentIndex++;
-
-        const attachment = new Attachment({
-          data: blob,
-          filename: filename,
-          contentType: mediaType,
-        });
-
-        // Replace image data with Attachment object in-place
         return {
-          ...part,
+          ...node,
           image: attachment,
         };
       }
     }
 
-    // Handle file content parts
-    if (part.type === "file" && part.data) {
-      const mediaType = part.mediaType || "application/octet-stream";
-      const blob = convertDataToBlob(part.data, mediaType);
+    // AI SDK file content format
+    if (node.type === "file" && node.data) {
+      const mediaType = node.mediaType || "application/octet-stream";
+      const filename =
+        node.filename ||
+        `input_file_${attachmentIndex}.${getExtensionFromMediaType(mediaType)}`;
+      const attachment = toAttachment(node.data, mediaType, filename);
 
-      if (blob) {
-        const filename =
-          part.filename ||
-          `input_file_${attachmentIndex}.${getExtensionFromMediaType(mediaType)}`;
+      if (attachment) {
         attachmentIndex++;
-
-        const attachment = new Attachment({
-          data: blob,
-          filename: filename,
-          contentType: mediaType,
-        });
-
-        // Replace data with Attachment object in-place
         return {
-          ...part,
+          ...node,
           data: attachment,
         };
       }
     }
 
-    return part;
+    const processed: Record<string, unknown> = {};
+    for (const [key, value] of Object.entries(node)) {
+      processed[key] = processNode(value);
+    }
+    return processed;
   };
 
-  // Helper to process a message
-  const processMessage = (message: any): any => {
-    if (!message || typeof message !== "object") {
-      return message;
-    }
-
-    // If message has content array, process each part
-    if (Array.isArray(message.content)) {
-      return {
-        ...message,
-        content: message.content.map(processContentPart),
-      };
-    }
-
-    return message;
-  };
-
-  // Process different input types
   if (Array.isArray(input)) {
-    // Array of messages
-    return input.map(processMessage);
-  } else if (typeof input === "object" && input.content) {
-    // Single message with content
-    return processMessage(input);
+    return input.map(processNode);
   }
 
-  // Simple string or other input - no processing needed
-  return input;
+  return processNode(input);
 }

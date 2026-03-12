@@ -93,6 +93,7 @@ export type IdentPiece = z.infer<typeof identPieceSchema>;
 export const identSchema = z.strictObject({
   op: z.literal("ident"),
   name: z.array(identPieceSchema),
+  alias: z.string().nullish(),
   loc,
 });
 export type Ident = z.infer<typeof identSchema>;
@@ -109,12 +110,17 @@ export interface Star {
   loc?: NullableLoc;
 }
 
+export const shapeSchema = z.enum(["spans", "traces", "summary"]);
+export type Shape = z.infer<typeof shapeSchema>;
+
 export interface Function {
   op: "function";
   name: Ident;
   args: (Expr | AliasExpr)[];
   duplicate_treatment?: DuplicateTreatment | null;
   loc?: NullableLoc;
+  shape?: Shape | null;
+  alias?: string | null;
 }
 export const duplicateTreatmentSchema = z.enum(["Distinct", "All"]);
 export type DuplicateTreatment = z.infer<typeof duplicateTreatmentSchema>;
@@ -124,6 +130,8 @@ export const functionSchema: z.ZodType<Function> = z.object({
   args: z.array(z.union([z.lazy(() => exprSchema), z.lazy(() => aliasExpr)])),
   duplicate_treatment: duplicateTreatmentSchema.nullish(),
   loc,
+  shape: shapeSchema.nullish(),
+  alias: z.string().nullish(),
 });
 
 export const comparisonOps = [
@@ -341,9 +349,6 @@ export const sortExpr = z.strictObject({
 
 export type SortExpr = z.infer<typeof sortExpr>;
 
-export const shapeSchema = z.enum(["spans", "traces", "summary"]);
-export type Shape = z.infer<typeof shapeSchema>;
-
 export const fromFunctionSchema = functionSchema.and(
   z.object({
     shape: shapeSchema.nullish(),
@@ -389,5 +394,7 @@ export const parsedQuerySchema = z.strictObject({
   span_filter: exprSchema.nullish(),
   trace_filter: exprSchema.nullish(),
   final_filter: exprSchema.nullish(),
+  final_dimensions: z.array(aliasExpr).nullish(),
+  final_measures: z.array(aliasExpr).nullish(),
 });
 export type ParsedQuery = z.infer<typeof parsedQuerySchema>;

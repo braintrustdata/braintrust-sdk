@@ -1,10 +1,20 @@
-import { tracingChannel } from "dc-browser";
-import { BasePlugin, isAsyncIterable, patchStreamIfNeeded } from "../core";
-import type { StartEvent } from "../core";
-import { startSpan, Attachment } from "../../logger";
-import type { Span } from "../../logger";
+import { BasePlugin } from "../core";
+import {
+  traceAsyncChannel,
+  traceStreamingChannel,
+  unsubscribeAll,
+} from "../core/channel-tracing";
+import { Attachment } from "../../logger";
 import { SpanTypeAttribute } from "../../../util/index";
 import { getCurrentUnixTimestamp } from "../../util";
+import { googleGenAIChannels } from "./google-genai-channels";
+import type {
+  GoogleGenAIGenerateContentParams,
+  GoogleGenAIGenerateContentResponse,
+  GoogleGenAIContent,
+  GoogleGenAIPart,
+  GoogleGenAIUsageMetadata,
+} from "../../vendor-sdk-types/google-genai";
 
 /**
  * Auto-instrumentation plugin for the Google GenAI SDK.
@@ -21,49 +31,21 @@ import { getCurrentUnixTimestamp } from "../../util";
  * - Tool calls (functionCall, functionResponse) and executable code results
  */
 export class GoogleGenAIPlugin extends BasePlugin {
-  protected unsubscribers: Array<() => void> = [];
-
   protected onEnable(): void {
     this.subscribeToGoogleGenAIChannels();
   }
 
   protected onDisable(): void {
-    for (const unsubscribe of this.unsubscribers) {
-      unsubscribe();
-    }
-    this.unsubscribers = [];
+    this.unsubscribers = unsubscribeAll(this.unsubscribers);
   }
 
   private subscribeToGoogleGenAIChannels(): void {
     // GenerativeModel.generateContent (non-streaming)
-    this.subscribeToChannel("orchestrion:google-genai:models.generateContent", {
-      name: "google-genai.generateContent",
-      type: SpanTypeAttribute.LLM,
-      extractInput: (args: any[]) => {
-        const params = args[0] || {};
-        const input = serializeInput(params);
-        const metadata = extractMetadata(params);
-        return {
-          input,
-          metadata: { ...metadata, provider: "google-genai" },
-        };
-      },
-      extractOutput: (result: any) => {
-        return result;
-      },
-      extractMetrics: (result: any, startTime?: number) => {
-        return extractGenerateContentMetrics(result, startTime);
-      },
-    });
-
-    // GenerativeModel.generateContentStream (streaming)
-    this.subscribeToGoogleStreamingChannel(
-      "orchestrion:google-genai:models.generateContentStream",
-      {
-        name: "google-genai.generateContentStream",
+    this.unsubscribers.push(
+      traceAsyncChannel(googleGenAIChannels.generateContent, {
+        name: "google-genai.generateContent",
         type: SpanTypeAttribute.LLM,
-        extractInput: (args: any[]) => {
-          const params = args[0] || {};
+        extractInput: ([params]) => {
           const input = serializeInput(params);
           const metadata = extractMetadata(params);
           return {
@@ -71,215 +53,49 @@ export class GoogleGenAIPlugin extends BasePlugin {
             metadata: { ...metadata, provider: "google-genai" },
           };
         },
-        aggregateChunks: aggregateGenerateContentChunks,
-      },
+        extractOutput: (result) => {
+          return result;
+        },
+        extractMetrics: (result, startTime) => {
+          return extractGenerateContentMetrics(result, startTime);
+        },
+      }),
     );
-  }
 
-  protected subscribeToChannel(
-    channelName: string,
-    config: {
-      name: string;
-      type: string;
-      extractInput: (args: any[]) => { input: any; metadata: any };
-      extractOutput: (result: any) => any;
-      extractMetrics: (
-        result: any,
-        startTime?: number,
-      ) => Record<string, number>;
-    },
-  ): void {
-    const channel = tracingChannel(channelName);
-
-    const spans = new WeakMap<any, { span: Span; startTime: number }>();
-
-    const handlers = {
-      start: (event: StartEvent) => {
-        const span = startSpan({
-          name: config.name,
-          spanAttributes: {
-            type: config.type,
-          },
-        });
-
-        const startTime = getCurrentUnixTimestamp();
-        spans.set(event, { span, startTime });
-
-        try {
-          const { input, metadata } = config.extractInput(event.arguments);
-          span.log({
+    // GenerativeModel.generateContentStream (streaming)
+    this.unsubscribers.push(
+      traceStreamingChannel(googleGenAIChannels.generateContentStream, {
+        name: "google-genai.generateContentStream",
+        type: SpanTypeAttribute.LLM,
+        extractInput: ([params]) => {
+          const input = serializeInput(params);
+          const metadata = extractMetadata(params);
+          return {
             input,
-            metadata,
-          });
-        } catch (error) {
-          console.error(`Error extracting input for ${channelName}:`, error);
-        }
-      },
-
-      asyncEnd: (event: any) => {
-        const spanData = spans.get(event);
-        if (!spanData) {
-          return;
-        }
-
-        const { span, startTime } = spanData;
-
-        try {
-          const output = config.extractOutput(event.result);
-          const metrics = config.extractMetrics(event.result, startTime);
-
-          span.log({
-            output,
-            metrics,
-          });
-        } catch (error) {
-          console.error(`Error extracting output for ${channelName}:`, error);
-        } finally {
-          span.end();
-          spans.delete(event);
-        }
-      },
-
-      error: (event: any) => {
-        const spanData = spans.get(event);
-        if (!spanData) {
-          return;
-        }
-
-        const { span } = spanData;
-
-        span.log({
-          error: event.error.message,
-        });
-        span.end();
-        spans.delete(event);
-      },
-    };
-
-    channel.subscribe(handlers);
-
-    this.unsubscribers.push(() => {
-      channel.unsubscribe(handlers);
-    });
-  }
-
-  private subscribeToGoogleStreamingChannel(
-    channelName: string,
-    config: {
-      name: string;
-      type: string;
-      extractInput: (args: any[]) => { input: any; metadata: any };
-      aggregateChunks: (
-        chunks: any[],
-        startTime: number,
-      ) => {
-        output: any;
-        metrics: Record<string, number>;
-      };
-    },
-  ): void {
-    const channel = tracingChannel(channelName);
-
-    const spans = new WeakMap<any, { span: Span; startTime: number }>();
-
-    const handlers = {
-      start: (event: StartEvent) => {
-        const span = startSpan({
-          name: config.name,
-          spanAttributes: {
-            type: config.type,
-          },
-        });
-
-        const startTime = getCurrentUnixTimestamp();
-        spans.set(event, { span, startTime });
-
-        try {
-          const { input, metadata } = config.extractInput(event.arguments);
-          span.log({
-            input,
-            metadata,
-          });
-        } catch (error) {
-          console.error(`Error extracting input for ${channelName}:`, error);
-        }
-      },
-
-      asyncEnd: (event: any) => {
-        const spanData = spans.get(event);
-        if (!spanData) {
-          return;
-        }
-
-        const { span, startTime } = spanData;
-
-        // Check if result is a stream
-        if (isAsyncIterable(event.result)) {
-          // Patch the stream to collect chunks
-          patchStreamIfNeeded(event.result, {
-            onComplete: (chunks: any[]) => {
-              try {
-                const { output, metrics } = config.aggregateChunks(
-                  chunks,
-                  startTime,
-                );
-
-                span.log({
-                  output,
-                  metrics,
-                });
-              } catch (error) {
-                console.error(
-                  `Error extracting output for ${channelName}:`,
-                  error,
-                );
-              } finally {
-                span.end();
-              }
-            },
-            onError: (error: Error) => {
-              span.log({
-                error: error.message,
-              });
-              span.end();
-            },
-          });
-        } else {
-          // Non-streaming response (shouldn't happen for generateContentStream)
-          span.end();
-          spans.delete(event);
-        }
-      },
-
-      error: (event: any) => {
-        const spanData = spans.get(event);
-        if (!spanData) {
-          return;
-        }
-
-        const { span } = spanData;
-
-        span.log({
-          error: event.error.message,
-        });
-        span.end();
-        spans.delete(event);
-      },
-    };
-
-    channel.subscribe(handlers);
-
-    this.unsubscribers.push(() => {
-      channel.unsubscribe(handlers);
-    });
+            metadata: { ...metadata, provider: "google-genai" },
+          };
+        },
+        extractOutput: (result) => {
+          return result;
+        },
+        extractMetrics: () => {
+          return {};
+        },
+        aggregateChunks: (chunks, _result, _endEvent, startTime) => {
+          return aggregateGenerateContentChunks(chunks, startTime);
+        },
+      }),
+    );
   }
 }
 
 /**
  * Serialize input parameters for Google GenAI API calls.
  */
-function serializeInput(params: any): any {
-  const input: any = {
+function serializeInput(
+  params: GoogleGenAIGenerateContentParams,
+): Record<string, unknown> {
+  const input: Record<string, unknown> = {
     model: params.model,
     contents: serializeContents(params.contents),
   };
@@ -301,7 +117,9 @@ function serializeInput(params: any): any {
 /**
  * Serialize contents, converting inline data to Attachments.
  */
-function serializeContents(contents: any): any {
+function serializeContents(
+  contents: GoogleGenAIGenerateContentParams["contents"],
+): unknown {
   if (contents === null || contents === undefined) {
     return null;
   }
@@ -316,12 +134,12 @@ function serializeContents(contents: any): any {
 /**
  * Serialize a single content item.
  */
-function serializeContentItem(item: any): any {
+function serializeContentItem(item: string | GoogleGenAIContent): unknown {
   if (typeof item === "object" && item !== null) {
     if (item.parts && Array.isArray(item.parts)) {
       return {
         ...item,
-        parts: item.parts.map((part: any) => serializePart(part)),
+        parts: item.parts.map((part: GoogleGenAIPart) => serializePart(part)),
       };
     }
     return item;
@@ -337,7 +155,7 @@ function serializeContentItem(item: any): any {
 /**
  * Serialize a part, converting inline data to Attachments.
  */
-function serializePart(part: any): any {
+function serializePart(part: GoogleGenAIPart): unknown {
   if (!part || typeof part !== "object") {
     return part;
   }
@@ -368,8 +186,17 @@ function serializePart(part: any): any {
             ? Buffer.from(data)
             : new Uint8Array(data);
 
+      // Convert to ArrayBuffer for Attachment compatibility
+      const arrayBuffer =
+        buffer instanceof Uint8Array
+          ? buffer.buffer.slice(
+              buffer.byteOffset,
+              buffer.byteOffset + buffer.byteLength,
+            )
+          : buffer;
+
       const attachment = new Attachment({
-        data: buffer,
+        data: arrayBuffer,
         filename,
         contentType: mimeType || "application/octet-stream",
       });
@@ -386,13 +213,15 @@ function serializePart(part: any): any {
 /**
  * Serialize tools configuration.
  */
-function serializeTools(params: any): any[] | null {
+function serializeTools(
+  params: GoogleGenAIGenerateContentParams,
+): Record<string, unknown>[] | null {
   if (!params.config?.tools) {
     return null;
   }
 
   try {
-    return params.config.tools.map((tool: any) => {
+    return params.config.tools.map((tool) => {
       if (typeof tool === "object" && tool.functionDeclarations) {
         return tool;
       }
@@ -406,8 +235,10 @@ function serializeTools(params: any): any[] | null {
 /**
  * Extract metadata from parameters.
  */
-function extractMetadata(params: any): any {
-  const metadata: any = {};
+function extractMetadata(
+  params: GoogleGenAIGenerateContentParams,
+): Record<string, unknown> {
+  const metadata: Record<string, unknown> = {};
 
   if (params.model) {
     metadata.model = params.model;
@@ -431,7 +262,7 @@ function extractMetadata(params: any): any {
  * Extract metrics from non-streaming generateContent response.
  */
 function extractGenerateContentMetrics(
-  response: any,
+  response: GoogleGenAIGenerateContentResponse | undefined,
   startTime?: number,
 ): Record<string, number> {
   const metrics: Record<string, number> = {};
@@ -441,47 +272,54 @@ function extractGenerateContentMetrics(
     metrics.duration = end - startTime;
   }
 
-  if (response.usageMetadata) {
-    const usage = response.usageMetadata;
-
-    if (usage.promptTokenCount !== undefined) {
-      metrics.prompt_tokens = usage.promptTokenCount;
-    }
-    if (usage.candidatesTokenCount !== undefined) {
-      metrics.completion_tokens = usage.candidatesTokenCount;
-    }
-    if (usage.totalTokenCount !== undefined) {
-      metrics.tokens = usage.totalTokenCount;
-    }
-    if (usage.cachedContentTokenCount !== undefined) {
-      metrics.prompt_cached_tokens = usage.cachedContentTokenCount;
-    }
-    if (usage.thoughtsTokenCount !== undefined) {
-      metrics.completion_reasoning_tokens = usage.thoughtsTokenCount;
-    }
+  if (response?.usageMetadata) {
+    populateUsageMetrics(metrics, response.usageMetadata);
   }
 
   return metrics;
+}
+
+function populateUsageMetrics(
+  metrics: Record<string, number>,
+  usage: GoogleGenAIUsageMetadata,
+): void {
+  if (usage.promptTokenCount !== undefined) {
+    metrics.prompt_tokens = usage.promptTokenCount;
+  }
+  if (usage.candidatesTokenCount !== undefined) {
+    metrics.completion_tokens = usage.candidatesTokenCount;
+  }
+  if (usage.totalTokenCount !== undefined) {
+    metrics.tokens = usage.totalTokenCount;
+  }
+  if (usage.cachedContentTokenCount !== undefined) {
+    metrics.prompt_cached_tokens = usage.cachedContentTokenCount;
+  }
+  if (usage.thoughtsTokenCount !== undefined) {
+    metrics.completion_reasoning_tokens = usage.thoughtsTokenCount;
+  }
 }
 
 /**
  * Aggregate chunks from streaming generateContentStream response.
  */
 function aggregateGenerateContentChunks(
-  chunks: any[],
-  startTime: number,
+  chunks: GoogleGenAIGenerateContentResponse[],
+  startTime?: number,
 ): {
-  output: any;
+  output: Record<string, unknown>;
   metrics: Record<string, number>;
 } {
-  const end = getCurrentUnixTimestamp();
-  const metrics: Record<string, number> = {
-    duration: end - startTime,
-  };
+  const metrics: Record<string, number> = {};
+
+  if (startTime !== undefined) {
+    const end = getCurrentUnixTimestamp();
+    metrics.duration = end - startTime;
+  }
 
   let firstTokenTime: number | null = null;
 
-  if (chunks.length > 0 && firstTokenTime === null) {
+  if (chunks.length > 0 && firstTokenTime === null && startTime !== undefined) {
     firstTokenTime = getCurrentUnixTimestamp();
     metrics.time_to_first_token = firstTokenTime - startTime;
   }
@@ -492,9 +330,9 @@ function aggregateGenerateContentChunks(
 
   let text = "";
   let thoughtText = "";
-  const otherParts: any[] = [];
-  let usageMetadata: any = null;
-  let lastResponse: any = null;
+  const otherParts: Record<string, unknown>[] = [];
+  let usageMetadata: GoogleGenAIUsageMetadata | null = null;
+  let lastResponse: GoogleGenAIGenerateContentResponse | null = null;
 
   for (const chunk of chunks) {
     lastResponse = chunk;
@@ -528,9 +366,9 @@ function aggregateGenerateContentChunks(
     }
   }
 
-  const output: any = {};
+  const output: Record<string, unknown> = {};
 
-  const parts: any[] = [];
+  const parts: Record<string, unknown>[] = [];
   if (thoughtText) {
     parts.push({ text: thoughtText, thought: true });
   }
@@ -540,9 +378,9 @@ function aggregateGenerateContentChunks(
   parts.push(...otherParts);
 
   if (parts.length > 0 && lastResponse?.candidates) {
-    const candidates: any[] = [];
+    const candidates: Record<string, unknown>[] = [];
     for (const candidate of lastResponse.candidates) {
-      const candidateDict: any = {
+      const candidateDict: Record<string, unknown> = {
         content: {
           parts,
           role: "model",
@@ -563,22 +401,7 @@ function aggregateGenerateContentChunks(
 
   if (usageMetadata) {
     output.usageMetadata = usageMetadata;
-
-    if (usageMetadata.promptTokenCount !== undefined) {
-      metrics.prompt_tokens = usageMetadata.promptTokenCount;
-    }
-    if (usageMetadata.candidatesTokenCount !== undefined) {
-      metrics.completion_tokens = usageMetadata.candidatesTokenCount;
-    }
-    if (usageMetadata.totalTokenCount !== undefined) {
-      metrics.tokens = usageMetadata.totalTokenCount;
-    }
-    if (usageMetadata.cachedContentTokenCount !== undefined) {
-      metrics.prompt_cached_tokens = usageMetadata.cachedContentTokenCount;
-    }
-    if (usageMetadata.thoughtsTokenCount !== undefined) {
-      metrics.completion_reasoning_tokens = usageMetadata.thoughtsTokenCount;
-    }
+    populateUsageMetrics(metrics, usageMetadata);
   }
 
   if (text) {
@@ -591,16 +414,22 @@ function aggregateGenerateContentChunks(
 /**
  * Helper to convert objects to dictionaries.
  */
-function tryToDict(obj: any): any {
+function tryToDict(obj: unknown): Record<string, unknown> | null {
   if (obj === null || obj === undefined) {
     return null;
   }
 
   if (typeof obj === "object") {
-    if (typeof obj.toJSON === "function") {
-      return obj.toJSON();
+    if (
+      "toJSON" in obj &&
+      // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
+      typeof (obj as Record<string, unknown>).toJSON === "function"
+    ) {
+      // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
+      return (obj as { toJSON: () => Record<string, unknown> }).toJSON();
     }
-    return obj;
+    // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
+    return obj as Record<string, unknown>;
   }
 
   return null;
