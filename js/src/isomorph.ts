@@ -15,6 +15,38 @@ export interface IsoAsyncLocalStorage<T> {
   getStore(): T | undefined;
 }
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export type IsoMessageFunction<M = any, N extends string | symbol = string> = (
+  message: M,
+  name: N,
+) => void;
+
+export type IsoTransformFunction<M, S> = (message: M) => S;
+
+/**
+ * Channel interface matching the shared node:diagnostics_channel and dc-browser API.
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export interface IsoChannel<M = any, N extends string | symbol = string> {
+  readonly name: N;
+  readonly hasSubscribers: boolean;
+  subscribe(subscription: IsoMessageFunction<M, N>): void;
+  unsubscribe(subscription: IsoMessageFunction<M, N>): boolean;
+  bindStore<T>(
+    store: IsoAsyncLocalStorage<T>,
+    transform?: IsoTransformFunction<M, T>,
+  ): void;
+  unbindStore<T>(store: IsoAsyncLocalStorage<T>): boolean;
+  publish(message: M): void;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  runStores<F extends (...args: any[]) => any>(
+    message: M,
+    fn: F,
+    thisArg?: ThisParameterType<F>,
+    ...args: Parameters<F>
+  ): ReturnType<F>;
+}
+
 class DefaultAsyncLocalStorage<T> implements IsoAsyncLocalStorage<T> {
   constructor() {}
 
@@ -27,34 +59,81 @@ class DefaultAsyncLocalStorage<T> implements IsoAsyncLocalStorage<T> {
   }
 }
 
+class DefaultChannel<
+  M,
+  N extends string | symbol = string,
+> implements IsoChannel<M, N> {
+  readonly hasSubscribers = false;
+
+  constructor(public readonly name: N) {}
+
+  subscribe(_subscription: IsoMessageFunction<M, N>): void {}
+
+  unsubscribe(_subscription: IsoMessageFunction<M, N>): boolean {
+    return false;
+  }
+
+  bindStore<T>(
+    _store: IsoAsyncLocalStorage<T>,
+    _transform?: IsoTransformFunction<M, T>,
+  ): void {}
+
+  unbindStore<T>(_store: IsoAsyncLocalStorage<T>): boolean {
+    return false;
+  }
+
+  publish(_message: M): void {}
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  runStores<F extends (...args: any[]) => any>(
+    _message: M,
+    fn: F,
+    thisArg?: ThisParameterType<F>,
+    ...args: Parameters<F>
+  ): ReturnType<F> {
+    return fn.apply(thisArg, args);
+  }
+}
+
 /**
  * TracingChannel interface matching both node:diagnostics_channel and dc-browser.
- * Provides event-based instrumentation for sync/async operations.
+ * A composite of the five tracing subchannels used to instrument sync/async operations.
  */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-export interface IsoTracingChannel<M = any> {
-  hasSubscribers: boolean;
+export interface IsoTracingChannelCollection<M = any> {
+  readonly start?: IsoChannel<M>;
+  readonly end?: IsoChannel<M>;
+  readonly asyncStart?: IsoChannel<M>;
+  readonly asyncEnd?: IsoChannel<M>;
+  readonly error?: IsoChannel<M>;
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export interface IsoTracingChannel<
+  M = any,
+> extends IsoTracingChannelCollection<M> {
+  readonly hasSubscribers: boolean;
   subscribe(handlers: IsoChannelHandlers<M>): void;
   unsubscribe(handlers: IsoChannelHandlers<M>): boolean;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   traceSync<F extends (...args: any[]) => any>(
     fn: F,
-    message: M,
+    message?: M,
     thisArg?: ThisParameterType<F>,
     ...args: Parameters<F>
   ): ReturnType<F>;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   tracePromise<F extends (...args: any[]) => any>(
     fn: F,
-    message: M,
+    message?: M,
     thisArg?: ThisParameterType<F>,
     ...args: Parameters<F>
   ): Promise<Awaited<ReturnType<F>>>;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   traceCallback<F extends (...args: any[]) => any>(
     fn: F,
-    position: number | undefined,
-    message: M,
+    position?: number,
+    message?: M,
     thisArg?: ThisParameterType<F>,
     ...args: Parameters<F>
   ): ReturnType<F>;
@@ -73,7 +152,42 @@ export interface IsoChannelHandlers<M = any> {
  * Default no-op TracingChannel implementation.
  */
 class DefaultTracingChannel<M> implements IsoTracingChannel<M> {
-  hasSubscribers = false;
+  readonly start: IsoChannel<M>;
+  readonly end: IsoChannel<M>;
+  readonly asyncStart: IsoChannel<M>;
+  readonly asyncEnd: IsoChannel<M>;
+  readonly error: IsoChannel<M>;
+
+  constructor(nameOrChannels: string | IsoTracingChannelCollection<M>) {
+    if (typeof nameOrChannels === "string") {
+      this.start = new DefaultChannel(`tracing:${nameOrChannels}:start`);
+      this.end = new DefaultChannel(`tracing:${nameOrChannels}:end`);
+      this.asyncStart = new DefaultChannel(
+        `tracing:${nameOrChannels}:asyncStart`,
+      );
+      this.asyncEnd = new DefaultChannel(`tracing:${nameOrChannels}:asyncEnd`);
+      this.error = new DefaultChannel(`tracing:${nameOrChannels}:error`);
+      return;
+    }
+
+    this.start = nameOrChannels.start ?? new DefaultChannel("tracing:start");
+    this.end = nameOrChannels.end ?? new DefaultChannel("tracing:end");
+    this.asyncStart =
+      nameOrChannels.asyncStart ?? new DefaultChannel("tracing:asyncStart");
+    this.asyncEnd =
+      nameOrChannels.asyncEnd ?? new DefaultChannel("tracing:asyncEnd");
+    this.error = nameOrChannels.error ?? new DefaultChannel("tracing:error");
+  }
+
+  get hasSubscribers(): boolean {
+    return (
+      this.start.hasSubscribers ||
+      this.end.hasSubscribers ||
+      this.asyncStart.hasSubscribers ||
+      this.asyncEnd.hasSubscribers ||
+      this.error.hasSubscribers
+    );
+  }
 
   subscribe(_handlers: IsoChannelHandlers<M>): void {}
   unsubscribe(_handlers: IsoChannelHandlers<M>): boolean {
@@ -82,7 +196,7 @@ class DefaultTracingChannel<M> implements IsoTracingChannel<M> {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   traceSync<F extends (...args: any[]) => any>(
     fn: F,
-    _message: M,
+    _message?: M,
     thisArg?: ThisParameterType<F>,
     ...args: Parameters<F>
   ): ReturnType<F> {
@@ -91,7 +205,7 @@ class DefaultTracingChannel<M> implements IsoTracingChannel<M> {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   tracePromise<F extends (...args: any[]) => any>(
     fn: F,
-    _message: M,
+    _message?: M,
     thisArg?: ThisParameterType<F>,
     ...args: Parameters<F>
   ): Promise<Awaited<ReturnType<F>>> {
@@ -100,8 +214,8 @@ class DefaultTracingChannel<M> implements IsoTracingChannel<M> {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   traceCallback<F extends (...args: any[]) => any>(
     fn: F,
-    _position: number | undefined,
-    _message: M,
+    _position?: number,
+    _message?: M,
     thisArg?: ThisParameterType<F>,
     ...args: Parameters<F>
   ): ReturnType<F> {
@@ -127,7 +241,7 @@ export interface Common {
   newAsyncLocalStorage: <T>() => IsoAsyncLocalStorage<T>;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   newTracingChannel: <M = any>(
-    nameOrChannels: string | object,
+    nameOrChannels: string | IsoTracingChannelCollection<M>,
   ) => IsoTracingChannel<M>;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   processOn: (event: string, handler: (code: any) => void) => void;
@@ -181,8 +295,9 @@ const iso: Common = {
   getCallerLocation: () => undefined,
   newAsyncLocalStorage: <T>() => new DefaultAsyncLocalStorage<T>(),
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  newTracingChannel: <M = any>(_nameOrChannels: string | object) =>
-    new DefaultTracingChannel<M>(),
+  newTracingChannel: <M = any>(
+    nameOrChannels: string | IsoTracingChannelCollection<M>,
+  ) => new DefaultTracingChannel<M>(nameOrChannels),
   processOn: (_0, _1) => {},
   basename: (filepath: string) => filepath.split(/[\\/]/).pop() || filepath,
   writeln: (text: string) => console.log(text),
