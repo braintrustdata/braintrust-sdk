@@ -66,6 +66,8 @@ jobs:
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version-file: .tool-versions
+      - name: Setup mise
+        uses: jdx/mise-action@c37c93293d6b742fc901e1406b8f764f6fb19dac # v2.4.4
       - name: Determine release metadata
         id: release_metadata
         working-directory: js
@@ -131,8 +133,8 @@ jobs:
         with:
           node-version-file: .tool-versions
           registry-url: "https://registry.npmjs.org"
-      - name: Install npm 11.6.2
-        run: npm install -g npm@11.6.2
+      - name: Setup mise
+        uses: jdx/mise-action@c37c93293d6b742fc901e1406b8f764f6fb19dac # v2.4.4
       - name: Publish to npm (stable release)
         working-directory: js
         env:
@@ -202,8 +204,8 @@ jobs:
         with:
           node-version-file: .tool-versions
           registry-url: "https://registry.npmjs.org"
-      - name: Install npm 11.6.2
-        run: npm install -g npm@11.6.2
+      - name: Setup mise
+        uses: jdx/mise-action@c37c93293d6b742fc901e1406b8f764f6fb19dac # v2.4.4
       - name: Publish pre-release
         working-directory: js
         run: ./scripts/publish-prerelease.sh "rc" "$VERSION"
@@ -239,18 +241,12 @@ jobs:
           fetch-depth: 0
           ref: ${{ needs.prepare-release.outputs.branch }}
 
-      - name: Set up pnpm
-        uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4.3.0
-
       - name: Set up Node.js
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
-          node-version: "22"
-          cache: "pnpm"
-          registry-url: "https://registry.npmjs.org"
-
-      - name: Install npm 11.6.2
-        run: npm install -g npm@11.6.2
+          node-version-file: .tool-versions
+      - name: Setup mise
+        uses: jdx/mise-action@c37c93293d6b742fc901e1406b8f764f6fb19dac # v2.4.4
 
       - name: Check whether a new canary is needed
         id: should_publish
