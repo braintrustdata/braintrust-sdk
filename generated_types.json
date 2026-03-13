@@ -1943,6 +1943,15 @@
             "type": ["string", "null"],
             "description": "Version number of the linked dataset the experiment was run against. This can be used to reproduce the experiment after the dataset has been modified."
           },
+          "parameters_id": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "Identifier of the linked saved parameters object, or null if the experiment is not linked to saved parameters"
+          },
+          "parameters_version": {
+            "type": ["string", "null"],
+            "description": "Version number of the linked saved parameters object the experiment was run against."
+          },
           "public": {
             "type": "boolean",
             "description": "Whether or not the experiment is public. Public experiments can be viewed by anybody inside or outside the organization"
@@ -6506,7 +6515,7 @@
     "license": {
       "name": "Apache 2.0"
     },
-    "x-internal-git-sha": "fe5561830dccd01c0850ad5d091e8f4079893744"
+    "x-internal-git-sha": "88b7d99576ed26d4b9a53399a1764088a2054063"
   },
   "paths": {},
   "webhooks": {}
