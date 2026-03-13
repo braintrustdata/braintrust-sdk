@@ -6514,8 +6514,7 @@
     "description": "Publicly exported typespecs for the Braintrust API.",
     "license": {
       "name": "Apache 2.0"
-    },
-    "x-internal-git-sha": "88b7d99576ed26d4b9a53399a1764088a2054063"
+    }
   },
   "paths": {},
   "webhooks": {}
