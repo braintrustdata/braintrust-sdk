@@ -184,7 +184,7 @@ export async function runWrapAISDKGenerationTraces(
               messages: [
                 {
                   role: "user",
-                  content: "Reply with exactly HELLO.",
+                  content: "Reply with exactly HELLO and no punctuation.",
                 },
               ],
               ...tokenLimit(options.maxTokensKey, 16),
@@ -206,7 +206,8 @@ export async function runWrapAISDKGenerationTraces(
               messages: [
                 {
                   role: "user",
-                  content: "Reply with exactly STREAM HELLO.",
+                  content:
+                    "Reply with exactly STREAM HELLO and no punctuation.",
                 },
               ],
               ...tokenLimit(options.maxTokensKey, 16),
