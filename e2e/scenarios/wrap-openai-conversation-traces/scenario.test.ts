@@ -10,12 +10,101 @@ import {
   resolveScenarioDir,
   withScenarioHarness,
 } from "../../helpers/scenario-harness";
-import {
-  findLatestChildSpan,
-  findLatestSpan,
-} from "../../helpers/trace-selectors";
+import { findChildSpans, findLatestSpan } from "../../helpers/trace-selectors";
 
 const scenarioDir = resolveScenarioDir(import.meta.url);
+
+const OPERATIONS = [
+  {
+    childName: "Chat Completion",
+    expectsOutput: true,
+    name: "openai-chat-operation",
+    operation: "chat",
+  },
+  {
+    childName: "Chat Completion",
+    expectsOutput: true,
+    name: "openai-chat-with-response-operation",
+    operation: "chat-with-response",
+  },
+  {
+    childName: "Chat Completion",
+    expectsOutput: true,
+    expectsTimeToFirstToken: true,
+    name: "openai-stream-operation",
+    operation: "stream",
+  },
+  {
+    childName: "Chat Completion",
+    expectsOutput: true,
+    expectsTimeToFirstToken: true,
+    name: "openai-stream-with-response-operation",
+    operation: "stream-with-response",
+  },
+  {
+    childName: "Chat Completion",
+    expectsOutput: true,
+    name: "openai-parse-operation",
+    operation: "parse",
+  },
+  {
+    childName: "Chat Completion",
+    expectsOutput: true,
+    expectsTimeToFirstToken: true,
+    name: "openai-sync-stream-operation",
+    operation: "sync-stream",
+  },
+  {
+    childName: "Embedding",
+    expectsOutput: true,
+    name: "openai-embeddings-operation",
+    operation: "embeddings",
+  },
+  {
+    childName: "Moderation",
+    expectsOutput: true,
+    name: "openai-moderations-operation",
+    operation: "moderations",
+  },
+  {
+    childName: "openai.responses.create",
+    expectsOutput: true,
+    name: "openai-responses-operation",
+    operation: "responses",
+  },
+  {
+    childName: "openai.responses.create",
+    expectsOutput: true,
+    name: "openai-responses-with-response-operation",
+    operation: "responses-with-response",
+  },
+  {
+    childName: "openai.responses.create",
+    expectsOutput: true,
+    expectsTimeToFirstToken: true,
+    name: "openai-responses-create-stream-operation",
+    operation: "responses-create-stream",
+  },
+  {
+    childName: "openai.responses.create",
+    expectsOutput: true,
+    expectsTimeToFirstToken: true,
+    name: "openai-responses-stream-operation",
+    operation: "responses-stream",
+  },
+  {
+    childName: "openai.responses.create",
+    expectsTimeToFirstToken: true,
+    name: "openai-responses-stream-partial-operation",
+    operation: "responses-stream-partial",
+  },
+  {
+    childName: "openai.responses.parse",
+    expectsOutput: true,
+    name: "openai-responses-parse-operation",
+    operation: "responses-parse",
+  },
+] as const;
 
 beforeAll(async () => {
   await installScenarioDependencies({ scenarioDir });
@@ -24,7 +113,7 @@ beforeAll(async () => {
 test.each(
   WRAP_OPENAI_SCENARIOS.map(({ entry, version }) => [version, entry] as const),
 )(
-  "wrap-openai-conversation-traces logs wrapped chat and responses traces (openai %s)",
+  "wrap-openai-conversation-traces logs wrapped endpoint traces (openai %s)",
   async (version, entry) => {
     await withScenarioHarness(async ({ events, runScenarioDir }) => {
       await runScenarioDir({
@@ -34,108 +123,56 @@ test.each(
       });
 
       const capturedEvents = events();
-
       const root = findLatestSpan(capturedEvents, "openai-wrapper-root");
-      const chatOperation = findLatestSpan(
-        capturedEvents,
-        "openai-chat-operation",
-      );
-      const streamOperation = findLatestSpan(
-        capturedEvents,
-        "openai-stream-operation",
-      );
-      const responsesOperation = findLatestSpan(
-        capturedEvents,
-        "openai-responses-operation",
-      );
-      const chatCompletionSpan = findLatestChildSpan(
-        capturedEvents,
-        "Chat Completion",
-        chatOperation?.span.id,
-      );
-      const streamCompletionSpan = findLatestChildSpan(
-        capturedEvents,
-        "Chat Completion",
-        streamOperation?.span.id,
-      );
-      const responsesSpan = findLatestChildSpan(
-        capturedEvents,
-        "openai.responses.create",
-        responsesOperation?.span.id,
-      );
 
       expect(root).toBeDefined();
-      expect(chatOperation).toBeDefined();
-      expect(streamOperation).toBeDefined();
-      expect(responsesOperation).toBeDefined();
-      expect(chatCompletionSpan).toBeDefined();
-      expect(streamCompletionSpan).toBeDefined();
-      expect(responsesSpan).toBeDefined();
       expect(root?.row.metadata).toMatchObject({
         openaiSdkVersion: version,
+        scenario: "wrap-openai-conversation-traces",
       });
-      expect(chatOperation?.row.metadata).toMatchObject({
-        operation: "chat",
-      });
-      expect(streamOperation?.row.metadata).toMatchObject({
-        operation: "stream",
-      });
-      expect(responsesOperation?.row.metadata).toMatchObject({
-        operation: "responses",
-      });
-      expect(chatCompletionSpan?.row.metadata).toMatchObject({
-        provider: "openai",
-      });
-      expect(
-        typeof (
-          chatCompletionSpan?.row.metadata as { model?: unknown } | undefined
-        )?.model,
-      ).toBe("string");
-      expect(streamCompletionSpan?.row.metadata).toMatchObject({
-        provider: "openai",
-      });
-      expect(
-        typeof (
-          streamCompletionSpan?.row.metadata as { model?: unknown } | undefined
-        )?.model,
-      ).toBe("string");
-      expect(responsesSpan?.row.metadata).toMatchObject({
-        provider: "openai",
-      });
-      expect(
-        typeof (responsesSpan?.row.metadata as { model?: unknown } | undefined)
-          ?.model,
-      ).toBe("string");
 
-      expect(chatOperation?.span.parentIds).toEqual([root?.span.id ?? ""]);
-      expect(streamOperation?.span.parentIds).toEqual([root?.span.id ?? ""]);
-      expect(responsesOperation?.span.parentIds).toEqual([root?.span.id ?? ""]);
-      expect(chatCompletionSpan?.span.parentIds).toEqual([
-        chatOperation?.span.id ?? "",
-      ]);
-      expect(streamCompletionSpan?.span.parentIds).toEqual([
-        streamOperation?.span.id ?? "",
-      ]);
-      expect(responsesSpan?.span.parentIds).toEqual([
-        responsesOperation?.span.id ?? "",
-      ]);
-      expect(chatCompletionSpan?.input).toBeDefined();
-      expect(chatCompletionSpan?.output).toBeDefined();
-      expect(streamCompletionSpan?.output).toBeDefined();
-      expect(streamCompletionSpan?.metrics).toBeDefined();
-      expect(responsesSpan?.output).toBeDefined();
+      const snapshotRows = [root];
+
+      for (const operationSpec of OPERATIONS) {
+        const operation = findLatestSpan(capturedEvents, operationSpec.name);
+        expect(operation).toBeDefined();
+        expect(operation?.row.metadata).toMatchObject({
+          operation: operationSpec.operation,
+        });
+        expect(operation?.span.parentIds).toEqual([root?.span.id ?? ""]);
+
+        const children = findChildSpans(
+          capturedEvents,
+          operationSpec.childName,
+          operation?.span.id,
+        );
+
+        expect(children).toHaveLength(1);
+        const child = children[0];
+        snapshotRows.push(operation, child);
+
+        expect(child?.row.metadata).toMatchObject({
+          provider: "openai",
+        });
+        expect(
+          typeof (child?.row.metadata as { model?: unknown } | undefined)
+            ?.model,
+        ).toBe("string");
+
+        if (operationSpec.expectsOutput) {
+          expect(child?.output).toBeDefined();
+        }
+
+        if (operationSpec.expectsTimeToFirstToken) {
+          expect(child?.metrics?.time_to_first_token).toEqual(
+            expect.any(Number),
+          );
+        }
+      }
 
       expect(
         normalizeForSnapshot(
-          [
-            root,
-            chatOperation,
-            chatCompletionSpan,
-            streamOperation,
-            streamCompletionSpan,
-            responsesOperation,
-            responsesSpan,
-          ].map((event) => summarizeOpenAIContract(event!)) as Json,
+          snapshotRows.map((event) => summarizeOpenAIContract(event!)) as Json,
         ),
       ).toMatchSnapshot("span-events");
     });

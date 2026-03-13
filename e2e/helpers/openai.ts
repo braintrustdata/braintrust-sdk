@@ -2,20 +2,24 @@ import type { CapturedLogEvent } from "./mock-braintrust-server";
 import type { Json } from "./normalize";
 
 interface OpenAIScenario {
+  chatHelperNamespace: "beta" | "ga";
   entry: string;
   version: string;
 }
 
 const OPENAI_VERSIONS = [
   {
+    chatHelperNamespace: "beta",
     suffix: "v4",
     version: "4.104.0",
   },
   {
+    chatHelperNamespace: "ga",
     suffix: "v5",
     version: "5.11.0",
   },
   {
+    chatHelperNamespace: "ga",
     suffix: "v6",
     version: "6.25.0",
   },
@@ -31,7 +35,8 @@ export const OPENAI_AUTO_HOOK_SCENARIOS: OpenAIScenario[] = OPENAI_VERSIONS.map(
 );
 
 export const WRAP_OPENAI_SCENARIOS: OpenAIScenario[] = OPENAI_VERSIONS.map(
-  ({ suffix, version }) => ({
+  ({ chatHelperNamespace, suffix, version }) => ({
+    chatHelperNamespace,
     entry: `scenario.openai-${suffix}.ts`,
     version,
   }),

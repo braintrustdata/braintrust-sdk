@@ -1,4 +1,12 @@
+import { spawn } from "node:child_process";
+import * as path from "node:path";
 import { BasicTracerProvider } from "@opentelemetry/sdk-trace-base";
+
+export interface SubprocessResult {
+  exitCode: number;
+  stderr: string;
+  stdout: string;
+}
 
 export async function collectAsync<T>(records: AsyncIterable<T>): Promise<T[]> {
   const items: T[] = [];
@@ -33,6 +41,72 @@ export function createTracerProvider(processors: unknown[]) {
 
   return new BasicTracerProvider({
     spanProcessors: processors as never,
+  });
+}
+
+export async function runNodeSubprocess(options: {
+  args: string[];
+  cwd?: string;
+  env?: Record<string, string | undefined>;
+  timeoutMs?: number;
+}): Promise<SubprocessResult> {
+  const cwd = options.cwd ?? process.cwd();
+  const timeoutMs = options.timeoutMs ?? 30_000;
+
+  return await new Promise<SubprocessResult>((resolve, reject) => {
+    const child = spawn(process.execPath, options.args, {
+      cwd,
+      env: {
+        ...process.env,
+        ...options.env,
+      },
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+
+    let stdout = "";
+    let stderr = "";
+    const timeout = setTimeout(() => {
+      child.kill("SIGTERM");
+      reject(
+        new Error(
+          `Subprocess ${[process.execPath, ...options.args].join(" ")} timed out after ${timeoutMs}ms`,
+        ),
+      );
+    }, timeoutMs);
+
+    child.stdout.on("data", (chunk) => {
+      stdout += chunk.toString();
+    });
+
+    child.stderr.on("data", (chunk) => {
+      stderr += chunk.toString();
+    });
+
+    child.on("error", (error) => {
+      clearTimeout(timeout);
+      reject(error);
+    });
+
+    child.on("close", (code) => {
+      clearTimeout(timeout);
+
+      const result = {
+        exitCode: code ?? 0,
+        stderr,
+        stdout,
+      };
+
+      if (result.exitCode !== 0) {
+        reject(
+          new Error(
+            `Subprocess ${path.basename(process.execPath)} ${options.args.join(" ")} failed with exit code ${result.exitCode}\nSTDOUT:\n${stdout}\nSTDERR:\n${stderr}`,
+          ),
+        );
+        return;
+      }
+
+      resolve(result);
+    });
   });
 }
 

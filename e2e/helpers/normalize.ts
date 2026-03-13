@@ -52,6 +52,51 @@ const STACK_FRAME_REPO_PATH_REGEX =
 const REPO_PATH_REGEX =
   /(?:[A-Za-z]:)?[^\s)\n]*braintrust-sdk-javascript(?:[\\/](?:braintrust-sdk-javascript|[^\\/\s)\n]+))?((?:[\\/](?:e2e|js)[^:\s)\n]+))/g;
 const NODE_INTERNAL_FRAME_REGEX = /node:[^)\n]+:\d+:\d+/g;
+const WRAP_AI_SDK_GENERATION_TRACES_SCENARIO_PATH =
+  "/e2e/scenarios/wrap-ai-sdk-generation-traces/";
+
+function isRecord(value: Json | undefined): value is { [key: string]: Json } {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function getSpanAttribute(
+  value: { [key: string]: Json },
+  key: string,
+): Json | undefined {
+  if (!isRecord(value.span_attributes as Json | undefined)) {
+    return undefined;
+  }
+
+  return value.span_attributes[key];
+}
+
+function shouldNormalizeWrapAISDKGenerationTracesCaller(
+  row: { [key: string]: Json },
+  context: { [key: string]: Json },
+  callerFilename: string | undefined,
+): boolean {
+  if (
+    typeof callerFilename !== "string" ||
+    !callerFilename.includes(WRAP_AI_SDK_GENERATION_TRACES_SCENARIO_PATH)
+  ) {
+    return false;
+  }
+
+  const spanName = getSpanAttribute(row, "name");
+  const execCounter = getSpanAttribute(row, "exec_counter");
+
+  return (
+    (spanName === "generateText" &&
+      execCounter === 2 &&
+      callerFilename.endsWith("/scenario.impl.ts") &&
+      context.caller_functionname === "logger.traced.name") ||
+    (spanName === "doGenerate" &&
+      execCounter === 3 &&
+      callerFilename.includes("/node_modules/.pnpm/ai@") &&
+      callerFilename.endsWith("/node_modules/ai/dist/index.js") &&
+      context.caller_functionname === "fn")
+  );
+}
 
 function normalizeCallerFilename(value: string): string {
   const e2eIndex = value.lastIndexOf("/e2e/");
@@ -102,16 +147,26 @@ function normalizeStackLikeString(value: string): string {
 function normalizeObject(
   value: { [key: string]: Json },
   tokenMaps: TokenMaps,
+  currentKey?: string,
+  parentObject?: { [key: string]: Json },
 ): Json {
   const callerFilename =
     typeof value.caller_filename === "string"
       ? value.caller_filename
       : undefined;
   const isNodeInternalCaller = callerFilename?.startsWith("node:");
+  const shouldNormalizeScenarioCaller =
+    currentKey === "context"
+      ? shouldNormalizeWrapAISDKGenerationTracesCaller(
+          parentObject ?? value,
+          value,
+          callerFilename,
+        )
+      : false;
 
   return Object.fromEntries(
     Object.entries(value).map(([key, entry]) => {
-      if (isNodeInternalCaller) {
+      if (isNodeInternalCaller || shouldNormalizeScenarioCaller) {
         if (key === "caller_filename") {
           return [key, "<node-internal>"];
         }
@@ -123,7 +178,7 @@ function normalizeObject(
         }
       }
 
-      return [key, normalizeValue(entry as Json, tokenMaps, key)];
+      return [key, normalizeValue(entry as Json, tokenMaps, key, value)];
     }),
   );
 }
@@ -147,21 +202,24 @@ function normalizeValue(
   value: Json,
   tokenMaps: TokenMaps,
   currentKey?: string,
+  parentObject?: { [key: string]: Json },
 ): Json {
   if (Array.isArray(value)) {
     if (currentKey === "span_parents") {
       return value.map((entry) =>
         typeof entry === "string"
           ? tokenFor(tokenMaps.ids, entry, "span")
-          : normalizeValue(entry, tokenMaps),
+          : normalizeValue(entry, tokenMaps, undefined, parentObject),
       );
     }
 
-    return value.map((entry) => normalizeValue(entry, tokenMaps));
+    return value.map((entry) =>
+      normalizeValue(entry, tokenMaps, undefined, parentObject),
+    );
   }
 
   if (value && typeof value === "object") {
-    return normalizeObject(value, tokenMaps);
+    return normalizeObject(value, tokenMaps, currentKey, parentObject);
   }
 
   if (typeof value === "number") {
@@ -212,6 +270,10 @@ function normalizeValue(
 
     if (currentKey && TIME_KEYS.has(currentKey)) {
       return "<timestamp>";
+    }
+
+    if (currentKey === "system_fingerprint") {
+      return "<system_fingerprint>";
     }
 
     if (ISO_DATE_REGEX.test(value)) {

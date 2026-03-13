@@ -45,6 +45,26 @@ function stageRank(row: CapturedLogRow): number {
   return 3;
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function hasTestRunId(value: unknown, testRunId: string): boolean {
+  if (Array.isArray(value)) {
+    return value.some((entry) => hasTestRunId(entry, testRunId));
+  }
+
+  if (!isRecord(value)) {
+    return false;
+  }
+
+  if (value.testRunId === testRunId) {
+    return true;
+  }
+
+  return Object.values(value).some((entry) => hasTestRunId(entry, testRunId));
+}
+
 function splitTerminalMergeRow(row: CapturedLogRow): CapturedLogRow[] {
   const metrics =
     typeof row.metrics === "object" &&
@@ -110,6 +130,32 @@ function splitTerminalMergeRow(row: CapturedLogRow): CapturedLogRow[] {
   return rows;
 }
 
+function sortPayloadRows(rows: CapturedLogRow[]): CapturedLogRow[] {
+  const spanOrder = new Map<string, number>();
+  for (const row of rows) {
+    if (typeof row.span_id === "string" && !spanOrder.has(row.span_id)) {
+      spanOrder.set(row.span_id, spanOrder.size);
+    }
+  }
+
+  return [...rows].sort((left, right) => {
+    const leftOrder =
+      typeof left.span_id === "string"
+        ? (spanOrder.get(left.span_id) ?? Number.MAX_SAFE_INTEGER)
+        : Number.MAX_SAFE_INTEGER;
+    const rightOrder =
+      typeof right.span_id === "string"
+        ? (spanOrder.get(right.span_id) ?? Number.MAX_SAFE_INTEGER)
+        : Number.MAX_SAFE_INTEGER;
+
+    if (leftOrder !== rightOrder) {
+      return leftOrder - rightOrder;
+    }
+
+    return stageRank(left) - stageRank(right);
+  });
+}
+
 export function summarizeWrapperContract(
   event: CapturedLogEvent,
   metadataKeys: string[] = [],
@@ -145,27 +191,17 @@ export function payloadRowsForRootSpan(
     .filter((row) => row.root_span_id === rootSpanId)
     .flatMap((row) => splitTerminalMergeRow(row));
 
-  const spanOrder = new Map<string, number>();
-  for (const row of rows) {
-    if (typeof row.span_id === "string" && !spanOrder.has(row.span_id)) {
-      spanOrder.set(row.span_id, spanOrder.size);
-    }
-  }
+  return sortPayloadRows(rows);
+}
 
-  return [...rows].sort((left, right) => {
-    const leftOrder =
-      typeof left.span_id === "string"
-        ? (spanOrder.get(left.span_id) ?? Number.MAX_SAFE_INTEGER)
-        : Number.MAX_SAFE_INTEGER;
-    const rightOrder =
-      typeof right.span_id === "string"
-        ? (spanOrder.get(right.span_id) ?? Number.MAX_SAFE_INTEGER)
-        : Number.MAX_SAFE_INTEGER;
+export function payloadRowsForTestRunId(
+  payloads: CapturedLogPayload[],
+  testRunId: string,
+): CapturedLogRow[] {
+  const rows = payloads
+    .flatMap((payload) => payload.rows)
+    .filter((row) => hasTestRunId(row, testRunId))
+    .flatMap((row) => splitTerminalMergeRow(row));
 
-    if (leftOrder !== rightOrder) {
-      return leftOrder - rightOrder;
-    }
-
-    return stageRank(left) - stageRank(right);
-  });
+  return sortPayloadRows(rows);
 }
