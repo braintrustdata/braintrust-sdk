@@ -129,7 +129,9 @@
     "test:output": "tsx scripts/test-output.ts --with-comparison --with-metrics --with-progress",
     "lint": "eslint .",
     "fix:lint": "eslint --fix .",
-    "playground": "tsx playground.ts"
+    "playground": "tsx playground.ts",
+    "playground:cli:push": "node dist/cli.js push playground.ts",
+    "playground:cli:eval": "node dist/cli.js eval playground.ts"
   },
   "author": "",
   "license": "MIT",
