@@ -78,20 +78,20 @@ The workflow writes a short run summary with the published version and recent co
 If you do not want to open GitHub Actions manually, you can dispatch the same workflow from the terminal:
 
 ```bash
-make release-js-sdk
+./js/scripts/dispatch-release-workflow.sh
 ```
 
 To target a different remote branch:
 
 ```bash
-make release-js-sdk BRANCH=<branch>
+BRANCH=<branch> ./js/scripts/dispatch-release-workflow.sh
 ```
 
 To dispatch a prerelease or canary instead of a stable release:
 
 ```bash
-make release-js-sdk RELEASE_TYPE=prerelease
-make release-js-sdk RELEASE_TYPE=canary
+RELEASE_TYPE=prerelease ./js/scripts/dispatch-release-workflow.sh
+RELEASE_TYPE=canary ./js/scripts/dispatch-release-workflow.sh
 ```
 
 Notes:
