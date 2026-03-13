@@ -29,6 +29,7 @@ import {
   ExperimentSummary,
   FullInitOptions,
   NOOP_SPAN,
+  type ParametersRef,
   RemoteEvalParameters,
   Span,
   StartSpanArgs,
@@ -437,6 +438,34 @@ function initExperiment<IsOpen extends boolean = false>(
   });
 }
 
+async function getExperimentParametersRef(
+  parameters:
+    | EvalParameters
+    | RemoteEvalParameters<boolean, boolean>
+    | Promise<RemoteEvalParameters<boolean, boolean>>
+    | undefined,
+): Promise<ParametersRef | undefined> {
+  if (!parameters) {
+    return undefined;
+  }
+
+  const resolvedParameters =
+    parameters instanceof Promise ? await parameters : parameters;
+
+  if (!RemoteEvalParameters.isParameters(resolvedParameters)) {
+    return undefined;
+  }
+
+  if (resolvedParameters.id === undefined) {
+    return undefined;
+  }
+
+  return {
+    id: resolvedParameters.id,
+    version: resolvedParameters.version,
+  };
+}
+
 export function callEvaluatorData<
   Input,
   Expected,
@@ -658,6 +687,7 @@ export async function Eval<
     const { data, baseExperiment: defaultBaseExperiment } = callEvaluatorData(
       evaluator.data,
     );
+    const parameters = await getExperimentParametersRef(evaluator.parameters);
     // NOTE: This code is duplicated with initExperiment in js/src/cli.ts. Make sure
     // to update that if you change this.
     const experiment =
@@ -679,6 +709,7 @@ export async function Eval<
             gitMetadataSettings: evaluator.gitMetadataSettings,
             repoInfo: evaluator.repoInfo,
             dataset: Dataset.isDataset(data) ? data : undefined,
+            parameters,
           });
 
     // Ensure experiment ID is resolved before tasks start for OTEL parent attribute support
