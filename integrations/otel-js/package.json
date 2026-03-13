@@ -28,7 +28,7 @@
   "devDependencies": {
     "@types/node": "^22.15.21",
     "braintrust": "workspace:*",
-    "tsup": "^8.5.0",
+    "tsup": "^8.5.1",
     "typedoc": "^0.28.15",
     "typescript": "5.5.4"
   },
