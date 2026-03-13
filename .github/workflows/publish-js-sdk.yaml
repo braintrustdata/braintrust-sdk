@@ -65,7 +65,7 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
-          node-version: "22"
+          node-version-file: .tool-versions
       - name: Determine release metadata
         id: release_metadata
         working-directory: js
@@ -129,7 +129,7 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
-          node-version: "22"
+          node-version-file: .tool-versions
           registry-url: "https://registry.npmjs.org"
       - name: Install npm 11.6.2
         run: npm install -g npm@11.6.2
@@ -200,7 +200,7 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
-          node-version: "22"
+          node-version-file: .tool-versions
           registry-url: "https://registry.npmjs.org"
       - name: Install npm 11.6.2
         run: npm install -g npm@11.6.2

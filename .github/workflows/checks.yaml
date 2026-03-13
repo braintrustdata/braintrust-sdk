@@ -1,16 +1,7 @@
-name: js
+name: checks
 
 on:
   pull_request:
-    paths:
-      - "js/**"
-      - "integrations/otel-js/**"
-      - "integrations/temporal-js/**"
-      - ".github/workflows/js.yaml"
-      - ".github/workflows/otel-js-test.yaml"
-      - ".github/workflows/temporal-js-build-test.yaml"
-      - "pnpm-lock.yaml"
-      - "pnpm-workspace.yaml"
   push:
     branches: [main]
 
@@ -19,38 +10,91 @@ permissions:
   actions: write
 
 jobs:
-  build:
+  formatting:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version-file: .tool-versions
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4.3.0
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Check formatting
+        run: pnpm run formatting
+
+  lint:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version-file: .tool-versions
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4.3.0
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Lint
+        run: pnpm run lint
+
+  check-typings:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version-file: .tool-versions
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4.3.0
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Check typings
+        run: pnpm run check:typings
+
+  dead-code:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version-file: .tool-versions
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4.3.0
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Check dead code
+        run: pnpm run knip
+
+  ensure-pinned-actions:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+      - name: Ensure SHA pinned actions
+        uses: zgosalvez/github-actions-ensure-sha-pinned-actions@70c4af2ed5282c51ba40566d026d6647852ffa3e # v5.0.1
+
+  js-build:
     runs-on: ${{ matrix.os }}
     timeout-minutes: 30
-
     strategy:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, windows-latest]
         node-version: [20, 22]
-
-    env:
-      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY}}
-      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY}}
-      GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY}}
-
     outputs:
       artifact-name: ${{ steps.artifact.outputs.name }}
-
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
-
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: ${{ matrix.node-version }}
           registry-url: "https://registry.npmjs.org"
       - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4.3.0
-
-      - name: "verify ci"
+      - name: Verify checks
         shell: bash
         run: |
-          make js-verify-ci
-
+          make js-verify-checks
       - name: Determine artifact name
         id: artifact
         env:
@@ -66,7 +110,6 @@ jobs:
           mkdir -p artifacts
           PACKED_TARBALL=$(npm pack --pack-destination artifacts)
           echo "packed_tarball=$PACKED_TARBALL" >> "$GITHUB_OUTPUT"
-
       - name: Pack @braintrust/browser
         id: prepare_browser_artifact
         working-directory: integrations/browser-js
@@ -74,12 +117,10 @@ jobs:
         run: |
           PACKED_BROWSER_TARBALL=$(npm pack --pack-destination ../../js/artifacts)
           echo "packed_browser_tarball=$PACKED_BROWSER_TARBALL" >> "$GITHUB_OUTPUT"
-
       - name: Build and pack @braintrust/otel
         id: prepare_otel_artifact
         shell: bash
         run: |
-          # Install the built braintrust package in otel-js to satisfy peer dependency
           BRAINTRUST_TARBALL=$(ls js/artifacts/braintrust-*.tgz | head -n 1)
           if [ -z "$BRAINTRUST_TARBALL" ]; then
             echo "Error: braintrust tarball not found"
@@ -87,8 +128,6 @@ jobs:
           fi
           echo "Using braintrust tarball: $BRAINTRUST_TARBALL"
 
-          # Install braintrust and OpenTelemetry peer dependencies in otel-js directory for build
-          # Use pnpm to match the workspace, with no-save flags to avoid modifying lockfile
           cd integrations/otel-js
           if ! npm_config_save=false npm_config_lockfile=false pnpm add \
             file:../../$BRAINTRUST_TARBALL \
@@ -100,13 +139,10 @@ jobs:
             exit 1
           fi
 
-          # Build the otel package
           pnpm run build
 
-          # Pack the otel package
           PACKED_OTEL_TARBALL=$(npm pack --pack-destination ../../js/artifacts)
           echo "packed_otel_tarball=$PACKED_OTEL_TARBALL" >> "$GITHUB_OUTPUT"
-
       - name: Build and pack @braintrust/templates-nunjucks
         id: prepare_templates_nunjucks_artifact
         shell: bash
@@ -115,7 +151,6 @@ jobs:
           pnpm run build
           PACKED_NUNJUCKS_TARBALL=$(npm pack --pack-destination ../../js/artifacts)
           echo "packed_nunjucks_tarball=$PACKED_NUNJUCKS_TARBALL" >> "$GITHUB_OUTPUT"
-
       - name: List artifacts before upload
         shell: bash
         run: |
@@ -124,7 +159,6 @@ jobs:
           echo "Otel tarball: ${{ steps.prepare_otel_artifact.outputs.packed_otel_tarball }}"
           echo "Templates-nunjucks tarball: ${{ steps.prepare_templates_nunjucks_artifact.outputs.packed_nunjucks_tarball }}"
           ls -la js/artifacts/
-
       - name: Upload build artifacts
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
@@ -136,26 +170,22 @@ jobs:
             js/artifacts/${{ steps.prepare_templates_nunjucks_artifact.outputs.packed_nunjucks_tarball }}
           retention-days: 1
 
-  api-compatibility:
+  js-api-compatibility:
     runs-on: ubuntu-latest
     timeout-minutes: 20
-    # Run in parallel with build job
     strategy:
       fail-fast: false
       matrix:
         node-version: [20]
-
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
         with:
-          fetch-depth: 0 # Fetch full history to access main branch for baseline
-
+          fetch-depth: 0
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: ${{ matrix.node-version }}
           registry-url: "https://registry.npmjs.org"
       - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4.3.0
-
       - name: Get published braintrust version for cache key
         id: published-version
         shell: bash
@@ -163,7 +193,6 @@ jobs:
           PUBLISHED_VERSION=$(npm view braintrust version 2>/dev/null || echo "none")
           echo "version=$PUBLISHED_VERSION" >> "$GITHUB_OUTPUT"
           echo "Published version: $PUBLISHED_VERSION"
-
       - name: Cache API compatibility test tarball
         uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         with:
@@ -172,51 +201,40 @@ jobs:
           restore-keys: |
             braintrust-tarball-${{ steps.published-version.outputs.version }}-
             braintrust-tarball-
-
       - name: Build baseline from main branch for API compatibility
         shell: bash
         run: |
-          # Save current state
           CURRENT_REF=$(git rev-parse HEAD)
           BASELINE_DIR="$HOME/braintrust-baseline"
           mkdir -p "$BASELINE_DIR"
 
-          # Checkout main and build
           echo "Building baseline from main branch..."
           git checkout origin/main || { echo "Could not checkout main"; exit 0; }
 
-          # Install and build main
           pnpm install --frozen-lockfile || { echo "Baseline install failed"; git checkout "$CURRENT_REF"; exit 0; }
           pnpm run build || { echo "Baseline build failed"; git checkout "$CURRENT_REF"; exit 0; }
 
-          # Copy built files to baseline directory
           mkdir -p "$BASELINE_DIR/js/dev" "$BASELINE_DIR/js/util"
           cp -R js/dist "$BASELINE_DIR/js/"
           cp -R js/dev/dist "$BASELINE_DIR/js/dev/"
           cp -R js/util/dist "$BASELINE_DIR/js/util/"
           echo "Copied js/dist, js/dev/dist, and js/util/dist to baseline"
 
-          # Return to original commit
           git checkout "$CURRENT_REF"
 
-          # Set environment variable for test to find baseline
-          echo "BASELINE_DIR=$BASELINE_DIR" >> $GITHUB_ENV
+          echo "BASELINE_DIR=$BASELINE_DIR" >> "$GITHUB_ENV"
           echo "Baseline created at $BASELINE_DIR"
-
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
-
       - name: Build current branch
         run: pnpm run build
-
       - name: Run API compatibility test
         env:
           BASELINE_DIR: ${{ env.BASELINE_DIR }}
         run: |
           cd js && pnpm test:api-compat
 
-  # Smoke v2: Auto-discovery of scenarios
-  smoke-discover:
+  js-smoke-discover:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     outputs:
@@ -230,49 +248,42 @@ jobs:
         run: |
           echo "Discovering local and integration scenarios..."
           SCRIPTDIR="../../integrations"
-          # Local scenarios (under js/smoke/scenarios): emit their directory names
           LOCAL=$(find scenarios -mindepth 1 -maxdepth 1 -type d -exec test -f {}/Makefile \; -print | sed 's|scenarios/||' | tr '\n' ' ')
-          # Integration scenarios: emit as integration/name
           INTEGRATIONS=$(find "$SCRIPTDIR" -type f -path '*/smoke/scenarios/*/Makefile' 2>/dev/null | sed "s|^$SCRIPTDIR/||" | sed 's|/Makefile$||' | sed 's|/smoke/scenarios/|/|' | tr '\n' ' ')
           ALL="${LOCAL} ${INTEGRATIONS}"
-          # Convert space-separated list to JSON array
           SCENARIOS=$(printf "%s\n" $ALL | jq -R -s -c 'split("\n") | map(select(length>0))')
           echo "scenarios=$SCENARIOS" >> "$GITHUB_OUTPUT"
           echo "Discovered scenarios: $SCENARIOS"
 
-  smoke-test:
-    needs: [build, smoke-discover]
+  js-smoke-test:
+    needs: [js-build, js-smoke-discover]
     runs-on: ubuntu-latest
     timeout-minutes: 15
-
     strategy:
       fail-fast: false
       matrix:
-        scenario: ${{ fromJson(needs.smoke-discover.outputs.scenarios) }}
-
+        scenario: ${{ fromJson(needs.js-smoke-discover.outputs.scenarios) }}
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
-
       - name: Setup mise
         uses: jdx/mise-action@c37c93293d6b742fc901e1406b8f764f6fb19dac # v2.4.4
         with:
           working_directory: js/smoke
-
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 20
       - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4.3.0
-
       - name: Download build artifact (node 20)
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
-          name: ${{ needs.build.outputs.artifact-name }}-20-dist
+          name: ${{ needs.js-build.outputs.artifact-name }}-20-dist
           path: js/artifacts
           run-id: ${{ github.run_id }}
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-
+          github-token: ${{ github.token }}
       - name: Prepare artifacts at well-known paths
         working-directory: js/artifacts
         shell: bash
         run: |
-          # Copy braintrust tarball to well-known path
           for f in braintrust-[0-9]*.tgz; do
             if [ -f "$f" ]; then
               cp "$f" braintrust-latest.tgz
@@ -281,7 +292,6 @@ jobs:
             fi
           done
 
-          # Copy browser tarball to well-known path
           for f in braintrust-browser-[0-9]*.tgz; do
             if [ -f "$f" ]; then
               cp "$f" braintrust-browser-latest.tgz
@@ -290,7 +300,6 @@ jobs:
             fi
           done
 
-          # Copy otel tarball to well-known path
           for f in braintrust-otel-[0-9]*.tgz; do
             if [ -f "$f" ]; then
               cp "$f" braintrust-otel-latest.tgz
@@ -299,7 +308,6 @@ jobs:
             fi
           done
 
-          # Copy templates-nunjucks-js tarball to well-known path
           for f in braintrust-templates-nunjucks-js-[0-9]*.tgz; do
             if [ -f "$f" ]; then
               cp "$f" braintrust-templates-nunjucks-js-latest.tgz
@@ -307,14 +315,12 @@ jobs:
               break
             fi
           done
-
       - name: Build shared test package (once for all scenarios)
         working-directory: js/smoke/shared
         shell: bash
         run: |
           npm ci
           npm run build
-
       - name: Run scenario ${{ matrix.scenario }}
         working-directory: js/smoke
         shell: bash
@@ -328,3 +334,178 @@ jobs:
           SMOKE_V2_SHARED_DIST: shared/dist
         run: |
           make test ${{ matrix.scenario }}
+
+  temporal-js:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        node-version: [20, 22]
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: ${{ matrix.node-version }}
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4.3.0
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Build braintrust
+        working-directory: js
+        run: pnpm run build
+      - name: Build @braintrust/temporal
+        working-directory: integrations/temporal-js
+        run: pnpm run build
+      - name: Run @braintrust/temporal tests
+        working-directory: integrations/temporal-js
+        run: pnpm run test
+
+  templates-nunjucks-js:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        node-version: [20, 22]
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: ${{ matrix.node-version }}
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4.3.0
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Build braintrust
+        working-directory: js
+        run: pnpm run build
+      - name: Build @braintrust/templates-nunjucks-js
+        working-directory: integrations/templates-nunjucks
+        run: pnpm run build
+      - name: Run @braintrust/templates-nunjucks-js tests
+        working-directory: integrations/templates-nunjucks
+        run: pnpm run test
+
+  otel-js:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        node-version: [20, 22]
+        test-dir: [otel-v1, otel-v2]
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3.12.0
+      - name: Build Docker image for ${{ matrix.test-dir }}
+        shell: bash
+        run: |
+          docker build -f integrations/otel-js/Dockerfile.test \
+            --build-arg NODE_VERSION=${{ matrix.node-version }} \
+            --build-arg TEST_DIR=${{ matrix.test-dir }} \
+            -t otel-js-test-${{ matrix.test-dir }}-node${{ matrix.node-version }} .
+      - name: Run tests for ${{ matrix.test-dir }}
+        shell: bash
+        run: |
+          docker run --rm otel-js-test-${{ matrix.test-dir }}-node${{ matrix.node-version }}
+
+  js-zod-versions:
+    name: JS Zod Versions (${{ matrix.zod-version }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        zod-version: ["3.25.34", "4.2.1"]
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          fetch-depth: 1
+      - name: Setup pnpm
+        uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4.3.0
+      - name: Setup Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version-file: .tool-versions
+          cache: "pnpm"
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Setup Zod version
+        working-directory: ./js
+        run: |
+          pnpm add -D zod@${{ matrix.zod-version }}
+      - name: Build JS package
+        working-directory: ./js
+        run: |
+          pnpm run build
+      - name: Run hermetic JS tests
+        working-directory: ./js
+        shell: bash
+        run: |
+          make test-checks
+      - name: Run zod v3 tests
+        if: matrix.zod-version == '3.25.34'
+        working-directory: ./js
+        run: |
+          pnpm test:zod-v3
+      - name: Run zod v4 tests
+        if: matrix.zod-version == '4.2.1'
+        working-directory: ./js
+        run: |
+          pnpm test:zod-v4
+
+  checks-passed:
+    name: checks-passed
+    needs:
+      - formatting
+      - lint
+      - check-typings
+      - dead-code
+      - ensure-pinned-actions
+      - js-build
+      - js-api-compatibility
+      - js-smoke-discover
+      - js-smoke-test
+      - temporal-js
+      - templates-nunjucks-js
+      - otel-js
+      - js-zod-versions
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    if: always()
+    steps:
+      - name: Verify all required checks passed
+        run: |
+          FAILED=0
+
+          check_result() {
+            local job_name="$1"
+            local job_result="$2"
+
+            if [ "$job_result" != "success" ] && [ "$job_result" != "skipped" ]; then
+              echo "Job '$job_name' finished with result: $job_result"
+              FAILED=1
+            fi
+          }
+
+          check_result "formatting" "${{ needs.formatting.result }}"
+          check_result "lint" "${{ needs.lint.result }}"
+          check_result "check-typings" "${{ needs.check-typings.result }}"
+          check_result "dead-code" "${{ needs.dead-code.result }}"
+          check_result "ensure-pinned-actions" "${{ needs.ensure-pinned-actions.result }}"
+          check_result "js-build" "${{ needs.js-build.result }}"
+          check_result "js-api-compatibility" "${{ needs.js-api-compatibility.result }}"
+          check_result "js-smoke-discover" "${{ needs.js-smoke-discover.result }}"
+          check_result "js-smoke-test" "${{ needs.js-smoke-test.result }}"
+          check_result "temporal-js" "${{ needs.temporal-js.result }}"
+          check_result "templates-nunjucks-js" "${{ needs.templates-nunjucks-js.result }}"
+          check_result "otel-js" "${{ needs.otel-js.result }}"
+          check_result "js-zod-versions" "${{ needs.js-zod-versions.result }}"
+
+          if [ "$FAILED" -ne 0 ]; then
+            echo "One or more required checks failed"
+            exit 1
+          fi
+
+          echo "All required checks passed"

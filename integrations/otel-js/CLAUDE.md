@@ -401,29 +401,13 @@ The otel-js package has a **dedicated CI workflow** separate from the main JavaS
 3. **Different failure modes**: OTel version conflicts shouldn't block other SDK tests
 4. **Clearer test results**: Separate workflow makes it easier to identify OTel-specific issues
 
-### CI Workflow: `.github/workflows/otel-js-test.yaml`
+### CI Workflow: `.github/workflows/checks.yaml`
 
-The dedicated workflow simply runs:
+The consolidated `checks` workflow contains a dedicated `otel-js` job that:
 
-```bash
-make js-test-otel
-```
-
-This Makefile target handles:
-
-1. **Installing workspace dependencies** (respects exclusions)
-2. **Building braintrust SDK** (required peer dependency)
-3. **Building @braintrust/otel package**
-4. **Setting up otel-v1 isolated dependencies**:
-   ```bash
-   cd otel-v1 && rm -rf node_modules && pnpm add -D vitest
-   ```
-5. **Setting up otel-v2 isolated dependencies**:
-   ```bash
-   cd otel-v2 && rm -rf node_modules && pnpm add -D vitest
-   ```
-6. **Running otel-v1 tests** (OpenTelemetry 1.x compatibility)
-7. **Running otel-v2 tests** (OpenTelemetry 2.x compatibility)
+1. **Builds isolated Docker images** for `otel-v1` and `otel-v2`
+2. **Runs each image across Node 20 and 22**
+3. **Keeps OTel-specific failures scoped to the `otel-js` job**
 
 ### Workflow Triggers
 
@@ -432,7 +416,7 @@ The workflow runs on:
 - **Pull requests** that modify:
   - `integrations/otel-js/**`
   - `js/**` (braintrust SDK)
-  - `.github/workflows/otel-js-test.yaml`
+  - `.github/workflows/checks.yaml`
 - **Pushes to main** that modify the same paths
 
 ### Matrix Testing
@@ -442,24 +426,17 @@ Tests run on:
 - **Operating systems**: Ubuntu, Windows
 - **Node versions**: 20, 22
 
-### Main JS Workflow Exclusion
+### Checks Workflow Placement
 
-The main `js.yaml` workflow explicitly excludes otel-js to prevent conflicts:
-
-```yaml
-on:
-  pull_request:
-    paths-ignore:
-      - "integrations/otel-js/**"
-```
+OTel coverage now lives inside the consolidated `checks` workflow as its own job rather than in a separate workflow file.
 
 ### Makefile Targets
 
 **For CI:**
 
 ```bash
-make js-test        # Main SDK tests (otel-js tested separately via paths-ignore)
-make js-test-otel   # Dedicated otel-js testing with isolation setup
+make js-verify-checks    # Main hermetic checks workflow entrypoint
+make js-test-otel-docker # Local equivalent for the Docker-based otel-js job
 ```
 
 **For local development:**
@@ -490,4 +467,4 @@ docker build -f integrations/otel-js/Dockerfile.test --build-arg NODE_VERSION=22
 - `otel-v1/.npmrc` - Isolation config for v1
 - `otel-v2/package.json` - OTel 2.x version constraints
 - `otel-v2/.npmrc` - Isolation config for v2
-- `.github/workflows/otel-js-test.yaml` - Dedicated CI workflow
+- `.github/workflows/checks.yaml` - Consolidated CI workflow

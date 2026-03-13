@@ -229,11 +229,11 @@ Scenarios automatically create tarballs if they're not provided via environment 
 - Cached for subsequent runs (fast)
 - Run from any level: `sdk/js/`, `sdk/js/smoke/`, or scenario directory
 
-**In CI** (`.github/workflows/js.yaml`):
+**In CI** (`.github/workflows/checks.yaml`):
 
-1. **Build job**: Creates all tarballs (braintrust, otel, templates-nunjucks), uploads as artifacts
-2. **Smoke-discover job**: Auto-discovers all scenarios (local + integration)
-3. **Smoke-test job**: Downloads tarballs, runs all scenarios in parallel with `fail-fast: false`
+1. **`js-build` job**: Creates all tarballs (braintrust, otel, templates-nunjucks), uploads as artifacts
+2. **`js-smoke-discover` job**: Auto-discovers all scenarios (local + integration)
+3. **`js-smoke-test` job**: Downloads tarballs, runs all scenarios in parallel with `fail-fast: false`
 
 ## Integration Scenarios
 

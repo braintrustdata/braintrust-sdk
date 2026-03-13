@@ -25,21 +25,26 @@ fixup:
 #
 #
 
-.PHONY: js-build js-test js-docs js-verify-ci
+.PHONY: js-build js-test js-test-checks js-test-external js-docs js-verify-checks js-verify-ci
 
 js-build:
 	pnpm install --frozen-lockfile
 	pnpm run build
 
-js-test: js-build
-	# Run tests only for the JS workspace packages and exclude integration scenario tests
-	pnpm --filter ./js... run test
-	cd js && make test
+js-test-checks: js-build
+	cd js && make test-checks
+
+js-test-external: js-build
+	cd js && make test-external
+
+js-test: js-test-checks js-test-external
 
 js-docs: js-build
 	cd js && make docs
 
-js-verify-ci: js-docs js-test
+js-verify-checks: js-docs js-test-checks
+
+js-verify-ci: js-verify-checks js-test-external
 
 js-test-otel-docker:
 	@echo "Building Docker images for otel-js tests..."
