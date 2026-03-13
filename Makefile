@@ -28,8 +28,8 @@ fixup:
 .PHONY: js-build js-test js-test-checks js-test-external js-docs js-verify-checks js-verify-ci
 
 js-build:
-	pnpm install --frozen-lockfile
-	pnpm run build
+	$(MISE) pnpm install --frozen-lockfile
+	$(MISE) pnpm run build
 
 js-test-checks: js-build
 	cd js && make test-checks
