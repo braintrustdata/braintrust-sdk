@@ -548,7 +548,7 @@ exports[`wrap-ai-sdk-generation-traces captures wrapper and child model spans (a
               "date": "<timestamp>",
               "openai-organization": "braintrust-data",
               "openai-processing-ms": "<openai-processing-ms>",
-              "openai-project": "proj_wMRY6YpEiASXMxPIIcI9nQRi",
+              "openai-project": "<openai-project>",
               "openai-version": "2020-10-01",
               "server": "cloudflare",
               "set-cookie": "<set-cookie>",
