@@ -14,10 +14,10 @@ export function resolveRuntimeAsyncLocalStorage():
   | RuntimeAsyncLocalStorageConstructor
   | undefined {
   try {
-    const globalAsyncLocalStorage = Object.getOwnPropertyDescriptor(
+    const globalAsyncLocalStorage: unknown = Reflect.get(
       globalThis,
       "AsyncLocalStorage",
-    )?.value;
+    );
 
     if (isAsyncLocalStorageConstructor(globalAsyncLocalStorage)) {
       return globalAsyncLocalStorage;
@@ -27,10 +27,7 @@ export function resolveRuntimeAsyncLocalStorage():
       return undefined;
     }
 
-    const getBuiltinModule: unknown = Object.getOwnPropertyDescriptor(
-      process,
-      "getBuiltinModule",
-    )?.value;
+    const getBuiltinModule: unknown = Reflect.get(process, "getBuiltinModule");
 
     if (typeof getBuiltinModule !== "function") {
       return undefined;

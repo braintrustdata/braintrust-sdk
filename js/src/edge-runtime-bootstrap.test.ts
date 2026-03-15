@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 
 type EdgeEntrypoint = "./edge-light/index" | "./workerd/index";
+const braintrustStateSymbol = Symbol.for("braintrust-state");
 
 describe.each([
   ["./workerd/index", "workerd"],
@@ -17,9 +18,11 @@ describe.each([
       "getBuiltinModule",
     );
 
-    beforeEach(() => {
+    function restoreRuntimeEnvironment() {
       vi.resetModules();
       vi.restoreAllMocks();
+
+      Reflect.deleteProperty(globalThis, braintrustStateSymbol);
 
       if (originalAsyncLocalStorageDescriptor) {
         Object.defineProperty(
@@ -40,31 +43,14 @@ describe.each([
       } else {
         Reflect.deleteProperty(process, "getBuiltinModule");
       }
+    }
+
+    beforeEach(() => {
+      restoreRuntimeEnvironment();
     });
 
     afterEach(() => {
-      vi.resetModules();
-      vi.restoreAllMocks();
-
-      if (originalAsyncLocalStorageDescriptor) {
-        Object.defineProperty(
-          globalThis,
-          "AsyncLocalStorage",
-          originalAsyncLocalStorageDescriptor,
-        );
-      } else {
-        Reflect.deleteProperty(globalThis, "AsyncLocalStorage");
-      }
-
-      if (originalGetBuiltinModuleDescriptor) {
-        Object.defineProperty(
-          process,
-          "getBuiltinModule",
-          originalGetBuiltinModuleDescriptor,
-        );
-      } else {
-        Reflect.deleteProperty(process, "getBuiltinModule");
-      }
+      restoreRuntimeEnvironment();
     });
 
     test("falls back to node:async_hooks when AsyncLocalStorage is not global", async () => {
@@ -77,8 +63,7 @@ describe.each([
 
       Object.defineProperty(process, "getBuiltinModule", {
         configurable: true,
-        value: getBuiltinModule,
-        writable: true,
+        get: () => getBuiltinModule,
       });
 
       const braintrust = await import(entrypoint);
