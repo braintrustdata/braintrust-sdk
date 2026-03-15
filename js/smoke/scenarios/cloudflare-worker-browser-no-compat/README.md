@@ -1,12 +1,12 @@
 # Cloudflare Worker Browser No Compat Scenario
 
-Tests Braintrust SDK in Cloudflare Workers with `braintrust/browser` entrypoint without Node.js compatibility flags.
+Tests Braintrust SDK in Cloudflare Workers with the top-level `braintrust` import resolving to the `workerd` build, without Node.js compatibility flags.
 
 ## Design Decisions
 
 ### Import Path
 
-Uses `braintrust/browser` (browser entrypoint) to test the most lightweight configuration. The browser entrypoint is designed to work in environments without Node.js APIs.
+Uses `braintrust` and asserts that Cloudflare resolves it to the `workerd` build in the most lightweight Worker configuration.
 
 ### Compatibility Flags
 
@@ -14,7 +14,7 @@ No compatibility flags are enabled. This tests the pure Cloudflare Workers runti
 
 ### Expected Outcome
 
-All tests should pass. The browser entrypoint is designed to work in standard Web API environments without requiring Node.js compatibility.
+The scenario should pass with its documented expected failures. The package should still resolve to the `workerd` build in a pure Workers runtime, while ALS-specific parent propagation remains an expected failure without Node.js compatibility.
 
 ### Test Pattern
 
