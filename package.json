@@ -17,6 +17,7 @@
     "knip": "knip --config knip.jsonc --no-config-hints",
     "test": "turbo run test --filter=\"!@braintrust/otel\"",
     "test:e2e": "turbo run test:e2e",
+    "test:e2e:canary": "turbo run test:e2e:canary",
     "test:e2e:update": "turbo run test:e2e:update",
     "playground": "turbo run playground --filter=\"braintrust\"",
     "playground:cli:push": "turbo run playground:cli:push --filter=\"braintrust\"",

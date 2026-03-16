@@ -11,6 +11,7 @@ dist
 .aider*
 !.aiderignore
 .pnpm-store
+**/.bt-tmp
 
 docker-compose.override.yml
 Dockerfile.local

@@ -1,13 +1,16 @@
 import { expect, test } from "vitest";
 import { normalizeForSnapshot, type Json } from "../../helpers/normalize";
 import {
+  prepareScenarioDir,
   resolveScenarioDir,
   withScenarioHarness,
 } from "../../helpers/scenario-harness";
 import { findLatestSpan } from "../../helpers/trace-selectors";
 import { summarizeEvent, summarizeRequest } from "../../helpers/trace-summary";
 
-const scenarioDir = resolveScenarioDir(import.meta.url);
+const scenarioDir = await prepareScenarioDir({
+  scenarioDir: resolveScenarioDir(import.meta.url),
+});
 
 test("trace-primitives-basic collects a minimal manual trace tree", async () => {
   await withScenarioHarness(

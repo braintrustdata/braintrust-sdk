@@ -1,6 +1,7 @@
 import { expect, test } from "vitest";
 import { normalizeForSnapshot, type Json } from "../../helpers/normalize";
 import {
+  prepareScenarioDir,
   resolveScenarioDir,
   withScenarioHarness,
 } from "../../helpers/scenario-harness";
@@ -10,7 +11,9 @@ import {
   summarizeWrapperContract,
 } from "../../helpers/wrapper-contract";
 
-const scenarioDir = resolveScenarioDir(import.meta.url);
+const scenarioDir = await prepareScenarioDir({
+  scenarioDir: resolveScenarioDir(import.meta.url),
+});
 const TIMEOUT_MS = 90_000;
 
 test("init-node-test-suite-traces captures node:test task spans", async () => {
