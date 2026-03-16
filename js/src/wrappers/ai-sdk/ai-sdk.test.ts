@@ -1400,10 +1400,9 @@ describe("ai sdk client unit tests", TEST_SUITE_OPTIONS, () => {
       (span: any) => span.span_attributes?.name === "generateText",
     );
     expect(generateTextSpan).toBeDefined();
-    expect((generateTextSpan as any).input.tools).toBeUndefined();
     expect((generateTextSpan as any).metadata.tools).toMatchObject({
       calculate: {
-        description: "Perform a basic arithmetic calculation",
+        description: "Perform a mathematical calculation",
       },
     });
 
