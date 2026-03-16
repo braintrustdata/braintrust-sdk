@@ -323,6 +323,13 @@ test.each(WRAP_AI_SDK_SCENARIOS)(
 
       expect(toolParent?.input).toBeDefined();
       expect(toolParent?.output).toBeDefined();
+      expect(
+        (toolParent?.row.metadata as { tools?: unknown } | undefined)?.tools,
+      ).toMatchObject({
+        get_weather: {
+          description: "Get the weather for a location",
+        },
+      });
       if (supportsToolExecution) {
         expect(toolModelSpans.length).toBeGreaterThanOrEqual(2);
         expect(toolSpans.length).toBeGreaterThanOrEqual(1);
@@ -409,6 +416,7 @@ test.each(WRAP_AI_SDK_SCENARIOS)(
                 "provider",
                 "model",
                 "operation",
+                "tools",
                 "braintrust",
                 "scenario",
               ]),

@@ -840,6 +840,36 @@ describe("AI SDK utility functions", () => {
       expect(metadata.model).toBeUndefined();
       expect(metadata.braintrust.integration_name).toBe("ai-sdk");
     });
+
+    it("should put tools in metadata", () => {
+      const params = {
+        model: "gpt-4",
+        tools: {
+          echo: {
+            description: "Echo the message",
+            execute: async () => "ok",
+            parameters: {
+              type: "object",
+              properties: {
+                message: {
+                  type: "string",
+                },
+              },
+            },
+          },
+        },
+      };
+      const metadata = extractMetadataFromParams(params);
+      expect(metadata.tools).toMatchObject({
+        echo: {
+          description: "Echo the message",
+          execute: "[Function]",
+          parameters: {
+            type: "object",
+          },
+        },
+      });
+    });
   });
 
   describe("processAISDKOutput", () => {
@@ -1189,8 +1219,44 @@ function extractMetadataFromParams(params: any): Record<string, any> {
   if (provider) {
     metadata.provider = provider;
   }
+  const tools = serializeAISDKToolsForLogging(params.tools);
+  if (tools) {
+    metadata.tools = tools;
+  }
 
   return metadata;
+}
+
+function serializeAISDKToolsForLogging(tools: any): any {
+  if (!tools || typeof tools !== "object") {
+    return tools;
+  }
+
+  if (Array.isArray(tools)) {
+    return tools.map(serializeAISDKTool);
+  }
+
+  return Object.fromEntries(
+    Object.entries(tools).map(([key, value]) => [
+      key,
+      serializeAISDKTool(value),
+    ]),
+  );
+}
+
+function serializeAISDKTool(tool: any): any {
+  if (!tool || typeof tool !== "object") {
+    return tool;
+  }
+
+  const serialized = { ...tool };
+  if ("execute" in serialized) {
+    serialized.execute = "[Function]";
+  }
+  if ("render" in serialized) {
+    serialized.render = "[Function]";
+  }
+  return serialized;
 }
 
 function processAISDKOutput(output: any, denyOutputPaths: string[]): any {

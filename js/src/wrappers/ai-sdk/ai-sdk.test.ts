@@ -1396,6 +1396,17 @@ describe("ai sdk client unit tests", TEST_SUITE_OPTIONS, () => {
     // Should have at least 2 spans: the main generateText span and the tool execution span
     expect(spans.length).toBeGreaterThanOrEqual(2);
 
+    const generateTextSpan = spans.find(
+      (span: any) => span.span_attributes?.name === "generateText",
+    );
+    expect(generateTextSpan).toBeDefined();
+    expect((generateTextSpan as any).input.tools).toBeUndefined();
+    expect((generateTextSpan as any).metadata.tools).toMatchObject({
+      calculate: {
+        description: "Perform a basic arithmetic calculation",
+      },
+    });
+
     // Find the tool execution span
     // eslint-disable-next-line @typescript-eslint/consistent-type-assertions, @typescript-eslint/no-explicit-any
     const toolSpan = spans.find(

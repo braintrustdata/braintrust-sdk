@@ -326,27 +326,28 @@ describe("google genai client unit tests", TEST_SUITE_OPTIONS, () => {
       },
       metadata: expect.objectContaining({
         model: TEST_MODEL,
+        tools: expect.arrayContaining([
+          expect.objectContaining({
+            functionDeclarations: expect.arrayContaining([
+              expect.objectContaining({
+                name: "get_weather",
+              }),
+            ]),
+          }),
+        ]),
       }),
       input: expect.objectContaining({
         model: TEST_MODEL,
         contents: expect.anything(),
-        config: expect.objectContaining({
-          tools: expect.arrayContaining([
-            expect.objectContaining({
-              functionDeclarations: expect.arrayContaining([
-                expect.objectContaining({
-                  name: "get_weather",
-                }),
-              ]),
-            }),
-          ]),
-        }),
+        config: expect.any(Object),
       }),
       metrics: expect.objectContaining({
         start: expect.any(Number),
         end: expect.any(Number),
       }),
     });
+
+    expect(span.input?.config?.tools).toBeUndefined();
 
     const { metrics } = span;
     expect(startTime).toBeLessThanOrEqual(metrics.start);
@@ -421,6 +422,18 @@ describe("google genai client unit tests", TEST_SUITE_OPTIONS, () => {
       },
       metadata: expect.objectContaining({
         model: TEST_MODEL,
+        tools: expect.arrayContaining([
+          expect.objectContaining({
+            functionDeclarations: expect.arrayContaining([
+              expect.objectContaining({
+                name: "get_weather",
+              }),
+              expect.objectContaining({
+                name: "get_time",
+              }),
+            ]),
+          }),
+        ]),
       }),
     });
 
