@@ -332,7 +332,15 @@ jobs:
 
           CURRENT_SHA=$(git rev-parse --short=7 HEAD)
           CANARY_NAME="braintrust"
-          npm version "$VERSION" --no-git-tag-version --allow-same-version
+          # Do not use `npm version` or `pnpm version` here — both delegate to
+          # npm's arborist which crashes when it encounters pnpm's workspace:*
+          # protocol specifiers in node_modules after `pnpm install`.
+          node -e "
+            const fs = require('fs');
+            const pkg = JSON.parse(fs.readFileSync('package.json', 'utf8'));
+            pkg.version = process.env.VERSION;
+            fs.writeFileSync('package.json', JSON.stringify(pkg, null, 2) + '\n');
+          "
 
           echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
           echo "package_name=${CANARY_NAME}" >> "$GITHUB_OUTPUT"
