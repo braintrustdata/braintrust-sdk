@@ -10,7 +10,6 @@ on:
       - "pnpm-lock.yaml"
       - "pnpm-workspace.yaml"
       - "turbo.json"
-      - "Makefile"
   push:
     branches: [main]
 
@@ -37,10 +36,14 @@ jobs:
           node-version: ${{ matrix.node-version }}
           registry-url: "https://registry.npmjs.org"
       - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4.3.0
-      - name: Run provider-backed JS tests
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Build
+        run: pnpm run build
+      - name: Run provider-backed tests
+        working-directory: js
         shell: bash
-        run: |
-          make js-test-external
+        run: pnpm run test:external
 
   e2e:
     runs-on: ubuntu-latest
