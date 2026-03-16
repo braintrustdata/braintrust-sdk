@@ -8248,7 +8248,7 @@ exports[`wrap-ai-sdk-generation-traces captures wrapper and child model spans (a
     "span_attributes": {
       "exec_counter": 24,
       "name": "Agent.generate",
-      "type": "llm",
+      "type": "function",
     },
     "span_id": "<span:70>",
     "span_parents": [
@@ -8604,7 +8604,7 @@ exports[`wrap-ai-sdk-generation-traces captures wrapper and child model spans (a
     "span_attributes": {
       "exec_counter": 27,
       "name": "Agent.stream",
-      "type": "llm",
+      "type": "function",
     },
     "span_id": "<span:78>",
     "span_parents": [
@@ -9280,7 +9280,7 @@ exports[`wrap-ai-sdk-generation-traces captures wrapper and child model spans (a
     "span_parents": [
       "<span:20>",
     ],
-    "type": "llm",
+    "type": "function",
   },
   {
     "has_input": true,
@@ -9344,7 +9344,7 @@ exports[`wrap-ai-sdk-generation-traces captures wrapper and child model spans (a
     "span_parents": [
       "<span:23>",
     ],
-    "type": "llm",
+    "type": "function",
   },
   {
     "has_input": true,
@@ -13471,7 +13471,7 @@ exports[`wrap-ai-sdk-generation-traces captures wrapper and child model spans (a
     "span_attributes": {
       "exec_counter": 24,
       "name": "ToolLoopAgent.generate",
-      "type": "llm",
+      "type": "function",
     },
     "span_id": "<span:70>",
     "span_parents": [
@@ -13893,7 +13893,7 @@ exports[`wrap-ai-sdk-generation-traces captures wrapper and child model spans (a
     "span_attributes": {
       "exec_counter": 27,
       "name": "ToolLoopAgent.stream",
-      "type": "llm",
+      "type": "function",
     },
     "span_id": "<span:78>",
     "span_parents": [
@@ -14637,7 +14637,7 @@ exports[`wrap-ai-sdk-generation-traces captures wrapper and child model spans (a
     "span_parents": [
       "<span:20>",
     ],
-    "type": "llm",
+    "type": "function",
   },
   {
     "has_input": true,
@@ -14700,7 +14700,7 @@ exports[`wrap-ai-sdk-generation-traces captures wrapper and child model spans (a
     "span_parents": [
       "<span:23>",
     ],
-    "type": "llm",
+    "type": "function",
   },
   {
     "has_input": true,
