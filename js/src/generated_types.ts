@@ -1,4 +1,4 @@
-// Auto-generated file (internal git SHA fe5561830dccd01c0850ad5d091e8f4079893744) -- do not modify
+// Auto-generated file (content hash 65ee1878ee4535ba) -- do not modify
 
 import { z } from "zod/v3";
 
@@ -705,6 +705,8 @@ export const Experiment = z.object({
   deleted_at: z.union([z.string(), z.null()]).optional(),
   dataset_id: z.union([z.string(), z.null()]).optional(),
   dataset_version: z.union([z.string(), z.null()]).optional(),
+  parameters_id: z.union([z.string(), z.null()]).optional(),
+  parameters_version: z.union([z.string(), z.null()]).optional(),
   public: z.boolean(),
   user_id: z.union([z.string(), z.null()]).optional(),
   metadata: z
