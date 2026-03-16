@@ -1,12 +1,12 @@
 /**
- * Rollup plugin for auto-instrumentation.
+ * Vite plugin for auto-instrumentation.
  *
  * Usage:
  * ```typescript
- * import { rollupPlugin } from '@braintrust/auto-instrumentations/bundler/rollup';
+ * import { vitePlugin } from '@braintrust/browser/vite';
  *
  * export default {
- *   plugins: [rollupPlugin()]
+ *   plugins: [vitePlugin()],
  * };
  * ```
  *
@@ -19,6 +19,6 @@
 
 import { unplugin, type BundlerPluginOptions } from "./plugin";
 
-export type RollupPluginOptions = BundlerPluginOptions;
+export type VitePluginOptions = BundlerPluginOptions;
 
-export const rollupPlugin = unplugin.rollup;
+export const vitePlugin = unplugin.vite;

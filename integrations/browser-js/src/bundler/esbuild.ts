@@ -1,13 +1,13 @@
 /**
- * Vite plugin for auto-instrumentation.
+ * esbuild plugin for auto-instrumentation.
  *
  * Usage:
  * ```typescript
- * import { vitePlugin } from '@braintrust/auto-instrumentations/bundler/vite';
+ * import { esbuildPlugin } from '@braintrust/browser/esbuild';
  *
- * export default {
- *   plugins: [vitePlugin()],
- * };
+ * await esbuild.build({
+ *   plugins: [esbuildPlugin()],
+ * });
  * ```
  *
  * This plugin uses @apm-js-collab/code-transformer to perform AST transformation
@@ -19,6 +19,6 @@
 
 import { unplugin, type BundlerPluginOptions } from "./plugin";
 
-export type VitePluginOptions = BundlerPluginOptions;
+export type EsbuildPluginOptions = BundlerPluginOptions;
 
-export const vitePlugin = unplugin.vite;
+export const esbuildPlugin = unplugin.esbuild;

@@ -3,7 +3,7 @@
  *
  * Usage:
  * ```javascript
- * import { webpackPlugin } from 'braintrust/auto-instrumentations/bundler/webpack';
+ * import { webpackPlugin } from '@braintrust/browser/webpack';
  *
  * export default {
  *   plugins: [webpackPlugin()],

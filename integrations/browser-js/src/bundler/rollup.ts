@@ -1,13 +1,13 @@
 /**
- * esbuild plugin for auto-instrumentation.
+ * Rollup plugin for auto-instrumentation.
  *
  * Usage:
  * ```typescript
- * import { esbuildPlugin } from '@braintrust/auto-instrumentations/bundler/esbuild';
+ * import { rollupPlugin } from '@braintrust/browser/rollup';
  *
- * await esbuild.build({
- *   plugins: [esbuildPlugin()],
- * });
+ * export default {
+ *   plugins: [rollupPlugin()]
+ * };
  * ```
  *
  * This plugin uses @apm-js-collab/code-transformer to perform AST transformation
@@ -19,6 +19,6 @@
 
 import { unplugin, type BundlerPluginOptions } from "./plugin";
 
-export type EsbuildPluginOptions = BundlerPluginOptions;
+export type RollupPluginOptions = BundlerPluginOptions;
 
-export const esbuildPlugin = unplugin.esbuild;
+export const rollupPlugin = unplugin.rollup;
