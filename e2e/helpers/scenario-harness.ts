@@ -30,6 +30,8 @@ interface ScenarioResult {
 
 const tsxCliPath = createRequire(import.meta.url).resolve("tsx/cli");
 const DEFAULT_SCENARIO_TIMEOUT_MS = 15_000;
+const HELPERS_DIR = path.dirname(fileURLToPath(import.meta.url));
+const REPO_ROOT = path.resolve(HELPERS_DIR, "../..");
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -70,6 +72,7 @@ function getTestServerEnv(
     BRAINTRUST_APP_PUBLIC_URL: server.url,
     BRAINTRUST_PROXY_URL: server.url,
     BRAINTRUST_E2E_RUN_ID: testRunId,
+    BRAINTRUST_E2E_REPO_ROOT: REPO_ROOT,
   };
 }
 

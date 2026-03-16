@@ -80,9 +80,16 @@ function shouldNormalizeWrapAISDKGenerationTracesCaller(
   context: { [key: string]: Json },
   callerFilename: string | undefined,
 ): boolean {
+  const normalizedCallerFilename =
+    typeof callerFilename === "string"
+      ? normalizeCallerFilename(callerFilename)
+      : undefined;
+
   if (
-    typeof callerFilename !== "string" ||
-    !callerFilename.includes(WRAP_AI_SDK_GENERATION_TRACES_SCENARIO_PATH)
+    typeof normalizedCallerFilename !== "string" ||
+    !normalizedCallerFilename.includes(
+      WRAP_AI_SDK_GENERATION_TRACES_SCENARIO_PATH,
+    )
   ) {
     return false;
   }
@@ -93,12 +100,12 @@ function shouldNormalizeWrapAISDKGenerationTracesCaller(
   return (
     (spanName === "generateText" &&
       execCounter === 2 &&
-      callerFilename.endsWith("/scenario.impl.ts") &&
+      normalizedCallerFilename.endsWith("/scenario.impl.ts") &&
       context.caller_functionname === "logger.traced.name") ||
     (spanName === "doGenerate" &&
       execCounter === 3 &&
-      callerFilename.includes("/node_modules/.pnpm/ai@") &&
-      callerFilename.endsWith("/node_modules/ai/dist/index.js") &&
+      normalizedCallerFilename.includes("/node_modules/.pnpm/ai@") &&
+      normalizedCallerFilename.endsWith("/node_modules/ai/dist/index.js") &&
       context.caller_functionname === "fn")
   );
 }
