@@ -36,6 +36,7 @@ const XACT_VERSION_KEYS = new Set([
 const DYNAMIC_HEADER_KEYS = new Set([
   "cf-ray",
   "openai-processing-ms",
+  "openai-project",
   "server-timing",
   "set-cookie",
   "x-ratelimit-remaining-requests",

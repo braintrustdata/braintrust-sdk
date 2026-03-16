@@ -24,5 +24,4 @@ pnpm run formatting # Check formatting
 pnpm run lint       # Run lint checks
 pnpm run fix:formatting # Auto-fix formatting
 pnpm run fix:lint   # Auto-fix lint issues
-make test           # Full JS-oriented test flow used in this repo
 ```
