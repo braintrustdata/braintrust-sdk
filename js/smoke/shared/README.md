@@ -30,11 +30,14 @@ shared/
 ├── src/
 │   ├── helpers/
 │   │   ├── types.ts          # Shared type definitions
-│   │   ├── test-state.ts     # Test environment setup/teardown
-│   │   └── assertions.ts     # Assertion utilities
+│   │   ├── register.ts       # Test registration and runner
+│   │   ├── assertions.ts     # Assertion utilities
+│   │   └── display.ts        # Result display utilities
 │   ├── suites/
-│   │   ├── basic-logging.ts  # Basic logging test suite
-│   │   └── ...               # Additional test suites
+│   │   ├── basic-logging.ts       # Basic logging test suite
+│   │   ├── import-verification.ts # Import/export verification
+│   │   ├── prompt-templating.ts   # Prompt templating tests
+│   │   └── eval-smoke.ts          # Eval functionality tests
 │   └── index.ts              # Main exports
 ├── dist/                     # Build output (gitignored)
 ├── package.json
@@ -54,202 +57,464 @@ This produces both CJS and ESM builds in the `dist/` directory.
 
 ## Usage
 
-### In Node.js (CJS)
+### Basic Pattern
 
 ```typescript
-// CommonJS environment
-const {
-  setupTestEnvironment,
-  runBasicLoggingTests,
-} = require("../../shared/dist/index.js");
+import {
+  runTests,
+  expectFailure,
+  testBasicSpanLogging,
+  testMultipleSpans,
+  testNunjucksTemplate,
+} from "../../shared/dist/index.mjs";
+
+import * as braintrust from "braintrust";
 
 async function main() {
-  const { initLogger, _exportsForTestingOnly } = require("braintrust");
-
-  const adapters = await setupTestEnvironment({
-    initLogger,
-    testingExports: _exportsForTestingOnly,
-    canUseFileSystem: true,
-    canUseCLI: true,
-    environment: "node",
+  const { all, passed, failed, xfail } = await runTests({
+    name: "My Test Suite",
+    braintrust,
+    tests: [
+      testBasicSpanLogging,
+      testMultipleSpans,
+      expectFailure(
+        testNunjucksTemplate,
+        (e) => e.message.includes("not supported"),
+        "Nunjucks not supported in browser build",
+      ),
+    ],
   });
 
-  const results = await runBasicLoggingTests(adapters);
-  // Handle results...
+  if (failed.length > 0) {
+    process.exit(1);
+  }
+}
+
+main().catch((error) => {
+  console.error(error);
+  process.exit(1);
+});
+```
+
+### In Node.js (CJS)
+
+```javascript
+const {
+  runTests,
+  testBasicSpanLogging,
+  testMultipleSpans,
+} = require("../../shared");
+
+const braintrust = require("braintrust");
+
+async function main() {
+  const { all, passed, failed, xfail } = await runTests({
+    name: "Node.js CJS Tests",
+    braintrust,
+    tests: [testBasicSpanLogging, testMultipleSpans],
+  });
+
+  if (failed.length > 0) {
+    process.exit(1);
+  }
 }
 ```
 
 ### In Node.js (ESM)
 
 ```typescript
-// ESM environment (after enable-esm)
 import {
-  setupTestEnvironment,
-  runBasicLoggingTests,
-} from "../../shared/dist/index.mjs";
+  runTests,
+  testBasicSpanLogging,
+  testMultipleSpans,
+} from "../../shared";
 
-async function main() {
-  const { initLogger, _exportsForTestingOnly } = await import("braintrust");
+import * as braintrust from "braintrust";
 
-  const adapters = await setupTestEnvironment({
-    initLogger,
-    testingExports: _exportsForTestingOnly,
-    canUseFileSystem: true,
-    canUseCLI: true,
-    environment: "node-esm",
-  });
+const { all, passed, failed, xfail } = await runTests({
+  name: "Node.js ESM Tests",
+  braintrust,
+  tests: [testBasicSpanLogging, testMultipleSpans],
+});
 
-  const results = await runBasicLoggingTests(adapters);
-  // Handle results...
+if (failed.length > 0) {
+  process.exit(1);
 }
 ```
 
 ### In Deno
 
 ```typescript
-// Deno always uses ESM
 import {
-  setupTestEnvironment,
-  runBasicLoggingTests,
-} from "../../shared/dist/index.mjs";
+  runTests,
+  testBasicSpanLogging,
+  testMultipleSpans,
+} from "../../shared";
 
-const { initLogger, _exportsForTestingOnly } = await import(
-  `file://${Deno.env.get("BRAINTRUST_BUILD_DIR")}`
-);
+import * as braintrust from "braintrust";
 
-const adapters = await setupTestEnvironment({
-  initLogger,
-  testingExports: _exportsForTestingOnly,
-  canUseFileSystem: true,
-  canUseCLI: false,
-  environment: "deno",
+const { all, passed, failed, xfail } = await runTests({
+  name: "Deno Tests",
+  braintrust,
+  tests: [testBasicSpanLogging, testMultipleSpans],
 });
 
-const results = await runBasicLoggingTests(adapters);
+if (failed.length > 0) {
+  Deno.exit(1);
+}
 ```
 
 ### In Cloudflare Workers
 
 ```typescript
-// Workers use ESM
 import {
-  setupTestEnvironment,
-  runBasicLoggingTests,
-} from "../../../shared/dist/index.mjs";
+  runTests,
+  expectFailure,
+  testBasicSpanLogging,
+  testNunjucksTemplate,
+} from "../../../shared";
 
-import { initLogger, _exportsForTestingOnly } from "braintrust";
+import * as braintrust from "braintrust";
 
 export default {
   async fetch(request: Request): Promise<Response> {
-    const adapters = await setupTestEnvironment({
-      initLogger,
-      testingExports: _exportsForTestingOnly,
-      canUseFileSystem: false, // No fs in Workers
-      canUseCLI: false,
-      environment: "cloudflare-worker",
+    const { all, passed, failed, xfail } = await runTests({
+      name: "Cloudflare Worker Tests",
+      braintrust,
+      tests: [
+        testBasicSpanLogging,
+        expectFailure(
+          testNunjucksTemplate,
+          (e) => e.message.includes("Disallowed"),
+          "Cloudflare Workers blocks dynamic code generation",
+        ),
+      ],
     });
 
-    const results = await runBasicLoggingTests(adapters);
-    return new Response(JSON.stringify(results));
+    return new Response(
+      JSON.stringify({
+        success: failed.length === 0,
+        totalTests: all.length,
+        passedTests: passed.length,
+        failedTests: failed.length,
+        xfailTests: xfail.length,
+        results: all,
+      }),
+      {
+        status: failed.length === 0 ? 200 : 500,
+        headers: { "Content-Type": "application/json" },
+      },
+    );
   },
 };
 ```
 
-## Test Adapters
+## Core Concepts
 
-The `TestAdapters` interface allows test suites to adapt to different environment capabilities:
+### Test Registration Pattern
+
+Tests are defined using the `register()` function which:
+
+- Adds tests to a global registry for coverage validation
+- Normalizes test output to `TestResult` format
+- Handles setup/teardown automatically using `_exportsForTestingOnly`
+- Wraps tests in try/catch blocks
 
 ```typescript
-interface TestAdapters {
-  initLogger: Function; // Braintrust initLogger function
-  testingExports: TestingExports; // _exportsForTestingOnly
-  backgroundLogger: BackgroundLogger;
-  canUseFileSystem: boolean; // Can tests read/write files?
-  canUseCLI: boolean; // Can tests invoke CLI commands?
-  environment: string; // Environment name for logging
+import { register } from "../helpers/register";
+
+export const testMyFeature = register(
+  "testMyFeature",
+  async (braintrust, { backgroundLogger }) => {
+    const initLogger = braintrust.initLogger as InitLoggerFn;
+    const logger = initLogger({ projectName: "test-project" });
+
+    // Test logic here
+
+    return "Test passed successfully";
+  },
+);
+```
+
+### Test Runner: `runTests()`
+
+The `runTests()` helper:
+
+- Executes all provided tests
+- Validates coverage (ensures all registered tests are called)
+- Displays results automatically
+- Returns structured results
+
+**API:**
+
+```typescript
+interface RunTestsOptions {
+  name: string; // Scenario name for display
+  braintrust: BraintrustModule; // Braintrust SDK module
+  tests: TestFn[]; // Array of test functions
+}
+
+interface TestRunResults {
+  all: TestResult[]; // All test results
+  passed: TestResult[]; // Only passed tests
+  failed: TestResult[]; // Only failed tests
+  xfail: TestResult[]; // Only expected failures
+}
+
+function runTests(options: RunTestsOptions): Promise<TestRunResults>;
+```
+
+**Example:**
+
+```typescript
+const { all, passed, failed, xfail } = await runTests({
+  name: "My Test Suite",
+  braintrust,
+  tests: [testOne, testTwo, testThree],
+});
+
+// Access specific result categories
+console.log(`Passed: ${passed.length}`);
+console.log(`Failed: ${failed.length}`);
+console.log(`Expected failures: ${xfail.length}`);
+```
+
+### Expected Failures: `expectFailure()`
+
+Use `expectFailure()` to mark tests that are expected to fail in certain environments:
+
+```typescript
+expectFailure(
+  testFunction, // The test function
+  errorPredicate, // Function to validate the error
+  reason, // Human-readable explanation
+);
+```
+
+**Error Predicate:**
+The `errorPredicate` function receives an error object and must return `true` if the error matches expectations:
+
+```typescript
+type ErrorPredicate = (error: { message: string; stack?: string }) => boolean;
+```
+
+**Examples:**
+
+```typescript
+// Simple message check
+expectFailure(
+  testNunjucksTemplate,
+  (e) => e.message.includes("not supported"),
+  "Nunjucks not supported in browser build",
+);
+
+// Multiple conditions
+expectFailure(
+  testAsyncLocalStorage,
+  (e) =>
+    e.message.includes("AsyncLocalStorage") ||
+    e.message.includes("not available"),
+  "ALS not available in this environment",
+);
+
+// Always expect failure (use sparingly)
+expectFailure(
+  testExperimentalFeature,
+  () => true,
+  "Feature not yet implemented",
+);
+```
+
+**Why Error Predicates Matter:**
+
+- Prevents masking unexpected errors
+- Ensures the test fails for the expected reason
+- If predicate returns `false`, the test remains a `fail` instead of converting to `xfail`
+
+### Test Context
+
+Tests receive a `TestContext` object with additional utilities:
+
+```typescript
+interface TestContext {
+  backgroundLogger: BackgroundLogger; // Logger for capturing/draining logs
 }
 ```
 
-Test suites check these flags and skip tests that aren't feasible in the current environment.
+The `backgroundLogger` provides:
+
+- `drain()` - Get and clear all captured events
+- Access to logged events for verification
 
 ## Available Test Suites
+
+### Import Verification
+
+Tests that verify SDK exports are correctly exposed and not tree-shaken:
+
+- `testCoreLoggingExports` - initLogger, Logger, Span, etc.
+- `testDatasetExports` - Dataset class and methods
+- `testPromptExports` - Prompt class and methods
+- `testExperimentExports` - Experiment class and methods
+- `testEvalExports` - Eval, Evaluator, Score, etc.
+- `testTracingExports` - traced, startSpan, currentSpan, etc.
+- `testClientWrapperExports` - wrapOpenAI, wrapAnthropic, etc.
+- `testUtilityExports` - Utility functions
+- `testFunctionExports` - Function class and methods
+- `testFramework2Exports` - Framework exports
+- `testIDGeneratorExports` - ID generation utilities
+- `testTestingExports` - \_exportsForTestingOnly
+- `testStateManagementExports` - State management utilities
+- `testBuildResolution` - Verifies correct build (browser vs node) and format (cjs vs esm)
 
 ### Basic Logging
 
 Tests core logging functionality:
 
-- `testBasicSpanLogging()` - Single span with input/output/expected
-- `testMultipleSpans()` - Multiple sequential spans
-- `testDirectLogging()` - Direct logger.log() if available
-- `runBasicLoggingTests()` - Runs all basic logging tests
+- `testBasicSpanLogging` - Single span with input/output/expected
+- `testMultipleSpans` - Multiple sequential spans
+- `testDirectLogging` - Direct logger.log() if available
+- `testJSONAttachment` - JSON attachment logging
+- `testAsyncLocalStorageTraced` - ALS: traced() + startSpan() parent-child relationship
+- `testNestedTraced` - ALS: Nested traced() calls (3-level hierarchy)
+- `testCurrentSpan` - ALS: currentSpan() returns active span
 
-### Adding New Test Suites
+**Async Local Storage (ALS) tests**: Verify parent-child span relationships work correctly.
 
-1. Create a new file in `src/suites/`:
+- **Node.js/Deno**: Full ALS → verifies `span_parents` relationships
+- **Browser/Workers**: May have limited or no ALS support
+- **Edge**: May have ALS → tests check if relationships work
+
+**Error handling**: Tests don't pre-check if functions exist. If `traced`, `startSpan`, or `currentSpan` are undefined, the code naturally throws and the error is caught by the `register()` wrapper, resulting in a test failure with the full stack trace.
+
+### Prompt Templating
+
+Tests prompt templating functionality:
+
+- `testMustacheTemplate` - Mustache templating (works everywhere)
+- `testNunjucksTemplate` - Nunjucks templating (Node.js only, uses eval/Function)
+
+**Note**: Nunjucks tests typically fail in browser/Workers environments due to:
+
+- Browser build doesn't include Nunjucks
+- Cloudflare Workers blocks dynamic code generation (eval/Function)
+
+Use `expectFailure()` for these tests in browser/Workers scenarios.
+
+### Eval Smoke Test
+
+Tests basic eval functionality:
+
+- `testEvalSmoke` - Creates eval, runs test cases, verifies output structure
+
+## Test Result Display
+
+### Standardized Output Format
+
+All scenarios use `displayTestResults()` for consistent output:
 
 ```typescript
-// src/suites/my-new-suite.ts
-import type { TestAdapters, TestResult } from "../helpers/types";
+import { displayTestResults } from "../../shared/dist/index.mjs";
 
-export async function testMyFeature(
-  adapters: TestAdapters,
-): Promise<TestResult> {
-  try {
-    // Your test logic here
-    return { success: true, testName: "testMyFeature" };
-  } catch (error) {
-    return { success: false, testName: "testMyFeature", error };
-  }
-}
-
-export async function runMyNewSuiteTests(
-  adapters: TestAdapters,
-): Promise<TestResult[]> {
-  return [
-    await testMyFeature(adapters),
-    // ... more tests
-  ];
-}
+// Called automatically by runTests(), but can also be used standalone
+displayTestResults({
+  scenarioName: "My Scenario Test Results",
+  results: testResults,
+  verbose: false, // Optional: show full stack traces
+});
 ```
 
-2. Export from `src/index.ts`:
+Output format:
+
+```
+=== My Scenario Test Results ===
+
+Tests: 18/20 passed
+Expected failures: 2
+
+✓ testCoreLoggingExports
+✓ testDatasetExports
+✗ testFailingFeature
+  Error: Feature not implemented
+  at Feature.test (feature.ts:42:11)
+⊘ testNunjucksTemplate
+  Expected failure: Nunjucks not supported in browser build
+```
+
+### Display Utilities
+
+- `displayTestResults(options)` - Display results in standardized format
+- `hasFailures(results)` - Check if there are any real failures (excluding xfail)
+- `getFailureCount(results)` - Get count of real failures
+- `getTestStats(results)` - Get summary statistics (total, passed, failed, xfail)
+
+## Adding New Tests
+
+1. **Create test function in a suite file:**
 
 ```typescript
-export { testMyFeature, runMyNewSuiteTests } from "./suites/my-new-suite";
+// src/suites/my-suite.ts
+import { register } from "../helpers/register";
+
+export const testMyFeature = register(
+  "testMyFeature",
+  async (braintrust, { backgroundLogger }) => {
+    const MyClass = braintrust.MyClass as typeof MyClassType;
+
+    const instance = new MyClass();
+    const result = await instance.doSomething();
+
+    assertEqual(result, expectedValue);
+
+    return "Test passed successfully";
+  },
+);
 ```
 
-3. Rebuild:
+2. **Export from `src/index.ts`:**
+
+```typescript
+export { testMyFeature } from "./suites/my-suite";
+```
+
+3. **Rebuild:**
 
 ```bash
 npm run build
 ```
 
-4. Use in any test environment:
+4. **Use in scenarios:**
 
 ```typescript
-import { runMyNewSuiteTests } from "../../shared/dist/index.mjs";
+import { runTests, testMyFeature } from "../../shared";
+
+const { failed } = await runTests({
+  name: "My Scenario",
+  braintrust,
+  tests: [testMyFeature],
+});
 ```
 
 ## Best Practices
 
 ### Write Environment-Agnostic Tests
 
-Check adapter flags before using environment-specific features:
+Let tests fail naturally when features aren't available:
 
 ```typescript
-export async function testDatasets(
-  adapters: TestAdapters,
-): Promise<TestResult> {
-  if (!adapters.canUseFileSystem) {
-    return {
-      success: true,
-      testName: "testDatasets",
-      message: "Skipped (no filesystem access)",
-    };
-  }
+// ✓ Good - let it throw naturally
+export const testDatasets = register("testDatasets", async (braintrust) => {
+  const Dataset = braintrust.Dataset as typeof DatasetClass;
+  const dataset = new Dataset();
+  // ... test logic
+});
 
-  // Test logic that needs filesystem...
-}
+// In scenarios where Dataset isn't available, wrap with expectFailure:
+expectFailure(
+  testDatasets,
+  (e) => e.message.includes("Dataset is not defined"),
+  "Datasets not available in browser build",
+);
 ```
 
 ### Use Provided Assertions
@@ -259,25 +524,39 @@ Use the provided assertion helpers instead of environment-specific ones:
 ```typescript
 import { assert, assertEqual, assertNotEmpty } from "../helpers/assertions";
 
-// Good - works everywhere
+// ✓ Good - works everywhere
 assertEqual(actual, expected);
 
-// Bad - only works in specific environments
+// ✗ Bad - only works in specific environments
 expect(actual).toBe(expected); // Jest-specific
 assertEquals(actual, expected); // Deno-specific
 ```
 
-### Return TestResult
+### Return Success Messages
 
-Always return a `TestResult` object with consistent structure:
+Test functions should return a descriptive success message:
 
 ```typescript
-interface TestResult {
-  success: boolean;
-  testName: string;
-  message?: string;
-  error?: Error;
-}
+export const testMyFeature = register("testMyFeature", async (braintrust) => {
+  // ... test logic
+
+  return "MyFeature works correctly with X and Y";
+});
+```
+
+### Type Assertions
+
+Since `BraintrustModule` properties are typed as `unknown`, explicitly cast them:
+
+```typescript
+export const testSomething = register("testSomething", async (braintrust) => {
+  const initLogger = braintrust.initLogger as InitLoggerFn;
+  const MyClass = braintrust.MyClass as typeof MyClassType;
+
+  // Now use with proper types
+  const logger = initLogger({ projectName: "test" });
+  const instance = new MyClass();
+});
 ```
 
 ## Development Workflow
@@ -286,14 +565,27 @@ interface TestResult {
 2. Run `npm run build` to rebuild
 3. Test in target environment (e.g., Deno):
    ```bash
-   cd ../tests/deno
-   deno task test:shared
+   cd ../scenarios/deno-node
+   make test
    ```
 4. Verify tests pass in multiple environments
+
+## Coverage Validation
+
+The test framework automatically validates that all registered tests are run in each scenario. If a scenario forgets to include a test, `validateCoverage()` (called automatically by `runTests()`) will add a failure to the results:
+
+```
+✗ Test coverage validation
+  Missing tests: testForgottenTest, testAnotherMissing
+```
+
+This ensures scenarios don't accidentally skip tests.
 
 ## Notes
 
 - Tests use `_exportsForTestingOnly` to avoid hitting real APIs
-- Each test suite should be independent and idempotent
-- Clean up test state in `finally` blocks using `cleanupTestEnvironment()`
+- Each test suite is independent and idempotent
+- The `register()` wrapper handles setup/cleanup automatically
 - The package is marked `private: true` - it's only for internal smoke tests
+- No manual `try/catch` blocks needed - `register()` handles this
+- No manual coverage validation needed - `runTests()` handles this

@@ -1,9 +1,8 @@
 import {
-  GitMetadataSettings as GitMetadataSettingsSchema,
   type GitMetadataSettingsType as GitMetadataSettings,
-  RepoInfo as RepoInfoSchema,
   type RepoInfoType as RepoInfo,
 } from "./generated_types";
+import { debugLogger } from "./debug-logger";
 import { simpleGit } from "simple-git";
 
 const COMMON_BASE_BRANCHES = ["main", "master", "develop"];
@@ -19,7 +18,7 @@ export async function currentRepo() {
     } else {
       return null;
     }
-  } catch (e) {
+  } catch {
     return null;
   }
 }
@@ -95,7 +94,7 @@ async function getBaseBranchAncestor(remote: string | undefined = undefined) {
       `${remoteName}/${baseBranch}`,
     ]);
     return ancestor.trim();
-  } catch (e) {
+  } catch {
     /*
     console.warn(
       `Warning: Could not find a common ancestor with ${remoteName}/${baseBranch}`
@@ -118,7 +117,7 @@ export async function getPastNAncestors(
   try {
     ancestor = await getBaseBranchAncestor(remote);
   } catch (e) {
-    console.warn(
+    debugLogger.warn(
       "Skipping git metadata. This is likely because the repository has not been published to a remote yet.",
       `${e}`,
     );
@@ -133,7 +132,7 @@ export async function getPastNAncestors(
 async function attempt<T>(fn: () => Promise<T>): Promise<T | undefined> {
   try {
     return await fn();
-  } catch (e) {
+  } catch {
     return undefined;
   }
 }

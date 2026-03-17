@@ -1,0 +1,22 @@
+{
+  "name": "@braintrust/js-e2e-tests",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test:e2e": "vitest run",
+    "test:e2e:canary": "node ./scripts/run-canary-tests.mjs",
+    "test:e2e:update": "vitest run --update"
+  },
+  "devDependencies": {
+    "@braintrust/otel": "workspace:^",
+    "@opentelemetry/api": ">=1.9.0",
+    "@opentelemetry/context-async-hooks": ">=1.9.0",
+    "@opentelemetry/sdk-trace-base": ">=1.9.0",
+    "@types/node": "^20.10.5",
+    "braintrust": "workspace:^",
+    "tsx": "^3.14.0",
+    "typescript": "5.4.4",
+    "vitest": "^2.1.9"
+  }
+}

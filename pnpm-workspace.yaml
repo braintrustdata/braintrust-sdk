@@ -1,6 +1,6 @@
 packages:
+  - e2e
   - js
-  - core/js
   - integrations/*
   - internal/golden
   - js/src/wrappers/*

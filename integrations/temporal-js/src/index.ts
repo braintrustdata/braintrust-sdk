@@ -24,10 +24,12 @@
  *   plugins: [braintrustPlugin],
  * });
  *
+ * const workflowsUrl = new URL("./workflows", import.meta.url);
+ * const workflowsPath = workflowsUrl.pathname;
  * // Create worker with the plugin
  * const worker = await Worker.create({
  *   taskQueue: "my-queue",
- *   workflowsPath: require.resolve("./workflows"),
+ *   workflowsPath: workflowsPath,
  *   activities,
  *   plugins: [braintrustPlugin],
  * });

@@ -7,7 +7,7 @@ import {
   beforeAll,
 } from "vitest";
 import { SpanCache } from "./span-cache";
-import { configureNode } from "./node";
+import { configureNode } from "./node/config";
 
 describe("SpanCache (disk-based)", () => {
   let cache: SpanCache;

@@ -10,7 +10,6 @@ const partialData = Array.from({ length: 100 }, (_, i) => i);
 // Initialize queues once
 const fullQueue = new Queue<number>(1000);
 const wrappedQueue = new Queue<number>(1000);
-const smallQueue = new Queue<number>(50);
 const partialQueue = new Queue<number>(1000);
 
 bench

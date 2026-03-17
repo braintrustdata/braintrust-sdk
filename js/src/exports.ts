@@ -40,6 +40,12 @@ export type {
   WithTransactionId,
 } from "./logger";
 
+export type {
+  SandboxConfig,
+  RegisterSandboxOptions,
+  RegisterSandboxResult,
+} from "./sandbox";
+
 export {
   Attachment,
   BaseAttachment,
@@ -82,6 +88,7 @@ export {
   initDataset,
   initExperiment,
   initLogger,
+  loadParameters,
   loadPrompt,
   log,
   logError,
@@ -112,12 +119,28 @@ export {
   registerOtelFlush,
 } from "./logger";
 
+export { registerSandbox } from "./sandbox";
+
+// Internal isomorph layer for platform-specific implementations
+import _internalIso from "./isomorph";
+export { _internalIso };
+
 export {
   isTemplateFormat,
   parseTemplateFormat,
   renderTemplateContent,
 } from "./template/renderer";
-export type { TemplateFormat } from "./template/renderer";
+export type { TemplateFormat } from "./template/registry";
+
+export type {
+  TemplateRenderer,
+  TemplateRendererPlugin,
+} from "./template/registry";
+export {
+  registerTemplatePlugin,
+  getTemplateRenderer,
+  templateRegistry,
+} from "./template/registry";
 
 export type { InvokeFunctionArgs, InvokeReturn } from "./functions/invoke";
 export { initFunction, invoke } from "./functions/invoke";
@@ -150,6 +173,8 @@ export { wrapAnthropic } from "./wrappers/anthropic";
 export { wrapMastraAgent } from "./wrappers/mastra";
 export { wrapClaudeAgentSDK } from "./wrappers/claude-agent-sdk/claude-agent-sdk";
 export { wrapGoogleGenAI } from "./wrappers/google-genai";
+export { wrapVitest } from "./wrappers/vitest";
+export { initNodeTestSuite } from "./wrappers/node-test";
 
 export * as graph from "./graph-framework";
 
@@ -181,9 +206,6 @@ export type {
   CodeOpts,
   CreateProjectOpts,
   FunctionEvent,
-  PromptContents,
-  PromptDefinition,
-  PromptDefinitionWithTools,
   PromptOpts,
   ScorerOpts,
 } from "./framework2";
@@ -197,32 +219,21 @@ export {
   ScorerBuilder,
   ToolBuilder,
   projects,
+  toolFunctionDefinitionSchema,
+} from "./framework2";
+
+export {
   promptContentsSchema,
   promptDefinitionSchema,
   promptDefinitionToPromptData,
   promptDefinitionWithToolsSchema,
-  toolFunctionDefinitionSchema,
-} from "./framework2";
+  PromptContents,
+  PromptDefinition,
+  PromptDefinitionWithTools,
+} from "./prompt-schemas";
 
 export type { Trace, SpanData, GetThreadOptions } from "./trace";
 export { SpanFetcher, CachedSpanFetcher } from "./trace";
-
-export type {
-  LLMMessage,
-  PreprocessorResult,
-  ThreadTemplateVars,
-} from "./thread-utils";
-export {
-  isRoleContentMessage,
-  isLLMMessageArray,
-  formatMessageArrayAsText,
-  formatValueAsText,
-  stringifyPreprocessorResult,
-  IncrementalMerger,
-  mergeAndDeduplicateResults,
-  mergeAndStringify,
-  computeThreadTemplateVars,
-} from "./thread-utils";
 
 export type {
   ParentExperimentIds,
@@ -247,6 +258,7 @@ export type {
   EvalParameterSerializedSchema,
   EvaluatorDefinition,
   EvaluatorDefinitions,
+  ParametersSource,
 } from "../dev/types";
 
 export type { EvalParameters } from "./eval-parameters";
@@ -255,3 +267,7 @@ export {
   evaluatorDefinitionSchema,
   evaluatorDefinitionsSchema,
 } from "../dev/types";
+
+// Auto-instrumentation configuration
+export { configureInstrumentation } from "./instrumentation";
+export type { InstrumentationConfig } from "./instrumentation";

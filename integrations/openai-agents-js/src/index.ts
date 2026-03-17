@@ -23,6 +23,10 @@ import {
   isHandoffSpanData,
   isGuardrailSpanData,
   isCustomSpanData,
+  isMCPListToolsSpanData,
+  isTranscriptionSpanData,
+  isSpeechSpanData,
+  isSpeechGroupSpanData,
 } from "./types";
 
 function spanTypeFromAgents(span: AgentsSpan): SpanTypeAttribute {
@@ -31,16 +35,26 @@ function spanTypeFromAgents(span: AgentsSpan): SpanTypeAttribute {
   if (
     spanType === SpanType.AGENT ||
     spanType === SpanType.HANDOFF ||
-    spanType === SpanType.CUSTOM
+    spanType === SpanType.CUSTOM ||
+    spanType === SpanType.SPEECH_GROUP
   ) {
     return SpanTypeAttribute.TASK;
   }
 
-  if (spanType === SpanType.FUNCTION || spanType === SpanType.GUARDRAIL) {
+  if (
+    spanType === SpanType.FUNCTION ||
+    spanType === SpanType.GUARDRAIL ||
+    spanType === SpanType.MCP_TOOLS
+  ) {
     return SpanTypeAttribute.TOOL;
   }
 
-  if (spanType === SpanType.GENERATION || spanType === SpanType.RESPONSE) {
+  if (
+    spanType === SpanType.GENERATION ||
+    spanType === SpanType.RESPONSE ||
+    spanType === SpanType.TRANSCRIPTION ||
+    spanType === SpanType.SPEECH
+  ) {
     return SpanTypeAttribute.LLM;
   }
 
@@ -61,6 +75,17 @@ function spanNameFromAgents(span: AgentsSpan): string {
       return "Response";
     case SpanType.HANDOFF:
       return "Handoff";
+    case SpanType.MCP_TOOLS:
+      if (isMCPListToolsSpanData(spanData) && spanData.server) {
+        return `List Tools (${spanData.server})`;
+      }
+      return "MCP List Tools";
+    case SpanType.TRANSCRIPTION:
+      return "Transcription";
+    case SpanType.SPEECH:
+      return "Speech";
+    case SpanType.SPEECH_GROUP:
+      return "Speech Group";
     case SpanType.AGENT:
     case SpanType.FUNCTION:
     case SpanType.GUARDRAIL:
@@ -293,23 +318,25 @@ export class OpenAIAgentsTraceProcessor {
     return Promise.resolve();
   }
 
-  onTraceEnd(trace: AgentsTrace): Promise<void> {
+  async onTraceEnd(trace: AgentsTrace): Promise<void> {
     const traceData = this.traceSpans.get(trace.traceId);
 
     if (traceData) {
-      traceData.rootSpan.log({
-        input: traceData.metadata.firstInput,
-        output: traceData.metadata.lastOutput,
-      });
-      traceData.rootSpan.end();
-
-      this.traceSpans.delete(trace.traceId);
-      const orderIndex = this.traceOrder.indexOf(trace.traceId);
-      if (orderIndex > -1) {
-        this.traceOrder.splice(orderIndex, 1);
+      try {
+        traceData.rootSpan.log({
+          input: traceData.metadata.firstInput,
+          output: traceData.metadata.lastOutput,
+        });
+        traceData.rootSpan.end();
+        await traceData.rootSpan.flush();
+      } finally {
+        this.traceSpans.delete(trace.traceId);
+        const orderIndex = this.traceOrder.indexOf(trace.traceId);
+        if (orderIndex > -1) {
+          this.traceOrder.splice(orderIndex, 1);
+        }
       }
     }
-    return Promise.resolve();
   }
 
   private extractAgentLogData(span: AgentsSpan): Record<string, unknown> {
@@ -384,6 +411,9 @@ export class OpenAIAgentsTraceProcessor {
       if (usage.input_tokens_details?.cached_tokens != null)
         data.metrics.prompt_cached_tokens =
           usage.input_tokens_details.cached_tokens;
+      if (usage.input_tokens_details?.cache_write_tokens != null)
+        data.metrics.prompt_cache_creation_tokens =
+          usage.input_tokens_details.cache_write_tokens;
     }
 
     return data;
@@ -478,6 +508,63 @@ export class OpenAIAgentsTraceProcessor {
     return spanData.data || {};
   }
 
+  private extractMCPListToolsLogData(
+    span: AgentsSpan,
+  ): Record<string, unknown> {
+    const spanData = span.spanData;
+    if (!isMCPListToolsSpanData(spanData)) {
+      return {};
+    }
+    return {
+      output: spanData.result,
+      metadata: {
+        server: spanData.server,
+      },
+    };
+  }
+
+  private extractTranscriptionLogData(
+    span: AgentsSpan,
+  ): Record<string, unknown> {
+    const spanData = span.spanData;
+    if (!isTranscriptionSpanData(spanData)) {
+      return {};
+    }
+    return {
+      input: spanData.input,
+      output: spanData.output,
+      metadata: {
+        model: spanData.model,
+        model_config: spanData.model_config,
+      },
+    };
+  }
+
+  private extractSpeechLogData(span: AgentsSpan): Record<string, unknown> {
+    const spanData = span.spanData;
+    if (!isSpeechSpanData(spanData)) {
+      return {};
+    }
+    return {
+      input: spanData.input,
+      output: spanData.output,
+      metadata: {
+        model: spanData.model,
+        model_config: spanData.model_config,
+      },
+    };
+  }
+
+  private extractSpeechGroupLogData(span: AgentsSpan): Record<string, unknown> {
+    const spanData = span.spanData;
+    if (!isSpeechGroupSpanData(spanData)) {
+      return {};
+    }
+    return {
+      input: spanData.input,
+    };
+  }
+
   private extractLogData(span: AgentsSpan): Record<string, unknown> {
     const spanType = span.spanData?.type;
 
@@ -496,6 +583,14 @@ export class OpenAIAgentsTraceProcessor {
         return this.extractGenerationLogData(span);
       case SpanType.CUSTOM:
         return this.extractCustomLogData(span);
+      case SpanType.MCP_TOOLS:
+        return this.extractMCPListToolsLogData(span);
+      case SpanType.TRANSCRIPTION:
+        return this.extractTranscriptionLogData(span);
+      case SpanType.SPEECH:
+        return this.extractSpeechLogData(span);
+      case SpanType.SPEECH_GROUP:
+        return this.extractSpeechGroupLogData(span);
       default:
         return {};
     }
@@ -557,17 +652,15 @@ export class OpenAIAgentsTraceProcessor {
     return Promise.resolve();
   }
 
-  shutdown(): Promise<void> {
+  async shutdown(): Promise<void> {
     if (this.logger && typeof this.logger.flush === "function") {
-      this.logger.flush();
+      await this.logger.flush();
     }
-    return Promise.resolve();
   }
 
-  forceFlush(): Promise<void> {
+  async forceFlush(): Promise<void> {
     if (this.logger && typeof this.logger.flush === "function") {
-      this.logger.flush();
+      await this.logger.flush();
     }
-    return Promise.resolve();
   }
 }

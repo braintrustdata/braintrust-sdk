@@ -15,11 +15,12 @@ export type Schema<Input, Output> = Partial<{
   returns: ZodSchema<Output>;
 }>;
 
-interface BaseFnOpts {
+export interface BaseFnOpts {
   name: string;
   slug: string;
   description: string;
   ifExists: IfExists;
+  tags?: string[];
   metadata?: Record<string, unknown>;
 }
 

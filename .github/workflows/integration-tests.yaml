@@ -2,45 +2,84 @@ name: integration-tests
 
 on:
   pull_request:
-    types: [opened, synchronize, reopened, labeled]
+    paths:
+      - "js/**"
+      - "e2e/**"
+      - ".github/workflows/integration-tests.yaml"
+      - "package.json"
+      - "pnpm-lock.yaml"
+      - "pnpm-workspace.yaml"
+      - "turbo.json"
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
 
 jobs:
-  open-pr:
-    if: ${{ contains(github.event.pull_request.labels.*.name, 'run-integration-tests') }}
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-      pull-requests: write
-
+  js-provider-tests:
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+        node-version: [20, 22]
+    env:
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+      GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
     steps:
-      - name: Checkout parent repository
-        uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
-          repository: braintrustdata/braintrust
-          path: braintrust
-          token: ${{ secrets.CROSS_REPO_TOKEN }}
-          fetch-depth: 0
+          node-version: ${{ matrix.node-version }}
+          registry-url: "https://registry.npmjs.org"
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4.3.0
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Build
+        run: pnpm run build
+      - name: Run provider-backed tests
+        working-directory: js
+        shell: bash
+        run: pnpm run test:external
 
-      - name: Configure Git in parent repository
-        run: |
-          cd braintrust
-          git config user.name "GitHub Actions Bot"
-          git config user.email "actions@github.com"
+  e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      BRAINTRUST_API_KEY: ${{ secrets.BRAINTRUST_API_KEY }}
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+      GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version-file: .tool-versions
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4.3.0
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Run e2e tests
+        run: pnpm test:e2e
 
-      - name: Initialize and update SDK submodule
-        run: |
-          cd braintrust
-          git submodule init
-          git submodule update --init --recursive
-          cd sdk
-          git remote set-url origin https://github.com/braintrustdata/braintrust-sdk.git
-          git fetch origin
-          git checkout ${{ github.event.pull_request.head.sha }}
-
-      - name: Create integration test PR
-        run: ./braintrust/sdk/scripts/create-integration-test-pr.sh
-        env:
-          GH_TOKEN: ${{ secrets.CROSS_REPO_TOKEN }}
-          BRANCH_NAME: ${{ github.head_ref || github.ref_name }}
-          COMMIT_HASH: ${{ github.event.pull_request.head.sha }}
-          PARENT_REPO_PATH: braintrust
+  e2e-canary:
+    if: ${{ github.event_name == 'pull_request' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      BRAINTRUST_API_KEY: ${{ secrets.BRAINTRUST_API_KEY }}
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+      GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version-file: .tool-versions
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4.3.0
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Run canary e2e tests
+        run: pnpm test:e2e:canary

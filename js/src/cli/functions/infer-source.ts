@@ -1,9 +1,9 @@
 import { SourceMapConsumer } from "source-map";
-import * as fs from "fs/promises";
+import * as fs from "node:fs/promises";
 import { EvaluatorFile, warning } from "../../framework";
 import { loadModule } from "./load-module";
 import { type CodeBundleType as CodeBundle } from "../../generated_types";
-import path from "path";
+import path from "node:path";
 import type { Node } from "typescript";
 
 interface SourceMapContext {
@@ -49,8 +49,12 @@ function isNative(fn: Function): boolean {
 function locationToString(location: CodeBundle["location"]): string {
   if (location.type === "experiment") {
     return `eval ${location.eval_name} -> ${location.position.type}`;
-  } else {
+  } else if (location.type === "function") {
     return `task ${location.index}`;
+  } else if (location.type === "sandbox") {
+    return `sandbox eval ${location.eval_name}`;
+  } else {
+    throw new Error(`Unknown location type`);
   }
 }
 
@@ -64,7 +68,7 @@ export async function findCodeDefinition({
   // eslint-disable-next-line @typescript-eslint/no-unsafe-function-type
   let fn: Function | undefined = undefined;
 
-  if (location.type === "experiment") {
+  if (location.type === "experiment" || location.type === "sandbox") {
     const evaluator = outFileModule.evaluators[location.eval_name]?.evaluator;
     if (!evaluator) {
       console.warn(
@@ -75,12 +79,18 @@ export async function findCodeDefinition({
       return undefined;
     }
 
-    fn =
-      location.position.type === "task"
-        ? evaluator.task
-        : evaluator.scores[location.position.index];
-  } else {
+    if (location.type === "sandbox") {
+      fn = evaluator.task;
+    } else {
+      fn =
+        location.position.type === "task"
+          ? evaluator.task
+          : evaluator.scores[location.position.index];
+    }
+  } else if (location.type === "function") {
     fn = outFileModule.functions[location.index].handler;
+  } else {
+    throw new Error(`Unknown location type`);
   }
 
   if (!fn) {

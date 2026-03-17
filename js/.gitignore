@@ -11,3 +11,5 @@ braintrust-*.tgz
 
 # Vendor libraries (local-only for development)
 vendor/
+
+playground.ts

@@ -2,10 +2,10 @@
 
 import * as esbuild from "esbuild";
 import * as dotenv from "dotenv";
-import fs from "fs";
-import os from "os";
-import path from "path";
-import util from "util";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
+import util from "node:util";
 import * as fsWalk from "@nodelib/fs.walk";
 import { minimatch } from "minimatch";
 import { ArgumentParser } from "argparse";
@@ -17,6 +17,8 @@ import {
   Experiment,
   BaseMetadata,
   Dataset,
+  type ParametersRef,
+  RemoteEvalParameters,
 } from "../logger";
 import type { ProgressReporter } from "../reporters/types";
 import {
@@ -40,7 +42,7 @@ import {
   runEvaluator,
 } from "../framework";
 import { fancyReporter, warning } from "./reporters/eval";
-import { configureNode } from "../node";
+import { configureNode } from "../node/config";
 import { isEmpty } from "../util";
 import { loadEnvConfig } from "@next/env";
 import type {
@@ -54,6 +56,10 @@ import { uploadHandleBundles } from "./functions/upload";
 import { loadModule } from "./functions/load-module";
 import { bundleCommand } from "./util/bundle";
 import { RunArgs } from "./util/types";
+import {
+  normalizeDebugLoggingArgs,
+  shouldShowDetailedErrors,
+} from "./util/debug-logging";
 import { pullCommand } from "./util/pull";
 import { runDevServer } from "../../dev/server";
 
@@ -93,6 +99,7 @@ async function initExperiment(
   },
 ) {
   const { data, baseExperiment: defaultBaseExperiment } = evaluatorData;
+  const parameters = await getExperimentParametersRef(evaluator.parameters);
   // NOTE: This code is duplicated with initExperiment in js/src/framework.ts.
   // Make sure to update that if you change this.
   const logger = _initExperiment({
@@ -103,6 +110,7 @@ async function initExperiment(
     experiment: evaluator.experimentName,
     description: evaluator.description,
     metadata: evaluator.metadata,
+    tags: evaluator.tags,
     isPublic: evaluator.isPublic,
     update: evaluator.update,
     baseExperiment: evaluator.baseExperimentName ?? defaultBaseExperiment,
@@ -110,6 +118,7 @@ async function initExperiment(
     gitMetadataSettings: evaluator.gitMetadataSettings,
     repoInfo: evaluator.repoInfo,
     dataset: Dataset.isDataset(data) ? data : undefined,
+    parameters,
     setCurrent: false,
   });
   const info = await logger.summarize({ summarizeScores: false });
@@ -123,6 +132,34 @@ async function initExperiment(
       ` Experiment ${chalk.bold(info.experimentName)} is running at ${linkText}`,
   );
   return logger;
+}
+
+async function getExperimentParametersRef(
+  parameters:
+    | Record<string, unknown>
+    | RemoteEvalParameters<boolean, boolean>
+    | Promise<RemoteEvalParameters<boolean, boolean>>
+    | undefined,
+): Promise<ParametersRef | undefined> {
+  if (!parameters) {
+    return undefined;
+  }
+
+  const resolvedParameters =
+    parameters instanceof Promise ? await parameters : parameters;
+
+  if (!RemoteEvalParameters.isParameters(resolvedParameters)) {
+    return undefined;
+  }
+
+  if (resolvedParameters.id === undefined) {
+    return undefined;
+  }
+
+  return {
+    id: resolvedParameters.id,
+    version: resolvedParameters.version,
+  };
 }
 
 function resolveReporter(
@@ -185,7 +222,7 @@ function buildWatchPluginForEvaluator(
         console.error(`Done building ${inFile}`);
 
         if (!result.outputFiles) {
-          if (opts.verbose) {
+          if (opts.showDetailedErrors) {
             console.warn(`Failed to compile ${inFile}`);
             console.warn(result.errors);
           } else {
@@ -256,7 +293,7 @@ function buildWatchPluginForEvaluator(
             evaluator,
             evaluatorResult,
             {
-              verbose: opts.verbose,
+              verbose: opts.showDetailedErrors,
               jsonl: opts.jsonl,
             },
           );
@@ -320,6 +357,7 @@ async function initFile({
         const evaluator = evaluateBuildResults(inFile, result) || {
           functions: [],
           prompts: [],
+          parameters: [],
           evaluators: {},
           reporters: {},
         };
@@ -356,7 +394,7 @@ async function initFile({
 }
 
 interface EvaluatorOpts {
-  verbose: boolean;
+  showDetailedErrors: boolean;
   apiKey?: string;
   orgName?: string;
   appUrl?: string;
@@ -374,15 +412,15 @@ interface EvaluatorOpts {
 export function handleBuildFailure({
   result,
   terminateOnFailure,
-  verbose,
+  showDetailedErrors,
 }: {
   result: BuildFailure;
   terminateOnFailure: boolean;
-  verbose: boolean;
+  showDetailedErrors: boolean;
 }) {
   if (terminateOnFailure) {
     throw result.error;
-  } else if (verbose) {
+  } else if (showDetailedErrors) {
     console.warn(`Failed to compile ${result.sourceFile}`);
     console.warn(result.error);
   } else {
@@ -402,7 +440,7 @@ function updateEvaluators(
       handleBuildFailure({
         result,
         terminateOnFailure: opts.terminateOnFailure,
-        verbose: opts.verbose,
+        showDetailedErrors: opts.showDetailedErrors,
       });
       continue;
     }
@@ -571,7 +609,7 @@ async function runOnce(
       // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
       allEvalsResults[idx as number],
       {
-        verbose: opts.verbose,
+        verbose: opts.showDetailedErrors,
         jsonl: opts.jsonl,
       },
     );
@@ -590,7 +628,7 @@ async function runOnce(
       handles,
       setCurrent: opts.setCurrent,
       defaultIfExists: "replace",
-      verbose: opts.verbose,
+      showDetailedErrors: opts.showDetailedErrors,
     });
   }
 
@@ -860,6 +898,7 @@ export async function initializeHandles({
 }
 
 async function run(args: RunArgs) {
+  normalizeDebugLoggingArgs(args);
   // Load the environment variables from the .env files using the same rules as Next.js
   loadEnvConfig(process.cwd(), true);
 
@@ -873,7 +912,7 @@ async function run(args: RunArgs) {
   }
 
   const evaluatorOpts: EvaluatorOpts = {
-    verbose: args.verbose,
+    showDetailedErrors: shouldShowDetailedErrors(args.debug_logging),
     apiKey: args.api_key,
     orgName: args.org_name,
     appUrl: args.app_url,
@@ -931,6 +970,7 @@ async function run(args: RunArgs) {
         apiKey: args.api_key,
         orgName: args.org_name,
         appUrl: args.app_url,
+        debugLogLevel: args.debug_logging,
       });
     }
 
@@ -971,6 +1011,13 @@ function addAuthArgs(parser: ArgumentParser) {
   });
 }
 
+function addDebugLoggingArg(parser: ArgumentParser) {
+  parser.add_argument("--debug-logging", {
+    choices: ["error", "warn", "info", "debug"],
+    help: "Enable internal Braintrust SDK troubleshooting output. Use 'error', 'warn', 'info', or 'debug' to control the log level.",
+  });
+}
+
 function addCompileArgs(parser: ArgumentParser) {
   parser.add_argument("--terminate-on-failure", {
     action: "store_true",
@@ -995,7 +1042,7 @@ async function main() {
   const parentParser = new ArgumentParser({ add_help: false });
   parentParser.add_argument("--verbose", {
     action: "store_true",
-    help: "Include additional details, including full stack traces on errors.",
+    help: "Deprecated alias for --debug-logging debug. Use --debug-logging debug to include full stack traces and detailed troubleshooting output.",
   });
 
   const subparser = parser.add_subparsers({
@@ -1007,6 +1054,7 @@ async function main() {
     parents: [parentParser],
   });
   addAuthArgs(parser_run);
+  addDebugLoggingArg(parser_run);
   parser_run.add_argument("--filter", {
     help: "Only run evaluators that match these filters. Each filter is a regular expression (https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/RegExp). For example, --filter metadata.priority='^P0$' input.name='foo.*bar' will only run evaluators that have metadata.priority equal to 'P0' and input.name matching the regular expression 'foo.*bar'.",
     nargs: "*",
@@ -1068,6 +1116,7 @@ async function main() {
     help: "Bundle prompts, tools, scorers, and other resources into Braintrust",
   });
   addAuthArgs(parser_push);
+  addDebugLoggingArg(parser_push);
   addCompileArgs(parser_push);
   parser_push.add_argument("files", {
     nargs: "*",
@@ -1083,6 +1132,7 @@ async function main() {
   const parser_pull = subparser.add_parser("pull", {
     help: "Pull prompts, tools, scorers, and other resources from Braintrust to save in your codebase.",
   });
+  addDebugLoggingArg(parser_pull);
   parser_pull.add_argument("--output-dir", {
     help: "The directory to output the pulled resources to. If not specified, the current directory is used.",
   });
@@ -1107,12 +1157,12 @@ async function main() {
   });
   parser_pull.set_defaults({ func: pullCommand });
 
-  const parsed = parser.parse_args();
+  const parsed = normalizeDebugLoggingArgs(parser.parse_args());
 
   try {
     await parsed.func(parsed);
   } catch (e) {
-    logError(e, parsed.verbose);
+    logError(e, shouldShowDetailedErrors(parsed.debug_logging));
     process.exit(1);
   }
 }

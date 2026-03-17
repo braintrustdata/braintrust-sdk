@@ -1,0 +1,8 @@
+# Playwright test results
+test-results/
+playwright-report/
+*.png
+
+# Build output
+dist/
+package-lock.json

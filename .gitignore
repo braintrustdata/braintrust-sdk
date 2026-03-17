@@ -1,7 +1,5 @@
-*.pyc
 *.swp
 *.swo
-venv
 .env
 .direnv
 .DS_STORE
@@ -10,10 +8,10 @@ node_modules
 .turbo
 build
 dist
-*.egg-info
 .aider*
 !.aiderignore
 .pnpm-store
+**/.bt-tmp
 
 docker-compose.override.yml
 Dockerfile.local

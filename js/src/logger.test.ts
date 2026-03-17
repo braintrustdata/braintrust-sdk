@@ -14,16 +14,18 @@ import {
   currentSpan,
   withParent,
   startSpan,
+  updateSpan,
   Attachment,
   deepCopyEvent,
   renderMessage,
+  renderMessageImpl,
 } from "./logger";
 import {
   parseTemplateFormat,
   isTemplateFormat,
   renderTemplateContent,
 } from "./template/renderer";
-import { configureNode } from "./node";
+import { configureNode } from "./node/config";
 import { writeFile, unlink } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
@@ -61,7 +63,15 @@ test("renderMessage with file content parts", () => {
     ],
   };
 
-  const rendered = renderMessage(
+  const variables = {
+    item: "document",
+    image_url: "https://example.com/image.png",
+    file_data: "base64data",
+    file_id: "file-456",
+    filename: "report.pdf",
+  };
+
+  const rendered = renderMessageImpl(
     (template) =>
       template
         .replace("{{item}}", "document")
@@ -70,6 +80,7 @@ test("renderMessage with file content parts", () => {
         .replace("{{file_id}}", "file-456")
         .replace("{{filename}}", "report.pdf"),
     message,
+    variables,
   );
 
   expect(rendered.content).toEqual([
@@ -90,6 +101,293 @@ test("renderMessage with file content parts", () => {
         file_id: "file-456",
         filename: "report.pdf",
       },
+    },
+  ]);
+});
+
+test("renderMessage expands attachment array in image_url parts", () => {
+  const message = {
+    role: "user" as const,
+    content: [
+      {
+        type: "image_url" as const,
+        image_url: { url: "{{images}}" },
+      },
+    ],
+  };
+
+  const variables = {
+    images: ["https://example.com/img1.jpg", "https://example.com/img2.jpg"],
+  };
+
+  const rendered = renderMessageImpl(
+    (template) => template, // Template rendering shouldn't happen for attachment arrays
+    message,
+    variables,
+  );
+
+  expect(rendered.content).toEqual([
+    {
+      type: "image_url",
+      image_url: {
+        url: "https://example.com/img1.jpg",
+      },
+    },
+    {
+      type: "image_url",
+      image_url: {
+        url: "https://example.com/img2.jpg",
+      },
+    },
+  ]);
+});
+
+test("renderMessage expands inline attachment array in image_url parts", () => {
+  const message = {
+    role: "user" as const,
+    content: [
+      {
+        type: "image_url" as const,
+        image_url: { url: "{{images}}" },
+      },
+    ],
+  };
+
+  const variables = {
+    images: [
+      {
+        type: "inline_attachment",
+        src: "data:image/png;base64,abc",
+        content_type: "image/png",
+      },
+      {
+        type: "inline_attachment",
+        src: "data:image/jpeg;base64,def",
+        content_type: "image/jpeg",
+      },
+    ],
+  };
+
+  const rendered = renderMessageImpl(
+    (template) => template,
+    message,
+    variables,
+  );
+
+  expect(rendered.content).toEqual([
+    {
+      type: "image_url",
+      image_url: {
+        url: {
+          type: "inline_attachment",
+          src: "data:image/png;base64,abc",
+          content_type: "image/png",
+        },
+      },
+    },
+    {
+      type: "image_url",
+      image_url: {
+        url: {
+          type: "inline_attachment",
+          src: "data:image/jpeg;base64,def",
+          content_type: "image/jpeg",
+        },
+      },
+    },
+  ]);
+});
+
+test("renderMessage does NOT expand mixed content (text + variable)", () => {
+  const message = {
+    role: "user" as const,
+    content: "Look at {{images}}",
+  };
+
+  const variables = {
+    images: ["https://example.com/img1.jpg", "https://example.com/img2.jpg"],
+  };
+
+  const rendered = renderMessageImpl(
+    (template) => template.replace("{{images}}", "[array]"),
+    message,
+    variables,
+  );
+
+  // Mixed content is not expanded - just rendered normally
+  expect(rendered.content).toBe("Look at [array]");
+});
+
+test("renderMessage expands nested attachment arrays in image_url parts", () => {
+  const message = {
+    role: "user" as const,
+    content: [
+      {
+        type: "image_url" as const,
+        image_url: { url: "{{data.images}}" },
+      },
+    ],
+  };
+
+  const variables = {
+    data: {
+      images: ["https://example.com/img1.jpg", "https://example.com/img2.jpg"],
+    },
+  };
+
+  const rendered = renderMessageImpl(
+    (template) => template, // Template rendering shouldn't happen
+    message,
+    variables,
+  );
+
+  expect(rendered.content).toEqual([
+    {
+      type: "image_url",
+      image_url: {
+        url: "https://example.com/img1.jpg",
+      },
+    },
+    {
+      type: "image_url",
+      image_url: {
+        url: "https://example.com/img2.jpg",
+      },
+    },
+  ]);
+});
+
+test("renderMessage expands deeply nested attachment arrays in image_url parts", () => {
+  const message = {
+    role: "user" as const,
+    content: [
+      {
+        type: "image_url" as const,
+        image_url: { url: "{{user.profile.images}}" },
+      },
+    ],
+  };
+
+  const variables = {
+    user: {
+      profile: {
+        images: [
+          {
+            type: "inline_attachment",
+            src: "data:image/png;base64,abc",
+            content_type: "image/png",
+          },
+          {
+            type: "inline_attachment",
+            src: "data:image/jpeg;base64,def",
+            content_type: "image/jpeg",
+          },
+        ],
+      },
+    },
+  };
+
+  const rendered = renderMessageImpl(
+    (template) => template,
+    message,
+    variables,
+  );
+
+  expect(rendered.content).toEqual([
+    {
+      type: "image_url",
+      image_url: {
+        url: {
+          type: "inline_attachment",
+          src: "data:image/png;base64,abc",
+          content_type: "image/png",
+        },
+      },
+    },
+    {
+      type: "image_url",
+      image_url: {
+        url: {
+          type: "inline_attachment",
+          src: "data:image/jpeg;base64,def",
+          content_type: "image/jpeg",
+        },
+      },
+    },
+  ]);
+});
+
+test("renderMessage handles single image_url (no array)", () => {
+  const message = {
+    role: "user" as const,
+    content: [
+      {
+        type: "image_url" as const,
+        image_url: {
+          url: "{{image}}",
+        },
+      },
+    ],
+  };
+
+  const variables = {
+    image: "https://example.com/single.jpg",
+  };
+
+  const rendered = renderMessageImpl(
+    (template) =>
+      template.replace("{{image}}", "https://example.com/single.jpg"),
+    message,
+    variables,
+  );
+
+  expect(rendered.content).toEqual([
+    {
+      type: "image_url",
+      image_url: {
+        url: "https://example.com/single.jpg",
+      },
+    },
+  ]);
+});
+
+test("renderMessage expands attachment arrays in structured content", () => {
+  // This tests the case where content is already an array with structured parts,
+  // and one part has a template variable for an attachment array
+  const message = {
+    role: "user" as const,
+    content: [
+      { type: "text" as const, text: "Describe these images" },
+      { type: "image_url" as const, image_url: { url: "{{attachments}}" } },
+    ],
+  };
+
+  const variables = {
+    attachments: [
+      "https://example.com/img1.jpg",
+      "https://example.com/img2.jpg",
+    ],
+  };
+
+  const rendered = renderMessageImpl(
+    (template) => template,
+    message,
+    variables,
+  );
+
+  // Should expand {{attachments}} into multiple image_url parts
+  expect(rendered.content).toEqual([
+    {
+      type: "text",
+      text: "Describe these images",
+    },
+    {
+      type: "image_url",
+      image_url: { url: "https://example.com/img1.jpg" },
+    },
+    {
+      type: "image_url",
+      image_url: { url: "https://example.com/img2.jpg" },
     },
   ]);
 });
@@ -209,30 +507,16 @@ describe("prompt.build structured output templating", () => {
       false,
     );
 
-    const result = prompt.build(
-      {
-        user: { name: "ada" },
-      },
-      { templateFormat: "nunjucks" },
-    );
-
-    expect(result).toMatchObject({
-      response_format: {
-        type: "json_schema",
-        json_schema: {
-          name: "schema",
-          schema: {
-            type: "object",
-            properties: {
-              greeting: {
-                type: "string",
-                description: "Hello ADA",
-              },
-            },
-          },
+    expect(() =>
+      prompt.build(
+        {
+          user: { name: "ada" },
         },
-      },
-    });
+        { templateFormat: "nunjucks" },
+      ),
+    ).toThrow(
+      "Nunjucks templating requires @braintrust/template-nunjucks. Install and import it to enable templateFormat: 'nunjucks'.",
+    );
   });
 
   test("prompt.build with structured output templating", () => {
@@ -387,6 +671,41 @@ test("span.export handles unresolved parent object ID", async () => {
   expect(exported).toBeDefined();
   expect(typeof exported).toBe("string");
   expect((exported as string).length).toBeGreaterThan(0);
+});
+
+test("updateSpan includes span_id and root_span_id from exported span", async () => {
+  await _exportsForTestingOnly.simulateLoginForTests();
+  const memoryLogger = _exportsForTestingOnly.useTestBackgroundLogger();
+
+  try {
+    const logger = initLogger({
+      projectName: "test",
+      projectId: "test-project-id",
+    });
+    const span = logger.startSpan({ name: "test-span" });
+    const exported = await span.export();
+    const spanId = span.spanId;
+    const rootSpanId = span.rootSpanId;
+    span.end();
+
+    await memoryLogger.flush();
+    await memoryLogger.drain();
+
+    updateSpan({ exported, output: "updated output" });
+
+    await memoryLogger.flush();
+    const logs = await memoryLogger.drain();
+    expect(logs).toContainEqual(
+      expect.objectContaining({
+        output: "updated output",
+        span_id: spanId,
+        root_span_id: rootSpanId,
+      }),
+    );
+  } finally {
+    _exportsForTestingOnly.clearTestBackgroundLogger();
+    _exportsForTestingOnly.simulateLogoutForTests();
+  }
 });
 
 test("startSpan support ids with parent", () => {
@@ -641,7 +960,11 @@ describe("wrapTraced generator support", () => {
 
   test("traced sync generator truncation", async () => {
     process.env.BRAINTRUST_MAX_GENERATOR_ITEMS = "3";
-    initLogger({ projectName: "test", projectId: "test-project-id" });
+    initLogger({
+      projectName: "test",
+      projectId: "test-project-id",
+      debugLogLevel: "info",
+    });
 
     const consoleWarnSpy = vi
       .spyOn(console, "warn")
@@ -661,6 +984,7 @@ describe("wrapTraced generator support", () => {
     expect(results).toEqual([0, 1, 2, 3, 4, 5, 6, 7, 8, 9]);
 
     expect(consoleWarnSpy).toHaveBeenCalledWith(
+      "[braintrust]",
       "Generator output exceeded limit of 3 items, output not logged. " +
         "Increase BRAINTRUST_MAX_GENERATOR_ITEMS or set to -1 to disable limit.",
     );
@@ -678,7 +1002,11 @@ describe("wrapTraced generator support", () => {
 
   test("traced async generator truncation", async () => {
     process.env.BRAINTRUST_MAX_GENERATOR_ITEMS = "3";
-    initLogger({ projectName: "test", projectId: "test-project-id" });
+    initLogger({
+      projectName: "test",
+      projectId: "test-project-id",
+      debugLogLevel: "info",
+    });
 
     const consoleWarnSpy = vi
       .spyOn(console, "warn")
@@ -701,6 +1029,7 @@ describe("wrapTraced generator support", () => {
     expect(results).toEqual([0, 1, 2, 3, 4, 5, 6, 7, 8, 9]);
 
     expect(consoleWarnSpy).toHaveBeenCalledWith(
+      "[braintrust]",
       "Generator output exceeded limit of 3 items, output not logged. " +
         "Increase BRAINTRUST_MAX_GENERATOR_ITEMS or set to -1 to disable limit.",
     );
@@ -1003,6 +1332,7 @@ describe("parent precedence", () => {
 });
 
 test("attachment with unreadable path logs warning", () => {
+  _exportsForTestingOnly.simulateLogoutForTests().setDebugLogLevel("info");
   const consoleWarnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
 
   new Attachment({
@@ -1013,6 +1343,7 @@ test("attachment with unreadable path logs warning", () => {
 
   expect(consoleWarnSpy).toHaveBeenCalledTimes(1);
   expect(consoleWarnSpy).toHaveBeenCalledWith(
+    "[braintrust]",
     expect.stringMatching(/Failed to read file:/),
   );
 

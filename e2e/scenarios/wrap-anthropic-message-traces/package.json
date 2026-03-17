@@ -1,0 +1,14 @@
+{
+  "name": "@braintrust/e2e-wrap-anthropic-message-traces",
+  "private": true,
+  "braintrustScenario": {
+    "canary": {
+      "dependencies": {
+        "@anthropic-ai/sdk": "latest"
+      }
+    }
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "0.60.0"
+  }
+}

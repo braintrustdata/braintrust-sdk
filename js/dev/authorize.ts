@@ -149,7 +149,7 @@ const BRAINTRUST_AUTH_TOKEN_HEADER = "x-bt-auth-token";
 const ORIGIN_HEADER = "origin";
 const PROJECT_ID_HEADER = "x-bt-project-id";
 
-export function extractAllowedOrigin(originHeader: string | undefined): string {
+function extractAllowedOrigin(originHeader: string | undefined): string {
   let allowedOrigin: string = MAIN_ORIGIN;
   checkOrigin(originHeader, (err, origin) => {
     if (!err && originHeader && origin) {

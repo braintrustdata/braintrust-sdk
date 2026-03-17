@@ -1,9 +1,6 @@
 import {
-  CodeBundle as CodeBundleSchema,
   type CodeBundleType as CodeBundle,
-  Function as FunctionObjectSchema,
   type FunctionType as FunctionObject,
-  IfExists as IfExistsSchema,
   type IfExistsType as IfExists,
 } from "../../generated_types";
 import type { BuildSuccess, EvaluatorState, FileHandle } from "../types";
@@ -14,9 +11,9 @@ import {
   FailedHTTPResponse,
 } from "../../logger";
 import * as esbuild from "esbuild";
-import fs from "fs";
-import path from "path";
-import { createGzip } from "zlib";
+import fs from "node:fs";
+import path from "node:path";
+import { createGzip } from "node:zlib";
 import { addAzureBlobHeaders, isEmpty } from "../../util";
 import { z } from "zod/v3";
 import { capitalize } from "../../../util/index";
@@ -24,7 +21,11 @@ import { findCodeDefinition, makeSourceMapContext } from "./infer-source";
 import { slugify } from "../../../util/string_util";
 import { zodToJsonSchema } from "../../zod/utils";
 import pluralize from "pluralize";
-import { FunctionEvent, ProjectNameIdMap } from "../../framework2";
+import {
+  FunctionEvent,
+  ProjectNameIdMap,
+  serializeRemoteEvalParametersContainer,
+} from "../../framework2";
 
 export type EvaluatorMap = Record<
   string,
@@ -44,8 +45,16 @@ interface BundledFunctionSpec {
   origin?: FunctionObject["origin"];
   function_schema?: FunctionObject["function_schema"];
   if_exists?: IfExists;
+  tags?: string[];
   metadata?: Record<string, unknown>;
 }
+
+type BundledFunctionEntry = FunctionEvent & {
+  origin?: FunctionObject["origin"];
+  function_schema?: FunctionObject["function_schema"];
+};
+
+const SANDBOX_GROUP_NAME_METADATA_KEY = "_bt_sandbox_group_name";
 
 const pathInfoSchema = z
   .strictObject({
@@ -60,7 +69,7 @@ export async function uploadHandleBundles({
   bundlePromises,
   handles,
   setCurrent,
-  verbose,
+  showDetailedErrors,
   defaultIfExists,
 }: {
   buildResults: BuildSuccess[];
@@ -69,7 +78,7 @@ export async function uploadHandleBundles({
     [k: string]: Promise<esbuild.BuildResult<esbuild.BuildOptions>>;
   };
   handles: Record<string, FileHandle>;
-  verbose: boolean;
+  showDetailedErrors: boolean;
   setCurrent: boolean;
   defaultIfExists: IfExists;
 }) {
@@ -113,12 +122,19 @@ export async function uploadHandleBundles({
                 }
               : undefined,
           if_exists: fn.ifExists,
+          tags: fn.tags,
           metadata: fn.metadata,
         });
       }
 
       for (const prompt of result.evaluator.prompts) {
         prompts.push(await prompt.toFunctionDefinition(projectNameToId));
+      }
+
+      if (result.evaluator.parameters != null) {
+        for (const param of result.evaluator.parameters) {
+          prompts.push(await param.toFunctionDefinition(projectNameToId));
+        }
       }
     }
 
@@ -184,6 +200,51 @@ export async function uploadHandleBundles({
       ];
 
       bundleSpecs.push(...fileSpecs);
+
+      if (setCurrent) {
+        const sourceStem = path
+          .basename(sourceFile, path.extname(sourceFile))
+          .replace(/\.eval$/, "");
+        const evalName = evaluator.evaluator.evalName;
+        const sandboxGroupName = sourceStem;
+
+        const resolvedParameters = evaluator.evaluator.parameters
+          ? await Promise.resolve(evaluator.evaluator.parameters)
+          : undefined;
+
+        const evaluatorDefinition = {
+          ...(resolvedParameters
+            ? {
+                parameters:
+                  serializeRemoteEvalParametersContainer(resolvedParameters),
+              }
+            : {}),
+          scores: evaluator.evaluator.scores.map((score, i) => ({
+            name: scorerName(score, i),
+          })),
+        };
+
+        bundleSpecs.push({
+          ...baseInfo,
+          name: `Eval ${evalName} sandbox`,
+          slug: slugify(`${sourceStem}-${evalName}-sandbox`),
+          description: `Sandbox eval ${evalName}`,
+          location: {
+            type: "sandbox",
+            sandbox_spec: {
+              provider: "lambda",
+            },
+            entrypoints: [sourceFile],
+            eval_name: evalName,
+            evaluator_definition: evaluatorDefinition,
+          },
+          function_type: "sandbox",
+          metadata: {
+            [SANDBOX_GROUP_NAME_METADATA_KEY]: sandboxGroupName,
+          },
+          origin,
+        });
+      }
     }
 
     const slugs: Set<string> = new Set();
@@ -207,7 +268,7 @@ export async function uploadHandleBundles({
       bundlePromises,
       handles,
       defaultIfExists,
-      verbose,
+      showDetailedErrors,
     });
   });
 
@@ -237,7 +298,7 @@ async function uploadBundles({
   bundlePromises,
   handles,
   defaultIfExists,
-  verbose,
+  showDetailedErrors,
 }: {
   sourceFile: string;
   prompts: FunctionEvent[];
@@ -247,7 +308,7 @@ async function uploadBundles({
   };
   handles: Record<string, FileHandle>;
   defaultIfExists: IfExists;
-  verbose: boolean;
+  showDetailedErrors: boolean;
 }): Promise<boolean> {
   const orgId = _internalGetGlobalState().orgId;
   if (!orgId) {
@@ -282,7 +343,7 @@ async function uploadBundles({
         }),
       );
     } catch (e) {
-      if (verbose) {
+      if (showDetailedErrors) {
         console.error(e);
       }
       const msg =
@@ -340,30 +401,14 @@ async function uploadBundles({
     ...prompts,
     // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
     ...((await Promise.all(
-      bundleSpecs.map(async (spec) => ({
-        project_id: spec.project_id,
-        name: spec.name,
-        slug: spec.slug,
-        description: spec.description,
-        function_data: {
-          type: "code",
-          data: {
-            type: "bundle",
-            runtime_context,
-            location: spec.location,
-            bundle_id: pathInfo!.bundleId,
-            preview: await findCodeDefinition({
-              location: spec.location,
-              ctx: sourceMapContext,
-            }),
-          },
-        },
-        origin: spec.origin,
-        function_type: spec.function_type,
-        function_schema: spec.function_schema,
-        if_exists: spec.if_exists,
-        metadata: spec.metadata,
-      })),
+      bundleSpecs.map((spec) =>
+        buildBundledFunctionEntry({
+          spec,
+          runtime_context,
+          bundleId: pathInfo!.bundleId,
+          sourceMapContext,
+        }),
+      ),
     )) as FunctionEvent[]),
   ].map((fn) => ({
     ...fn,
@@ -376,7 +421,7 @@ async function uploadBundles({
         functions: functionEntries,
       });
     } catch (e) {
-      if (verbose) {
+      if (showDetailedErrors) {
         console.error(e);
       }
       const msg =
@@ -402,5 +447,48 @@ function formatNameAndSlug(pieces: string[]) {
   return {
     name: capitalize(nonEmptyPieces.join(" ")),
     slug: slugify(nonEmptyPieces.join("-")),
+  };
+}
+
+export async function buildBundledFunctionEntry({
+  spec,
+  runtime_context,
+  bundleId,
+  sourceMapContext,
+}: {
+  spec: BundledFunctionSpec;
+  runtime_context: {
+    runtime: "node";
+    version: string;
+  };
+  bundleId: string;
+  sourceMapContext?: Awaited<ReturnType<typeof makeSourceMapContext>>;
+}): Promise<BundledFunctionEntry> {
+  return {
+    project_id: spec.project_id,
+    name: spec.name,
+    slug: spec.slug,
+    description: spec.description,
+    function_data: {
+      type: "code",
+      data: {
+        type: "bundle",
+        runtime_context,
+        location: spec.location,
+        bundle_id: bundleId,
+        preview: sourceMapContext
+          ? await findCodeDefinition({
+              location: spec.location,
+              ctx: sourceMapContext,
+            })
+          : undefined,
+      },
+    },
+    origin: spec.origin,
+    function_type: spec.function_type ?? undefined,
+    function_schema: spec.function_schema,
+    if_exists: spec.if_exists,
+    tags: spec.tags,
+    metadata: spec.metadata,
   };
 }

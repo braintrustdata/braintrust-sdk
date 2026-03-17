@@ -24,7 +24,7 @@ done
 # Fetch latest tags
 git fetch --tags --prune
 
-REPO_URL="https://github.com/braintrustdata/braintrust-sdk"
+REPO_URL="https://github.com/braintrustdata/braintrust-sdk-javascript"
 TAG_PREFIX="js-sdk-v"
 COMMIT=$(git rev-parse --short HEAD)
 
@@ -98,5 +98,5 @@ git push origin "$TAG"
 
 echo ""
 echo "Tag ${TAG} has been created and pushed to origin. Check GitHub Actions for build progress:"
-echo "https://github.com/braintrustdata/braintrust-sdk/actions/workflows/publish-js-sdk.yaml"
+echo "https://github.com/braintrustdata/braintrust-sdk-javascript/actions/workflows/publish-js-sdk.yaml"
 echo ""

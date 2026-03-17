@@ -8,7 +8,7 @@ import {
   expect,
   vi,
 } from "vitest";
-import { configureNode } from "../node";
+import { configureNode } from "../node/config";
 import OpenAI from "openai";
 import {
   _exportsForTestingOnly,
@@ -775,30 +775,35 @@ describe("openai client unit tests", TEST_SUITE_OPTIONS, () => {
     }
 
     assert.lengthOf(await backgroundLogger.drain(), 0);
-    // Create a mock client that will return a response with an image
-    const mockClient = {
-      responses: {
-        create: vi.fn().mockResolvedValue({
-          output: [
-            {
-              type: "image_generation_call",
-              result:
-                "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==", // Simple 1x1 PNG in base64
-              output_format: "png",
-              revised_prompt: "A simple test image",
-            },
-          ],
-          usage: {
-            input_tokens: 10,
-            output_tokens: 5,
-          },
-        }),
+    // Create a mock client response with APIPromise semantics.
+    const mockData = {
+      output: [
+        {
+          type: "image_generation_call",
+          result:
+            "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==", // Simple 1x1 PNG in base64
+          output_format: "png",
+          revised_prompt: "A simple test image",
+        },
+      ],
+      usage: {
+        input_tokens: 10,
+        output_tokens: 5,
       },
     };
+    const mockResponse = new Response(null, { status: 200 });
+    const mockCreate = vi.fn().mockImplementation(() => {
+      const apiPromise = Promise.resolve(mockData) as any;
+      apiPromise.withResponse = vi.fn().mockResolvedValue({
+        data: mockData,
+        response: mockResponse,
+      });
+      return apiPromise;
+    });
 
     // Replace the client.responses.create method temporarily
     const originalCreate = client.responses.create;
-    client.responses.create = mockClient.responses.create as any;
+    client.responses.create = mockCreate as any;
 
     try {
       const start = getCurrentUnixTimestamp();
@@ -839,7 +844,9 @@ describe("openai client unit tests", TEST_SUITE_OPTIONS, () => {
         outputItem.result.reference.filename.includes("A_simple_test_image"),
       );
       const m = span.metrics;
-      assert.isTrue(start <= m.start && m.start < m.end && m.end <= end);
+      // Metrics are logged asynchronously; end can land after the awaited call resolves.
+      assert.isTrue(start <= m.start && m.start <= m.end);
+      assert.isTrue(m.end <= getCurrentUnixTimestamp());
     } finally {
       // Restore the original method
       client.responses.create = originalCreate;

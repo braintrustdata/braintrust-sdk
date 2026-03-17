@@ -96,8 +96,10 @@ function getEntrypointName(entryFile: string, outDir: string): string {
   const basename = path.basename(entryFile, path.extname(entryFile));
 
   // Map common patterns to friendly names
-  if (entryFile.includes("src/index.ts")) return "main";
-  if (entryFile.includes("src/browser.ts")) return "browser";
+  if (entryFile.includes("src/node/index.ts")) return "main";
+  if (entryFile.includes("src/browser/index.ts")) return "browser";
+  if (entryFile.includes("src/edge-light/index.ts")) return "edge-light";
+  if (entryFile.includes("src/workerd/index.ts")) return "workerd";
   if (entryFile.includes("dev/index.ts")) return "dev";
   if (entryFile.includes("util/index.ts")) return "util";
 
@@ -387,8 +389,16 @@ function compareExports(
     kind: string;
   }> = [];
 
+  // Internal testing exports that can change without breaking compatibility
+  const internalExports = new Set(["_exportsForTestingOnly"]);
+
   // Check for removed or modified exports
   for (const [name, publishedSymbol] of publishedExports) {
+    // Skip internal exports - they can change without being breaking changes
+    if (internalExports.has(name)) {
+      continue;
+    }
+
     const currentSymbol = currentExports.get(name);
     if (!currentSymbol) {
       removed.push(publishedSymbol);
@@ -410,6 +420,11 @@ function compareExports(
 
   // Check for added exports
   for (const [name, currentSymbol] of currentExports) {
+    // Skip internal exports - their additions don't count as public API additions
+    if (internalExports.has(name)) {
+      continue;
+    }
+
     if (!publishedExports.has(name)) {
       added.push(currentSymbol);
     }
@@ -617,9 +632,9 @@ function areFunctionSignaturesCompatible(
 ): boolean {
   // Extract function name and parameters
   const parseFunctionSig = (sig: string) => {
-    // Match: export function name(params): returnType
+    // Match: export function name(params): returnType OR function name(params): returnType (for re-exports)
     const match = sig.match(
-      /export\s+function\s+(\w+)\s*\(([^)]*)\)\s*:\s*(.+)$/,
+      /(?:export\s+)?(?:declare\s+)?function\s+(\w+)\s*\(([^)]*)\)\s*:\s*(.+)$/,
     );
     if (!match) return null;
 
@@ -743,17 +758,207 @@ function areFunctionSignaturesCompatible(
 }
 
 /**
- * Compares type alias signatures to determine if changes are backwards compatible.
- * Widening union types or adding optional properties to objects is compatible.
+ * Normalizes type references to handle equivalent forms:
+ * - z.infer<typeof Type> -> TypeType
+ * - z.infer<typeof Type$N> -> TypeType (handles TypeScript disambiguation suffixes)
+ * - Type$1, Type$2, etc. -> Type (removes TypeScript disambiguation suffixes)
  */
+function normalizeTypeReference(type: string): string {
+  // First normalize z.infer<typeof TypeName$N> patterns - handle both with and without $N suffix
+  // This handles: z.infer<typeof ObjectReference$1> -> ObjectReferenceType
+  // And: z.infer<typeof ObjectReference> -> ObjectReferenceType
+  // Match the full identifier (which may include $ suffix) and extract just the base name
+  type = type.replace(
+    /z\.infer<typeof\s+([\w$]+)>/g,
+    (match, fullIdentifier) => {
+      // Extract base name by removing $ suffix if present
+      // Simply remove any $ followed by digits from the end
+      const baseName = fullIdentifier.replace(/\$\d+$/, "");
+      return `${baseName}Type`;
+    },
+  );
+
+  // Then remove any remaining TypeScript disambiguation suffixes
+  // This handles cases like: ObjectReferenceType$1 -> ObjectReferenceType
+  type = type.replace(/(\w+)\$\d+/g, "$1");
+
+  return type;
+}
+
+function parseObjectTypeProps(
+  def: string,
+): Map<string, { type: string; optional: boolean }> {
+  const props = new Map<string, { type: string; optional: boolean }>();
+
+  let braceDepth = 0;
+  let startIdx = -1;
+  for (let i = 0; i < def.length; i++) {
+    if (def[i] === "{") {
+      if (braceDepth === 0) startIdx = i + 1;
+      braceDepth++;
+    } else if (def[i] === "}") {
+      braceDepth--;
+      if (braceDepth === 0 && startIdx !== -1) {
+        const body = def.substring(startIdx, i);
+
+        let depth = 0;
+        let current = "";
+        let propName = "";
+        let isOptional = false;
+        let inPropName = true;
+
+        for (let j = 0; j < body.length; j++) {
+          const char = body[j];
+
+          if (char === "<" || char === "{" || char === "(") {
+            depth++;
+            if (!inPropName) current += char;
+          } else if (char === ">" || char === "}" || char === ")") {
+            depth--;
+            if (!inPropName) current += char;
+          } else if (char === "?" && depth === 0 && inPropName) {
+            isOptional = true;
+          } else if (char === ":" && depth === 0 && inPropName) {
+            inPropName = false;
+            propName = current.trim();
+            current = "";
+          } else if (char === ";" && depth === 0) {
+            if (propName) {
+              props.set(propName, {
+                type: current.trim(),
+                optional: isOptional,
+              });
+            }
+            current = "";
+            propName = "";
+            isOptional = false;
+            inPropName = true;
+          } else {
+            if (inPropName) {
+              if (char.trim()) current += char;
+            } else {
+              current += char;
+            }
+          }
+        }
+
+        if (propName && current.trim()) {
+          props.set(propName, {
+            type: current.trim(),
+            optional: isOptional,
+          });
+        }
+
+        break;
+      }
+    }
+  }
+
+  return props;
+}
+
+function areObjectTypeDefinitionsCompatible(
+  oldDef: string,
+  newDef: string,
+): boolean {
+  const oldProps = parseObjectTypeProps(oldDef);
+  const newProps = parseObjectTypeProps(newDef);
+
+  for (const [propName, oldProp] of oldProps) {
+    const newProp = newProps.get(propName);
+
+    if (!newProp) {
+      return false;
+    }
+
+    const normalizeType = (type: string) =>
+      normalizeTypeReference(type.replace(/\s+/g, " ").trim());
+    const oldTypeNorm = normalizeType(oldProp.type);
+    const newTypeNorm = normalizeType(newProp.type);
+
+    if (oldTypeNorm !== newTypeNorm) {
+      if (!isUnionTypeWidening(oldTypeNorm, newTypeNorm)) {
+        return false;
+      }
+    }
+
+    if (oldProp.optional && !newProp.optional) {
+      return false;
+    }
+  }
+
+  for (const [propName, newProp] of newProps) {
+    if (!oldProps.has(propName) && !newProp.optional) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
+function parseTypeAliasDefinitionNode(def: string): ts.TypeNode | null {
+  const sourceFile = ts.createSourceFile(
+    "type-alias.ts",
+    `type __ApiCompatAlias = ${def};`,
+    ts.ScriptTarget.Latest,
+    true,
+    ts.ScriptKind.TS,
+  );
+
+  let declaration: ts.TypeAliasDeclaration | undefined;
+  ts.forEachChild(sourceFile, (node) => {
+    if (ts.isTypeAliasDeclaration(node) && !declaration) {
+      declaration = node;
+    }
+  });
+
+  return declaration?.type ?? null;
+}
+
+function getIntersectionParts(def: string): string[] {
+  const typeNode = parseTypeAliasDefinitionNode(def);
+  if (!typeNode) {
+    return [def.trim()];
+  }
+
+  if (ts.isIntersectionTypeNode(typeNode)) {
+    return typeNode.types.map((type) => type.getText());
+  }
+
+  return [typeNode.getText()];
+}
+
+function getTypeLiteralPart(def: string): string | null {
+  const typeNode = parseTypeAliasDefinitionNode(def);
+  if (!typeNode) {
+    return null;
+  }
+
+  if (ts.isTypeLiteralNode(typeNode)) {
+    return typeNode.getText();
+  }
+
+  if (ts.isIntersectionTypeNode(typeNode)) {
+    const literalPart = typeNode.types.find((type) =>
+      ts.isTypeLiteralNode(type),
+    );
+    return literalPart?.getText() ?? null;
+  }
+
+  return null;
+}
+
 function areTypeAliasSignaturesCompatible(
   oldType: string,
   newType: string,
 ): boolean {
   // Extract type name and definition
   const parseTypeSig = (sig: string) => {
-    // Match: export type Name = Definition
-    const match = sig.match(/export\s+type\s+(\w+)\s*=\s*(.+)$/);
+    // Match: export type Name = Definition or export type Name<T> = Definition
+    // Also handles non-exported aliases for re-exports.
+    const match = sig.match(
+      /(?:export\s+)?type\s+(\w+)(?:<[^>]+>)?\s*=\s*(.+)$/s,
+    );
     if (!match) return null;
 
     return {
@@ -772,8 +977,21 @@ function areTypeAliasSignaturesCompatible(
   const oldDef = oldParsed.definition;
   const newDef = newParsed.definition;
 
-  // Check if it's a union type
-  const isUnion = (def: string) => def.includes("|");
+  // Check if it's a union type (at top level, not inside braces/brackets/parens)
+  const isUnion = (def: string) => {
+    let depth = 0;
+    for (let i = 0; i < def.length; i++) {
+      const char = def[i];
+      if (char === "<" || char === "{" || char === "(") {
+        depth++;
+      } else if (char === ">" || char === "}" || char === ")") {
+        depth--;
+      } else if (char === "|" && depth === 0) {
+        return true; // Found a pipe at top level
+      }
+    }
+    return false;
+  };
 
   if (isUnion(oldDef) || isUnion(newDef)) {
     // Parse union members
@@ -826,101 +1044,74 @@ function areTypeAliasSignaturesCompatible(
   const isObjectType = (def: string) => def.trim().startsWith("{");
 
   if (isObjectType(oldDef) && isObjectType(newDef)) {
-    // Parse object properties
-    const parseObjectProps = (
-      def: string,
-    ): Map<string, { type: string; optional: boolean }> => {
-      const props = new Map<string, { type: string; optional: boolean }>();
+    return areObjectTypeDefinitionsCompatible(oldDef, newDef);
+  }
 
-      // Extract content between { and }
-      const bodyMatch = def.match(/\{([^}]*)\}/);
-      if (!bodyMatch) return props;
+  const oldTypeLiteralPart = getTypeLiteralPart(oldDef);
+  const newTypeLiteralPart = getTypeLiteralPart(newDef);
 
-      const body = bodyMatch[1];
-      let depth = 0;
-      let current = "";
-      let propName = "";
-      let isOptional = false;
-      let inPropName = true;
+  if (oldTypeLiteralPart && newTypeLiteralPart) {
+    return areObjectTypeDefinitionsCompatible(
+      oldTypeLiteralPart,
+      newTypeLiteralPart,
+    );
+  }
 
-      for (let i = 0; i < body.length; i++) {
-        const char = body[i];
+  const oldIntersectionParts = getIntersectionParts(oldDef);
+  const newIntersectionParts = getIntersectionParts(newDef);
 
-        if (char === "<" || char === "{" || char === "(") {
-          depth++;
-          if (!inPropName) current += char;
-        } else if (char === ">" || char === "}" || char === ")") {
-          depth--;
-          if (!inPropName) current += char;
-        } else if (char === "?" && depth === 0 && inPropName) {
-          isOptional = true;
-        } else if (char === ":" && depth === 0 && inPropName) {
-          inPropName = false;
-          propName = current.trim();
-          current = "";
-        } else if (char === ";" && depth === 0) {
-          if (propName) {
-            props.set(propName, { type: current.trim(), optional: isOptional });
-          }
-          current = "";
-          propName = "";
-          isOptional = false;
-          inPropName = true;
-        } else {
-          if (inPropName) {
-            if (char.trim()) current += char;
-          } else {
-            current += char;
-          }
-        }
-      }
-
-      if (propName && current.trim()) {
-        props.set(propName, { type: current.trim(), optional: isOptional });
-      }
-
-      return props;
-    };
-
-    const oldProps = parseObjectProps(oldDef);
-    const newProps = parseObjectProps(newDef);
-
-    // Check all old properties exist in new with same types
-    for (const [propName, oldProp] of oldProps) {
-      const newProp = newProps.get(propName);
-
-      if (!newProp) {
-        // Property removed - breaking change
-        return false;
-      }
-
-      if (oldProp.type !== newProp.type) {
-        // Property type changed - breaking change
-        return false;
-      }
-
-      // If old prop was required, new can be required or optional (compatible)
-      // If old prop was optional, new must be optional (making required is breaking)
-      if (oldProp.optional && !newProp.optional) {
-        return false;
-      }
+  if (oldIntersectionParts.length > 1 || newIntersectionParts.length > 1) {
+    if (oldIntersectionParts.length !== newIntersectionParts.length) {
+      return false;
     }
 
-    // Check new properties
-    for (const [propName, newProp] of newProps) {
-      if (!oldProps.has(propName)) {
-        // New property must be optional
-        if (!newProp.optional) {
-          return false;
+    const usedNewIndices = new Set<number>();
+
+    for (const oldPart of oldIntersectionParts) {
+      const oldPartNorm = normalizeTypeReference(
+        oldPart.replace(/\s+/g, " ").trim(),
+      );
+
+      let matched = false;
+      for (const [index, newPart] of newIntersectionParts.entries()) {
+        if (usedNewIndices.has(index)) {
+          continue;
         }
+
+        const newPartNorm = normalizeTypeReference(
+          newPart.replace(/\s+/g, " ").trim(),
+        );
+
+        if (oldPartNorm === newPartNorm) {
+          usedNewIndices.add(index);
+          matched = true;
+          break;
+        }
+
+        if (
+          isObjectType(oldPart) &&
+          isObjectType(newPart) &&
+          areObjectTypeDefinitionsCompatible(oldPart, newPart)
+        ) {
+          usedNewIndices.add(index);
+          matched = true;
+          break;
+        }
+      }
+
+      if (!matched) {
+        return false;
       }
     }
 
     return true;
   }
 
-  // For other types, they must match exactly
-  return oldDef === newDef;
+  // For other types, normalize and compare
+  // This handles cases where TypeScript generates different names that are semantically equivalent
+  const oldDefNorm = normalizeTypeReference(oldDef);
+  const newDefNorm = normalizeTypeReference(newDef);
+  return oldDefNorm === newDefNorm;
 }
 
 /**
@@ -933,9 +1124,9 @@ function areEnumSignaturesCompatible(
 ): boolean {
   // Extract enum name and members
   const parseEnumSig = (sig: string) => {
-    // Match: export enum Name { members } or declare enum Name { members } or enum Name { members }
+    // Match: export enum Name { members } OR declare enum Name { members } OR enum Name { members } (for re-exports)
     const match = sig.match(
-      /(?:export\s+|declare\s+)?enum\s+(\w+)\s*\{([^}]*)\}/,
+      /(?:export\s+)?(?:declare\s+)?enum\s+(\w+)\s*\{([^}]*)\}/,
     );
     if (!match) return null;
 
@@ -1012,6 +1203,69 @@ function areEnumSignaturesCompatible(
 }
 
 /**
+ * Checks if a type change represents union widening (backwards compatible).
+ * Returns true if oldType is a subset of newType (e.g., T -> T | U | V).
+ */
+function isUnionTypeWidening(oldType: string, newType: string): boolean {
+  // Check if newType is a union that includes oldType
+  const isUnion = (type: string) => type.includes("|");
+
+  if (!isUnion(newType)) {
+    // New type is not a union, so it's not widening
+    return false;
+  }
+
+  // Parse union members from newType
+  const parseUnionMembers = (type: string): Set<string> => {
+    const members = new Set<string>();
+    let depth = 0;
+    let current = "";
+
+    for (let i = 0; i < type.length; i++) {
+      const char = type[i];
+
+      if (char === "<" || char === "{" || char === "(") {
+        depth++;
+        current += char;
+      } else if (char === ">" || char === "}" || char === ")") {
+        depth--;
+        current += char;
+      } else if (char === "|" && depth === 0) {
+        if (current.trim()) {
+          members.add(current.trim());
+        }
+        current = "";
+      } else {
+        current += char;
+      }
+    }
+
+    if (current.trim()) {
+      members.add(current.trim());
+    }
+
+    return members;
+  };
+
+  const newMembers = parseUnionMembers(newType);
+
+  // Check if oldType (or oldType as a union) is a subset of newType
+  if (isUnion(oldType)) {
+    const oldMembers = parseUnionMembers(oldType);
+    // All old members must be in new members
+    for (const oldMember of oldMembers) {
+      if (!newMembers.has(oldMember)) {
+        return false;
+      }
+    }
+    return true;
+  } else {
+    // oldType is a single type - check if it's in the new union
+    return newMembers.has(oldType);
+  }
+}
+
+/**
  * Compares interface signatures to determine if changes are backwards compatible.
  * Adding optional fields to interfaces is backwards compatible.
  */
@@ -1019,90 +1273,53 @@ function areInterfaceSignaturesCompatible(
   oldInterface: string,
   newInterface: string,
 ): boolean {
-  // Extract interface name to ensure we're comparing the same interface
-  const oldNameMatch = oldInterface.match(/interface\s+(\w+)/);
-  const newNameMatch = newInterface.match(/interface\s+(\w+)/);
+  const parseInterface = (interfaceSig: string) => {
+    const sourceFile = ts.createSourceFile(
+      "interface.ts",
+      interfaceSig,
+      ts.ScriptTarget.Latest,
+      true,
+      ts.ScriptKind.TS,
+    );
 
-  if (!oldNameMatch || !newNameMatch || oldNameMatch[1] !== newNameMatch[1]) {
-    return false; // Different interfaces
-  }
-
-  // Extract fields from interface body
-  // Pattern: interface Name { field1: Type1; field2?: Type2; ... }
-  // Returns Map<fieldName, {type, optional}>
-  const extractFields = (
-    interfaceSig: string,
-  ): Map<string, { type: string; optional: boolean }> => {
-    const fields = new Map<string, { type: string; optional: boolean }>();
-
-    // Extract the content between { and }
-    const bodyMatch = interfaceSig.match(/\{([^}]*)\}/);
-    if (!bodyMatch) return fields;
-
-    const body = bodyMatch[1];
-
-    // Match field definitions: fieldName: Type or fieldName?: Type
-    // Handle nested types with angle brackets, braces, etc.
-    let currentField = "";
-    let depth = 0;
-    let fieldName = "";
-    let isOptional = false;
-    let inFieldName = true;
-
-    for (let i = 0; i < body.length; i++) {
-      const char = body[i];
-
-      if (char === "<" || char === "{" || char === "(") {
-        depth++;
-        if (!inFieldName) currentField += char;
-      } else if (char === ">" || char === "}" || char === ")") {
-        depth--;
-        if (!inFieldName) currentField += char;
-      } else if (char === "?" && depth === 0 && inFieldName) {
-        // Found optional marker after field name
-        isOptional = true;
-      } else if (char === ":" && depth === 0 && inFieldName) {
-        // Found the separator between field name and type
-        inFieldName = false;
-        fieldName = currentField.trim();
-        currentField = "";
-      } else if (char === ";" && depth === 0) {
-        // End of field definition
-        if (fieldName) {
-          fields.set(fieldName, {
-            type: currentField.trim(),
-            optional: isOptional,
-          });
-        }
-        currentField = "";
-        fieldName = "";
-        isOptional = false;
-        inFieldName = true;
-      } else {
-        if (inFieldName) {
-          if (char.trim()) {
-            // Skip whitespace in field name
-            currentField += char;
-          }
-        } else {
-          currentField += char;
-        }
+    let declaration: ts.InterfaceDeclaration | undefined;
+    ts.forEachChild(sourceFile, (node) => {
+      if (ts.isInterfaceDeclaration(node) && !declaration) {
+        declaration = node;
       }
+    });
+
+    if (!declaration) {
+      return null;
     }
 
-    // Handle last field if no trailing semicolon
-    if (fieldName && currentField.trim()) {
-      fields.set(fieldName, {
-        type: currentField.trim(),
-        optional: isOptional,
+    const fields = new Map<string, { type: string; optional: boolean }>();
+    for (const member of declaration.members) {
+      if (!ts.isPropertySignature(member) || !member.type) {
+        return null;
+      }
+
+      fields.set(member.name.getText(sourceFile), {
+        type: member.type.getText(sourceFile),
+        optional: !!member.questionToken,
       });
     }
 
-    return fields;
+    return {
+      name: declaration.name.text,
+      fields,
+    };
   };
 
-  const oldFields = extractFields(oldInterface);
-  const newFields = extractFields(newInterface);
+  const oldParsed = parseInterface(oldInterface);
+  const newParsed = parseInterface(newInterface);
+
+  if (!oldParsed || !newParsed || oldParsed.name !== newParsed.name) {
+    return false;
+  }
+
+  const oldFields = oldParsed.fields;
+  const newFields = newParsed.fields;
 
   // Check that all old fields exist in new interface with compatible types
   for (const [fieldName, oldField] of oldFields) {
@@ -1113,14 +1330,18 @@ function areInterfaceSignaturesCompatible(
       return false;
     }
 
-    // Normalize field types for comparison (remove whitespace differences)
-    const normalizeType = (type: string) => type.replace(/\s+/g, " ").trim();
+    // Normalize field types for comparison (remove whitespace differences and normalize type references)
+    const normalizeType = (type: string) =>
+      normalizeTypeReference(type.replace(/\s+/g, " ").trim());
     const oldTypeNorm = normalizeType(oldField.type);
     const newTypeNorm = normalizeType(newField.type);
 
     if (oldTypeNorm !== newTypeNorm) {
-      // Field type changed - breaking change
-      return false;
+      // Check if it's a union type widening (backwards compatible)
+      if (!isUnionTypeWidening(oldTypeNorm, newTypeNorm)) {
+        // Field type changed in an incompatible way - breaking change
+        return false;
+      }
     }
 
     // Check if required field became optional - that's compatible
@@ -1477,6 +1698,41 @@ function findDifference(before: string, after: string): string {
   return `First difference at position ${diffStart}:\n    Before: ...${beforeContext}...\n    After:  ...${afterContext}...`;
 }
 
+describe("isUnionTypeWidening", () => {
+  test("should recognize single type becoming union", () => {
+    const result = isUnionTypeWidening("string", "string | number");
+    expect(result).toBe(true);
+  });
+
+  test("should recognize type not in union", () => {
+    const result = isUnionTypeWidening("boolean", "string | number");
+    expect(result).toBe(false);
+  });
+
+  test("should handle complex types in union", () => {
+    const result = isUnionTypeWidening("string", "string | URL");
+    expect(result).toBe(true);
+  });
+
+  test("should handle union to larger union", () => {
+    const result = isUnionTypeWidening(
+      "string | number",
+      "string | number | boolean",
+    );
+    expect(result).toBe(true);
+  });
+
+  test("should reject narrowing union", () => {
+    const result = isUnionTypeWidening("string | number", "string");
+    expect(result).toBe(false);
+  });
+
+  test("should reject non-union to non-union change", () => {
+    const result = isUnionTypeWidening("string", "number");
+    expect(result).toBe(false);
+  });
+});
+
 describe("areInterfaceSignaturesCompatible", () => {
   test("should allow adding optional fields to interface", () => {
     const oldInterface = `export interface LogOptions<IsAsyncFlush> { asyncFlush?: IsAsyncFlush; computeMetadataArgs?: Record<string, any>; }`;
@@ -1521,6 +1777,55 @@ describe("areInterfaceSignaturesCompatible", () => {
   test("should reject making optional field required", () => {
     const oldInterface = `export interface LogOptions<IsAsyncFlush> { asyncFlush?: IsAsyncFlush; }`;
     const newInterface = `export interface LogOptions<IsAsyncFlush> { asyncFlush: IsAsyncFlush; }`;
+
+    const result = areInterfaceSignaturesCompatible(oldInterface, newInterface);
+    expect(result).toBe(false);
+  });
+
+  test("should allow widening field type to union (single type to union)", () => {
+    const oldInterface = `export interface EvalOptions<Parameters> { parameters?: Parameters; }`;
+    const newInterface = `export interface EvalOptions<Parameters> { parameters?: Parameters | RemoteEvalParameters<boolean, boolean, InferParameters<Parameters>> | Promise<RemoteEvalParameters<boolean, boolean, InferParameters<Parameters>>>; }`;
+
+    const result = areInterfaceSignaturesCompatible(oldInterface, newInterface);
+    expect(result).toBe(true);
+  });
+
+  test("should allow widening field type to union (simple case)", () => {
+    const oldInterface = `export interface Config { value: string; }`;
+    const newInterface = `export interface Config { value: string | number; }`;
+
+    const result = areInterfaceSignaturesCompatible(oldInterface, newInterface);
+    expect(result).toBe(true);
+  });
+
+  test("should allow adding an optional field to a documented interface", () => {
+    const oldInterface = `interface LoginOptions {
+      appUrl?: string;
+      apiKey?: string;
+      orgName?: string;
+      fetch?: typeof globalThis.fetch;
+      noExitFlush?: boolean;
+      onFlushError?: (error: unknown) => void;
+      disableSpanCache?: boolean;
+    }`;
+    const newInterface = `interface LoginOptions {
+      appUrl?: string;
+      apiKey?: string;
+      orgName?: string;
+      fetch?: typeof globalThis.fetch;
+      noExitFlush?: boolean;
+      onFlushError?: (error: unknown) => void;
+      disableSpanCache?: boolean;
+      debugLogLevel?: DebugLogLevel | false;
+    }`;
+
+    const result = areInterfaceSignaturesCompatible(oldInterface, newInterface);
+    expect(result).toBe(true);
+  });
+
+  test("should reject narrowing field type from union", () => {
+    const oldInterface = `export interface Config { value: string | number; }`;
+    const newInterface = `export interface Config { value: string; }`;
 
     const result = areInterfaceSignaturesCompatible(oldInterface, newInterface);
     expect(result).toBe(false);
@@ -1630,6 +1935,24 @@ describe("areTypeAliasSignaturesCompatible", () => {
     const oldType = `export type Foo = string`;
     const newType = `export type Foo = { value: string }`;
     expect(areTypeAliasSignaturesCompatible(oldType, newType)).toBe(false);
+  });
+
+  test("should allow widening object type property to union", () => {
+    const oldType = `export type Config = { host: string; port: number; }`;
+    const newType = `export type Config = { host: string | URL; port: number; }`;
+    expect(areTypeAliasSignaturesCompatible(oldType, newType)).toBe(true);
+  });
+
+  test("should allow adding optional field to object type (EvaluatorFile scenario)", () => {
+    const oldType = `export type EvaluatorFile = { functions: CodeFunction[]; prompts: CodePrompt[]; evaluators: { [evalName: string]: { evaluator: EvaluatorDef; }; }; reporters: { [reporterName: string]: ReporterDef; }; }`;
+    const newType = `export type EvaluatorFile = { functions: CodeFunction[]; prompts: CodePrompt[]; parameters?: CodeParameters[]; evaluators: { [evalName: string]: { evaluator: EvaluatorDef; }; }; reporters: { [reporterName: string]: ReporterDef; }; }`;
+    expect(areTypeAliasSignaturesCompatible(oldType, newType)).toBe(true);
+  });
+
+  test("should allow adding optional properties inside an intersection object member", () => {
+    const oldType = `export type InitOptions<IsOpen extends boolean> = FullLoginOptions & { experiment?: string; description?: string; dataset?: AnyDataset | DatasetRef; update?: boolean; } & InitOpenOption<IsOpen>`;
+    const newType = `export type InitOptions<IsOpen extends boolean> = FullLoginOptions & { experiment?: string; description?: string; dataset?: AnyDataset | DatasetRef; parameters?: ParametersRef | RemoteEvalParameters<boolean, boolean>; update?: boolean; } & InitOpenOption<IsOpen>`;
+    expect(areTypeAliasSignaturesCompatible(oldType, newType)).toBe(true);
   });
 });
 
@@ -1771,6 +2094,8 @@ interface BreakingChanges {
 function findNewBreakingChanges(
   baselineChanges: BreakingChanges,
   currentChanges: BreakingChanges,
+  baselineExports?: Map<string, ExportedSymbol>,
+  currentExports?: Map<string, ExportedSymbol>,
 ): BreakingChanges {
   // Find removed exports in current that don't exist in baseline
   const newRemoved = currentChanges.removed.filter(
@@ -1778,9 +2103,52 @@ function findNewBreakingChanges(
   );
 
   // Find modified exports in current that don't exist in baseline
-  const newModified = currentChanges.modified.filter(
-    (exp) => !baselineChanges.modified.some((b) => b.name === exp.name),
-  );
+  // Also exclude exports that normalize to the same signature (not actually breaking)
+  const newModified = currentChanges.modified.filter((exp) => {
+    // Check if this export exists in baseline with same name
+    const baselineMod = baselineChanges.modified.find(
+      (b) => b.name === exp.name,
+    );
+
+    if (baselineMod) {
+      // It exists in baseline modified - check if the "after" signatures normalize to the same thing
+      // If they do, it's the same breaking change that's already in main, not a new one
+      const baselineAfterNorm = normalizeTypeReference(
+        baselineMod.after.replace(/\s+/g, " ").trim(),
+      );
+      const currentAfterNorm = normalizeTypeReference(
+        exp.after.replace(/\s+/g, " ").trim(),
+      );
+
+      // Only consider it "new" if normalized "after" signatures are different
+      return baselineAfterNorm !== currentAfterNorm;
+    }
+
+    // Not in baseline modified list - check if it exists in baseline exports
+    // If it does and normalized signatures match, it's not a new breaking change
+    if (baselineExports && currentExports) {
+      const baselineExp = baselineExports.get(exp.name);
+      const currentExp = currentExports.get(exp.name);
+
+      if (baselineExp && currentExp) {
+        // Both exist - check if normalized signatures match
+        const baselineNorm = normalizeTypeReference(
+          baselineExp.signature.replace(/\s+/g, " ").trim(),
+        );
+        const currentNorm = normalizeTypeReference(
+          currentExp.signature.replace(/\s+/g, " ").trim(),
+        );
+
+        // If they normalize to the same, it's not a new breaking change
+        if (baselineNorm === currentNorm) {
+          return false;
+        }
+      }
+    }
+
+    // Not in baseline at all, or signatures don't match - it's new
+    return true;
+  });
 
   return { removed: newRemoved, modified: newModified };
 }
@@ -1962,9 +2330,12 @@ describe("API Compatibility", () => {
         };
 
         // Find NEW breaking changes (not in baseline)
+        // Also pass exports so we can check normalized signatures even if not in modified list
         const newBreaking = findNewBreakingChanges(
           baselineBreaking,
           currentBreaking,
+          mainExports,
+          currentExports,
         );
 
         // Log baseline info (informational only)
@@ -1998,8 +2369,12 @@ describe("API Compatibility", () => {
               `NEW modified exports (${newBreaking.modified.length}):\n` +
                 newBreaking.modified
                   .map((m) => {
-                    const beforeNorm = m.before.replace(/\s+/g, " ").trim();
-                    const afterNorm = m.after.replace(/\s+/g, " ").trim();
+                    const beforeNorm = normalizeTypeReference(
+                      m.before.replace(/\s+/g, " ").trim(),
+                    );
+                    const afterNorm = normalizeTypeReference(
+                      m.after.replace(/\s+/g, " ").trim(),
+                    );
 
                     if (beforeNorm === afterNorm) {
                       return `  - ${m.name} (${m.kind})\n    Note: Signatures appear identical after normalization`;
@@ -2063,8 +2438,12 @@ describe("API Compatibility", () => {
               `Modified exports (${comparison.modified.length}):\n` +
                 comparison.modified
                   .map((m) => {
-                    const beforeNorm = m.before.replace(/\s+/g, " ").trim();
-                    const afterNorm = m.after.replace(/\s+/g, " ").trim();
+                    const beforeNorm = normalizeTypeReference(
+                      m.before.replace(/\s+/g, " ").trim(),
+                    );
+                    const afterNorm = normalizeTypeReference(
+                      m.after.replace(/\s+/g, " ").trim(),
+                    );
 
                     if (beforeNorm === afterNorm) {
                       return `  - ${m.name} (${m.kind})\n    Note: Signatures appear identical after normalization`;

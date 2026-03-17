@@ -3,7 +3,7 @@ import { z } from "zod";
 import * as ai from "ai";
 import { wrapAISDK } from "ai-sdk";
 import { initLogger } from "../../../logger";
-import { configureNode } from "../../../node";
+import { configureNode } from "../../../node/config";
 import { openai } from "@ai-sdk/openai";
 
 configureNode();

@@ -1,7 +1,16 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
-import { Span, traced, Attachment } from "../logger";
+import { Span, traced, Attachment, startSpan } from "../logger";
 import { SpanTypeAttribute } from "../../util/index";
 import { getCurrentUnixTimestamp } from "../util";
+import type {
+  GoogleGenAIClient,
+  GoogleGenAIConstructor,
+  GoogleGenAIGenerateContentParams,
+  GoogleGenAIGenerateContentResponse,
+  GoogleGenAIModels,
+  GoogleGenAIPart,
+  GoogleGenAIContent,
+  GoogleGenAIUsageMetadata,
+} from "../vendor-sdk-types/google-genai";
 
 /**
  * Wrap a Google GenAI module (imported with `import * as googleGenAI from '@google/genai'`) to add tracing.
@@ -38,7 +47,12 @@ export function wrapGoogleGenAI<T extends Record<string, any>>(
   return new Proxy(googleGenAI, {
     get(target, prop, receiver) {
       if (prop === "GoogleGenAI") {
-        const OriginalGoogleGenAI = Reflect.get(target, prop, receiver);
+        // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
+        const OriginalGoogleGenAI = Reflect.get(
+          target,
+          prop,
+          receiver,
+        ) as GoogleGenAIConstructor;
         return wrapGoogleGenAIClass(OriginalGoogleGenAI);
       }
       return Reflect.get(target, prop, receiver);
@@ -46,27 +60,32 @@ export function wrapGoogleGenAI<T extends Record<string, any>>(
   });
 }
 
-function wrapGoogleGenAIClass(OriginalGoogleGenAI: any): any {
+function wrapGoogleGenAIClass(
+  OriginalGoogleGenAI: GoogleGenAIConstructor,
+): GoogleGenAIConstructor {
   return new Proxy(OriginalGoogleGenAI, {
     construct(target, args) {
       const instance = Reflect.construct(target, args);
-      return wrapGoogleGenAIInstance(instance);
+      // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
+      return wrapGoogleGenAIInstance(instance as GoogleGenAIClient);
     },
   });
 }
 
-function wrapGoogleGenAIInstance(instance: any): any {
+function wrapGoogleGenAIInstance(
+  instance: GoogleGenAIClient,
+): GoogleGenAIClient {
   return new Proxy(instance, {
     get(target, prop, receiver) {
       if (prop === "models") {
-        return wrapModels(Reflect.get(target, prop, receiver));
+        return wrapModels(target.models);
       }
       return Reflect.get(target, prop, receiver);
     },
   });
 }
 
-function wrapModels(models: any): any {
+function wrapModels(models: GoogleGenAIModels): GoogleGenAIModels {
   return new Proxy(models, {
     get(target, prop, receiver) {
       if (prop === "generateContent") {
@@ -81,8 +100,10 @@ function wrapModels(models: any): any {
   });
 }
 
-function wrapGenerateContent(original: any): any {
-  return async function (params: any) {
+function wrapGenerateContent(
+  original: GoogleGenAIModels["generateContent"],
+): GoogleGenAIModels["generateContent"] {
+  return async function (params: GoogleGenAIGenerateContentParams) {
     const input = serializeInput(params);
     const metadata = extractMetadata(params);
 
@@ -121,8 +142,10 @@ function wrapGenerateContent(original: any): any {
   };
 }
 
-function wrapGenerateContentStream(original: any): any {
-  return async function (params: any) {
+function wrapGenerateContentStream(
+  original: GoogleGenAIModels["generateContentStream"],
+): GoogleGenAIModels["generateContentStream"] {
+  return async function (params: GoogleGenAIGenerateContentParams) {
     const input = serializeInput(params);
     const metadata = extractMetadata(params);
 
@@ -133,21 +156,80 @@ function wrapGenerateContentStream(original: any): any {
 }
 
 function asyncGeneratorProxy(
-  generator: AsyncGenerator<any>,
-  input: any,
-  metadata: any,
-): AsyncGenerator<any> {
-  const chunks: any[] = [];
+  generator: AsyncGenerator<GoogleGenAIGenerateContentResponse>,
+  input: Record<string, unknown>,
+  metadata: Record<string, unknown>,
+): AsyncGenerator<GoogleGenAIGenerateContentResponse> {
+  const chunks: GoogleGenAIGenerateContentResponse[] = [];
   const start = getCurrentUnixTimestamp();
   let firstTokenTime: number | null = null;
   let span: Span | null = null;
+  let finalized = false;
+
+  const ensureSpan = () => {
+    if (span === null) {
+      span = startSpan({
+        name: "generate_content_stream",
+        spanAttributes: {
+          type: SpanTypeAttribute.LLM,
+        },
+        event: {
+          input,
+          metadata,
+        },
+      });
+    }
+
+    return span;
+  };
+
+  const finalizeSpan = ({
+    error,
+    result,
+  }: {
+    error?: unknown;
+    result?: {
+      aggregated: Record<string, unknown>;
+      metrics: Record<string, number>;
+    };
+  }) => {
+    if (finalized || span === null) {
+      return;
+    }
+
+    finalized = true;
+
+    if (result) {
+      const { end, ...metricsWithoutEnd } = result.metrics;
+      span.log({
+        output: result.aggregated,
+        metrics: cleanMetrics(metricsWithoutEnd),
+      });
+      span.end(typeof end === "number" ? { endTime: end } : undefined);
+      return;
+    }
+
+    if (error !== undefined) {
+      span.log({
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+
+    span.end();
+  };
 
   return new Proxy(generator, {
     get(target, prop, receiver) {
       if (prop === Symbol.asyncIterator) {
-        const original = Reflect.get(target, prop, receiver);
+        // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
+        const original = Reflect.get(
+          target,
+          prop,
+          receiver,
+        ) as () => AsyncIterator<GoogleGenAIGenerateContentResponse>;
         return function () {
-          const iterator: AsyncIterator<any> = original.call(target);
+          const iterator: AsyncIterator<GoogleGenAIGenerateContentResponse> =
+            original.call(target);
           return new Proxy(iterator, {
             get(iterTarget, iterProp, iterReceiver) {
               if (iterProp === "next") {
@@ -157,21 +239,13 @@ function asyncGeneratorProxy(
                   iterReceiver,
                 );
                 return async function () {
-                  if (span === null) {
-                    span = traced((s: Span) => s, {
-                      name: "generate_content_stream",
-                      spanAttributes: {
-                        type: SpanTypeAttribute.LLM,
-                      },
-                      event: {
-                        input,
-                        metadata,
-                      },
-                    });
-                  }
+                  ensureSpan();
 
                   try {
-                    const result = await originalNext.call(iterTarget);
+                    // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
+                    const result = (await originalNext.call(
+                      iterTarget,
+                    )) as IteratorResult<GoogleGenAIGenerateContentResponse>;
 
                     if (!result.done && result.value) {
                       if (firstTokenTime === null) {
@@ -181,31 +255,74 @@ function asyncGeneratorProxy(
                     }
 
                     if (result.done && span) {
-                      const { aggregated, metrics } =
-                        aggregateGenerateContentChunks(
+                      finalizeSpan({
+                        result: aggregateGenerateContentChunks(
                           chunks,
                           start,
                           firstTokenTime,
-                        );
-
-                      span.log({
-                        output: aggregated,
-                        metrics: cleanMetrics(metrics),
+                        ),
                       });
-                      span.end();
                     }
 
                     return result;
                   } catch (error) {
-                    if (span) {
-                      span.log({
-                        error:
-                          error instanceof Error
-                            ? error.message
-                            : String(error),
-                      });
-                      span.end();
-                    }
+                    finalizeSpan({ error });
+                    throw error;
+                  }
+                };
+              }
+              if (iterProp === "return") {
+                const originalReturn = Reflect.get(
+                  iterTarget,
+                  iterProp,
+                  iterReceiver,
+                );
+                if (typeof originalReturn !== "function") {
+                  return originalReturn;
+                }
+
+                return async function (...args: [] | [unknown]) {
+                  ensureSpan();
+                  try {
+                    // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
+                    return (await originalReturn.call(
+                      iterTarget,
+                      ...args,
+                    )) as IteratorResult<GoogleGenAIGenerateContentResponse>;
+                  } finally {
+                    finalizeSpan({
+                      result:
+                        chunks.length > 0
+                          ? aggregateGenerateContentChunks(
+                              chunks,
+                              start,
+                              firstTokenTime,
+                            )
+                          : undefined,
+                    });
+                  }
+                };
+              }
+              if (iterProp === "throw") {
+                const originalThrow = Reflect.get(
+                  iterTarget,
+                  iterProp,
+                  iterReceiver,
+                );
+                if (typeof originalThrow !== "function") {
+                  return originalThrow;
+                }
+
+                return async function (...args: [] | [unknown]) {
+                  ensureSpan();
+                  try {
+                    // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
+                    return (await originalThrow.call(
+                      iterTarget,
+                      ...args,
+                    )) as IteratorResult<GoogleGenAIGenerateContentResponse>;
+                  } catch (error) {
+                    finalizeSpan({ error });
                     throw error;
                   }
                 };
@@ -220,8 +337,10 @@ function asyncGeneratorProxy(
   });
 }
 
-function serializeInput(params: any): any {
-  const input: any = {
+function serializeInput(
+  params: GoogleGenAIGenerateContentParams,
+): Record<string, unknown> {
+  const input: Record<string, unknown> = {
     model: params.model,
     contents: serializeContents(params.contents),
   };
@@ -229,18 +348,22 @@ function serializeInput(params: any): any {
   if (params.config) {
     const config = tryToDict(params.config);
     if (config) {
-      const tools = serializeTools(params);
-      if (tools) {
-        config.tools = tools;
-      }
-      input.config = config;
+      const filteredConfig: Record<string, unknown> = {};
+      Object.keys(config).forEach((key) => {
+        if (key !== "tools") {
+          filteredConfig[key] = config[key];
+        }
+      });
+      input.config = filteredConfig;
     }
   }
 
   return input;
 }
 
-function serializeContents(contents: any): any {
+function serializeContents(
+  contents: GoogleGenAIGenerateContentParams["contents"],
+): unknown {
   if (contents === null || contents === undefined) {
     return null;
   }
@@ -252,12 +375,12 @@ function serializeContents(contents: any): any {
   return serializeContentItem(contents);
 }
 
-function serializeContentItem(item: any): any {
+function serializeContentItem(item: string | GoogleGenAIContent): unknown {
   if (typeof item === "object" && item !== null) {
     if (item.parts && Array.isArray(item.parts)) {
       return {
         ...item,
-        parts: item.parts.map((part: any) => serializePart(part)),
+        parts: item.parts.map((part: GoogleGenAIPart) => serializePart(part)),
       };
     }
     return item;
@@ -270,7 +393,7 @@ function serializeContentItem(item: any): any {
   return item;
 }
 
-function serializePart(part: any): any {
+function serializePart(part: GoogleGenAIPart): unknown {
   if (!part || typeof part !== "object") {
     return part;
   }
@@ -287,7 +410,7 @@ function serializePart(part: any): any {
       const extension = mimeType ? mimeType.split("/")[1] : "bin";
       const filename = `file.${extension}`;
 
-      // Convert to Buffer - handles Uint8Array, Buffer, and base64 strings
+      // Convert to ArrayBuffer - handles Uint8Array, Buffer, and base64 strings
       const buffer =
         typeof data === "string"
           ? Buffer.from(data, "base64")
@@ -308,13 +431,15 @@ function serializePart(part: any): any {
   return part;
 }
 
-function serializeTools(params: any): any[] | null {
+function serializeTools(
+  params: GoogleGenAIGenerateContentParams,
+): Record<string, unknown>[] | null {
   if (!params.config?.tools) {
     return null;
   }
 
   try {
-    return params.config.tools.map((tool: any) => {
+    return params.config.tools.map((tool) => {
       if (typeof tool === "object" && tool.functionDeclarations) {
         return tool;
       }
@@ -325,8 +450,10 @@ function serializeTools(params: any): any[] | null {
   }
 }
 
-function extractMetadata(params: any): any {
-  const metadata: any = {};
+function extractMetadata(
+  params: GoogleGenAIGenerateContentParams,
+): Record<string, unknown> {
+  const metadata: Record<string, unknown> = {};
 
   if (params.model) {
     metadata.model = params.model;
@@ -343,47 +470,60 @@ function extractMetadata(params: any): any {
     }
   }
 
+  const tools = serializeTools(params);
+  if (tools) {
+    metadata.tools = tools;
+  }
+
   return metadata;
 }
 
-function extractGenerateContentMetrics(response: any, start: number): any {
+function extractGenerateContentMetrics(
+  response: GoogleGenAIGenerateContentResponse,
+  start: number,
+): Record<string, number> {
   const end = getCurrentUnixTimestamp();
-  const metrics: any = {
+  const metrics: Record<string, number> = {
     start,
     end,
     duration: end - start,
   };
 
   if (response.usageMetadata) {
-    const usage = response.usageMetadata;
-
-    if (usage.promptTokenCount !== undefined) {
-      metrics.prompt_tokens = usage.promptTokenCount;
-    }
-    if (usage.candidatesTokenCount !== undefined) {
-      metrics.completion_tokens = usage.candidatesTokenCount;
-    }
-    if (usage.totalTokenCount !== undefined) {
-      metrics.tokens = usage.totalTokenCount;
-    }
-    if (usage.cachedContentTokenCount !== undefined) {
-      metrics.prompt_cached_tokens = usage.cachedContentTokenCount;
-    }
-    if (usage.thoughtsTokenCount !== undefined) {
-      metrics.completion_reasoning_tokens = usage.thoughtsTokenCount;
-    }
+    populateUsageMetrics(metrics, response.usageMetadata);
   }
 
   return metrics;
 }
 
+function populateUsageMetrics(
+  metrics: Record<string, number>,
+  usage: GoogleGenAIUsageMetadata,
+): void {
+  if (usage.promptTokenCount !== undefined) {
+    metrics.prompt_tokens = usage.promptTokenCount;
+  }
+  if (usage.candidatesTokenCount !== undefined) {
+    metrics.completion_tokens = usage.candidatesTokenCount;
+  }
+  if (usage.totalTokenCount !== undefined) {
+    metrics.tokens = usage.totalTokenCount;
+  }
+  if (usage.cachedContentTokenCount !== undefined) {
+    metrics.prompt_cached_tokens = usage.cachedContentTokenCount;
+  }
+  if (usage.thoughtsTokenCount !== undefined) {
+    metrics.completion_reasoning_tokens = usage.thoughtsTokenCount;
+  }
+}
+
 function aggregateGenerateContentChunks(
-  chunks: any[],
+  chunks: GoogleGenAIGenerateContentResponse[],
   start: number,
   firstTokenTime: number | null,
-): { aggregated: any; metrics: any } {
+): { aggregated: Record<string, unknown>; metrics: Record<string, number> } {
   const end = getCurrentUnixTimestamp();
-  const metrics: any = {
+  const metrics: Record<string, number> = {
     start,
     end,
     duration: end - start,
@@ -399,9 +539,9 @@ function aggregateGenerateContentChunks(
 
   let text = "";
   let thoughtText = "";
-  const otherParts: any[] = [];
-  let usageMetadata: any = null;
-  let lastResponse: any = null;
+  const otherParts: Record<string, unknown>[] = [];
+  let usageMetadata: GoogleGenAIUsageMetadata | null = null;
+  let lastResponse: GoogleGenAIGenerateContentResponse | null = null;
 
   for (const chunk of chunks) {
     lastResponse = chunk;
@@ -435,9 +575,9 @@ function aggregateGenerateContentChunks(
     }
   }
 
-  const aggregated: any = {};
+  const aggregated: Record<string, unknown> = {};
 
-  const parts: any[] = [];
+  const parts: Record<string, unknown>[] = [];
   if (thoughtText) {
     parts.push({ text: thoughtText, thought: true });
   }
@@ -447,9 +587,9 @@ function aggregateGenerateContentChunks(
   parts.push(...otherParts);
 
   if (parts.length > 0 && lastResponse?.candidates) {
-    const candidates: any[] = [];
+    const candidates: Record<string, unknown>[] = [];
     for (const candidate of lastResponse.candidates) {
-      const candidateDict: any = {
+      const candidateDict: Record<string, unknown> = {
         content: {
           parts,
           role: "model",
@@ -470,22 +610,7 @@ function aggregateGenerateContentChunks(
 
   if (usageMetadata) {
     aggregated.usageMetadata = usageMetadata;
-
-    if (usageMetadata.promptTokenCount !== undefined) {
-      metrics.prompt_tokens = usageMetadata.promptTokenCount;
-    }
-    if (usageMetadata.candidatesTokenCount !== undefined) {
-      metrics.completion_tokens = usageMetadata.candidatesTokenCount;
-    }
-    if (usageMetadata.totalTokenCount !== undefined) {
-      metrics.tokens = usageMetadata.totalTokenCount;
-    }
-    if (usageMetadata.cachedContentTokenCount !== undefined) {
-      metrics.prompt_cached_tokens = usageMetadata.cachedContentTokenCount;
-    }
-    if (usageMetadata.thoughtsTokenCount !== undefined) {
-      metrics.completion_reasoning_tokens = usageMetadata.thoughtsTokenCount;
-    }
+    populateUsageMetrics(metrics, usageMetadata);
   }
 
   if (text) {
@@ -495,8 +620,8 @@ function aggregateGenerateContentChunks(
   return { aggregated, metrics };
 }
 
-function cleanMetrics(metrics: any): any {
-  const cleaned: any = {};
+function cleanMetrics(metrics: Record<string, number>): Record<string, number> {
+  const cleaned: Record<string, number> = {};
   for (const [key, value] of Object.entries(metrics)) {
     if (value !== null && value !== undefined) {
       cleaned[key] = value;
@@ -505,16 +630,22 @@ function cleanMetrics(metrics: any): any {
   return cleaned;
 }
 
-function tryToDict(obj: any): any {
+function tryToDict(obj: unknown): Record<string, unknown> | null {
   if (obj === null || obj === undefined) {
     return null;
   }
 
   if (typeof obj === "object") {
-    if (typeof obj.toJSON === "function") {
-      return obj.toJSON();
+    if (
+      "toJSON" in obj &&
+      // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
+      typeof (obj as Record<string, unknown>).toJSON === "function"
+    ) {
+      // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
+      return (obj as { toJSON: () => Record<string, unknown> }).toJSON();
     }
-    return obj;
+    // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
+    return obj as Record<string, unknown>;
   }
 
   return null;

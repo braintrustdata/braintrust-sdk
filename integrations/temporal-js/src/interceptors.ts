@@ -117,17 +117,23 @@ class BraintrustActivityInterceptor implements ActivityInboundCallsInterceptor {
             // Construct workflow parent with the workflow's span ID
             // IMPORTANT: row_id must match span_id for the parent span
             // Must provide EITHER object_id OR compute_object_metadata_args, not both
-            const workflowComponents = new SpanComponentsV3({
+            const workflowParentBase = {
               object_type: clientData.object_type,
-              object_id: clientData.object_id || undefined,
-              compute_object_metadata_args: clientData.object_id
-                ? undefined
-                : clientData.compute_object_metadata_args || undefined,
               propagated_event: clientData.propagated_event,
               row_id: workflowSpanId, // Use workflow's row_id, not client's
               span_id: workflowSpanId, // Use workflow's span_id, not client's
               root_span_id: clientData.root_span_id, // Keep same trace
-            });
+            };
+            const workflowComponents = clientData.object_id
+              ? new SpanComponentsV3({
+                  ...workflowParentBase,
+                  object_id: clientData.object_id,
+                })
+              : new SpanComponentsV3({
+                  ...workflowParentBase,
+                  compute_object_metadata_args:
+                    clientData.compute_object_metadata_args!,
+                });
 
             parent = workflowComponents.toStr();
           } else {

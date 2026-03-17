@@ -1,13 +1,16 @@
 # Mise will automatically read and use .tool-versions files as well as this file.
 
-[env]
-# Automatically activate our virtual environment
-_.python.venv = { path = "venv", create = true, uv_create_args = ['--seed']}
+[settings]
+experimental = true
 
+[env]
 # See env.example to configure API keys.
 _.file = ".env"
 
 [tools]
-ruff = "0.12.7"
-uv = "latest"
+nodejs = "22.15.0"
+npm = "10.9.2"
 pnpm = "10.26.2"
+
+[hooks]
+postinstall = "pnpm install"

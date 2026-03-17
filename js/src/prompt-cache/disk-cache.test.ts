@@ -3,7 +3,7 @@ import * as path from "path";
 import { DiskCache } from "./disk-cache";
 import { tmpdir } from "os";
 import { beforeEach, describe, it, afterEach, expect } from "vitest";
-import { configureNode } from "../node";
+import { configureNode } from "../node/config";
 
 describe("DiskCache", () => {
   configureNode();

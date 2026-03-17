@@ -1,0 +1,15 @@
+{
+  "name": "@braintrust/e2e-wrap-claude-agent-sdk-traces",
+  "private": true,
+  "braintrustScenario": {
+    "canary": {
+      "dependencies": {
+        "@anthropic-ai/claude-agent-sdk": "latest"
+      }
+    }
+  },
+  "dependencies": {
+    "@anthropic-ai/claude-agent-sdk": "^0.1.0",
+    "zod": "^3.25.34"
+  }
+}

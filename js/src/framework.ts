@@ -15,8 +15,9 @@ import {
 import { queue } from "async";
 
 import iso from "./isomorph";
+import { debugLogger } from "./debug-logger";
 import { GenericFunction } from "./framework-types";
-import { CodeFunction, CodePrompt } from "./framework2";
+import { CodeFunction, CodePrompt, CodeParameters } from "./framework2";
 import { Trace, LocalTrace } from "./trace";
 import {
   BaseMetadata,
@@ -28,6 +29,8 @@ import {
   ExperimentSummary,
   FullInitOptions,
   NOOP_SPAN,
+  type ParametersRef,
+  RemoteEvalParameters,
   Span,
   StartSpanArgs,
   init as _initExperiment,
@@ -226,10 +229,17 @@ export interface Evaluator<
 
   /**
    * A set of parameters that will be passed to the evaluator.
-   * Can contain array values that will be converted to single values in the task.
+   * Can be:
+   * - A raw EvalParameters schema (Zod schemas)
+   * - A Parameters instance from loadParameters()
+   * - A Promise<Parameters> from loadParameters()
    */
-
-  parameters?: Parameters;
+  parameters?:
+    | Parameters
+    | RemoteEvalParameters<boolean, boolean, InferParameters<Parameters>>
+    | Promise<
+        RemoteEvalParameters<boolean, boolean, InferParameters<Parameters>>
+      >;
 
   /**
    * An optional name for the experiment.
@@ -252,6 +262,11 @@ export interface Evaluator<
    * Optional additional metadata for the experiment.
    */
   metadata?: Record<string, unknown>;
+
+  /**
+   * Optional tags for the experiment.
+   */
+  tags?: string[];
 
   /**
    * Whether the experiment should be public. Defaults to false.
@@ -396,6 +411,7 @@ export type EvaluatorFile = {
     GenericFunction<unknown, unknown>
   >[];
   prompts: CodePrompt[];
+  parameters?: CodeParameters[];
   evaluators: {
     [evalName: string]: {
       evaluator: EvaluatorDef<
@@ -420,6 +436,34 @@ function initExperiment<IsOpen extends boolean = false>(
     ...options,
     setCurrent: false,
   });
+}
+
+async function getExperimentParametersRef(
+  parameters:
+    | EvalParameters
+    | RemoteEvalParameters<boolean, boolean>
+    | Promise<RemoteEvalParameters<boolean, boolean>>
+    | undefined,
+): Promise<ParametersRef | undefined> {
+  if (!parameters) {
+    return undefined;
+  }
+
+  const resolvedParameters =
+    parameters instanceof Promise ? await parameters : parameters;
+
+  if (!RemoteEvalParameters.isParameters(resolvedParameters)) {
+    return undefined;
+  }
+
+  if (resolvedParameters.id === undefined) {
+    return undefined;
+  }
+
+  return {
+    id: resolvedParameters.id,
+    version: resolvedParameters.version,
+  };
 }
 
 export function callEvaluatorData<
@@ -456,7 +500,8 @@ function isAsyncIterable<T>(value: unknown): value is AsyncIterable<T> {
   return (
     typeof value === "object" &&
     value !== null &&
-    typeof (value as AsyncIterable<T>)[Symbol.asyncIterator] === "function"
+    Symbol.asyncIterator in value &&
+    typeof value[Symbol.asyncIterator] === "function"
   );
 }
 
@@ -464,7 +509,8 @@ function isIterable<T>(value: unknown): value is Iterable<T> {
   return (
     typeof value === "object" &&
     value !== null &&
-    typeof (value as Iterable<T>)[Symbol.iterator] === "function"
+    Symbol.iterator in value &&
+    typeof value[Symbol.iterator] === "function"
   );
 }
 
@@ -479,6 +525,7 @@ declare global {
 globalThis._evals = {
   functions: [],
   prompts: [],
+  parameters: [],
   evaluators: {},
   reporters: {},
 };
@@ -640,6 +687,7 @@ export async function Eval<
     const { data, baseExperiment: defaultBaseExperiment } = callEvaluatorData(
       evaluator.data,
     );
+    const parameters = await getExperimentParametersRef(evaluator.parameters);
     // NOTE: This code is duplicated with initExperiment in js/src/cli.ts. Make sure
     // to update that if you change this.
     const experiment =
@@ -652,6 +700,7 @@ export async function Eval<
             experiment: evaluator.experimentName,
             description: evaluator.description,
             metadata: evaluator.metadata,
+            tags: evaluator.tags,
             isPublic: evaluator.isPublic,
             update: evaluator.update,
             baseExperiment:
@@ -660,6 +709,7 @@ export async function Eval<
             gitMetadataSettings: evaluator.gitMetadataSettings,
             repoInfo: evaluator.repoInfo,
             dataset: Dataset.isDataset(data) ? data : undefined,
+            parameters,
           });
 
     // Ensure experiment ID is resolved before tasks start for OTEL parent attribute support
@@ -749,16 +799,12 @@ export function Reporter<EvalReport>(
   return ret;
 }
 
-export function getLoadedEvals() {
-  return _evals;
-}
-
 export interface Filter {
   path: string[];
   pattern: RegExp;
 }
 
-export function serializeJSONWithPlainString(v: unknown) {
+function serializeJSONWithPlainString(v: unknown) {
   if (typeof v === "string") {
     return v;
   } else {
@@ -766,7 +812,7 @@ export function serializeJSONWithPlainString(v: unknown) {
   }
 }
 
-export function deserializePlainStringAsJSON(s: string) {
+function deserializePlainStringAsJSON(s: string) {
   try {
     return { value: JSON.parse(s), error: undefined };
   } catch (e) {
@@ -876,9 +922,9 @@ async function runEvaluatorInternal(
     let dataResult =
       typeof evaluator.data === "function" ? evaluator.data() : evaluator.data;
 
-    parameters = validateParameters(
+    parameters = await validateParameters(
       parameters ?? {},
-      evaluator.parameters ?? {},
+      evaluator.parameters,
     );
 
     if ("_type" in dataResult) {
@@ -1234,10 +1280,12 @@ async function runEvaluatorInternal(
               const names = Object.keys(scorerErrors).join(", ");
               const errors = failingScorersAndResults.map((item) => item.error);
               unhandledScores = Object.keys(scorerErrors);
-              console.warn(
-                `Found exceptions for the following scorers: ${names}`,
-                errors,
-              );
+              debugLogger
+                .forState(evaluator.state)
+                .warn(
+                  `Found exceptions for the following scorers: ${names}`,
+                  errors,
+                );
             }
           } catch (e) {
             logSpanError(rootSpan, e);
@@ -1284,10 +1332,15 @@ async function runEvaluatorInternal(
           });
         } else {
           const result = await experiment.traced(callback, baseEvent);
-          // Flush logs after each task to provide backpressure and prevent memory accumulation
-          // when maxConcurrency is set. This ensures logs are sent before the next task starts,
-          // preventing unbounded memory growth with large log payloads.
-          if (evaluator.maxConcurrency !== undefined) {
+          // Flush logs to provide backpressure and prevent memory accumulation
+          // when maxConcurrency is set. Only flush when pending data exceeds the
+          // byte threshold, avoiding excessive sequential round-trips for small
+          // payloads while still bounding memory usage for large ones.
+          const bgLogger = experiment.loggingState.bgLogger();
+          if (
+            evaluator.maxConcurrency !== undefined &&
+            bgLogger.pendingFlushBytes() >= bgLogger.flushBackpressureBytes()
+          ) {
             await experiment.flush();
           }
           return result;
@@ -1375,7 +1428,9 @@ async function runEvaluatorInternal(
       if (e instanceof InternalAbortError) {
         // Log cancellation for debugging
         if (iso.getEnv("BRAINTRUST_VERBOSE")) {
-          console.warn("Evaluator cancelled:", (e as Error).message);
+          debugLogger
+            .forState(evaluator.state)
+            .warn("Evaluator cancelled:", e.message);
         }
       }
 
@@ -1515,7 +1570,11 @@ export function reportFailures<
       }
     }
     if (!verbose && !jsonl) {
-      console.error(warning("Add --verbose to see full stack traces."));
+      console.error(
+        warning(
+          "Use --debug-logging debug to see full stack traces and troubleshooting details.",
+        ),
+      );
     }
   }
 }
@@ -1528,7 +1587,7 @@ export function reportFailures<
 /**
  * Simple plain-text reporter for framework - no fancy formatting dependencies
  */
-export const defaultReporter: ReporterDef<boolean> = {
+const defaultReporter: ReporterDef<boolean> = {
   name: "Braintrust default reporter",
   async reportEval(
     // eslint-disable-next-line @typescript-eslint/no-explicit-any

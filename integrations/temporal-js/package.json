@@ -1,6 +1,6 @@
 {
   "name": "@braintrust/temporal",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "SDK for integrating Braintrust with Temporal",
   "main": "./dist/index.js",
   "module": "./dist/index.mjs",
@@ -22,6 +22,7 @@
   },
   "scripts": {
     "build": "tsup",
+    "check:typings": "tsc --noEmit",
     "watch": "tsup --watch",
     "clean": "rm -r dist/*",
     "test": "vitest run"

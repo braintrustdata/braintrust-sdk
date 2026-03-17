@@ -11,7 +11,7 @@ import {
 import Anthropic from "@anthropic-ai/sdk";
 import { wrapAnthropic } from "./anthropic";
 import { _exportsForTestingOnly, Attachment, initLogger } from "../logger";
-import { configureNode } from "../node";
+import { configureNode } from "../node/config";
 import { getCurrentUnixTimestamp } from "../util";
 
 // use the cheapest model for tests
@@ -58,7 +58,9 @@ describe("anthropic client unit tests", { retry: 3 }, () => {
   beforeEach(async () => {
     backgroundLogger = _exportsForTestingOnly.useTestBackgroundLogger();
 
-    anthropic = new Anthropic();
+    anthropic = new Anthropic({
+      apiKey: process.env.ANTHROPIC_API_KEY || "test-key",
+    });
     client = wrapAnthropic(anthropic);
 
     logger = initLogger({

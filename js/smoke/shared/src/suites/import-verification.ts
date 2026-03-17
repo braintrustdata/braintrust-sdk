@@ -17,8 +17,8 @@
  * - Optional: May not exist depending on build configuration
  */
 
-import type { TestResult } from "../helpers/types";
 import { assertType, assertDefined } from "../helpers/assertions";
+import { register, type TestFn } from "../helpers/register";
 
 /**
  * Interface for the Braintrust module based on exports.ts
@@ -102,15 +102,9 @@ export interface BraintrustModule {
   [key: string]: unknown;
 }
 
-/**
- * Test required core logging exports
- */
-export async function testCoreLoggingExports(
-  module: BraintrustModule,
-): Promise<TestResult> {
-  const testName = "testCoreLoggingExports";
-
-  try {
+export const testCoreLoggingExports = register(
+  "testCoreLoggingExports",
+  async (module) => {
     assertDefined(module.initLogger, "initLogger must exist");
     assertType(module.initLogger, "function", "initLogger must be a function");
 
@@ -140,29 +134,13 @@ export async function testCoreLoggingExports(
     assertDefined(module.flush, "flush must exist");
     assertType(module.flush, "function", "flush must be a function");
 
-    return {
-      success: true,
-      testName,
-      message: "Core logging exports verified (7 exports)",
-    };
-  } catch (error) {
-    return {
-      success: false,
-      testName,
-      error: error as Error,
-    };
-  }
-}
+    return "Core logging exports verified (7 exports)";
+  },
+);
 
-/**
- * Test required dataset exports
- */
-export async function testDatasetExports(
-  module: BraintrustModule,
-): Promise<TestResult> {
-  const testName = "testDatasetExports";
-
-  try {
+export const testDatasetExports = register(
+  "testDatasetExports",
+  async (module) => {
     assertDefined(module.initDataset, "initDataset must exist");
     assertType(
       module.initDataset,
@@ -173,29 +151,13 @@ export async function testDatasetExports(
     assertDefined(module.Dataset, "Dataset must exist");
     assertType(module.Dataset, "function", "Dataset must be a function/class");
 
-    return {
-      success: true,
-      testName,
-      message: "Dataset exports verified (2 exports)",
-    };
-  } catch (error) {
-    return {
-      success: false,
-      testName,
-      error: error as Error,
-    };
-  }
-}
+    return "Dataset exports verified (2 exports)";
+  },
+);
 
-/**
- * Test required prompt exports
- */
-export async function testPromptExports(
-  module: BraintrustModule,
-): Promise<TestResult> {
-  const testName = "testPromptExports";
-
-  try {
+export const testPromptExports = register(
+  "testPromptExports",
+  async (module) => {
     assertDefined(module.loadPrompt, "loadPrompt must exist");
     assertType(module.loadPrompt, "function", "loadPrompt must be a function");
 
@@ -209,29 +171,13 @@ export async function testPromptExports(
       "getPromptVersions must be a function",
     );
 
-    return {
-      success: true,
-      testName,
-      message: "Prompt exports verified (3 exports)",
-    };
-  } catch (error) {
-    return {
-      success: false,
-      testName,
-      error: error as Error,
-    };
-  }
-}
+    return "Prompt exports verified (3 exports)";
+  },
+);
 
-/**
- * Test experiment exports (all browser-compatible now)
- */
-export async function testExperimentExports(
-  module: BraintrustModule,
-): Promise<TestResult> {
-  const testName = "testExperimentExports";
-
-  try {
+export const testExperimentExports = register(
+  "testExperimentExports",
+  async (module) => {
     assertDefined(module.initExperiment, "initExperiment must exist");
     assertType(
       module.initExperiment,
@@ -253,99 +199,64 @@ export async function testExperimentExports(
       "currentExperiment must be a function",
     );
 
-    return {
-      success: true,
-      testName,
-      message: "Experiment exports verified (3 exports)",
-    };
-  } catch (error) {
-    return {
-      success: false,
-      testName,
-      error: error as Error,
-    };
-  }
-}
+    return "Experiment exports verified (3 exports)";
+  },
+);
 
-/**
- * Test evaluation exports (runtime values only - types like Evaluator, BaseExperiment, EvalTask are type-only)
- */
-export async function testEvalExports(
-  module: BraintrustModule,
-): Promise<TestResult> {
-  const testName = "testEvalExports";
+export const testEvalExports = register("testEvalExports", async (module) => {
+  assertDefined(module.Eval, "Eval must exist");
+  assertType(module.Eval, "function", "Eval must be a function");
 
-  try {
-    assertDefined(module.Eval, "Eval must exist");
-    assertType(module.Eval, "function", "Eval must be a function");
+  assertDefined(
+    module.EvalResultWithSummary,
+    "EvalResultWithSummary must exist",
+  );
+  assertType(
+    module.EvalResultWithSummary,
+    "function",
+    "EvalResultWithSummary must be a function/class",
+  );
 
-    assertDefined(
-      module.EvalResultWithSummary,
-      "EvalResultWithSummary must exist",
-    );
-    assertType(
-      module.EvalResultWithSummary,
-      "function",
-      "EvalResultWithSummary must be a function/class",
-    );
+  assertDefined(module.Reporter, "Reporter must exist");
+  assertType(module.Reporter, "function", "Reporter must be a function");
 
-    assertDefined(module.Reporter, "Reporter must exist");
-    assertType(module.Reporter, "function", "Reporter must be a function");
+  assertDefined(module.runEvaluator, "runEvaluator must exist");
+  assertType(
+    module.runEvaluator,
+    "function",
+    "runEvaluator must be a function",
+  );
 
-    assertDefined(module.runEvaluator, "runEvaluator must exist");
-    assertType(
-      module.runEvaluator,
-      "function",
-      "runEvaluator must be a function",
-    );
+  assertDefined(module.buildLocalSummary, "buildLocalSummary must exist");
+  assertType(
+    module.buildLocalSummary,
+    "function",
+    "buildLocalSummary must be a function",
+  );
 
-    assertDefined(module.buildLocalSummary, "buildLocalSummary must exist");
-    assertType(
-      module.buildLocalSummary,
-      "function",
-      "buildLocalSummary must be a function",
-    );
+  assertDefined(module.reportFailures, "reportFailures must exist");
+  assertType(
+    module.reportFailures,
+    "function",
+    "reportFailures must be a function",
+  );
 
-    assertDefined(module.reportFailures, "reportFailures must exist");
-    assertType(
-      module.reportFailures,
-      "function",
-      "reportFailures must be a function",
-    );
+  assertDefined(
+    module.defaultErrorScoreHandler,
+    "defaultErrorScoreHandler must exist",
+  );
+  assertType(
+    module.defaultErrorScoreHandler,
+    "function",
+    "defaultErrorScoreHandler must be a function",
+  );
 
-    assertDefined(
-      module.defaultErrorScoreHandler,
-      "defaultErrorScoreHandler must exist",
-    );
-    assertType(
-      module.defaultErrorScoreHandler,
-      "function",
-      "defaultErrorScoreHandler must be a function",
-    );
+  return "Eval exports verified (7 runtime exports)";
+});
 
-    return {
-      success: true,
-      testName,
-      message: "Eval exports verified (7 runtime exports)",
-    };
-  } catch (error) {
-    return {
-      success: false,
-      testName,
-      error: error as Error,
-    };
-  }
-}
-
-/**
- * Test required tracing exports
- */
-export async function testTracingExports(
-  module: BraintrustModule,
-): Promise<TestResult> {
-  const testName = "testTracingExports";
-
-  try {
+export const testTracingExports = register(
+  "testTracingExports",
+  async (module) => {
     assertDefined(module.traced, "traced must exist");
     assertType(module.traced, "function", "traced must be a function");
 
@@ -365,35 +276,16 @@ export async function testTracingExports(
       "withCurrent must be a function",
     );
 
-    return {
-      success: true,
-      testName,
-      message: "Tracing exports verified (5 exports)",
-    };
-  } catch (error) {
-    return {
-      success: false,
-      testName,
-      error: error as Error,
-    };
-  }
-}
+    return "Tracing exports verified (5 exports)";
+  },
+);
 
-/**
- * Test client wrapper exports
- * wrapOpenAI is required, others are optional
- */
-export async function testClientWrapperExports(
-  module: BraintrustModule,
-): Promise<TestResult> {
-  const testName = "testClientWrapperExports";
-
-  try {
-    // wrapOpenAI is required
+export const testClientWrapperExports = register(
+  "testClientWrapperExports",
+  async (module) => {
     assertDefined(module.wrapOpenAI, "wrapOpenAI must exist");
     assertType(module.wrapOpenAI, "function", "wrapOpenAI must be a function");
 
-    // Count optional wrappers that exist
     let optionalCount = 0;
     const optionalWrappers = [
       "wrapAnthropic",
@@ -414,29 +306,13 @@ export async function testClientWrapperExports(
       }
     }
 
-    return {
-      success: true,
-      testName,
-      message: `Client wrapper exports verified (1 required + ${optionalCount} optional)`,
-    };
-  } catch (error) {
-    return {
-      success: false,
-      testName,
-      error: error as Error,
-    };
-  }
-}
+    return `Client wrapper exports verified (1 required + ${optionalCount} optional)`;
+  },
+);
 
-/**
- * Test required utility exports
- */
-export async function testUtilityExports(
-  module: BraintrustModule,
-): Promise<TestResult> {
-  const testName = "testUtilityExports";
-
-  try {
+export const testUtilityExports = register(
+  "testUtilityExports",
+  async (module) => {
     assertDefined(module.JSONAttachment, "JSONAttachment must exist");
     assertType(
       module.JSONAttachment,
@@ -457,29 +333,13 @@ export async function testUtilityExports(
     assertDefined(module.permalink, "permalink must exist");
     assertType(module.permalink, "function", "permalink must be a function");
 
-    return {
-      success: true,
-      testName,
-      message: "Utility exports verified (4 exports)",
-    };
-  } catch (error) {
-    return {
-      success: false,
-      testName,
-      error: error as Error,
-    };
-  }
-}
+    return "Utility exports verified (4 exports)";
+  },
+);
 
-/**
- * Test required function exports
- */
-export async function testFunctionExports(
-  module: BraintrustModule,
-): Promise<TestResult> {
-  const testName = "testFunctionExports";
-
-  try {
+export const testFunctionExports = register(
+  "testFunctionExports",
+  async (module) => {
     assertDefined(module.invoke, "invoke must exist");
     assertType(module.invoke, "function", "invoke must be a function");
 
@@ -490,29 +350,13 @@ export async function testFunctionExports(
       "initFunction must be a function",
     );
 
-    return {
-      success: true,
-      testName,
-      message: "Function exports verified (2 exports)",
-    };
-  } catch (error) {
-    return {
-      success: false,
-      testName,
-      error: error as Error,
-    };
-  }
-}
+    return "Function exports verified (2 exports)";
+  },
+);
 
-/**
- * Test framework2 exports (programmatic prompt/function creation)
- */
-export async function testFramework2Exports(
-  module: BraintrustModule,
-): Promise<TestResult> {
-  const testName = "testFramework2Exports";
-
-  try {
+export const testFramework2Exports = register(
+  "testFramework2Exports",
+  async (module) => {
     assertDefined(module.Project, "Project must exist");
     assertType(module.Project, "function", "Project must be a function/class");
 
@@ -526,29 +370,13 @@ export async function testFramework2Exports(
       "PromptBuilder must be a function/class",
     );
 
-    return {
-      success: true,
-      testName,
-      message: "Framework2 exports verified (3 exports)",
-    };
-  } catch (error) {
-    return {
-      success: false,
-      testName,
-      error: error as Error,
-    };
-  }
-}
+    return "Framework2 exports verified (3 exports)";
+  },
+);
 
-/**
- * Test required ID generation exports
- */
-export async function testIDGeneratorExports(
-  module: BraintrustModule,
-): Promise<TestResult> {
-  const testName = "testIDGeneratorExports";
-
-  try {
+export const testIDGeneratorExports = register(
+  "testIDGeneratorExports",
+  async (module) => {
     assertDefined(module.IDGenerator, "IDGenerator must exist");
     assertType(
       module.IDGenerator,
@@ -556,29 +384,13 @@ export async function testIDGeneratorExports(
       "IDGenerator must be a function/class",
     );
 
-    return {
-      success: true,
-      testName,
-      message: "ID generator exports verified (1 export)",
-    };
-  } catch (error) {
-    return {
-      success: false,
-      testName,
-      error: error as Error,
-    };
-  }
-}
+    return "ID generator exports verified (1 export)";
+  },
+);
 
-/**
- * Test required testing exports
- */
-export async function testTestingExports(
-  module: BraintrustModule,
-): Promise<TestResult> {
-  const testName = "testTestingExports";
-
-  try {
+export const testTestingExports = register(
+  "testTestingExports",
+  async (module) => {
     assertDefined(
       module._exportsForTestingOnly,
       "_exportsForTestingOnly must exist",
@@ -589,29 +401,13 @@ export async function testTestingExports(
       "_exportsForTestingOnly must be an object",
     );
 
-    return {
-      success: true,
-      testName,
-      message: "Testing exports verified (1 export)",
-    };
-  } catch (error) {
-    return {
-      success: false,
-      testName,
-      error: error as Error,
-    };
-  }
-}
+    return "Testing exports verified (1 export)";
+  },
+);
 
-/**
- * Test required state management exports
- */
-export async function testStateManagementExports(
-  module: BraintrustModule,
-): Promise<TestResult> {
-  const testName = "testStateManagementExports";
-
-  try {
+export const testStateManagementExports = register(
+  "testStateManagementExports",
+  async (module) => {
     assertDefined(module.BraintrustState, "BraintrustState must exist");
     assertType(
       module.BraintrustState,
@@ -622,50 +418,136 @@ export async function testStateManagementExports(
     assertDefined(module.login, "login must exist");
     assertType(module.login, "function", "login must be a function");
 
-    return {
-      success: true,
-      testName,
-      message: "State management exports verified (2 exports)",
-    };
-  } catch (error) {
-    return {
-      success: false,
-      testName,
-      error: error as Error,
-    };
-  }
+    return "State management exports verified (2 exports)";
+  },
+);
+
+export function testBuildResolution(
+  expectedBuildType?:
+    | "browser"
+    | "browser-js"
+    | "edge-light"
+    | "workerd"
+    | "node",
+): TestFn {
+  return register("testBuildResolution", async (module) => {
+    const { buildType: detectedBuild, buildDetails } = detectBuildType(module);
+    const detectedFormat = detectModuleFormat();
+
+    if (detectedBuild === "unknown") {
+      throw new Error(
+        `Build type is unknown - configureBrowser() or configureNode() was not called. ${buildDetails || ""}`,
+      );
+    }
+
+    if (expectedBuildType && detectedBuild !== expectedBuildType) {
+      throw new Error(
+        `Expected build type "${expectedBuildType}" but detected "${detectedBuild}"`,
+      );
+    }
+
+    const parts: string[] = [`Detected ${detectedBuild} build`];
+
+    if (expectedBuildType) {
+      parts.push(`(expected: ${expectedBuildType})`);
+    }
+
+    if (detectedFormat !== "unknown") {
+      parts.push(`${detectedFormat} format`);
+    }
+
+    return parts.join(", ");
+  });
 }
 
-/**
- * Run all import verification tests
- *
- * This forces bundlers to process the full Braintrust export graph,
- * preventing tree-shaking false positives.
- *
- * Note: Only tests runtime value exports (functions, classes, objects).
- * TypeScript type-only exports are not tested as they don't exist at runtime.
- *
- * @param module - The Braintrust module to test
- */
-export async function runImportVerificationTests(
-  module: BraintrustModule,
-): Promise<TestResult[]> {
-  const results: TestResult[] = [];
+function detectBuildType(module: BraintrustModule): {
+  buildType:
+    | "browser"
+    | "browser-js"
+    | "edge-light"
+    | "workerd"
+    | "node"
+    | "unknown";
+  buildDetails: string;
+} {
+  if (!module._exportsForTestingOnly) {
+    return {
+      buildType: "unknown",
+      buildDetails: "_exportsForTestingOnly not available",
+    };
+  }
 
-  // All runtime value exports must exist in all builds
-  results.push(await testCoreLoggingExports(module));
-  results.push(await testDatasetExports(module));
-  results.push(await testPromptExports(module));
-  results.push(await testTracingExports(module));
-  results.push(await testClientWrapperExports(module));
-  results.push(await testUtilityExports(module));
-  results.push(await testFunctionExports(module));
-  results.push(await testFramework2Exports(module));
-  results.push(await testIDGeneratorExports(module));
-  results.push(await testTestingExports(module));
-  results.push(await testStateManagementExports(module));
-  results.push(await testExperimentExports(module));
-  results.push(await testEvalExports(module));
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const testing = module._exportsForTestingOnly as any;
+  const iso = testing.isomorph;
 
-  return results;
+  if (!iso || typeof iso !== "object") {
+    return {
+      buildType: "unknown",
+      buildDetails: "isomorph not available in testing exports",
+    };
+  }
+
+  const buildType = iso.buildType;
+  if (
+    buildType === "browser" ||
+    buildType === "browser-js" ||
+    buildType === "edge-light" ||
+    buildType === "workerd" ||
+    buildType === "node" ||
+    buildType === "unknown"
+  ) {
+    return {
+      buildType,
+      buildDetails: `Build type from isomorph.buildType: ${buildType}`,
+    };
+  }
+
+  return {
+    buildType: "unknown",
+    buildDetails: `isomorph.buildType has unexpected value: ${buildType}`,
+  };
+}
+
+function detectModuleFormat(): "cjs" | "esm" | "unknown" {
+  const packageSpec = "braintrust";
+  try {
+    if (
+      typeof import.meta !== "undefined" &&
+      typeof import.meta.resolve === "function"
+    ) {
+      const resolved = import.meta.resolve(packageSpec);
+      let resolvedPath: string;
+      try {
+        const url = new URL(resolved);
+        resolvedPath = url.pathname;
+      } catch {
+        resolvedPath = resolved;
+      }
+      if (resolvedPath.endsWith(".mjs")) {
+        return "esm";
+      }
+      if (resolvedPath.endsWith(".js") && !resolvedPath.endsWith(".mjs")) {
+        return "cjs";
+      }
+    }
+  } catch {
+    // import.meta.resolve might not be available
+  }
+
+  try {
+    if (typeof require !== "undefined" && require.resolve) {
+      const resolved = require.resolve(packageSpec);
+      if (resolved.endsWith(".js") && !resolved.endsWith(".mjs")) {
+        return "cjs";
+      }
+      if (resolved.endsWith(".mjs")) {
+        return "esm";
+      }
+    }
+  } catch {
+    // require.resolve might not be available
+  }
+
+  return "unknown";
 }

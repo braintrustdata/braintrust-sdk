@@ -1,39 +1,29 @@
-An isomorphic JS library for logging data to Braintrust.
+# Braintrust JavaScript SDK
 
-## Version information
+[![npm version](https://img.shields.io/npm/v/braintrust.svg)](https://www.npmjs.com/package/braintrust)
 
-**2.x** is the current stable release. [Zod](https://zod.dev/) is now a peer dependency instead of a bundled dependency. This gives you control over the Zod version in your project and reduces bundle size if you’re already using Zod.
+An isomorphic JavaScript/TypeScript SDK for logging, tracing, and evaluating AI applications with [Braintrust](https://www.braintrust.dev/). For more details, see the [Braintrust docs](https://www.braintrust.dev/docs)
 
-The SDK requires Zod v3.25.34 or later.
+## Installation
 
-### Upgrading from 1.x
-
-See the [Migrate from v1.x to v2.x guide](https://www.braintrust.dev/docs/reference/sdks/typescript/migrations/v1-to-v2) for instructions.
-
-### Upgrading from 0.x
-
-First follow the [Migrate from v0.x to v1.x guide](https://www.braintrust.dev/docs/reference/sdks/typescript/migrations/v0-to-v1), then proceed to the [Migrate from v1.x to v2.x guide](https://www.braintrust.dev/docs/reference/sdks/typescript/migrations/v1-to-v2).
-
-**Note:** If you do not have OpenTelemetry you can upgrade directly from v0.x to v2.x.
-
-### Quickstart
-
-Install the library with npm (or yarn).
+Install the SDK:
 
 ```bash
-npm install braintrust zod
+npm install braintrust
 ```
 
-Then, run a simple experiment with the following code (replace `YOUR_API_KEY` with
-your Braintrust API key):
+## Quickstart
 
-```javascript
+Run a simple experiment (replace `YOUR_API_KEY` with your Braintrust API key):
+
+```typescript
 import * as braintrust from "braintrust";
 
 async function main() {
   const experiment = await braintrust.init("NodeTest", {
     apiKey: "YOUR_API_KEY",
   });
+
   experiment.log({
     input: { test: 1 },
     output: "foo",
@@ -45,8 +35,95 @@ async function main() {
       id: 1,
     },
   });
+
   console.log(await experiment.summarize());
 }
 
 main().catch(console.error);
 ```
+
+## Auto-Instrumentation
+
+Braintrust can automatically instrument popular AI SDKs (OpenAI, Anthropic, Vercel AI SDK, and others) to log calls without manual wrapper code.
+
+### Node.js
+
+Use the runtime import hook:
+
+```bash
+node --import braintrust/hook.mjs app.js
+```
+
+### Bundled Apps
+
+Use a bundler plugin:
+
+Vite:
+
+```ts
+import { vitePlugin } from "braintrust/vite";
+
+export default {
+  plugins: [vitePlugin()],
+};
+```
+
+Webpack:
+
+```js
+const { webpackPlugin } = require("braintrust/webpack");
+
+module.exports = {
+  plugins: [webpackPlugin()],
+};
+```
+
+esbuild:
+
+```ts
+import { esbuildPlugin } from "braintrust/esbuild";
+
+await esbuild.build({
+  plugins: [esbuildPlugin()],
+});
+```
+
+Rollup:
+
+```ts
+import { rollupPlugin } from "braintrust/rollup";
+
+export default {
+  plugins: [rollupPlugin()],
+};
+```
+
+If you use TypeScript or other transpilation plugins, place the Braintrust plugin after them so transformed output is instrumented.
+
+For deeper details, see the [auto-instrumentation architecture docs](src/auto-instrumentations/README.md).
+
+## Browser Support
+
+For browser-only applications, use the dedicated browser package:
+
+```bash
+npm install @braintrust/browser braintrust
+```
+
+See the [`@braintrust/browser` README](../integrations/browser-js/README.md) for details and current limitations.
+
+## Migration Guides
+
+### Upgrading from 2.x to 3.x
+
+See the [Migrate from v2.x to v3.x guide](https://www.braintrust.dev/docs/reference/sdks/typescript/migrations/v2-to-v3).
+
+In 3.x, browser usage should move to `@braintrust/browser` instead of relying on the legacy `braintrust/browser` path.
+
+### Upgrading from 1.x to 2.x
+
+See the [Migrate from v1.x to v2.x guide](https://www.braintrust.dev/docs/reference/sdks/typescript/migrations/v1-to-v2).
+
+### Upgrading from 0.x to 1.x
+
+See the [Migrate from v1.x to v2.x guide](https://www.braintrust.dev/docs/reference/sdks/typescript/migrations/v0-to-v1).

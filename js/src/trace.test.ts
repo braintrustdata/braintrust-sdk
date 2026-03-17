@@ -9,7 +9,7 @@ import {
 } from "vitest";
 import { CachedSpanFetcher, LocalTrace, SpanData, SpanFetchFn } from "./trace";
 import { _exportsForTestingOnly, _internalGetGlobalState } from "./logger";
-import { configureNode } from "./node";
+import { configureNode } from "./node/config";
 
 // Mock the invoke function
 vi.mock("./functions/invoke", () => ({

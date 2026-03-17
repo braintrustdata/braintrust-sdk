@@ -4,15 +4,15 @@
 # release and will fail if it is not.
 set -e
 
+RELEASE_BRANCH="${RELEASE_BRANCH:-main}"
 
-
-# Ensure the current branch has been pushed to main (aka tests have passed)
+# Ensure the current commit is on the configured release branch
 CURRENT_BRANCH=$(git rev-parse --abbrev-ref HEAD)
-if [ "$CURRENT_BRANCH" != "main" ]; then
-  git fetch origin main --depth=1000
-  # assert this commit is on the main branch
-  if ! git merge-base --is-ancestor "$(git rev-parse HEAD)" origin/main; then
-    echo "ERROR: Current commit is not on the main branch"
+if [ "$CURRENT_BRANCH" != "$RELEASE_BRANCH" ]; then
+  git fetch origin "$RELEASE_BRANCH" --depth=1000
+  # assert this commit is on the release branch
+  if ! git merge-base --is-ancestor "$(git rev-parse HEAD)" "origin/$RELEASE_BRANCH"; then
+    echo "ERROR: Current commit is not on the $RELEASE_BRANCH branch"
     exit 1
   fi
 fi

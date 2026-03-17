@@ -20,11 +20,41 @@ import {
 import { SpanObjectTypeV3 } from "../util/index";
 import { LazyValue } from "./util";
 import { BackgroundLogEvent, IS_MERGE_FIELD } from "../util/index";
-import { configureNode } from "./node";
+import { configureNode } from "./node/config";
 
 configureNode();
 
-const { extractAttachments, deepCopyEvent } = _exportsForTestingOnly;
+const { extractAttachments, deepCopyEvent, validateTags } =
+  _exportsForTestingOnly;
+
+describe("validateTags", () => {
+  test("accepts valid tags", () => {
+    expect(() => validateTags(["foo", "bar", "baz"])).not.toThrow();
+  });
+
+  test("accepts empty array", () => {
+    expect(() => validateTags([])).not.toThrow();
+  });
+
+  test("accepts single tag", () => {
+    expect(() => validateTags(["solo"])).not.toThrow();
+  });
+
+  test("throws on non-string tag", () => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    expect(() => validateTags([123 as any])).toThrow("tags must be strings");
+  });
+
+  test("throws on duplicate tags", () => {
+    expect(() => validateTags(["foo", "bar", "foo"])).toThrow(
+      "duplicate tag: foo",
+    );
+  });
+
+  test("throws on adjacent duplicate tags", () => {
+    expect(() => validateTags(["a", "a"])).toThrow("duplicate tag: a");
+  });
+});
 
 test("extractAttachments no op", () => {
   const attachments: BaseAttachment[] = [];

@@ -1,3 +1,5 @@
+export * from "../util";
+
 export const GLOBAL_PROJECT = "Global";
 
 // Given a function to execute, a catch handler, and a finally handler, runs the function and
@@ -148,8 +150,4 @@ export function filterFrom(record: Record<string, any>, keys: string[]) {
     }
   }
   return out;
-}
-
-export function objectIsEmpty(obj: Record<string, any>): boolean {
-  return !obj || Object.keys(obj).length === 0;
 }
