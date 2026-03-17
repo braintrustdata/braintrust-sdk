@@ -1400,11 +1400,25 @@ describe("ai sdk client unit tests", TEST_SUITE_OPTIONS, () => {
       (span: any) => span.span_attributes?.name === "generateText",
     );
     expect(generateTextSpan).toBeDefined();
+    expect((generateTextSpan as any).input.tools).toMatchObject({
+      calculate: {
+        description: "Perform a mathematical calculation",
+        inputSchema: {
+          type: "object",
+        },
+      },
+    });
     expect((generateTextSpan as any).metadata.tools).toMatchObject({
       calculate: {
         description: "Perform a mathematical calculation",
       },
     });
+    expect((generateTextSpan as any).input.tools).not.toHaveProperty(
+      "calculate.execute",
+    );
+    expect((generateTextSpan as any).metadata.tools).not.toHaveProperty(
+      "calculate.execute",
+    );
 
     // Find the tool execution span
     // eslint-disable-next-line @typescript-eslint/consistent-type-assertions, @typescript-eslint/no-explicit-any

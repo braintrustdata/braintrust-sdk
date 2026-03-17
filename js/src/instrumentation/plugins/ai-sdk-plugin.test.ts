@@ -10,6 +10,7 @@ vi.mock("../../isomorph", () => ({
 import { AISDKPlugin } from "./ai-sdk-plugin";
 import { Attachment } from "../../logger";
 import iso from "../../isomorph";
+import { serializeAISDKToolsForLogging } from "../../wrappers/ai-sdk/tool-serialization";
 
 const mockNewTracingChannel = iso.newTracingChannel as ReturnType<typeof vi.fn>;
 
@@ -863,12 +864,12 @@ describe("AI SDK utility functions", () => {
       expect(metadata.tools).toMatchObject({
         echo: {
           description: "Echo the message",
-          execute: "[Function]",
           parameters: {
             type: "object",
           },
         },
       });
+      expect(metadata.tools).not.toHaveProperty("echo.execute");
     });
   });
 
@@ -1225,38 +1226,6 @@ function extractMetadataFromParams(params: any): Record<string, any> {
   }
 
   return metadata;
-}
-
-function serializeAISDKToolsForLogging(tools: any): any {
-  if (!tools || typeof tools !== "object") {
-    return tools;
-  }
-
-  if (Array.isArray(tools)) {
-    return tools.map(serializeAISDKTool);
-  }
-
-  return Object.fromEntries(
-    Object.entries(tools).map(([key, value]) => [
-      key,
-      serializeAISDKTool(value),
-    ]),
-  );
-}
-
-function serializeAISDKTool(tool: any): any {
-  if (!tool || typeof tool !== "object") {
-    return tool;
-  }
-
-  const serialized = { ...tool };
-  if ("execute" in serialized) {
-    serialized.execute = "[Function]";
-  }
-  if ("render" in serialized) {
-    serialized.render = "[Function]";
-  }
-  return serialized;
 }
 
 function processAISDKOutput(output: any, denyOutputPaths: string[]): any {

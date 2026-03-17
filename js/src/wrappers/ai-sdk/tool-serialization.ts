@@ -41,11 +41,11 @@ function serializeTool(tool: AISDKTool): AISDKTool {
   }
 
   if ("execute" in serialized) {
-    serialized.execute = "[Function]";
+    delete serialized.execute;
   }
 
   if ("render" in serialized) {
-    serialized.render = "[Function]";
+    delete serialized.render;
   }
 
   return serialized;

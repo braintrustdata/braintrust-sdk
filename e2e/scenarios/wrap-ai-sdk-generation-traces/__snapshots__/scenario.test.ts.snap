@@ -815,24 +815,18 @@ exports[`wrap-ai-sdk-generation-traces captures wrapper and child model spans (a
         "get_weather": {
           "description": "Get the weather for a location",
           "parameters": {
-            "_cached": null,
-            "_def": {
-              "catchall": {
-                "_def": {
-                  "typeName": "ZodNever",
-                },
-                "~standard": {
-                  "vendor": "zod",
-                  "version": 1,
-                },
+            "$schema": "http://json-schema.org/draft-07/schema#",
+            "additionalProperties": false,
+            "properties": {
+              "location": {
+                "description": "The city and country",
+                "type": "string",
               },
-              "typeName": "ZodObject",
-              "unknownKeys": "strip",
             },
-            "~standard": {
-              "vendor": "zod",
-              "version": 1,
-            },
+            "required": [
+              "location",
+            ],
+            "type": "object",
           },
         },
       },
@@ -848,7 +842,6 @@ exports[`wrap-ai-sdk-generation-traces captures wrapper and child model spans (a
       "tools": {
         "get_weather": {
           "description": "Get the weather for a location",
-          "execute": "[Function]",
           "parameters": {
             "$schema": "http://json-schema.org/draft-07/schema#",
             "additionalProperties": false,
@@ -2157,7 +2150,6 @@ exports[`wrap-ai-sdk-generation-traces captures wrapper and child model spans (a
       "tools": {
         "get_weather": {
           "description": "Get the weather for a location",
-          "execute": "[Function]",
           "parameters": {
             "$schema": "http://json-schema.org/draft-07/schema#",
             "additionalProperties": false,
@@ -3177,24 +3169,18 @@ exports[`wrap-ai-sdk-generation-traces captures wrapper and child model spans (a
         "get_weather": {
           "description": "Get the weather for a location",
           "parameters": {
-            "_cached": null,
-            "_def": {
-              "catchall": {
-                "_def": {
-                  "typeName": "ZodNever",
-                },
-                "~standard": {
-                  "vendor": "zod",
-                  "version": 1,
-                },
+            "$schema": "http://json-schema.org/draft-07/schema#",
+            "additionalProperties": false,
+            "properties": {
+              "location": {
+                "description": "The city and country",
+                "type": "string",
               },
-              "typeName": "ZodObject",
-              "unknownKeys": "strip",
             },
-            "~standard": {
-              "vendor": "zod",
-              "version": 1,
-            },
+            "required": [
+              "location",
+            ],
+            "type": "object",
           },
         },
       },
@@ -3210,7 +3196,6 @@ exports[`wrap-ai-sdk-generation-traces captures wrapper and child model spans (a
       "tools": {
         "get_weather": {
           "description": "Get the weather for a location",
-          "execute": "[Function]",
           "parameters": {
             "$schema": "http://json-schema.org/draft-07/schema#",
             "additionalProperties": false,
@@ -4618,7 +4603,6 @@ exports[`wrap-ai-sdk-generation-traces captures wrapper and child model spans (a
       "tools": {
         "get_weather": {
           "description": "Get the weather for a location",
-          "execute": "[Function]",
           "parameters": {
             "$schema": "http://json-schema.org/draft-07/schema#",
             "additionalProperties": false,
@@ -5622,24 +5606,18 @@ exports[`wrap-ai-sdk-generation-traces captures wrapper and child model spans (a
         "get_weather": {
           "description": "Get the weather for a location",
           "inputSchema": {
-            "_cached": null,
-            "_def": {
-              "catchall": {
-                "_def": {
-                  "typeName": "ZodNever",
-                },
-                "~standard": {
-                  "vendor": "zod",
-                  "version": 1,
-                },
+            "$schema": "http://json-schema.org/draft-07/schema#",
+            "additionalProperties": false,
+            "properties": {
+              "location": {
+                "description": "The city and country",
+                "type": "string",
               },
-              "typeName": "ZodObject",
-              "unknownKeys": "strip",
             },
-            "~standard": {
-              "vendor": "zod",
-              "version": 1,
-            },
+            "required": [
+              "location",
+            ],
+            "type": "object",
           },
         },
       },
@@ -5655,7 +5633,6 @@ exports[`wrap-ai-sdk-generation-traces captures wrapper and child model spans (a
       "tools": {
         "get_weather": {
           "description": "Get the weather for a location",
-          "execute": "[Function]",
           "inputSchema": {
             "$schema": "http://json-schema.org/draft-07/schema#",
             "additionalProperties": false,
@@ -9260,7 +9237,6 @@ exports[`wrap-ai-sdk-generation-traces captures wrapper and child model spans (a
       "tools": {
         "get_weather": {
           "description": "Get the weather for a location",
-          "execute": "[Function]",
           "inputSchema": {
             "$schema": "http://json-schema.org/draft-07/schema#",
             "additionalProperties": false,
@@ -10570,24 +10546,18 @@ exports[`wrap-ai-sdk-generation-traces captures wrapper and child model spans (a
         "get_weather": {
           "description": "Get the weather for a location",
           "inputSchema": {
-            "_cached": null,
-            "_def": {
-              "catchall": {
-                "_def": {
-                  "typeName": "ZodNever",
-                },
-                "~standard": {
-                  "vendor": "zod",
-                  "version": 1,
-                },
+            "$schema": "http://json-schema.org/draft-07/schema#",
+            "additionalProperties": false,
+            "properties": {
+              "location": {
+                "description": "The city and country",
+                "type": "string",
               },
-              "typeName": "ZodObject",
-              "unknownKeys": "strip",
             },
-            "~standard": {
-              "vendor": "zod",
-              "version": 1,
-            },
+            "required": [
+              "location",
+            ],
+            "type": "object",
           },
         },
       },
@@ -10603,7 +10573,6 @@ exports[`wrap-ai-sdk-generation-traces captures wrapper and child model spans (a
       "tools": {
         "get_weather": {
           "description": "Get the weather for a location",
-          "execute": "[Function]",
           "inputSchema": {
             "$schema": "http://json-schema.org/draft-07/schema#",
             "additionalProperties": false,
@@ -14748,7 +14717,6 @@ exports[`wrap-ai-sdk-generation-traces captures wrapper and child model spans (a
       "tools": {
         "get_weather": {
           "description": "Get the weather for a location",
-          "execute": "[Function]",
           "inputSchema": {
             "$schema": "http://json-schema.org/draft-07/schema#",
             "additionalProperties": false,

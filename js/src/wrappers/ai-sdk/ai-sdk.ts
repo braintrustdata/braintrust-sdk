@@ -1502,6 +1502,10 @@ const processInputAttachmentsSync = (
     processed.callOptionsSchema = serializeZodSchema(input.callOptionsSchema);
   }
 
+  if (input.tools) {
+    processed.tools = serializeAISDKToolsForLogging(input.tools);
+  }
+
   // Track if we need async resolution for v6
   let outputPromise:
     | Promise<{
@@ -1582,6 +1586,10 @@ const processInputAttachments = async (
   // Process callOptionsSchema (used by ToolLoopAgent and other agents)
   if (input.callOptionsSchema && isZodSchema(input.callOptionsSchema)) {
     processed.callOptionsSchema = serializeZodSchema(input.callOptionsSchema);
+  }
+
+  if (input.tools) {
+    processed.tools = serializeAISDKToolsForLogging(input.tools);
   }
 
   // Process output schema for generateText/streamText with Output.object()
