@@ -1,7 +1,8 @@
-import { beforeAll, expect, test } from "vitest";
+import { expect, test } from "vitest";
 import { normalizeForSnapshot, type Json } from "../../helpers/normalize";
 import {
-  installScenarioDependencies,
+  isCanaryMode,
+  prepareScenarioDir,
   resolveScenarioDir,
   withScenarioHarness,
 } from "../../helpers/scenario-harness";
@@ -11,7 +12,9 @@ import {
   summarizeWrapperContract,
 } from "../../helpers/wrapper-contract";
 
-const scenarioDir = resolveScenarioDir(import.meta.url);
+const scenarioDir = await prepareScenarioDir({
+  scenarioDir: resolveScenarioDir(import.meta.url),
+});
 const TIMEOUT_MS = 90_000;
 
 function normalizeGooglePayloads(payloadRows: unknown[]): unknown[] {
@@ -36,10 +39,6 @@ function normalizeGooglePayloads(payloadRows: unknown[]): unknown[] {
     return row;
   });
 }
-
-beforeAll(async () => {
-  await installScenarioDependencies({ scenarioDir });
-});
 
 test("wrap-google-genai-content-traces captures generate, attachment, stream, early-return, and tool spans", async () => {
   await withScenarioHarness(async ({ events, payloads, runScenarioDir }) => {
@@ -186,32 +185,38 @@ test("wrap-google-genai-content-traces captures generate, attachment, stream, ea
         ),
     ).toBe(true);
 
-    expect(
-      normalizeForSnapshot(
-        [
-          root,
-          generateOperation,
-          generateSpan,
-          attachmentOperation,
-          attachmentSpan,
-          streamOperation,
-          streamSpan,
-          streamReturnOperation,
-          streamReturnSpan,
-          toolOperation,
-          toolSpan,
-        ].map((event) =>
-          summarizeWrapperContract(event!, ["model", "operation", "scenario"]),
-        ) as Json,
-      ),
-    ).toMatchSnapshot("span-events");
+    if (!isCanaryMode()) {
+      expect(
+        normalizeForSnapshot(
+          [
+            root,
+            generateOperation,
+            generateSpan,
+            attachmentOperation,
+            attachmentSpan,
+            streamOperation,
+            streamSpan,
+            streamReturnOperation,
+            streamReturnSpan,
+            toolOperation,
+            toolSpan,
+          ].map((event) =>
+            summarizeWrapperContract(event!, [
+              "model",
+              "operation",
+              "scenario",
+            ]),
+          ) as Json,
+        ),
+      ).toMatchSnapshot("span-events");
 
-    expect(
-      normalizeForSnapshot(
-        normalizeGooglePayloads(
-          payloadRowsForRootSpan(payloads(), root?.span.id),
-        ) as Json,
-      ),
-    ).toMatchSnapshot("log-payloads");
+      expect(
+        normalizeForSnapshot(
+          normalizeGooglePayloads(
+            payloadRowsForRootSpan(payloads(), root?.span.id),
+          ) as Json,
+        ),
+      ).toMatchSnapshot("log-payloads");
+    }
   });
 });

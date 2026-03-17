@@ -53,6 +53,9 @@ const STACK_FRAME_REPO_PATH_REGEX =
 const REPO_PATH_REGEX =
   /(?:[A-Za-z]:)?[^\s)\n]*braintrust-sdk-javascript(?:[\\/](?:braintrust-sdk-javascript|[^\\/\s)\n]+))?((?:[\\/](?:e2e|js)[^:\s)\n]+))/g;
 const NODE_INTERNAL_FRAME_REGEX = /node:[^)\n]+:\d+:\d+/g;
+const TEMP_SCENARIO_PATH_REGEX =
+  /\/e2e\/\.bt-tmp\/[^/\s)]+\/scenarios\/([^/\s)]+)\/?/g;
+const TEMP_HELPER_PATH_REGEX = /\/e2e\/\.bt-tmp\/[^/\s)]+\/helpers\/?/g;
 const WRAP_AI_SDK_GENERATION_TRACES_SCENARIO_PATH =
   "/e2e/scenarios/wrap-ai-sdk-generation-traces/";
 
@@ -64,11 +67,12 @@ function getSpanAttribute(
   value: { [key: string]: Json },
   key: string,
 ): Json | undefined {
-  if (!isRecord(value.span_attributes as Json | undefined)) {
+  const spanAttributes = value.span_attributes;
+  if (!isRecord(spanAttributes as Json | undefined)) {
     return undefined;
   }
 
-  return value.span_attributes[key];
+  return spanAttributes[key];
 }
 
 function shouldNormalizeWrapAISDKGenerationTracesCaller(
@@ -76,9 +80,16 @@ function shouldNormalizeWrapAISDKGenerationTracesCaller(
   context: { [key: string]: Json },
   callerFilename: string | undefined,
 ): boolean {
+  const normalizedCallerFilename =
+    typeof callerFilename === "string"
+      ? normalizeCallerFilename(callerFilename)
+      : undefined;
+
   if (
-    typeof callerFilename !== "string" ||
-    !callerFilename.includes(WRAP_AI_SDK_GENERATION_TRACES_SCENARIO_PATH)
+    typeof normalizedCallerFilename !== "string" ||
+    !normalizedCallerFilename.includes(
+      WRAP_AI_SDK_GENERATION_TRACES_SCENARIO_PATH,
+    )
   ) {
     return false;
   }
@@ -89,23 +100,31 @@ function shouldNormalizeWrapAISDKGenerationTracesCaller(
   return (
     (spanName === "generateText" &&
       execCounter === 2 &&
-      callerFilename.endsWith("/scenario.impl.ts") &&
+      normalizedCallerFilename.endsWith("/scenario.impl.ts") &&
       context.caller_functionname === "logger.traced.name") ||
     (spanName === "doGenerate" &&
       execCounter === 3 &&
-      callerFilename.includes("/node_modules/.pnpm/ai@") &&
-      callerFilename.endsWith("/node_modules/ai/dist/index.js") &&
+      normalizedCallerFilename.includes("/node_modules/.pnpm/ai@") &&
+      normalizedCallerFilename.endsWith("/node_modules/ai/dist/index.js") &&
       context.caller_functionname === "fn")
   );
 }
 
 function normalizeCallerFilename(value: string): string {
-  const e2eIndex = value.lastIndexOf("/e2e/");
+  const normalizedValue = value.replace(
+    TEMP_SCENARIO_PATH_REGEX,
+    "/e2e/scenarios/$1/",
+  );
+  const helperNormalizedValue = normalizedValue.replace(
+    TEMP_HELPER_PATH_REGEX,
+    "/e2e/helpers/",
+  );
+  const e2eIndex = helperNormalizedValue.lastIndexOf("/e2e/");
   if (e2eIndex >= 0) {
-    return `<repo>${value.slice(e2eIndex)}`;
+    return `<repo>${helperNormalizedValue.slice(e2eIndex)}`;
   }
 
-  return value;
+  return helperNormalizedValue;
 }
 
 function normalizeMockServerUrl(value: string): string | undefined {
@@ -125,6 +144,11 @@ function normalizeMockServerUrl(value: string): string | undefined {
 function normalizeStackLikeString(value: string): string {
   let normalized = value.replaceAll("file://", "");
   normalized = normalized.replaceAll(REPO_ROOT, "<repo>");
+  normalized = normalized.replace(
+    TEMP_SCENARIO_PATH_REGEX,
+    "/e2e/scenarios/$1/",
+  );
+  normalized = normalized.replace(TEMP_HELPER_PATH_REGEX, "/e2e/helpers/");
 
   normalized = normalized.replace(
     STACK_FRAME_REPO_PATH_REGEX,

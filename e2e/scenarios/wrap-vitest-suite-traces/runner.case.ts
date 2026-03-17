@@ -1,3 +1,4 @@
+import * as path from "node:path";
 import {
   afterAll as vitestAfterAll,
   beforeAll as vitestBeforeAll,
@@ -6,9 +7,19 @@ import {
   test as vitestTest,
 } from "vitest";
 import { getTestRunId, scopedName } from "../../helpers/scenario-runtime";
-import { wrapVitest } from "../../../js/src/wrappers/vitest/index";
-import { login } from "../../../js/src/logger";
-import { configureNode } from "../../../js/src/node/config";
+
+const repoRoot = process.env.BRAINTRUST_E2E_REPO_ROOT;
+if (!repoRoot) {
+  throw new Error("BRAINTRUST_E2E_REPO_ROOT is not set");
+}
+
+const { login } = await import(path.join(repoRoot, "js/src/logger.ts"));
+const { configureNode } = await import(
+  path.join(repoRoot, "js/src/node/config.ts")
+);
+const { wrapVitest } = await import(
+  path.join(repoRoot, "js/src/wrappers/vitest/index.ts")
+);
 
 configureNode();
 

@@ -1,6 +1,9 @@
+import { readInstalledPackageVersion } from "./scenario-installer";
+
 export interface WrapAISDKScenario {
   agentClassExport?: "Experimental_Agent" | "ToolLoopAgent";
   agentSpanName?: string;
+  dependencyName: string;
   entry: string;
   supportsGenerateObject: boolean;
   supportsStreamObject: boolean;
@@ -20,40 +23,54 @@ export interface AISDKAutoHookScenario {
 
 export const AI_SDK_SCENARIO_TIMEOUT_MS = 120_000;
 
-export const WRAP_AI_SDK_SCENARIOS: WrapAISDKScenario[] = [
+const AI_SDK_SCENARIO_SPECS = [
   {
+    dependencyName: "ai-sdk-v3",
     entry: "scenario.ai-sdk-v3.ts",
     supportsGenerateObject: true,
     supportsStreamObject: true,
     supportsToolExecution: false,
-    version: "3.4.33",
   },
   {
+    dependencyName: "ai-sdk-v4",
     entry: "scenario.ai-sdk-v4.ts",
     supportsGenerateObject: true,
     supportsStreamObject: true,
     supportsToolExecution: false,
-    version: "4.3.19",
   },
   {
     agentClassExport: "Experimental_Agent",
     agentSpanName: "Agent",
+    dependencyName: "ai-sdk-v5",
     entry: "scenario.ai-sdk-v5.ts",
     supportsGenerateObject: true,
     supportsStreamObject: true,
     supportsToolExecution: true,
-    version: "5.0.82",
   },
   {
     agentClassExport: "ToolLoopAgent",
     agentSpanName: "ToolLoopAgent",
+    dependencyName: "ai-sdk-v6",
     entry: "scenario.ai-sdk-v6.ts",
     supportsGenerateObject: true,
     supportsStreamObject: true,
     supportsToolExecution: true,
-    version: "6.0.1",
   },
-];
+] as const;
+
+export async function getWrapAISDKScenarios(
+  scenarioDir: string,
+): Promise<WrapAISDKScenario[]> {
+  return await Promise.all(
+    AI_SDK_SCENARIO_SPECS.map(async (scenario) => ({
+      ...scenario,
+      version: await readInstalledPackageVersion(
+        scenarioDir,
+        scenario.dependencyName,
+      ),
+    })),
+  );
+}
 
 export const AI_SDK_AUTO_HOOK_SCENARIOS: AISDKAutoHookScenario[] = [
   {

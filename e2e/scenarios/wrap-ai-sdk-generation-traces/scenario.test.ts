@@ -1,22 +1,21 @@
-import { beforeAll, expect, test } from "vitest";
+import { expect, test } from "vitest";
 import {
   AI_SDK_SCENARIO_TIMEOUT_MS,
-  WRAP_AI_SDK_SCENARIOS,
+  getWrapAISDKScenarios,
 } from "../../helpers/ai-sdk";
 import { assertAISDKTraceContract } from "../../helpers/ai-sdk-trace-contract";
 import {
-  installScenarioDependencies,
+  prepareScenarioDir,
   resolveScenarioDir,
   withScenarioHarness,
 } from "../../helpers/scenario-harness";
 
-const scenarioDir = resolveScenarioDir(import.meta.url);
-
-beforeAll(async () => {
-  await installScenarioDependencies({ scenarioDir });
+const scenarioDir = await prepareScenarioDir({
+  scenarioDir: resolveScenarioDir(import.meta.url),
 });
+const wrapAISDKScenarios = await getWrapAISDKScenarios(scenarioDir);
 
-test.each(WRAP_AI_SDK_SCENARIOS)(
+test.each(wrapAISDKScenarios)(
   "wrap-ai-sdk-generation-traces captures wrapper and child model spans (ai $version)",
   async ({
     agentSpanName,
