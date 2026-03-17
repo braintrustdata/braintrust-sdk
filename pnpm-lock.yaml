@@ -379,9 +379,6 @@ importers:
       '@anthropic-ai/sdk':
         specifier: ^0.60.0
         version: 0.60.0
-      '@braintrust/browser':
-        specifier: workspace:*
-        version: link:../integrations/browser-js
       '@google/genai':
         specifier: ^1.25.0
         version: 1.25.0(@modelcontextprotocol/sdk@1.18.0)

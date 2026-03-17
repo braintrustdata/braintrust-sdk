@@ -15,8 +15,23 @@ const config = {
     alias: {
       // Prevent resolution into vendor directories
       vendor: false,
-      // Force braintrust subpath imports to resolve to the workspace source,
-      // not the stale npm version pinned in integrations/browser-js/node_modules.
+      // Alias @braintrust/browser bundler subpaths to source files to avoid a
+      // circular workspace dependency (braintrust -> @braintrust/browser -> braintrust).
+      "@braintrust/browser/esbuild": path.resolve(
+        __dirname,
+        "../integrations/browser-js/src/bundler/esbuild.ts",
+      ),
+      "@braintrust/browser/vite": path.resolve(
+        __dirname,
+        "../integrations/browser-js/src/bundler/vite.ts",
+      ),
+      "@braintrust/browser/rollup": path.resolve(
+        __dirname,
+        "../integrations/browser-js/src/bundler/rollup.ts",
+      ),
+      // Redirect braintrust subpath import used by the browser bundler plugin to the
+      // workspace source, bypassing the stale npm v3.0.0-rc.29 copy in
+      // integrations/browser-js/node_modules (which predates this export).
       "braintrust/auto-instrumentation-configs": path.resolve(
         __dirname,
         "src/auto-instrumentations/index.ts",
