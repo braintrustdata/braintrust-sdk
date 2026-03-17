@@ -7,6 +7,7 @@ import {
   getExtensionFromMediaType,
 } from "../attachment-utils";
 import { zodToJsonSchema } from "../../zod/utils";
+import { serializeAISDKToolsForLogging } from "./tool-serialization";
 import type {
   AISDK,
   AISDKAgentClass,
@@ -212,6 +213,8 @@ const wrapAgentGenerate = (
       options,
       generate.bind(instance), // as of v5 this is just streamText under the hood
       // Follows what the AI SDK does under the hood when calling generateText
+      undefined,
+      SpanTypeAttribute.FUNCTION,
     )({ ...instance.settings, ...params });
 };
 
@@ -226,6 +229,7 @@ const wrapAgentStream = (
       options,
       stream.bind(instance), // as of v5 this is just streamText under the hood
       undefined, // aiSDK not needed since model is already on instance
+      SpanTypeAttribute.FUNCTION,
     )({ ...instance.settings, ...params });
 };
 
@@ -234,6 +238,7 @@ const makeGenerateTextWrapper = (
   options: WrapAISDKOptions,
   generateText: AISDKGenerateFunction,
   aiSDK?: AISDK,
+  spanType: SpanTypeAttribute = SpanTypeAttribute.LLM,
 ) => {
   const wrapper = async function (allParams: AISDKCallParams & SpanInfo) {
     // Extract span_info from params (used by Braintrust-managed prompts)
@@ -245,6 +250,7 @@ const makeGenerateTextWrapper = (
     } = span_info ?? {};
 
     const { model, provider } = serializeModelWithProvider(params.model);
+    const serializedTools = serializeAISDKToolsForLogging(params.tools);
 
     // Process input attachments (including async Output.object resolution for v6)
     const processedInput = await processInputAttachments(params);
@@ -285,7 +291,7 @@ const makeGenerateTextWrapper = (
       {
         name: spanName || name,
         spanAttributes: {
-          type: SpanTypeAttribute.LLM,
+          type: spanType,
           ...spanInfoAttrs,
         },
         event: {
@@ -294,6 +300,7 @@ const makeGenerateTextWrapper = (
             ...spanInfoMetadata,
             model,
             ...(provider ? { provider } : {}),
+            ...(serializedTools ? { tools: serializedTools } : {}),
             braintrust: {
               integration_name: "ai-sdk",
               sdk_language: "typescript",
@@ -367,6 +374,7 @@ const wrapModel = (
     serializeModelWithProvider(resolvedModel);
 
   const wrappedDoGenerate = async (options: AISDKCallParams) => {
+    const serializedTools = serializeAISDKToolsForLogging(options.tools);
     // Process input attachments (including async Output.object resolution for v6)
     const processedInput = await processInputAttachments(options);
 
@@ -407,6 +415,7 @@ const wrapModel = (
           metadata: {
             model: modelId,
             ...(provider ? { provider } : {}),
+            ...(serializedTools ? { tools: serializedTools } : {}),
             braintrust: {
               integration_name: "ai-sdk",
               sdk_language: "typescript",
@@ -420,6 +429,7 @@ const wrapModel = (
   const wrappedDoStream = async (options: AISDKCallParams) => {
     const startTime = Date.now();
     let receivedFirst = false;
+    const serializedTools = serializeAISDKToolsForLogging(options.tools);
 
     // Process input attachments (including async Output.object resolution for v6)
     const processedInput = await processInputAttachments(options);
@@ -434,6 +444,7 @@ const wrapModel = (
         metadata: {
           model: modelId,
           ...(provider ? { provider } : {}),
+          ...(serializedTools ? { tools: serializedTools } : {}),
           braintrust: {
             integration_name: "ai-sdk",
             sdk_language: "typescript",
@@ -621,6 +632,7 @@ const wrapGenerateObject = (
     } = span_info ?? {};
 
     const { model, provider } = serializeModelWithProvider(params.model);
+    const serializedTools = serializeAISDKToolsForLogging(params.tools);
 
     // Process input attachments (including async Output.object resolution for v6)
     const processedInput = await processInputAttachments(params);
@@ -672,6 +684,7 @@ const wrapGenerateObject = (
             ...spanInfoMetadata,
             model,
             ...(provider ? { provider } : {}),
+            ...(serializedTools ? { tools: serializedTools } : {}),
             braintrust: {
               integration_name: "ai-sdk",
               sdk_language: "typescript",
@@ -688,6 +701,7 @@ const makeStreamTextWrapper = (
   options: WrapAISDKOptions,
   streamText: AISDKStreamFunction,
   aiSDK?: AISDK,
+  spanType: SpanTypeAttribute = SpanTypeAttribute.LLM,
 ) => {
   // Note: streamText returns a sync result (stream object), so we cannot make this async
   // For v6, Output.object responseFormat is a Promise - we handle this by:
@@ -703,6 +717,7 @@ const makeStreamTextWrapper = (
     } = span_info ?? {};
 
     const { model, provider } = serializeModelWithProvider(params.model);
+    const serializedTools = serializeAISDKToolsForLogging(params.tools);
 
     // Process input attachments synchronously
     // v5: responseFormat is a plain object - captured fully
@@ -713,7 +728,7 @@ const makeStreamTextWrapper = (
     const span = startSpan({
       name: spanName || name,
       spanAttributes: {
-        type: SpanTypeAttribute.LLM,
+        type: spanType,
         ...spanInfoAttrs,
       },
       event: {
@@ -722,6 +737,7 @@ const makeStreamTextWrapper = (
           ...spanInfoMetadata,
           model,
           ...(provider ? { provider } : {}),
+          ...(serializedTools ? { tools: serializedTools } : {}),
           braintrust: {
             integration_name: "ai-sdk",
             sdk_language: "typescript",
@@ -878,6 +894,7 @@ const wrapStreamObject = (
     } = span_info ?? {};
 
     const { model, provider } = serializeModelWithProvider(params.model);
+    const serializedTools = serializeAISDKToolsForLogging(params.tools);
 
     // Process input attachments synchronously
     // v5: responseFormat is a plain object - captured fully
@@ -897,6 +914,7 @@ const wrapStreamObject = (
           ...spanInfoMetadata,
           model,
           ...(provider ? { provider } : {}),
+          ...(serializedTools ? { tools: serializedTools } : {}),
           braintrust: {
             integration_name: "ai-sdk",
             sdk_language: "typescript",
@@ -1305,54 +1323,6 @@ const serializeZodSchema = (schema: unknown): AISDKOutputResponseFormat => {
 };
 
 /**
- * Processes tools to convert Zod schemas to JSON Schema
- * AI SDK v3-v6 tools can have inputSchema or parameters fields with Zod schemas
- */
-const processTools = (
-  tools: AISDKTools | undefined,
-): AISDKTools | undefined => {
-  if (!tools || typeof tools !== "object") return tools;
-
-  if (Array.isArray(tools)) {
-    return tools.map(processTool);
-  }
-
-  const processed: Record<string, AISDKTool> = {};
-  for (const [key, tool] of Object.entries(tools)) {
-    processed[key] = processTool(tool);
-  }
-  return processed;
-};
-
-const processTool = (tool: AISDKTool): AISDKTool => {
-  if (!tool || typeof tool !== "object") return tool;
-
-  const processed = { ...tool };
-
-  // Convert inputSchema if it's a Zod schema (v3-v4 with ai.tool())
-  if (isZodSchema(processed.inputSchema)) {
-    processed.inputSchema = serializeZodSchema(processed.inputSchema);
-  }
-
-  // Convert parameters if it's a Zod schema (v3-v4 raw definitions)
-  if (isZodSchema(processed.parameters)) {
-    processed.parameters = serializeZodSchema(processed.parameters);
-  }
-
-  // Remove execute function from logs (not serializable and not useful)
-  if ("execute" in processed) {
-    processed.execute = "[Function]";
-  }
-
-  // Remove render function from logs (not serializable and not useful)
-  if ("render" in processed) {
-    processed.render = "[Function]";
-  }
-
-  return processed;
-};
-
-/**
  * Detects if an object is an AI SDK Output object (from Output.object() or Output.text())
  * Output objects have a responseFormat property (function, object, or Promise).
  * AI SDK v5: { type: "object", responseFormat: { type: "json", schema: {...} } }
@@ -1527,11 +1497,6 @@ const processInputAttachmentsSync = (
     }
   }
 
-  // Process tools to convert Zod schemas to JSON Schema
-  if (input.tools) {
-    processed.tools = processTools(input.tools);
-  }
-
   // Process schema (used by generateObject/streamObject) to convert Zod to JSON Schema
   if (input.schema && isZodSchema(input.schema)) {
     processed.schema = serializeZodSchema(input.schema);
@@ -1540,6 +1505,10 @@ const processInputAttachmentsSync = (
   // Process callOptionsSchema (used by ToolLoopAgent and other agents)
   if (input.callOptionsSchema && isZodSchema(input.callOptionsSchema)) {
     processed.callOptionsSchema = serializeZodSchema(input.callOptionsSchema);
+  }
+
+  if (input.tools) {
+    processed.tools = serializeAISDKToolsForLogging(input.tools);
   }
 
   // Track if we need async resolution for v6
@@ -1614,11 +1583,6 @@ const processInputAttachments = async (
     }
   }
 
-  // Process tools to convert Zod schemas to JSON Schema
-  if (input.tools) {
-    processed.tools = processTools(input.tools);
-  }
-
   // Process schema (used by generateObject/streamObject) to convert Zod to JSON Schema
   if (input.schema && isZodSchema(input.schema)) {
     processed.schema = serializeZodSchema(input.schema);
@@ -1627,6 +1591,10 @@ const processInputAttachments = async (
   // Process callOptionsSchema (used by ToolLoopAgent and other agents)
   if (input.callOptionsSchema && isZodSchema(input.callOptionsSchema)) {
     processed.callOptionsSchema = serializeZodSchema(input.callOptionsSchema);
+  }
+
+  if (input.tools) {
+    processed.tools = serializeAISDKToolsForLogging(input.tools);
   }
 
   // Process output schema for generateText/streamText with Output.object()

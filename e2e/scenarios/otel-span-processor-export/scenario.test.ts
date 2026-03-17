@@ -1,5 +1,6 @@
 import { expect, test } from "vitest";
 import {
+  prepareScenarioDir,
   resolveScenarioDir,
   withScenarioHarness,
 } from "../../helpers/scenario-harness";
@@ -8,7 +9,9 @@ import {
   summarizeRequest,
 } from "../../helpers/trace-summary";
 
-const scenarioDir = resolveScenarioDir(import.meta.url);
+const scenarioDir = await prepareScenarioDir({
+  scenarioDir: resolveScenarioDir(import.meta.url),
+});
 
 test("otel-span-processor-export sends filtered OTLP traces to Braintrust", async () => {
   await withScenarioHarness(

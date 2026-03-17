@@ -1,11 +1,12 @@
-import { beforeAll, expect, test } from "vitest";
+import { expect, test } from "vitest";
 import {
   AI_SDK_SCENARIO_TIMEOUT_MS,
-  WRAP_AI_SDK_SCENARIOS,
+  getWrapAISDKScenarios,
 } from "../../helpers/ai-sdk";
 import { normalizeForSnapshot, type Json } from "../../helpers/normalize";
 import {
-  installScenarioDependencies,
+  isCanaryMode,
+  prepareScenarioDir,
   resolveScenarioDir,
   withScenarioHarness,
 } from "../../helpers/scenario-harness";
@@ -19,11 +20,10 @@ import {
   summarizeWrapperContract,
 } from "../../helpers/wrapper-contract";
 
-const scenarioDir = resolveScenarioDir(import.meta.url);
-
-beforeAll(async () => {
-  await installScenarioDependencies({ scenarioDir });
+const scenarioDir = await prepareScenarioDir({
+  scenarioDir: resolveScenarioDir(import.meta.url),
 });
+const wrapAISDKScenarios = await getWrapAISDKScenarios(scenarioDir);
 
 function collectToolCallNames(output: unknown): string[] {
   if (!output || typeof output !== "object") {
@@ -115,7 +115,7 @@ function normalizeAISDKPayloads(payloadRows: unknown[]): unknown[] {
   });
 }
 
-test.each(WRAP_AI_SDK_SCENARIOS)(
+test.each(wrapAISDKScenarios)(
   "wrap-ai-sdk-generation-traces captures wrapper and child model spans (ai $version)",
   async ({
     agentSpanName,
@@ -323,6 +323,13 @@ test.each(WRAP_AI_SDK_SCENARIOS)(
 
       expect(toolParent?.input).toBeDefined();
       expect(toolParent?.output).toBeDefined();
+      expect(
+        (toolParent?.row.metadata as { tools?: unknown } | undefined)?.tools,
+      ).toMatchObject({
+        get_weather: {
+          description: "Get the weather for a location",
+        },
+      });
       if (supportsToolExecution) {
         expect(toolModelSpans.length).toBeGreaterThanOrEqual(2);
         expect(toolSpans.length).toBeGreaterThanOrEqual(1);
@@ -363,8 +370,14 @@ test.each(WRAP_AI_SDK_SCENARIOS)(
       if (agentSpanName) {
         expect(agentGenerateOperation).toBeDefined();
         expect(agentStreamOperation).toBeDefined();
+        expect(agentGenerateParent?.row.span_attributes).toMatchObject({
+          type: "function",
+        });
         expect(agentGenerateParent?.output).toBeDefined();
         expect(agentGenerateChildren.length).toBeGreaterThanOrEqual(1);
+        expect(agentStreamParent?.row.span_attributes).toMatchObject({
+          type: "function",
+        });
         expect(agentStreamParent?.metrics?.time_to_first_token).toEqual(
           expect.any(Number),
         );
@@ -376,53 +389,56 @@ test.each(WRAP_AI_SDK_SCENARIOS)(
         expect(agentStreamOperation).toBeUndefined();
       }
 
-      expect(
-        normalizeForSnapshot(
-          [
-            root,
-            generateOperation,
-            generateParent,
-            generateChild,
-            streamOperation,
-            streamParent,
-            streamChild,
-            toolOperation,
-            toolParent,
-            ...toolSpans,
-            generateObjectOperation,
-            generateObjectParent,
-            generateObjectChild,
-            streamObjectOperation,
-            streamObjectParent,
-            streamObjectChild,
-            agentGenerateOperation,
-            agentGenerateParent,
-            latestAgentGenerateChild,
-            agentStreamOperation,
-            agentStreamParent,
-            latestAgentStreamChild,
-          ]
-            .filter((value) => value !== undefined)
-            .map((event) =>
-              summarizeWrapperContract(event!, [
-                "aiSdkVersion",
-                "provider",
-                "model",
-                "operation",
-                "braintrust",
-                "scenario",
-              ]),
-            ) as Json,
-        ),
-      ).toMatchSnapshot("span-events");
+      if (!isCanaryMode()) {
+        expect(
+          normalizeForSnapshot(
+            [
+              root,
+              generateOperation,
+              generateParent,
+              generateChild,
+              streamOperation,
+              streamParent,
+              streamChild,
+              toolOperation,
+              toolParent,
+              ...toolSpans,
+              generateObjectOperation,
+              generateObjectParent,
+              generateObjectChild,
+              streamObjectOperation,
+              streamObjectParent,
+              streamObjectChild,
+              agentGenerateOperation,
+              agentGenerateParent,
+              latestAgentGenerateChild,
+              agentStreamOperation,
+              agentStreamParent,
+              latestAgentStreamChild,
+            ]
+              .filter((value) => value !== undefined)
+              .map((event) =>
+                summarizeWrapperContract(event!, [
+                  "aiSdkVersion",
+                  "provider",
+                  "model",
+                  "operation",
+                  "tools",
+                  "braintrust",
+                  "scenario",
+                ]),
+              ) as Json,
+          ),
+        ).toMatchSnapshot("span-events");
 
-      expect(
-        normalizeForSnapshot(
-          normalizeAISDKPayloads(
-            payloadRowsForRootSpan(payloads(), root?.span.id),
-          ) as Json,
-        ),
-      ).toMatchSnapshot("log-payloads");
+        expect(
+          normalizeForSnapshot(
+            normalizeAISDKPayloads(
+              payloadRowsForRootSpan(payloads(), root?.span.id),
+            ) as Json,
+          ),
+        ).toMatchSnapshot("log-payloads");
+      }
     });
   },
 );

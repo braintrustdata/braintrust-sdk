@@ -1,18 +1,22 @@
-import { beforeAll, expect, test } from "vitest";
+import { expect, test } from "vitest";
 import { normalizeForSnapshot, type Json } from "../../helpers/normalize";
 import {
+  getWrapOpenAIScenarios,
   OPENAI_SCENARIO_TIMEOUT_MS,
-  WRAP_OPENAI_SCENARIOS,
   summarizeOpenAIContract,
 } from "../../helpers/openai";
 import {
-  installScenarioDependencies,
+  isCanaryMode,
+  prepareScenarioDir,
   resolveScenarioDir,
   withScenarioHarness,
 } from "../../helpers/scenario-harness";
 import { findChildSpans, findLatestSpan } from "../../helpers/trace-selectors";
 
-const scenarioDir = resolveScenarioDir(import.meta.url);
+const scenarioDir = await prepareScenarioDir({
+  scenarioDir: resolveScenarioDir(import.meta.url),
+});
+const wrapOpenAIScenarios = await getWrapOpenAIScenarios(scenarioDir);
 
 const OPERATIONS = [
   {
@@ -106,12 +110,8 @@ const OPERATIONS = [
   },
 ] as const;
 
-beforeAll(async () => {
-  await installScenarioDependencies({ scenarioDir });
-});
-
 test.each(
-  WRAP_OPENAI_SCENARIOS.map(({ entry, version }) => [version, entry] as const),
+  wrapOpenAIScenarios.map(({ entry, version }) => [version, entry] as const),
 )(
   "wrap-openai-conversation-traces logs wrapped endpoint traces (openai %s)",
   async (version, entry) => {
@@ -159,22 +159,29 @@ test.each(
             ?.model,
         ).toBe("string");
 
-        if (operationSpec.expectsOutput) {
+        if ("expectsOutput" in operationSpec && operationSpec.expectsOutput) {
           expect(child?.output).toBeDefined();
         }
 
-        if (operationSpec.expectsTimeToFirstToken) {
+        if (
+          "expectsTimeToFirstToken" in operationSpec &&
+          operationSpec.expectsTimeToFirstToken
+        ) {
           expect(child?.metrics?.time_to_first_token).toEqual(
             expect.any(Number),
           );
         }
       }
 
-      expect(
-        normalizeForSnapshot(
-          snapshotRows.map((event) => summarizeOpenAIContract(event!)) as Json,
-        ),
-      ).toMatchSnapshot("span-events");
+      if (!isCanaryMode()) {
+        expect(
+          normalizeForSnapshot(
+            snapshotRows.map((event) =>
+              summarizeOpenAIContract(event!),
+            ) as Json,
+          ),
+        ).toMatchSnapshot("span-events");
+      }
     });
   },
 );

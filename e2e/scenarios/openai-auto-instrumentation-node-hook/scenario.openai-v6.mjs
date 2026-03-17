@@ -1,4 +1,10 @@
 import OpenAI from "openai";
-import { runOpenAIAutoInstrumentationNodeHookOrExit } from "./scenario.impl.mjs";
+import {
+  getInstalledPackageVersion,
+  runOpenAIAutoInstrumentationNodeHookOrExit,
+} from "./scenario.impl.mjs";
 
-runOpenAIAutoInstrumentationNodeHookOrExit(OpenAI, "6.25.0");
+runOpenAIAutoInstrumentationNodeHookOrExit(
+  OpenAI,
+  await getInstalledPackageVersion(import.meta.url, "openai"),
+);

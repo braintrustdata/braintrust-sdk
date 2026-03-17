@@ -1,5 +1,14 @@
 import OpenAI from "openai";
-import { runMain } from "../../helpers/scenario-runtime";
+import {
+  getInstalledPackageVersion,
+  runMain,
+} from "../../helpers/scenario-runtime";
 import { runWrapOpenAIConversationTraces } from "./scenario.impl";
 
-runMain(() => runWrapOpenAIConversationTraces(OpenAI, "6.25.0", "ga"));
+runMain(async () =>
+  runWrapOpenAIConversationTraces(
+    OpenAI,
+    await getInstalledPackageVersion(import.meta.url, "openai"),
+    "ga",
+  ),
+);

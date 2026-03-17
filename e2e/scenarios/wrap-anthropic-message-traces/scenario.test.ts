@@ -1,7 +1,8 @@
-import { beforeAll, expect, test } from "vitest";
+import { expect, test } from "vitest";
 import { normalizeForSnapshot, type Json } from "../../helpers/normalize";
 import {
-  installScenarioDependencies,
+  isCanaryMode,
+  prepareScenarioDir,
   resolveScenarioDir,
   withScenarioHarness,
 } from "../../helpers/scenario-harness";
@@ -11,7 +12,9 @@ import {
   summarizeWrapperContract,
 } from "../../helpers/wrapper-contract";
 
-const scenarioDir = resolveScenarioDir(import.meta.url);
+const scenarioDir = await prepareScenarioDir({
+  scenarioDir: resolveScenarioDir(import.meta.url),
+});
 const TIMEOUT_MS = 90_000;
 
 function normalizeAnthropicPayloads(payloadRows: unknown[]): unknown[] {
@@ -88,10 +91,6 @@ function normalizeAnthropicPayloads(payloadRows: unknown[]): unknown[] {
     return row;
   });
 }
-
-beforeAll(async () => {
-  await installScenarioDependencies({ scenarioDir });
-});
 
 test("wrap-anthropic-message-traces captures create, stream, beta, attachment, and tool spans", async () => {
   await withScenarioHarness(async ({ events, payloads, runScenarioDir }) => {
@@ -246,41 +245,43 @@ test("wrap-anthropic-message-traces captures create, stream, beta, attachment, a
     const attachmentInput = JSON.stringify(attachmentSpan?.input);
     expect(attachmentInput).toContain("image.png");
 
-    expect(
-      normalizeForSnapshot(
-        [
-          root,
-          createOperation,
-          createSpan,
-          attachmentOperation,
-          attachmentSpan,
-          streamOperation,
-          streamSpan,
-          withResponseOperation,
-          withResponseSpan,
-          toolOperation,
-          toolSpan,
-          betaCreateOperation,
-          betaCreateSpan,
-          betaStreamOperation,
-          betaStreamSpan,
-        ].map((event) =>
-          summarizeWrapperContract(event!, [
-            "provider",
-            "model",
-            "operation",
-            "scenario",
-          ]),
-        ) as Json,
-      ),
-    ).toMatchSnapshot("span-events");
+    if (!isCanaryMode()) {
+      expect(
+        normalizeForSnapshot(
+          [
+            root,
+            createOperation,
+            createSpan,
+            attachmentOperation,
+            attachmentSpan,
+            streamOperation,
+            streamSpan,
+            withResponseOperation,
+            withResponseSpan,
+            toolOperation,
+            toolSpan,
+            betaCreateOperation,
+            betaCreateSpan,
+            betaStreamOperation,
+            betaStreamSpan,
+          ].map((event) =>
+            summarizeWrapperContract(event!, [
+              "provider",
+              "model",
+              "operation",
+              "scenario",
+            ]),
+          ) as Json,
+        ),
+      ).toMatchSnapshot("span-events");
 
-    expect(
-      normalizeForSnapshot(
-        normalizeAnthropicPayloads(
-          payloadRowsForRootSpan(payloads(), root?.span.id),
-        ) as Json,
-      ),
-    ).toMatchSnapshot("log-payloads");
+      expect(
+        normalizeForSnapshot(
+          normalizeAnthropicPayloads(
+            payloadRowsForRootSpan(payloads(), root?.span.id),
+          ) as Json,
+        ),
+      ).toMatchSnapshot("log-payloads");
+    }
   });
 });

@@ -1,12 +1,13 @@
-import { beforeAll, expect, test } from "vitest";
+import { expect, test } from "vitest";
 import { normalizeForSnapshot, type Json } from "../../helpers/normalize";
 import {
-  OPENAI_AUTO_HOOK_SCENARIOS,
+  getOpenAIAutoHookScenarios,
   OPENAI_SCENARIO_TIMEOUT_MS,
   summarizeOpenAIContract,
 } from "../../helpers/openai";
 import {
-  installScenarioDependencies,
+  isCanaryMode,
+  prepareScenarioDir,
   resolveScenarioDir,
   withScenarioHarness,
 } from "../../helpers/scenario-harness";
@@ -15,13 +16,12 @@ import {
   findLatestSpan,
 } from "../../helpers/trace-selectors";
 
-const scenarioDir = resolveScenarioDir(import.meta.url);
-
-beforeAll(async () => {
-  await installScenarioDependencies({ scenarioDir });
+const scenarioDir = await prepareScenarioDir({
+  scenarioDir: resolveScenarioDir(import.meta.url),
 });
+const openaiAutoHookScenarios = await getOpenAIAutoHookScenarios(scenarioDir);
 
-for (const scenario of OPENAI_AUTO_HOOK_SCENARIOS) {
+for (const scenario of openaiAutoHookScenarios) {
   test(`openai auto-instrumentation via node hook collects traces without manual wrapping (openai ${scenario.version})`, async () => {
     await withScenarioHarness(async ({ events, runNodeScenarioDir }) => {
       await runNodeScenarioDir({
@@ -51,13 +51,15 @@ for (const scenario of OPENAI_AUTO_HOOK_SCENARIOS) {
           ?.model,
       ).toBe("string");
 
-      expect(
-        normalizeForSnapshot(
-          [root, chatCompletion].map((event) =>
-            summarizeOpenAIContract(event!),
-          ) as Json,
-        ),
-      ).toMatchSnapshot("span-events");
+      if (!isCanaryMode()) {
+        expect(
+          normalizeForSnapshot(
+            [root, chatCompletion].map((event) =>
+              summarizeOpenAIContract(event!),
+            ) as Json,
+          ),
+        ).toMatchSnapshot("span-events");
+      }
     });
   });
 }

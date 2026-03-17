@@ -814,7 +814,6 @@ exports[`wrap-ai-sdk-generation-traces captures wrapper and child model spans (a
       "tools": {
         "get_weather": {
           "description": "Get the weather for a location",
-          "execute": "[Function]",
           "parameters": {
             "$schema": "http://json-schema.org/draft-07/schema#",
             "additionalProperties": false,
@@ -840,6 +839,25 @@ exports[`wrap-ai-sdk-generation-traces captures wrapper and child model spans (a
       },
       "model": "gpt-4o-mini",
       "provider": "openai.chat",
+      "tools": {
+        "get_weather": {
+          "description": "Get the weather for a location",
+          "parameters": {
+            "$schema": "http://json-schema.org/draft-07/schema#",
+            "additionalProperties": false,
+            "properties": {
+              "location": {
+                "description": "The city and country",
+                "type": "string",
+              },
+            },
+            "required": [
+              "location",
+            ],
+            "type": "object",
+          },
+        },
+      },
     },
     "metrics": {
       "start": 0,
@@ -2129,6 +2147,25 @@ exports[`wrap-ai-sdk-generation-traces captures wrapper and child model spans (a
       },
       "model": "gpt-4o-mini",
       "provider": "openai.chat",
+      "tools": {
+        "get_weather": {
+          "description": "Get the weather for a location",
+          "parameters": {
+            "$schema": "http://json-schema.org/draft-07/schema#",
+            "additionalProperties": false,
+            "properties": {
+              "location": {
+                "description": "The city and country",
+                "type": "string",
+              },
+            },
+            "required": [
+              "location",
+            ],
+            "type": "object",
+          },
+        },
+      },
     },
     "metric_keys": [],
     "name": "generateText",
@@ -3131,7 +3168,6 @@ exports[`wrap-ai-sdk-generation-traces captures wrapper and child model spans (a
       "tools": {
         "get_weather": {
           "description": "Get the weather for a location",
-          "execute": "[Function]",
           "parameters": {
             "$schema": "http://json-schema.org/draft-07/schema#",
             "additionalProperties": false,
@@ -3157,6 +3193,25 @@ exports[`wrap-ai-sdk-generation-traces captures wrapper and child model spans (a
       },
       "model": "gpt-4o-mini",
       "provider": "openai.chat",
+      "tools": {
+        "get_weather": {
+          "description": "Get the weather for a location",
+          "parameters": {
+            "$schema": "http://json-schema.org/draft-07/schema#",
+            "additionalProperties": false,
+            "properties": {
+              "location": {
+                "description": "The city and country",
+                "type": "string",
+              },
+            },
+            "required": [
+              "location",
+            ],
+            "type": "object",
+          },
+        },
+      },
     },
     "metrics": {
       "start": 0,
@@ -4545,6 +4600,25 @@ exports[`wrap-ai-sdk-generation-traces captures wrapper and child model spans (a
       },
       "model": "gpt-4o-mini",
       "provider": "openai.chat",
+      "tools": {
+        "get_weather": {
+          "description": "Get the weather for a location",
+          "parameters": {
+            "$schema": "http://json-schema.org/draft-07/schema#",
+            "additionalProperties": false,
+            "properties": {
+              "location": {
+                "description": "The city and country",
+                "type": "string",
+              },
+            },
+            "required": [
+              "location",
+            ],
+            "type": "object",
+          },
+        },
+      },
     },
     "metric_keys": [],
     "name": "generateText",
@@ -5531,7 +5605,6 @@ exports[`wrap-ai-sdk-generation-traces captures wrapper and child model spans (a
       "tools": {
         "get_weather": {
           "description": "Get the weather for a location",
-          "execute": "[Function]",
           "inputSchema": {
             "$schema": "http://json-schema.org/draft-07/schema#",
             "additionalProperties": false,
@@ -5557,6 +5630,25 @@ exports[`wrap-ai-sdk-generation-traces captures wrapper and child model spans (a
       },
       "model": "gpt-4o-mini",
       "provider": "openai.responses",
+      "tools": {
+        "get_weather": {
+          "description": "Get the weather for a location",
+          "inputSchema": {
+            "$schema": "http://json-schema.org/draft-07/schema#",
+            "additionalProperties": false,
+            "properties": {
+              "location": {
+                "description": "The city and country",
+                "type": "string",
+              },
+            },
+            "required": [
+              "location",
+            ],
+            "type": "object",
+          },
+        },
+      },
     },
     "metrics": {
       "start": 0,
@@ -6375,6 +6467,27 @@ exports[`wrap-ai-sdk-generation-traces captures wrapper and child model spans (a
       },
       "model": "gpt-4o-mini",
       "provider": "openai.responses",
+      "tools": [
+        {
+          "description": "Get the weather for a location",
+          "inputSchema": {
+            "$schema": "http://json-schema.org/draft-07/schema#",
+            "additionalProperties": false,
+            "properties": {
+              "location": {
+                "description": "The city and country",
+                "type": "string",
+              },
+            },
+            "required": [
+              "location",
+            ],
+            "type": "object",
+          },
+          "name": "get_weather",
+          "type": "function",
+        },
+      ],
     },
     "metrics": {
       "start": 0,
@@ -6613,6 +6726,27 @@ exports[`wrap-ai-sdk-generation-traces captures wrapper and child model spans (a
       },
       "model": "gpt-4o-mini",
       "provider": "openai.responses",
+      "tools": [
+        {
+          "description": "Get the weather for a location",
+          "inputSchema": {
+            "$schema": "http://json-schema.org/draft-07/schema#",
+            "additionalProperties": false,
+            "properties": {
+              "location": {
+                "description": "The city and country",
+                "type": "string",
+              },
+            },
+            "required": [
+              "location",
+            ],
+            "type": "object",
+          },
+          "name": "get_weather",
+          "type": "function",
+        },
+      ],
     },
     "metrics": {
       "start": 0,
@@ -6915,6 +7049,27 @@ exports[`wrap-ai-sdk-generation-traces captures wrapper and child model spans (a
       },
       "model": "gpt-4o-mini",
       "provider": "openai.responses",
+      "tools": [
+        {
+          "description": "Get the weather for a location",
+          "inputSchema": {
+            "$schema": "http://json-schema.org/draft-07/schema#",
+            "additionalProperties": false,
+            "properties": {
+              "location": {
+                "description": "The city and country",
+                "type": "string",
+              },
+            },
+            "required": [
+              "location",
+            ],
+            "type": "object",
+          },
+          "name": "get_weather",
+          "type": "function",
+        },
+      ],
     },
     "metrics": {
       "start": 0,
@@ -7281,6 +7436,27 @@ exports[`wrap-ai-sdk-generation-traces captures wrapper and child model spans (a
       },
       "model": "gpt-4o-mini",
       "provider": "openai.responses",
+      "tools": [
+        {
+          "description": "Get the weather for a location",
+          "inputSchema": {
+            "$schema": "http://json-schema.org/draft-07/schema#",
+            "additionalProperties": false,
+            "properties": {
+              "location": {
+                "description": "The city and country",
+                "type": "string",
+              },
+            },
+            "required": [
+              "location",
+            ],
+            "type": "object",
+          },
+          "name": "get_weather",
+          "type": "function",
+        },
+      ],
     },
     "metrics": {
       "start": 0,
@@ -8248,7 +8424,7 @@ exports[`wrap-ai-sdk-generation-traces captures wrapper and child model spans (a
     "span_attributes": {
       "exec_counter": 24,
       "name": "Agent.generate",
-      "type": "llm",
+      "type": "function",
     },
     "span_id": "<span:70>",
     "span_parents": [
@@ -8604,7 +8780,7 @@ exports[`wrap-ai-sdk-generation-traces captures wrapper and child model spans (a
     "span_attributes": {
       "exec_counter": 27,
       "name": "Agent.stream",
-      "type": "llm",
+      "type": "function",
     },
     "span_id": "<span:78>",
     "span_parents": [
@@ -9058,6 +9234,25 @@ exports[`wrap-ai-sdk-generation-traces captures wrapper and child model spans (a
       },
       "model": "gpt-4o-mini",
       "provider": "openai.responses",
+      "tools": {
+        "get_weather": {
+          "description": "Get the weather for a location",
+          "inputSchema": {
+            "$schema": "http://json-schema.org/draft-07/schema#",
+            "additionalProperties": false,
+            "properties": {
+              "location": {
+                "description": "The city and country",
+                "type": "string",
+              },
+            },
+            "required": [
+              "location",
+            ],
+            "type": "object",
+          },
+        },
+      },
     },
     "metric_keys": [],
     "name": "generateText",
@@ -9280,7 +9475,7 @@ exports[`wrap-ai-sdk-generation-traces captures wrapper and child model spans (a
     "span_parents": [
       "<span:20>",
     ],
-    "type": "llm",
+    "type": "function",
   },
   {
     "has_input": true,
@@ -9344,7 +9539,7 @@ exports[`wrap-ai-sdk-generation-traces captures wrapper and child model spans (a
     "span_parents": [
       "<span:23>",
     ],
-    "type": "llm",
+    "type": "function",
   },
   {
     "has_input": true,
@@ -10350,7 +10545,6 @@ exports[`wrap-ai-sdk-generation-traces captures wrapper and child model spans (a
       "tools": {
         "get_weather": {
           "description": "Get the weather for a location",
-          "execute": "[Function]",
           "inputSchema": {
             "$schema": "http://json-schema.org/draft-07/schema#",
             "additionalProperties": false,
@@ -10376,6 +10570,25 @@ exports[`wrap-ai-sdk-generation-traces captures wrapper and child model spans (a
       },
       "model": "gpt-4o-mini",
       "provider": "openai.responses",
+      "tools": {
+        "get_weather": {
+          "description": "Get the weather for a location",
+          "inputSchema": {
+            "$schema": "http://json-schema.org/draft-07/schema#",
+            "additionalProperties": false,
+            "properties": {
+              "location": {
+                "description": "The city and country",
+                "type": "string",
+              },
+            },
+            "required": [
+              "location",
+            ],
+            "type": "object",
+          },
+        },
+      },
     },
     "metrics": {
       "start": 0,
@@ -11394,6 +11607,27 @@ exports[`wrap-ai-sdk-generation-traces captures wrapper and child model spans (a
       },
       "model": "gpt-4o-mini",
       "provider": "openai.responses",
+      "tools": [
+        {
+          "description": "Get the weather for a location",
+          "inputSchema": {
+            "$schema": "http://json-schema.org/draft-07/schema#",
+            "additionalProperties": false,
+            "properties": {
+              "location": {
+                "description": "The city and country",
+                "type": "string",
+              },
+            },
+            "required": [
+              "location",
+            ],
+            "type": "object",
+          },
+          "name": "get_weather",
+          "type": "function",
+        },
+      ],
     },
     "metrics": {
       "start": 0,
@@ -11655,6 +11889,27 @@ exports[`wrap-ai-sdk-generation-traces captures wrapper and child model spans (a
       },
       "model": "gpt-4o-mini",
       "provider": "openai.responses",
+      "tools": [
+        {
+          "description": "Get the weather for a location",
+          "inputSchema": {
+            "$schema": "http://json-schema.org/draft-07/schema#",
+            "additionalProperties": false,
+            "properties": {
+              "location": {
+                "description": "The city and country",
+                "type": "string",
+              },
+            },
+            "required": [
+              "location",
+            ],
+            "type": "object",
+          },
+          "name": "get_weather",
+          "type": "function",
+        },
+      ],
     },
     "metrics": {
       "start": 0,
@@ -11990,6 +12245,27 @@ exports[`wrap-ai-sdk-generation-traces captures wrapper and child model spans (a
       },
       "model": "gpt-4o-mini",
       "provider": "openai.responses",
+      "tools": [
+        {
+          "description": "Get the weather for a location",
+          "inputSchema": {
+            "$schema": "http://json-schema.org/draft-07/schema#",
+            "additionalProperties": false,
+            "properties": {
+              "location": {
+                "description": "The city and country",
+                "type": "string",
+              },
+            },
+            "required": [
+              "location",
+            ],
+            "type": "object",
+          },
+          "name": "get_weather",
+          "type": "function",
+        },
+      ],
     },
     "metrics": {
       "start": 0,
@@ -12399,6 +12675,27 @@ exports[`wrap-ai-sdk-generation-traces captures wrapper and child model spans (a
       },
       "model": "gpt-4o-mini",
       "provider": "openai.responses",
+      "tools": [
+        {
+          "description": "Get the weather for a location",
+          "inputSchema": {
+            "$schema": "http://json-schema.org/draft-07/schema#",
+            "additionalProperties": false,
+            "properties": {
+              "location": {
+                "description": "The city and country",
+                "type": "string",
+              },
+            },
+            "required": [
+              "location",
+            ],
+            "type": "object",
+          },
+          "name": "get_weather",
+          "type": "function",
+        },
+      ],
     },
     "metrics": {
       "start": 0,
@@ -13471,7 +13768,7 @@ exports[`wrap-ai-sdk-generation-traces captures wrapper and child model spans (a
     "span_attributes": {
       "exec_counter": 24,
       "name": "ToolLoopAgent.generate",
-      "type": "llm",
+      "type": "function",
     },
     "span_id": "<span:70>",
     "span_parents": [
@@ -13893,7 +14190,7 @@ exports[`wrap-ai-sdk-generation-traces captures wrapper and child model spans (a
     "span_attributes": {
       "exec_counter": 27,
       "name": "ToolLoopAgent.stream",
-      "type": "llm",
+      "type": "function",
     },
     "span_id": "<span:78>",
     "span_parents": [
@@ -14417,6 +14714,25 @@ exports[`wrap-ai-sdk-generation-traces captures wrapper and child model spans (a
       },
       "model": "gpt-4o-mini",
       "provider": "openai.responses",
+      "tools": {
+        "get_weather": {
+          "description": "Get the weather for a location",
+          "inputSchema": {
+            "$schema": "http://json-schema.org/draft-07/schema#",
+            "additionalProperties": false,
+            "properties": {
+              "location": {
+                "description": "The city and country",
+                "type": "string",
+              },
+            },
+            "required": [
+              "location",
+            ],
+            "type": "object",
+          },
+        },
+      },
     },
     "metric_keys": [],
     "name": "generateText",
@@ -14637,7 +14953,7 @@ exports[`wrap-ai-sdk-generation-traces captures wrapper and child model spans (a
     "span_parents": [
       "<span:20>",
     ],
-    "type": "llm",
+    "type": "function",
   },
   {
     "has_input": true,
@@ -14700,7 +15016,7 @@ exports[`wrap-ai-sdk-generation-traces captures wrapper and child model spans (a
     "span_parents": [
       "<span:23>",
     ],
-    "type": "llm",
+    "type": "function",
   },
   {
     "has_input": true,

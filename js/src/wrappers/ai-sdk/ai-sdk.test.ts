@@ -1396,6 +1396,30 @@ describe("ai sdk client unit tests", TEST_SUITE_OPTIONS, () => {
     // Should have at least 2 spans: the main generateText span and the tool execution span
     expect(spans.length).toBeGreaterThanOrEqual(2);
 
+    const generateTextSpan = spans.find(
+      (span: any) => span.span_attributes?.name === "generateText",
+    );
+    expect(generateTextSpan).toBeDefined();
+    expect((generateTextSpan as any).input.tools).toMatchObject({
+      calculate: {
+        description: "Perform a mathematical calculation",
+        inputSchema: {
+          type: "object",
+        },
+      },
+    });
+    expect((generateTextSpan as any).metadata.tools).toMatchObject({
+      calculate: {
+        description: "Perform a mathematical calculation",
+      },
+    });
+    expect((generateTextSpan as any).input.tools).not.toHaveProperty(
+      "calculate.execute",
+    );
+    expect((generateTextSpan as any).metadata.tools).not.toHaveProperty(
+      "calculate.execute",
+    );
+
     // Find the tool execution span
     // eslint-disable-next-line @typescript-eslint/consistent-type-assertions, @typescript-eslint/no-explicit-any
     const toolSpan = spans.find(
@@ -1488,7 +1512,7 @@ describe("ai sdk client unit tests", TEST_SUITE_OPTIONS, () => {
     expect(span.span_id).toBeDefined();
     expect(span.root_span_id).toBeDefined();
     expect(span.span_attributes).toMatchObject({
-      type: "llm",
+      type: "function",
       name: "CustomAgent.generate",
     });
     expect(span.metadata).toMatchObject({

@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "test:e2e": "vitest run",
+    "test:e2e:canary": "node ./scripts/run-canary-tests.mjs",
     "test:e2e:update": "vitest run --update"
   },
   "devDependencies": {
