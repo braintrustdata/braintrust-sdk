@@ -26,6 +26,7 @@ test("parameters are passed to task", async () => {
         return output;
       },
       scores: [],
+      classifiers: [],
       parameters: {
         prefix: z.string().default("start:"),
         suffix: z.string().default(":end"),
@@ -59,6 +60,7 @@ test("prompt parameter is passed correctly", async () => {
         return input;
       },
       scores: [],
+      classifiers: [],
       parameters: {
         main: {
           type: "prompt",
@@ -99,6 +101,7 @@ test("custom parameter values override defaults", async () => {
         return output;
       },
       scores: [],
+      classifiers: [],
       parameters: {
         prefix: z.string().default("start:"),
         suffix: z.string().default(":end"),
@@ -131,6 +134,7 @@ test("array parameter is handled correctly", async () => {
         return input;
       },
       scores: [],
+      classifiers: [],
       parameters: {
         items: z.array(z.string()).default(["item1", "item2"]),
       },
@@ -161,6 +165,7 @@ test("object parameter is handled correctly", async () => {
         return input;
       },
       scores: [],
+      classifiers: [],
       parameters: {
         config: z
           .object({
@@ -196,6 +201,7 @@ test("model parameter defaults to configured value", async () => {
         return input;
       },
       scores: [],
+      classifiers: [],
       parameters: {
         model: {
           type: "model",
@@ -224,6 +230,7 @@ test("model parameter is required when default is missing", async () => {
         data: [{ input: "test" }],
         task: async (input: string) => input,
         scores: [],
+        classifiers: [],
         parameters: {
           model: {
             type: "model",
