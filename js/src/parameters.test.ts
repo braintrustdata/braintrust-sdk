@@ -3,6 +3,8 @@ import { runEvaluator } from "./framework";
 import { z } from "zod/v3";
 import { type ProgressReporter } from "./reporters/types";
 import { configureNode } from "./node/config";
+import { RemoteEvalParameters } from "./logger";
+import { validateParameters } from "./eval-parameters";
 
 beforeAll(() => {
   configureNode();
@@ -237,4 +239,45 @@ test("model parameter is required when default is missing", async () => {
       true,
     ),
   ).rejects.toThrow("Parameter 'model' is required");
+});
+
+test("remote prompt parameters are hydrated to Prompt objects", async () => {
+  const parameters = new RemoteEvalParameters({
+    id: "params-123",
+    project_id: "project-123",
+    name: "Saved parameters",
+    slug: "saved-parameters",
+    _xact_id: "v1",
+    function_type: "parameters",
+    function_data: {
+      type: "parameters",
+      data: {
+        main: {
+          prompt: {
+            type: "chat",
+            messages: [{ role: "user", content: "{{input}}" }],
+          },
+          options: {
+            model: "gpt-5-mini",
+          },
+        },
+      },
+      __schema: {
+        type: "object",
+        properties: {
+          main: {
+            type: "object",
+            "x-bt-type": "prompt",
+          },
+        },
+        additionalProperties: true,
+      },
+    },
+    created: "2023-10-01T00:00:00Z",
+  });
+
+  const result = await validateParameters({}, parameters);
+
+  expect(result.main).toBeDefined();
+  expect(typeof result.main.build).toBe("function");
 });

@@ -151,5 +151,51 @@ function validateParametersWithJsonSchema<T extends Record<string, unknown>>(
   }
 
   // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
-  return parameters as T;
+  return hydrateRemoteParameters(parameters, schema) as T;
+}
+
+function hydrateRemoteParameters(
+  parameters: Record<string, unknown>,
+  schema: Record<string, unknown>,
+): Record<string, unknown> {
+  const isRecord = (value: unknown): value is Record<string, unknown> =>
+    typeof value === "object" && value !== null;
+  const properties =
+    "properties" in schema && isRecord(schema.properties)
+      ? schema.properties
+      : undefined;
+  if (!properties) {
+    return parameters;
+  }
+
+  return Object.fromEntries(
+    Object.entries(parameters).map(([name, value]) => {
+      const propertySchema = properties[name];
+      if (!propertySchema || typeof propertySchema !== "object") {
+        return [name, value];
+      }
+
+      if (
+        "x-bt-type" in propertySchema &&
+        propertySchema["x-bt-type"] === "prompt"
+      ) {
+        return [
+          name,
+          Prompt.fromPromptData(name, promptDataSchema.parse(value)),
+        ];
+      }
+
+      if (
+        "x-bt-type" in propertySchema &&
+        propertySchema["x-bt-type"] === "model" &&
+        typeof value !== "string"
+      ) {
+        throw Error(
+          `Invalid parameter '${name}': model values must be strings`,
+        );
+      }
+
+      return [name, value];
+    }),
+  );
 }
