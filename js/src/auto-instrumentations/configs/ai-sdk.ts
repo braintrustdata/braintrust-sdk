@@ -26,6 +26,18 @@ export const aiSDKConfigs: InstrumentationConfig[] = [
       kind: "Async",
     },
   },
+  {
+    channelName: aiSDKChannels.generateText.channelName,
+    module: {
+      name: "ai",
+      versionRange: ">=3.0.0",
+      filePath: "dist/index.js",
+    },
+    functionQuery: {
+      functionName: "generateText",
+      kind: "Async",
+    },
+  },
 
   // streamText - async function
   {
@@ -40,6 +52,18 @@ export const aiSDKConfigs: InstrumentationConfig[] = [
       kind: "Async",
     },
   },
+  {
+    channelName: aiSDKChannels.streamTextSync.channelName,
+    module: {
+      name: "ai",
+      versionRange: ">=3.0.0",
+      filePath: "dist/index.js",
+    },
+    functionQuery: {
+      functionName: "streamText",
+      kind: "Sync",
+    },
+  },
 
   // generateObject - async function
   {
@@ -48,6 +72,18 @@ export const aiSDKConfigs: InstrumentationConfig[] = [
       name: "ai",
       versionRange: ">=3.0.0",
       filePath: "dist/index.mjs",
+    },
+    functionQuery: {
+      functionName: "generateObject",
+      kind: "Async",
+    },
+  },
+  {
+    channelName: aiSDKChannels.generateObject.channelName,
+    module: {
+      name: "ai",
+      versionRange: ">=3.0.0",
+      filePath: "dist/index.js",
     },
     functionQuery: {
       functionName: "generateObject",
@@ -68,6 +104,18 @@ export const aiSDKConfigs: InstrumentationConfig[] = [
       kind: "Async",
     },
   },
+  {
+    channelName: aiSDKChannels.streamObjectSync.channelName,
+    module: {
+      name: "ai",
+      versionRange: ">=3.0.0",
+      filePath: "dist/index.js",
+    },
+    functionQuery: {
+      functionName: "streamObject",
+      kind: "Sync",
+    },
+  },
 
   // Agent.generate - async method (v5 only)
   // The compiled AI SDK bundle emits this as an anonymous class method, so we
@@ -78,6 +126,19 @@ export const aiSDKConfigs: InstrumentationConfig[] = [
       name: "ai",
       versionRange: ">=5.0.0 <6.0.0",
       filePath: "dist/index.mjs",
+    },
+    functionQuery: {
+      methodName: "generate",
+      kind: "Async",
+      index: 0,
+    },
+  },
+  {
+    channelName: aiSDKChannels.agentGenerate.channelName,
+    module: {
+      name: "ai",
+      versionRange: ">=5.0.0 <6.0.0",
+      filePath: "dist/index.js",
     },
     functionQuery: {
       methodName: "generate",
@@ -102,6 +163,19 @@ export const aiSDKConfigs: InstrumentationConfig[] = [
       index: 0,
     },
   },
+  {
+    channelName: aiSDKChannels.agentStream.channelName,
+    module: {
+      name: "ai",
+      versionRange: ">=5.0.0 <6.0.0",
+      filePath: "dist/index.js",
+    },
+    functionQuery: {
+      methodName: "stream",
+      kind: "Async",
+      index: 0,
+    },
+  },
 
   // ToolLoopAgent.generate - async method (v6 only, Experimental_Agent is an alias)
   // The compiled AI SDK bundle emits this as an anonymous class method, so we
@@ -119,6 +193,19 @@ export const aiSDKConfigs: InstrumentationConfig[] = [
       index: 0,
     },
   },
+  {
+    channelName: aiSDKChannels.toolLoopAgentGenerate.channelName,
+    module: {
+      name: "ai",
+      versionRange: ">=6.0.0 <7.0.0",
+      filePath: "dist/index.js",
+    },
+    functionQuery: {
+      methodName: "generate",
+      kind: "Async",
+      index: 0,
+    },
+  },
 
   // ToolLoopAgent.stream - async method (v6 only, Experimental_Agent is an alias)
   // The compiled AI SDK bundle emits this as an anonymous class method, so we
@@ -129,6 +216,19 @@ export const aiSDKConfigs: InstrumentationConfig[] = [
       name: "ai",
       versionRange: ">=6.0.0 <7.0.0",
       filePath: "dist/index.mjs",
+    },
+    functionQuery: {
+      methodName: "stream",
+      kind: "Async",
+      index: 0,
+    },
+  },
+  {
+    channelName: aiSDKChannels.toolLoopAgentStream.channelName,
+    module: {
+      name: "ai",
+      versionRange: ">=6.0.0 <7.0.0",
+      filePath: "dist/index.js",
     },
     functionQuery: {
       methodName: "stream",

@@ -10,7 +10,7 @@ import {
 import * as Module from "node:module";
 import { sep } from "node:path";
 import moduleDetailsFromPath from "module-details-from-path";
-import { getPackageVersion } from "./get-package-version.js";
+import { getPackageName, getPackageVersion } from "./get-package-version.js";
 
 export class ModulePatch {
   private packages: Set<string>;
@@ -42,14 +42,21 @@ export class ModulePatch {
 
       const resolvedModule = moduleDetailsFromPath(normalizedForPlatform);
 
-      if (resolvedModule && self.packages.has(resolvedModule.name)) {
+      if (resolvedModule) {
+        const packageName =
+          getPackageName(resolvedModule.basedir) ?? resolvedModule.name;
+
+        if (!self.packages.has(packageName)) {
+          return self.originalCompile.apply(this, args);
+        }
+
         const version = getPackageVersion(resolvedModule.basedir);
 
         // Normalize module path for WASM transformer (expects forward slashes)
         const normalizedModulePath = resolvedModule.path.replace(/\\/g, "/");
 
         const transformer = self.instrumentator.getTransformer(
-          resolvedModule.name,
+          packageName,
           version,
           normalizedModulePath,
         );

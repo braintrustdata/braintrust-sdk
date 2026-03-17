@@ -112,6 +112,13 @@ export type SyncStreamChannelSpanConfig<TChannel extends AnySyncStreamChannel> =
       metrics?: Record<string, number>;
       metadata?: Record<string, unknown>;
     };
+    patchResult?: (args: {
+      channelName: string;
+      endEvent: EndOf<TChannel>;
+      result: ResultOf<TChannel>;
+      span: Span;
+      startTime: number;
+    }) => boolean;
   };
 
 type SyncStreamLike<TStreamEvent> = {
@@ -462,8 +469,21 @@ export function traceSyncStreamChannel<TChannel extends AnySyncStreamChannel>(
       }
 
       const { span, startTime } = spanData;
-      const resultEvent = event as { result: unknown };
-      const stream = resultEvent.result;
+      const endEvent = event as EndOf<TChannel>;
+
+      if (
+        config.patchResult?.({
+          channelName,
+          endEvent,
+          result: endEvent.result,
+          span,
+          startTime,
+        })
+      ) {
+        return;
+      }
+
+      const stream = endEvent.result;
 
       if (!isSyncStreamLike<ChunkOf<TChannel>>(stream)) {
         span.end();

@@ -1,5 +1,40 @@
 import type { CapturedLogEvent } from "./mock-braintrust-server";
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function clone<T>(value: T): T {
+  return structuredClone(value);
+}
+
+function mergeValue(base: unknown, incoming: unknown): unknown {
+  if (incoming === undefined) {
+    return clone(base);
+  }
+
+  if (isRecord(base) && isRecord(incoming)) {
+    const merged: Record<string, unknown> = { ...base };
+    for (const [key, value] of Object.entries(incoming)) {
+      merged[key] = key in merged ? mergeValue(merged[key], value) : value;
+    }
+    return merged;
+  }
+
+  return clone(incoming);
+}
+
+function mergeEvent(
+  existing: CapturedLogEvent | undefined,
+  incoming: CapturedLogEvent,
+): CapturedLogEvent {
+  if (!existing) {
+    return clone(incoming);
+  }
+
+  return mergeValue(existing, incoming) as CapturedLogEvent;
+}
+
 function latestEventsPerSpan(events: CapturedLogEvent[]): CapturedLogEvent[] {
   const orderedSpanIds: string[] = [];
   const latestBySpanId = new Map<string, CapturedLogEvent>();
@@ -10,7 +45,10 @@ function latestEventsPerSpan(events: CapturedLogEvent[]): CapturedLogEvent[] {
       if (!latestBySpanId.has(event.span.id)) {
         orderedSpanIds.push(event.span.id);
       }
-      latestBySpanId.set(event.span.id, event);
+      latestBySpanId.set(
+        event.span.id,
+        mergeEvent(latestBySpanId.get(event.span.id), event),
+      );
       continue;
     }
 

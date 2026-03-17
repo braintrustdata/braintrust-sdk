@@ -81,40 +81,6 @@ describe("AISDKPlugin", () => {
       expect(true).toBe(true);
     });
   });
-
-  describe("channel subscriptions", () => {
-    it("should subscribe to generateText channel on enable", () => {
-      expect(() => plugin.enable()).not.toThrow();
-    });
-
-    it("should subscribe to streamText channel on enable", () => {
-      expect(() => plugin.enable()).not.toThrow();
-    });
-
-    it("should subscribe to generateObject channel on enable", () => {
-      expect(() => plugin.enable()).not.toThrow();
-    });
-
-    it("should subscribe to streamObject channel on enable", () => {
-      expect(() => plugin.enable()).not.toThrow();
-    });
-
-    it("should subscribe to Agent.generate channel on enable", () => {
-      expect(() => plugin.enable()).not.toThrow();
-    });
-
-    it("should subscribe to Agent.stream channel on enable", () => {
-      expect(() => plugin.enable()).not.toThrow();
-    });
-
-    it("should subscribe to ToolLoopAgent.generate channel on enable", () => {
-      expect(() => plugin.enable()).not.toThrow();
-    });
-
-    it("should subscribe to ToolLoopAgent.stream channel on enable", () => {
-      expect(() => plugin.enable()).not.toThrow();
-    });
-  });
 });
 
 describe("AI SDK utility functions", () => {
