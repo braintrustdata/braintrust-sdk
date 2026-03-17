@@ -725,7 +725,7 @@ export async function Eval<
       if (experiment) {
         await experiment.flush().catch(console.error);
       } else if (options.parent) {
-        await flush().catch(console.error);
+        await flush({ state: evaluator.state }).catch(console.error);
       }
     }
   } finally {
@@ -1027,7 +1027,7 @@ async function runEvaluatorInternal(
                 objectId:
                   parentComponents?.data.object_id ??
                   (experimentIdPromise
-                    ? (await experimentIdPromise) ?? ""
+                    ? ((await experimentIdPromise) ?? "")
                     : ""),
                 rootSpanId: rootSpan.rootSpanId,
                 ensureSpansFlushed,
