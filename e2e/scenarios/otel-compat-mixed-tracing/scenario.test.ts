@@ -1,13 +1,16 @@
 import { expect, test } from "vitest";
 import { normalizeForSnapshot, type Json } from "../../helpers/normalize";
 import {
+  prepareScenarioDir,
   resolveScenarioDir,
   withScenarioHarness,
 } from "../../helpers/scenario-harness";
 import { findLatestSpan } from "../../helpers/trace-selectors";
 import { extractOtelSpans, summarizeEvent } from "../../helpers/trace-summary";
 
-const scenarioDir = resolveScenarioDir(import.meta.url);
+const scenarioDir = await prepareScenarioDir({
+  scenarioDir: resolveScenarioDir(import.meta.url),
+});
 
 test("otel-compat-mixed-tracing unifies Braintrust and OTEL spans into one trace", async () => {
   await withScenarioHarness(
