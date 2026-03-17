@@ -363,8 +363,14 @@ test.each(WRAP_AI_SDK_SCENARIOS)(
       if (agentSpanName) {
         expect(agentGenerateOperation).toBeDefined();
         expect(agentStreamOperation).toBeDefined();
+        expect(agentGenerateParent?.row.span_attributes).toMatchObject({
+          type: "function",
+        });
         expect(agentGenerateParent?.output).toBeDefined();
         expect(agentGenerateChildren.length).toBeGreaterThanOrEqual(1);
+        expect(agentStreamParent?.row.span_attributes).toMatchObject({
+          type: "function",
+        });
         expect(agentStreamParent?.metrics?.time_to_first_token).toEqual(
           expect.any(Number),
         );
