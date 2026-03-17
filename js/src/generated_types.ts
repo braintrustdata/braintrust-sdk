@@ -1,4 +1,4 @@
-// Auto-generated file (content hash 65ee1878ee4535ba) -- do not modify
+// Auto-generated file (content hash f3497ec890b91a97) -- do not modify
 
 import { z } from "zod/v3";
 
@@ -734,7 +734,11 @@ export const SpanType = z.union([
 export type SpanTypeType = z.infer<typeof SpanType>;
 export const SpanAttributes = z.union([
   z
-    .object({ name: z.union([z.string(), z.null()]), type: SpanType })
+    .object({
+      name: z.union([z.string(), z.null()]),
+      type: SpanType,
+      purpose: z.union([z.literal("scorer"), z.null()]),
+    })
     .partial()
     .passthrough(),
   z.null(),
