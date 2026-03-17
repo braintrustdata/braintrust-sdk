@@ -445,6 +445,9 @@ importers:
       cross-env:
         specifier: ^7.0.3
         version: 7.0.3
+      dc-browser:
+        specifier: ^1.0.3
+        version: 1.0.3
       eslint-plugin-node-import:
         specifier: ^1.0.5
         version: 1.0.5(eslint@9.39.3(jiti@2.6.1))

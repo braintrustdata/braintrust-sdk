@@ -154,6 +154,7 @@
     "async": "^3.2.5",
     "autoevals": "^0.0.131",
     "cross-env": "^7.0.3",
+    "dc-browser": "^1.0.3",
     "eslint-plugin-node-import": "^1.0.5",
     "jiti": "^2.6.1",
     "openai": "6.25.0",
