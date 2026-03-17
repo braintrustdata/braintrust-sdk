@@ -9,6 +9,7 @@ import type {
   AsyncEndOf,
   ChannelMessage,
   ChunkOf,
+  EndOf,
   ErrorOf,
   ResultOf,
   StartOf,

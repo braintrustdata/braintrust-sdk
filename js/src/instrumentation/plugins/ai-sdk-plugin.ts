@@ -696,22 +696,20 @@ function prepareAISDKChildTracing(
 
 function finalizeAISDKChildTracing(event?: { [key: string]: unknown }): void {
   const cleanup = event?.__braintrust_ai_sdk_cleanup;
-  if (typeof cleanup === "function") {
+  if (event && typeof cleanup === "function") {
     cleanup();
     delete event.__braintrust_ai_sdk_cleanup;
   }
 }
 
 function patchAISDKStreamingResult(args: {
-  channelName: string;
   denyOutputPaths: string[];
   endEvent: { [key: string]: unknown };
   result: AISDKResult;
   span: Span;
   startTime: number;
 }): boolean {
-  const { channelName, denyOutputPaths, endEvent, result, span, startTime } =
-    args;
+  const { denyOutputPaths, endEvent, result, span, startTime } = args;
 
   if (!result || typeof result !== "object") {
     return false;
@@ -974,7 +972,7 @@ function extractTokenMetrics(result: AISDKResult): Record<string, number> {
  */
 function aggregateAISDKChunks(
   chunks: unknown[],
-  _result?: AISDKResult,
+  _result?: AISDKResult | AsyncIterable<unknown>,
   endEvent?: { [key: string]: unknown },
 ): {
   output: Record<string, unknown>;

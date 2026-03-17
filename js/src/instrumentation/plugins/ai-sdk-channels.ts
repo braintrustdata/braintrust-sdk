@@ -27,7 +27,7 @@ export const aiSDKChannels = defineChannels("ai", {
   }),
   streamTextSync: channel<
     [AISDKCallParams],
-    AISDKStreamResult,
+    AISDKResult,
     Record<string, never>,
     unknown
   >({
@@ -54,7 +54,7 @@ export const aiSDKChannels = defineChannels("ai", {
   }),
   streamObjectSync: channel<
     [AISDKCallParams],
-    AISDKStreamResult,
+    AISDKResult,
     Record<string, never>,
     unknown
   >({
