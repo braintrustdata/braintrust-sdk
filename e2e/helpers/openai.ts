@@ -1,46 +1,62 @@
 import type { CapturedLogEvent } from "./mock-braintrust-server";
 import type { Json } from "./normalize";
+import { readInstalledPackageVersion } from "./scenario-installer";
 
 interface OpenAIScenario {
   chatHelperNamespace: "beta" | "ga";
+  dependencyName: string;
   entry: string;
   version: string;
 }
 
-const OPENAI_VERSIONS = [
+const OPENAI_VERSION_SPECS = [
   {
     chatHelperNamespace: "beta",
+    dependencyName: "openai-v4",
     suffix: "v4",
-    version: "4.104.0",
   },
   {
     chatHelperNamespace: "ga",
+    dependencyName: "openai-v5",
     suffix: "v5",
-    version: "5.11.0",
   },
   {
     chatHelperNamespace: "ga",
+    dependencyName: "openai",
     suffix: "v6",
-    version: "6.25.0",
   },
 ] as const;
 
 export const OPENAI_SCENARIO_TIMEOUT_MS = 60_000;
 
-export const OPENAI_AUTO_HOOK_SCENARIOS: OpenAIScenario[] = OPENAI_VERSIONS.map(
-  ({ suffix, version }) => ({
-    entry: `scenario.openai-${suffix}.mjs`,
-    version,
-  }),
-);
+export async function getOpenAIAutoHookScenarios(
+  scenarioDir: string,
+): Promise<
+  Array<Pick<OpenAIScenario, "dependencyName" | "entry" | "version">>
+> {
+  return await Promise.all(
+    OPENAI_VERSION_SPECS.map(async ({ dependencyName, suffix }) => ({
+      dependencyName,
+      entry: `scenario.openai-${suffix}.mjs`,
+      version: await readInstalledPackageVersion(scenarioDir, dependencyName),
+    })),
+  );
+}
 
-export const WRAP_OPENAI_SCENARIOS: OpenAIScenario[] = OPENAI_VERSIONS.map(
-  ({ chatHelperNamespace, suffix, version }) => ({
-    chatHelperNamespace,
-    entry: `scenario.openai-${suffix}.ts`,
-    version,
-  }),
-);
+export async function getWrapOpenAIScenarios(
+  scenarioDir: string,
+): Promise<OpenAIScenario[]> {
+  return await Promise.all(
+    OPENAI_VERSION_SPECS.map(
+      async ({ chatHelperNamespace, dependencyName, suffix }) => ({
+        chatHelperNamespace,
+        dependencyName,
+        entry: `scenario.openai-${suffix}.ts`,
+        version: await readInstalledPackageVersion(scenarioDir, dependencyName),
+      }),
+    ),
+  );
+}
 
 export function summarizeOpenAIContract(event: CapturedLogEvent): Json {
   const metadata = event.row.metadata as

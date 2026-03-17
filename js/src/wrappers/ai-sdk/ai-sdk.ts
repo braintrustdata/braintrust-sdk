@@ -213,6 +213,8 @@ const wrapAgentGenerate = (
       options,
       generate.bind(instance), // as of v5 this is just streamText under the hood
       // Follows what the AI SDK does under the hood when calling generateText
+      undefined,
+      SpanTypeAttribute.FUNCTION,
     )({ ...instance.settings, ...params });
 };
 
@@ -227,6 +229,7 @@ const wrapAgentStream = (
       options,
       stream.bind(instance), // as of v5 this is just streamText under the hood
       undefined, // aiSDK not needed since model is already on instance
+      SpanTypeAttribute.FUNCTION,
     )({ ...instance.settings, ...params });
 };
 
@@ -235,6 +238,7 @@ const makeGenerateTextWrapper = (
   options: WrapAISDKOptions,
   generateText: AISDKGenerateFunction,
   aiSDK?: AISDK,
+  spanType: SpanTypeAttribute = SpanTypeAttribute.LLM,
 ) => {
   const wrapper = async function (allParams: AISDKCallParams & SpanInfo) {
     // Extract span_info from params (used by Braintrust-managed prompts)
@@ -287,7 +291,7 @@ const makeGenerateTextWrapper = (
       {
         name: spanName || name,
         spanAttributes: {
-          type: SpanTypeAttribute.LLM,
+          type: spanType,
           ...spanInfoAttrs,
         },
         event: {
@@ -697,6 +701,7 @@ const makeStreamTextWrapper = (
   options: WrapAISDKOptions,
   streamText: AISDKStreamFunction,
   aiSDK?: AISDK,
+  spanType: SpanTypeAttribute = SpanTypeAttribute.LLM,
 ) => {
   // Note: streamText returns a sync result (stream object), so we cannot make this async
   // For v6, Output.object responseFormat is a Promise - we handle this by:
@@ -723,7 +728,7 @@ const makeStreamTextWrapper = (
     const span = startSpan({
       name: spanName || name,
       spanAttributes: {
-        type: SpanTypeAttribute.LLM,
+        type: spanType,
         ...spanInfoAttrs,
       },
       event: {

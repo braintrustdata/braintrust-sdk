@@ -74,7 +74,7 @@ jobs:
       - name: Ensure SHA pinned actions
         uses: zgosalvez/github-actions-ensure-sha-pinned-actions@70c4af2ed5282c51ba40566d026d6647852ffa3e # v5.0.1
 
-  js-build:
+  js-test:
     runs-on: ${{ matrix.os }}
     timeout-minutes: 30
     strategy:
@@ -82,19 +82,39 @@ jobs:
       matrix:
         os: [ubuntu-latest, windows-latest]
         node-version: [20, 22]
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: ${{ matrix.node-version }}
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4.3.0
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Build
+        run: pnpm run build
+      - name: Generate docs
+        working-directory: js
+        run: pnpm run docs
+      - name: Run hermetic tests
+        working-directory: js
+        run: pnpm run test:checks
+
+  js-build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
     outputs:
       artifact-name: ${{ steps.artifact.outputs.name }}
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
-          node-version: ${{ matrix.node-version }}
+          node-version: 20
           registry-url: "https://registry.npmjs.org"
       - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4.3.0
-      - name: Verify checks
-        shell: bash
-        run: |
-          make js-verify-checks
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Build
+        run: pnpm run build
       - name: Determine artifact name
         id: artifact
         env:
@@ -162,7 +182,7 @@ jobs:
       - name: Upload build artifacts
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
-          name: ${{ steps.artifact.outputs.name }}-${{ matrix.node-version }}-dist
+          name: ${{ steps.artifact.outputs.name }}-dist
           path: |
             js/artifacts/${{ steps.prepare_artifact.outputs.packed_tarball }}
             js/artifacts/${{ steps.prepare_browser_artifact.outputs.packed_browser_tarball }}
@@ -273,10 +293,10 @@ jobs:
         with:
           node-version-file: .tool-versions
       - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4.3.0
-      - name: Download build artifact (node 20)
+      - name: Download build artifacts
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
-          name: ${{ needs.js-build.outputs.artifact-name }}-20-dist
+          name: ${{ needs.js-build.outputs.artifact-name }}-dist
           path: js/artifacts
           run-id: ${{ github.run_id }}
           github-token: ${{ github.token }}
@@ -439,11 +459,9 @@ jobs:
         working-directory: ./js
         run: |
           pnpm run build
-      - name: Run hermetic JS tests
+      - name: Run hermetic tests
         working-directory: ./js
-        shell: bash
-        run: |
-          make test-checks
+        run: pnpm run test:checks
       - name: Run zod v3 tests
         if: matrix.zod-version == '3.25.34'
         working-directory: ./js
@@ -463,6 +481,7 @@ jobs:
       - check-typings
       - dead-code
       - ensure-pinned-actions
+      - js-test
       - js-build
       - js-api-compatibility
       - js-smoke-discover
@@ -494,6 +513,7 @@ jobs:
           check_result "check-typings" "${{ needs.check-typings.result }}"
           check_result "dead-code" "${{ needs.dead-code.result }}"
           check_result "ensure-pinned-actions" "${{ needs.ensure-pinned-actions.result }}"
+          check_result "js-test" "${{ needs.js-test.result }}"
           check_result "js-build" "${{ needs.js-build.result }}"
           check_result "js-api-compatibility" "${{ needs.js-api-compatibility.result }}"
           check_result "js-smoke-discover" "${{ needs.js-smoke-discover.result }}"

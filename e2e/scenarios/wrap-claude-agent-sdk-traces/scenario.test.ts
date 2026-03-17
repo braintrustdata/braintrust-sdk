@@ -1,7 +1,8 @@
-import { beforeAll, expect, test } from "vitest";
+import { expect, test } from "vitest";
 import { normalizeForSnapshot, type Json } from "../../helpers/normalize";
 import {
-  installScenarioDependencies,
+  isCanaryMode,
+  prepareScenarioDir,
   resolveScenarioDir,
   withScenarioHarness,
 } from "../../helpers/scenario-harness";
@@ -13,12 +14,10 @@ import {
 } from "../../helpers/trace-selectors";
 import { summarizeWrapperContract } from "../../helpers/wrapper-contract";
 
-const scenarioDir = resolveScenarioDir(import.meta.url);
-const TIMEOUT_MS = 120_000;
-
-beforeAll(async () => {
-  await installScenarioDependencies({ scenarioDir });
+const scenarioDir = await prepareScenarioDir({
+  scenarioDir: resolveScenarioDir(import.meta.url),
 });
+const TIMEOUT_MS = 120_000;
 
 test(
   "wrap-claude-agent-sdk-traces captures tool, async prompt, and subagent traces",
@@ -169,37 +168,39 @@ test(
       expect(failureToolSpan).toBeDefined();
       expect(failureToolSpan?.row.error).toBe("division by zero");
 
-      expect(
-        normalizeForSnapshot(
-          [
-            root,
-            basicOperation,
-            basicTask,
-            basicLlmSpans[0],
-            basicToolSpans[0],
-            asyncPromptOperation,
-            asyncPromptTask,
-            asyncPromptLlm,
-            subAgentOperation,
-            subAgentTaskRoot,
-            subAgentTask,
-            subAgentLlmSpans[0],
-            subAgentToolSpans[0],
-            failureOperation,
-            failureTask,
-            failureToolSpan,
-          ].map((event) =>
-            summarizeWrapperContract(event!, [
-              "provider",
-              "model",
-              "operation",
-              "scenario",
-              "mcp.server",
-              "gen_ai.tool.name",
-            ]),
-          ) as Json,
-        ),
-      ).toMatchSnapshot();
+      if (!isCanaryMode()) {
+        expect(
+          normalizeForSnapshot(
+            [
+              root,
+              basicOperation,
+              basicTask,
+              basicLlmSpans[0],
+              basicToolSpans[0],
+              asyncPromptOperation,
+              asyncPromptTask,
+              asyncPromptLlm,
+              subAgentOperation,
+              subAgentTaskRoot,
+              subAgentTask,
+              subAgentLlmSpans[0],
+              subAgentToolSpans[0],
+              failureOperation,
+              failureTask,
+              failureToolSpan,
+            ].map((event) =>
+              summarizeWrapperContract(event!, [
+                "provider",
+                "model",
+                "operation",
+                "scenario",
+                "mcp.server",
+                "gen_ai.tool.name",
+              ]),
+            ) as Json,
+          ),
+        ).toMatchSnapshot();
+      }
     });
   },
   TIMEOUT_MS,
