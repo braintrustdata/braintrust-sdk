@@ -13,7 +13,12 @@ import {
   EvalScorer,
   runEvaluator,
 } from "./framework";
-import { _exportsForTestingOnly, BraintrustState } from "./logger";
+import {
+  _exportsForTestingOnly,
+  BraintrustState,
+  initLogger,
+  TestBackgroundLogger,
+} from "./logger";
 import { configureNode } from "./node/config";
 import type { ProgressReporter } from "./reporters/types";
 import { InternalAbortError } from "./util";
@@ -1503,4 +1508,40 @@ test("Eval with enableCache: true (default) uses span cache", async () => {
 
   expect(startSpy).toHaveBeenCalled();
   expect(stopSpy).toHaveBeenCalled();
+});
+
+test("Eval with parent flushes evaluator state, not global state", async () => {
+  await _exportsForTestingOnly.simulateLoginForTests();
+
+  _exportsForTestingOnly.useTestBackgroundLogger();
+
+  const evaluatorState = new BraintrustState({
+    apiKey: "test-api-key",
+    appUrl: "https://example.com",
+  });
+  const evaluatorMemoryLogger = new TestBackgroundLogger();
+  evaluatorState.setOverrideBgLogger(evaluatorMemoryLogger);
+
+  const logger = initLogger({ projectName: "test", projectId: "pid" });
+  const span = logger.startSpan({ name: "parent-span" });
+  const parentStr = await span.export();
+  span.end();
+
+  const evaluatorFlushSpy = vi.spyOn(evaluatorMemoryLogger, "flush");
+
+  await Eval(
+    "test-parent-flush",
+    {
+      data: [{ input: 1, expected: 2 }],
+      task: (input) => input * 2,
+      scores: [],
+      state: evaluatorState,
+    },
+    { parent: parentStr },
+  );
+
+  expect(evaluatorFlushSpy).toHaveBeenCalled();
+
+  _exportsForTestingOnly.clearTestBackgroundLogger();
+  _exportsForTestingOnly.simulateLogoutForTests();
 });
