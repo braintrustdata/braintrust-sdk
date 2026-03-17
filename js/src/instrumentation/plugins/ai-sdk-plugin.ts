@@ -2,12 +2,17 @@ import { BasePlugin } from "../core";
 import { traceStreamingChannel, unsubscribeAll } from "../core/channel-tracing";
 import { SpanTypeAttribute } from "../../../util/index";
 import { getCurrentUnixTimestamp } from "../../util";
+import { type Span, withCurrent } from "../../logger";
 import { processInputAttachments } from "../../wrappers/attachment-utils";
 import { aiSDKChannels } from "./ai-sdk-channels";
 import type {
   AISDKCallParams,
+  AISDKLanguageModel,
   AISDKModel,
+  AISDKModelStreamChunk,
   AISDKResult,
+  AISDKTool,
+  AISDKTools,
   AISDKUsage,
 } from "../../vendor-sdk-types/ai-sdk";
 
@@ -38,6 +43,9 @@ const DEFAULT_DENY_OUTPUT_PATHS: string[] = [
   "steps[].response.headers",
 ];
 
+const AUTO_PATCHED_MODEL = Symbol.for("braintrust.ai-sdk.auto-patched-model");
+const AUTO_PATCHED_TOOL = Symbol.for("braintrust.ai-sdk.auto-patched-tool");
+
 /**
  * AI SDK plugin that subscribes to instrumentation channels
  * and creates Braintrust spans.
@@ -49,6 +57,8 @@ const DEFAULT_DENY_OUTPUT_PATHS: string[] = [
  * - streamObject (async function returning stream)
  * - Agent.generate (async method)
  * - Agent.stream (async method returning stream)
+ * - ToolLoopAgent.generate (async method)
+ * - ToolLoopAgent.stream (async method returning stream)
  *
  * The plugin automatically extracts:
  * - Model and provider information
@@ -81,22 +91,14 @@ export class AISDKPlugin extends BasePlugin {
       traceStreamingChannel(aiSDKChannels.generateText, {
         name: "generateText",
         type: SpanTypeAttribute.LLM,
-        extractInput: ([params]) => {
-          return {
-            input: processAISDKInput(params),
-            metadata: extractMetadataFromParams(params),
-          };
-        },
-        extractOutput: (result) => {
+        extractInput: ([params], event, span) =>
+          prepareAISDKInput(params, event, span, denyOutputPaths),
+        extractOutput: (result, endEvent) => {
+          finalizeAISDKChildTracing(endEvent as { [key: string]: unknown });
           return processAISDKOutput(result, denyOutputPaths);
         },
-        extractMetrics: (result, startTime) => {
-          const metrics = extractTokenMetrics(result);
-          if (startTime) {
-            metrics.time_to_first_token = getCurrentUnixTimestamp() - startTime;
-          }
-          return metrics;
-        },
+        extractMetrics: (result, _startTime, endEvent) =>
+          extractTopLevelAISDKMetrics(result, endEvent),
         aggregateChunks: aggregateAISDKChunks,
       }),
     );
@@ -106,23 +108,20 @@ export class AISDKPlugin extends BasePlugin {
       traceStreamingChannel(aiSDKChannels.streamText, {
         name: "streamText",
         type: SpanTypeAttribute.LLM,
-        extractInput: ([params]) => {
-          return {
-            input: processAISDKInput(params),
-            metadata: extractMetadataFromParams(params),
-          };
-        },
-        extractOutput: (result) => {
-          return processAISDKOutput(result, denyOutputPaths);
-        },
-        extractMetrics: (result, startTime) => {
-          const metrics = extractTokenMetrics(result);
-          if (startTime) {
-            metrics.time_to_first_token = getCurrentUnixTimestamp() - startTime;
-          }
-          return metrics;
-        },
+        extractInput: ([params], event, span) =>
+          prepareAISDKInput(params, event, span, denyOutputPaths),
+        extractOutput: (result) => processAISDKOutput(result, denyOutputPaths),
+        extractMetrics: (result, startTime, endEvent) =>
+          extractTopLevelAISDKMetrics(result, endEvent, startTime),
         aggregateChunks: aggregateAISDKChunks,
+        patchResult: ({ endEvent, result, span, startTime }) =>
+          patchAISDKStreamingResult({
+            denyOutputPaths,
+            endEvent,
+            result,
+            span,
+            startTime,
+          }),
       }),
     );
 
@@ -131,22 +130,14 @@ export class AISDKPlugin extends BasePlugin {
       traceStreamingChannel(aiSDKChannels.generateObject, {
         name: "generateObject",
         type: SpanTypeAttribute.LLM,
-        extractInput: ([params]) => {
-          return {
-            input: processAISDKInput(params),
-            metadata: extractMetadataFromParams(params),
-          };
-        },
-        extractOutput: (result) => {
+        extractInput: ([params], event, span) =>
+          prepareAISDKInput(params, event, span, denyOutputPaths),
+        extractOutput: (result, endEvent) => {
+          finalizeAISDKChildTracing(endEvent as { [key: string]: unknown });
           return processAISDKOutput(result, denyOutputPaths);
         },
-        extractMetrics: (result, startTime) => {
-          const metrics = extractTokenMetrics(result);
-          if (startTime) {
-            metrics.time_to_first_token = getCurrentUnixTimestamp() - startTime;
-          }
-          return metrics;
-        },
+        extractMetrics: (result, _startTime, endEvent) =>
+          extractTopLevelAISDKMetrics(result, endEvent),
         aggregateChunks: aggregateAISDKChunks,
       }),
     );
@@ -156,23 +147,20 @@ export class AISDKPlugin extends BasePlugin {
       traceStreamingChannel(aiSDKChannels.streamObject, {
         name: "streamObject",
         type: SpanTypeAttribute.LLM,
-        extractInput: ([params]) => {
-          return {
-            input: processAISDKInput(params),
-            metadata: extractMetadataFromParams(params),
-          };
-        },
-        extractOutput: (result) => {
-          return processAISDKOutput(result, denyOutputPaths);
-        },
-        extractMetrics: (result, startTime) => {
-          const metrics = extractTokenMetrics(result);
-          if (startTime) {
-            metrics.time_to_first_token = getCurrentUnixTimestamp() - startTime;
-          }
-          return metrics;
-        },
+        extractInput: ([params], event, span) =>
+          prepareAISDKInput(params, event, span, denyOutputPaths),
+        extractOutput: (result) => processAISDKOutput(result, denyOutputPaths),
+        extractMetrics: (result, startTime, endEvent) =>
+          extractTopLevelAISDKMetrics(result, endEvent, startTime),
         aggregateChunks: aggregateAISDKChunks,
+        patchResult: ({ endEvent, result, span, startTime }) =>
+          patchAISDKStreamingResult({
+            denyOutputPaths,
+            endEvent,
+            result,
+            span,
+            startTime,
+          }),
       }),
     );
 
@@ -181,22 +169,14 @@ export class AISDKPlugin extends BasePlugin {
       traceStreamingChannel(aiSDKChannels.agentGenerate, {
         name: "Agent.generate",
         type: SpanTypeAttribute.LLM,
-        extractInput: ([params]) => {
-          return {
-            input: processAISDKInput(params),
-            metadata: extractMetadataFromParams(params),
-          };
-        },
-        extractOutput: (result) => {
+        extractInput: ([params], event, span) =>
+          prepareAISDKInput(params, event, span, denyOutputPaths),
+        extractOutput: (result, endEvent) => {
+          finalizeAISDKChildTracing(endEvent as { [key: string]: unknown });
           return processAISDKOutput(result, denyOutputPaths);
         },
-        extractMetrics: (result, startTime) => {
-          const metrics = extractTokenMetrics(result);
-          if (startTime) {
-            metrics.time_to_first_token = getCurrentUnixTimestamp() - startTime;
-          }
-          return metrics;
-        },
+        extractMetrics: (result, _startTime, endEvent) =>
+          extractTopLevelAISDKMetrics(result, endEvent),
         aggregateChunks: aggregateAISDKChunks,
       }),
     );
@@ -206,23 +186,59 @@ export class AISDKPlugin extends BasePlugin {
       traceStreamingChannel(aiSDKChannels.agentStream, {
         name: "Agent.stream",
         type: SpanTypeAttribute.LLM,
-        extractInput: ([params]) => {
-          return {
-            input: processAISDKInput(params),
-            metadata: extractMetadataFromParams(params),
-          };
-        },
-        extractOutput: (result) => {
+        extractInput: ([params], event, span) =>
+          prepareAISDKInput(params, event, span, denyOutputPaths),
+        extractOutput: (result) => processAISDKOutput(result, denyOutputPaths),
+        extractMetrics: (result, startTime, endEvent) =>
+          extractTopLevelAISDKMetrics(result, endEvent, startTime),
+        aggregateChunks: aggregateAISDKChunks,
+        patchResult: ({ endEvent, result, span, startTime }) =>
+          patchAISDKStreamingResult({
+            denyOutputPaths,
+            endEvent,
+            result,
+            span,
+            startTime,
+          }),
+      }),
+    );
+
+    // ToolLoopAgent.generate - async method
+    this.unsubscribers.push(
+      traceStreamingChannel(aiSDKChannels.toolLoopAgentGenerate, {
+        name: "ToolLoopAgent.generate",
+        type: SpanTypeAttribute.LLM,
+        extractInput: ([params], event, span) =>
+          prepareAISDKInput(params, event, span, denyOutputPaths),
+        extractOutput: (result, endEvent) => {
+          finalizeAISDKChildTracing(endEvent as { [key: string]: unknown });
           return processAISDKOutput(result, denyOutputPaths);
         },
-        extractMetrics: (result, startTime) => {
-          const metrics = extractTokenMetrics(result);
-          if (startTime) {
-            metrics.time_to_first_token = getCurrentUnixTimestamp() - startTime;
-          }
-          return metrics;
-        },
+        extractMetrics: (result, _startTime, endEvent) =>
+          extractTopLevelAISDKMetrics(result, endEvent),
         aggregateChunks: aggregateAISDKChunks,
+      }),
+    );
+
+    // ToolLoopAgent.stream - async method returning stream
+    this.unsubscribers.push(
+      traceStreamingChannel(aiSDKChannels.toolLoopAgentStream, {
+        name: "ToolLoopAgent.stream",
+        type: SpanTypeAttribute.LLM,
+        extractInput: ([params], event, span) =>
+          prepareAISDKInput(params, event, span, denyOutputPaths),
+        extractOutput: (result) => processAISDKOutput(result, denyOutputPaths),
+        extractMetrics: (result, startTime, endEvent) =>
+          extractTopLevelAISDKMetrics(result, endEvent, startTime),
+        aggregateChunks: aggregateAISDKChunks,
+        patchResult: ({ endEvent, result, span, startTime }) =>
+          patchAISDKStreamingResult({
+            denyOutputPaths,
+            endEvent,
+            result,
+            span,
+            startTime,
+          }),
       }),
     );
   }
@@ -238,12 +254,61 @@ function processAISDKInput(params: AISDKCallParams): unknown {
   return processInputAttachments(params);
 }
 
+function prepareAISDKInput(
+  params: AISDKCallParams,
+  event: { self?: unknown; [key: string]: unknown },
+  span: Span,
+  denyOutputPaths: string[],
+): {
+  input: unknown;
+  metadata: Record<string, unknown>;
+} {
+  const input = processAISDKInput(params);
+  const metadata = extractMetadataFromParams(params, event.self);
+  const childTracing = prepareAISDKChildTracing(
+    params,
+    event.self,
+    span,
+    denyOutputPaths,
+  );
+  event.__braintrust_ai_sdk_model_wrapped = childTracing.modelWrapped;
+  if (childTracing.cleanup) {
+    event.__braintrust_ai_sdk_cleanup = childTracing.cleanup;
+  }
+
+  return {
+    input,
+    metadata,
+  };
+}
+
+function extractTopLevelAISDKMetrics(
+  result: AISDKResult,
+  event?: { [key: string]: unknown },
+  startTime?: number,
+): Record<string, number> {
+  const metrics = hasModelChildTracing(event)
+    ? {}
+    : extractTokenMetrics(result);
+
+  if (startTime) {
+    metrics.time_to_first_token = getCurrentUnixTimestamp() - startTime;
+  }
+
+  return metrics;
+}
+
+function hasModelChildTracing(event?: { [key: string]: unknown }): boolean {
+  return event?.__braintrust_ai_sdk_model_wrapped === true;
+}
+
 /**
  * Extract metadata from AI SDK parameters.
  * Includes model, provider, and integration info.
  */
 function extractMetadataFromParams(
   params: AISDKCallParams,
+  self?: unknown,
 ): Record<string, unknown> {
   const metadata: Record<string, unknown> = {
     braintrust: {
@@ -253,7 +318,21 @@ function extractMetadataFromParams(
   };
 
   // Extract model information
-  const { model, provider } = serializeModelWithProvider(params.model);
+  const agentModel =
+    self &&
+    typeof self === "object" &&
+    "model" in self &&
+    (self as { model?: AISDKModel }).model
+      ? (self as { model?: AISDKModel }).model
+      : self &&
+          typeof self === "object" &&
+          "settings" in self &&
+          (self as { settings?: { model?: AISDKModel } }).settings?.model
+        ? (self as { settings?: { model?: AISDKModel } }).settings?.model
+        : undefined;
+  const { model, provider } = serializeModelWithProvider(
+    params.model ?? agentModel,
+  );
   if (model) {
     metadata.model = model;
   }
@@ -262,6 +341,500 @@ function extractMetadataFromParams(
   }
 
   return metadata;
+}
+
+function prepareAISDKChildTracing(
+  params: AISDKCallParams,
+  self: unknown,
+  parentSpan: Span,
+  denyOutputPaths: string[],
+): {
+  cleanup?: () => void;
+  modelWrapped: boolean;
+} {
+  const cleanup: Array<() => void> = [];
+  const patchedModels = new WeakSet<object>();
+  const patchedTools = new WeakSet<object>();
+  let modelWrapped = false;
+
+  const patchModel = (model: AISDKModel | undefined): void => {
+    const resolvedModel = resolveAISDKModel(model);
+    if (
+      !resolvedModel ||
+      typeof resolvedModel !== "object" ||
+      typeof resolvedModel.doGenerate !== "function" ||
+      patchedModels.has(resolvedModel) ||
+      (resolvedModel as { [AUTO_PATCHED_MODEL]?: boolean })[AUTO_PATCHED_MODEL]
+    ) {
+      return;
+    }
+
+    patchedModels.add(resolvedModel);
+    (resolvedModel as { [AUTO_PATCHED_MODEL]?: boolean })[AUTO_PATCHED_MODEL] =
+      true;
+    modelWrapped = true;
+
+    const originalDoGenerate = resolvedModel.doGenerate;
+    const originalDoStream = resolvedModel.doStream;
+    const baseMetadata = buildAISDKChildMetadata(resolvedModel);
+
+    resolvedModel.doGenerate = async function doGeneratePatched(
+      options: AISDKCallParams,
+    ) {
+      return parentSpan.traced(
+        async (span) => {
+          const result = await Reflect.apply(
+            originalDoGenerate,
+            resolvedModel,
+            [options],
+          );
+
+          span.log({
+            output: processAISDKOutput(result, denyOutputPaths),
+            metrics: extractTokenMetrics(result),
+            ...buildResolvedMetadataPayload(result),
+          });
+
+          return result;
+        },
+        {
+          name: "doGenerate",
+          spanAttributes: {
+            type: SpanTypeAttribute.LLM,
+          },
+          event: {
+            input: processAISDKInput(options),
+            metadata: baseMetadata,
+          },
+        },
+      );
+    };
+
+    if (originalDoStream) {
+      resolvedModel.doStream = async function doStreamPatched(
+        options: AISDKCallParams,
+      ) {
+        const span = parentSpan.startSpan({
+          name: "doStream",
+          spanAttributes: {
+            type: SpanTypeAttribute.LLM,
+          },
+          event: {
+            input: processAISDKInput(options),
+            metadata: baseMetadata,
+          },
+        });
+
+        const result = await withCurrent(span, () =>
+          Reflect.apply(originalDoStream, resolvedModel, [options]),
+        );
+        const output: Record<string, unknown> = {};
+        let text = "";
+        let reasoning = "";
+        const toolCalls: unknown[] = [];
+        let object: unknown = undefined;
+
+        const transformStream = new TransformStream({
+          transform(chunk: AISDKModelStreamChunk, controller) {
+            switch (chunk.type) {
+              case "text-delta":
+                text += extractTextDelta(chunk);
+                break;
+              case "reasoning-delta":
+                if (chunk.delta) {
+                  reasoning += chunk.delta;
+                } else if (chunk.text) {
+                  reasoning += chunk.text;
+                }
+                break;
+              case "tool-call":
+                toolCalls.push(chunk);
+                break;
+              case "object":
+                object = chunk.object;
+                break;
+              case "raw":
+                if (chunk.rawValue) {
+                  const rawVal = chunk.rawValue as {
+                    choices?: Array<{ delta?: { content?: string } }>;
+                    content?: string;
+                    delta?: { content?: string };
+                    text?: string;
+                  };
+                  if (rawVal.delta?.content) {
+                    text += rawVal.delta.content;
+                  } else if (rawVal.choices?.[0]?.delta?.content) {
+                    text += rawVal.choices[0].delta.content;
+                  } else if (typeof rawVal.text === "string") {
+                    text += rawVal.text;
+                  } else if (typeof rawVal.content === "string") {
+                    text += rawVal.content;
+                  }
+                }
+                break;
+              case "finish":
+                output.text = text;
+                output.reasoning = reasoning;
+                output.toolCalls = toolCalls;
+                output.finishReason = chunk.finishReason;
+                output.usage = chunk.usage;
+
+                if (object !== undefined) {
+                  output.object = object;
+                }
+
+                span.log({
+                  output: processAISDKOutput(
+                    output as AISDKResult,
+                    denyOutputPaths,
+                  ),
+                  metrics: extractTokenMetrics(output as AISDKResult),
+                  ...buildResolvedMetadataPayload(output as AISDKResult),
+                });
+                span.end();
+                break;
+            }
+            controller.enqueue(chunk);
+          },
+        });
+
+        return {
+          ...result,
+          stream: result.stream.pipeThrough(transformStream),
+        };
+      };
+    }
+
+    cleanup.push(() => {
+      resolvedModel.doGenerate = originalDoGenerate;
+      if (originalDoStream) {
+        resolvedModel.doStream = originalDoStream;
+      }
+      delete (resolvedModel as { [AUTO_PATCHED_MODEL]?: boolean })[
+        AUTO_PATCHED_MODEL
+      ];
+    });
+  };
+
+  const patchTool = (tool: AISDKTool, name: string): void => {
+    if (
+      tool == null ||
+      typeof tool !== "object" ||
+      !("execute" in tool) ||
+      typeof tool.execute !== "function" ||
+      patchedTools.has(tool) ||
+      (tool as { [AUTO_PATCHED_TOOL]?: boolean })[AUTO_PATCHED_TOOL]
+    ) {
+      return;
+    }
+
+    patchedTools.add(tool);
+    (tool as { [AUTO_PATCHED_TOOL]?: boolean })[AUTO_PATCHED_TOOL] = true;
+    const originalExecute = tool.execute;
+    tool.execute = function executePatched(...args: unknown[]) {
+      const result = Reflect.apply(originalExecute, this, args);
+
+      if (isAsyncGenerator(result)) {
+        return (async function* () {
+          const span = parentSpan.startSpan({
+            name,
+            spanAttributes: {
+              type: SpanTypeAttribute.TOOL,
+            },
+          });
+          span.log({ input: args.length === 1 ? args[0] : args });
+
+          try {
+            let lastValue: unknown;
+            for await (const value of result) {
+              lastValue = value;
+              yield value;
+            }
+            span.log({ output: lastValue });
+          } catch (error) {
+            span.log({
+              error: error instanceof Error ? error.message : String(error),
+            });
+            throw error;
+          } finally {
+            span.end();
+          }
+        })();
+      }
+
+      return parentSpan.traced(
+        async (span) => {
+          span.log({ input: args.length === 1 ? args[0] : args });
+          const awaitedResult = await result;
+          span.log({ output: awaitedResult });
+          return awaitedResult;
+        },
+        {
+          name,
+          spanAttributes: {
+            type: SpanTypeAttribute.TOOL,
+          },
+        },
+      );
+    };
+
+    cleanup.push(() => {
+      tool.execute = originalExecute;
+      delete (tool as { [AUTO_PATCHED_TOOL]?: boolean })[AUTO_PATCHED_TOOL];
+    });
+  };
+
+  const patchTools = (tools: AISDKTools | undefined): void => {
+    if (!tools) {
+      return;
+    }
+
+    const inferName = (tool: AISDKTool, fallback: string) =>
+      (tool && (tool.name || tool.toolName || tool.id)) || fallback;
+
+    if (Array.isArray(tools)) {
+      tools.forEach((tool, index) =>
+        patchTool(tool, inferName(tool, `tool[${index}]`)),
+      );
+      return;
+    }
+
+    for (const [key, tool] of Object.entries(tools)) {
+      patchTool(tool, key);
+    }
+  };
+
+  if (params && typeof params === "object") {
+    patchModel(params.model);
+    patchTools(params.tools);
+  }
+
+  if (self && typeof self === "object") {
+    const selfRecord = self as {
+      model?: AISDKModel;
+      settings?: { model?: AISDKModel; tools?: AISDKTools };
+    };
+
+    if (selfRecord.model !== undefined) {
+      patchModel(selfRecord.model);
+    }
+
+    if (selfRecord.settings && typeof selfRecord.settings === "object") {
+      if (selfRecord.settings.model !== undefined) {
+        patchModel(selfRecord.settings.model);
+      }
+      if (selfRecord.settings.tools !== undefined) {
+        patchTools(selfRecord.settings.tools);
+      }
+    }
+  }
+
+  return {
+    cleanup:
+      cleanup.length > 0
+        ? () => {
+            while (cleanup.length > 0) {
+              cleanup.pop()?.();
+            }
+          }
+        : undefined,
+    modelWrapped,
+  };
+}
+
+function finalizeAISDKChildTracing(event?: { [key: string]: unknown }): void {
+  const cleanup = event?.__braintrust_ai_sdk_cleanup;
+  if (typeof cleanup === "function") {
+    cleanup();
+    delete event.__braintrust_ai_sdk_cleanup;
+  }
+}
+
+function patchAISDKStreamingResult(args: {
+  channelName: string;
+  denyOutputPaths: string[];
+  endEvent: { [key: string]: unknown };
+  result: AISDKResult;
+  span: Span;
+  startTime: number;
+}): boolean {
+  const { channelName, denyOutputPaths, endEvent, result, span, startTime } =
+    args;
+
+  if (!result || typeof result !== "object") {
+    return false;
+  }
+
+  const resultRecord = result as Record<string, unknown>;
+  if (!isReadableStreamLike(resultRecord.baseStream)) {
+    return false;
+  }
+
+  let firstChunkTime: number | undefined;
+
+  const wrappedBaseStream = resultRecord.baseStream.pipeThrough(
+    new TransformStream({
+      transform(chunk, controller) {
+        if (firstChunkTime === undefined) {
+          firstChunkTime = getCurrentUnixTimestamp();
+        }
+        controller.enqueue(chunk);
+      },
+      async flush() {
+        const metrics = extractTopLevelAISDKMetrics(result, endEvent);
+        if (
+          metrics.time_to_first_token === undefined &&
+          firstChunkTime !== undefined
+        ) {
+          metrics.time_to_first_token = firstChunkTime - startTime;
+        }
+
+        const output = await processAISDKStreamingOutput(
+          result,
+          denyOutputPaths,
+        );
+        const metadata = buildResolvedMetadataPayload(result).metadata;
+
+        span.log({
+          output,
+          ...(metadata ? { metadata } : {}),
+          metrics,
+        });
+
+        finalizeAISDKChildTracing(endEvent);
+        span.end();
+      },
+    }),
+  );
+
+  Object.defineProperty(resultRecord, "baseStream", {
+    configurable: true,
+    enumerable: true,
+    value: wrappedBaseStream,
+    writable: true,
+  });
+
+  return true;
+}
+
+function isReadableStreamLike(value: unknown): value is {
+  pipeThrough<T>(transform: TransformStream<unknown, T>): ReadableStream<T>;
+} {
+  return (
+    value != null &&
+    typeof value === "object" &&
+    typeof (value as { pipeThrough?: unknown }).pipeThrough === "function"
+  );
+}
+
+async function processAISDKStreamingOutput(
+  result: AISDKResult,
+  denyOutputPaths: string[],
+): Promise<Record<string, unknown> | AISDKResult> {
+  const output = processAISDKOutput(result, denyOutputPaths);
+
+  if (!output || typeof output !== "object") {
+    return output;
+  }
+
+  const outputRecord = output as Record<string, unknown>;
+
+  try {
+    if ("text" in result && typeof result.text === "string") {
+      outputRecord.text = result.text;
+    }
+  } catch {
+    // Ignore getter failures
+  }
+
+  try {
+    if ("object" in result) {
+      const resolvedObject = await Promise.resolve(result.object);
+      if (resolvedObject !== undefined) {
+        outputRecord.object = resolvedObject;
+      }
+    }
+  } catch {
+    // Ignore getter/promise failures
+  }
+
+  return outputRecord;
+}
+
+function buildAISDKChildMetadata(
+  model: AISDKModel | undefined,
+): Record<string, unknown> {
+  const { model: modelId, provider } = serializeModelWithProvider(model);
+
+  return {
+    ...(modelId ? { model: modelId } : {}),
+    ...(provider ? { provider } : {}),
+    braintrust: {
+      integration_name: "ai-sdk",
+      sdk_language: "typescript",
+    },
+  };
+}
+
+function buildResolvedMetadataPayload(result: AISDKResult): {
+  metadata?: Record<string, unknown>;
+} {
+  const gatewayInfo = extractGatewayRoutingInfo(result);
+  const metadata: Record<string, unknown> = {};
+
+  if (gatewayInfo?.provider) {
+    metadata.provider = gatewayInfo.provider;
+  }
+  if (gatewayInfo?.model) {
+    metadata.model = gatewayInfo.model;
+  }
+  if (result.finishReason !== undefined) {
+    metadata.finish_reason = result.finishReason;
+  }
+
+  return Object.keys(metadata).length > 0 ? { metadata } : {};
+}
+
+function resolveAISDKModel(
+  model: AISDKModel | undefined,
+): AISDKModel | undefined {
+  if (typeof model !== "string") {
+    return model;
+  }
+
+  const provider =
+    (
+      globalThis as typeof globalThis & {
+        AI_SDK_DEFAULT_PROVIDER?: {
+          languageModel?: (modelId: string) => AISDKLanguageModel;
+        };
+      }
+    ).AI_SDK_DEFAULT_PROVIDER ?? null;
+
+  if (provider && typeof provider.languageModel === "function") {
+    return provider.languageModel(model);
+  }
+
+  return model;
+}
+
+function extractTextDelta(chunk: AISDKModelStreamChunk): string {
+  if (typeof chunk.textDelta === "string") return chunk.textDelta;
+  if (typeof chunk.delta === "string") return chunk.delta;
+  if (typeof chunk.text === "string") return chunk.text;
+  if (typeof chunk.content === "string") return chunk.content;
+  return "";
+}
+
+function isAsyncGenerator(value: unknown): value is AsyncGenerator {
+  return (
+    value != null &&
+    typeof value === "object" &&
+    typeof (value as AsyncGenerator)[Symbol.asyncIterator] === "function" &&
+    typeof (value as AsyncGenerator).next === "function" &&
+    typeof (value as AsyncGenerator).return === "function" &&
+    typeof (value as AsyncGenerator).throw === "function"
+  );
 }
 
 /**
@@ -273,11 +846,7 @@ function processAISDKOutput(
 ): Record<string, unknown> | AISDKResult {
   if (!output) return output;
 
-  // Extract getter values from result objects
-  const getterValues = extractGetterValues(output);
-
-  // Merge with original output
-  const merged = { ...output, ...getterValues };
+  const merged = extractSerializableOutputFields(output);
 
   // Apply omit to remove unwanted paths
   return omit(merged, denyOutputPaths);
@@ -351,9 +920,14 @@ function extractTokenMetrics(result: AISDKResult): Record<string, number> {
 /**
  * Aggregate AI SDK streaming chunks into a single response.
  */
-function aggregateAISDKChunks(chunks: unknown[]): {
+function aggregateAISDKChunks(
+  chunks: unknown[],
+  _result?: AISDKResult,
+  endEvent?: { [key: string]: unknown },
+): {
   output: Record<string, unknown>;
   metrics: Record<string, number>;
+  metadata?: Record<string, unknown>;
 } {
   // For AI SDK streams, the chunks are typically delta objects
   // We'll return the last chunk which usually contains the final state
@@ -361,10 +935,14 @@ function aggregateAISDKChunks(chunks: unknown[]): {
 
   const output: Record<string, unknown> = {};
   let metrics: Record<string, number> = {};
+  let metadata: Record<string, unknown> | undefined;
 
   // Extract usage from last chunk
   if (lastChunk) {
-    metrics = extractTokenMetrics(lastChunk);
+    metrics = hasModelChildTracing(endEvent)
+      ? {}
+      : extractTokenMetrics(lastChunk);
+    metadata = buildResolvedMetadataPayload(lastChunk).metadata;
 
     // Extract common output fields
     if (lastChunk.text !== undefined) {
@@ -381,7 +959,9 @@ function aggregateAISDKChunks(chunks: unknown[]): {
     }
   }
 
-  return { output, metrics };
+  finalizeAISDKChildTracing(endEvent);
+
+  return { output, metrics, metadata };
 }
 
 /**
@@ -409,7 +989,7 @@ function extractGetterValues(
 
   for (const name of getterNames) {
     try {
-      if (obj && name in obj && typeof obj[name] !== "function") {
+      if (obj && name in obj && isSerializableOutputValue(obj[name])) {
         getterValues[name] = obj[name];
       }
     } catch {
@@ -418,6 +998,72 @@ function extractGetterValues(
   }
 
   return getterValues;
+}
+
+function extractSerializableOutputFields(
+  output: AISDKResult,
+): Record<string, unknown> {
+  const serialized: Record<string, unknown> = {};
+  const directFieldNames = [
+    "steps",
+    "request",
+    "responseMessages",
+    "warnings",
+    "rawResponse",
+    "response",
+    "providerMetadata",
+    "experimental_providerMetadata",
+  ] as const;
+
+  for (const name of directFieldNames) {
+    try {
+      const value = output?.[name];
+      if (isSerializableOutputValue(value)) {
+        serialized[name] = value;
+      }
+    } catch {
+      // Ignore errors accessing getters
+    }
+  }
+
+  return {
+    ...serialized,
+    ...extractGetterValues(output),
+  };
+}
+
+function isSerializableOutputValue(value: unknown): boolean {
+  if (typeof value === "function") {
+    return false;
+  }
+
+  if (
+    value &&
+    typeof value === "object" &&
+    typeof (value as { then?: unknown }).then === "function"
+  ) {
+    return false;
+  }
+
+  if (
+    value &&
+    typeof value === "object" &&
+    typeof (value as { getReader?: unknown }).getReader === "function"
+  ) {
+    return false;
+  }
+
+  if (
+    value &&
+    typeof value === "object" &&
+    typeof (value as { [Symbol.asyncIterator]?: unknown })[
+      Symbol.asyncIterator
+    ] === "function"
+  ) {
+    return false;
+  }
+
+  return true;
 }
 
 /**
@@ -461,6 +1107,31 @@ function parseGatewayModelString(modelString: string): {
     };
   }
   return { model: modelString };
+}
+
+function extractGatewayRoutingInfo(result: AISDKResult): {
+  model?: string;
+  provider?: string;
+} | null {
+  if (result?.steps && Array.isArray(result.steps) && result.steps.length > 0) {
+    const routing = result.steps[0]?.providerMetadata?.gateway?.routing;
+    if (routing) {
+      return {
+        provider: routing.resolvedProvider || routing.finalProvider,
+        model: routing.resolvedProviderApiModelId,
+      };
+    }
+  }
+
+  const routing = result?.providerMetadata?.gateway?.routing;
+  if (routing) {
+    return {
+      provider: routing.resolvedProvider || routing.finalProvider,
+      model: routing.resolvedProviderApiModelId,
+    };
+  }
+
+  return null;
 }
 
 /**

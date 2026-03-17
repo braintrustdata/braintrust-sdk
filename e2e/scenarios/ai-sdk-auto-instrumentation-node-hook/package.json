@@ -1,0 +1,11 @@
+{
+  "name": "@braintrust/e2e-ai-sdk-auto-instrumentation-node-hook",
+  "private": true,
+  "dependencies": {
+    "ai-sdk-openai-v5": "npm:@ai-sdk/openai@2.0.57",
+    "ai-sdk-openai-v6": "npm:@ai-sdk/openai@3.0.7",
+    "ai-sdk-v5": "npm:ai@5.0.82",
+    "ai-sdk-v6": "npm:ai@6.0.1",
+    "zod": "3.25.76"
+  }
+}

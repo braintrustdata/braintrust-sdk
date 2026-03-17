@@ -52,7 +52,9 @@ describe("AI SDK Instrumentation Configs", () => {
 
     expect(config).toBeDefined();
     expect(config?.module.name).toBe("ai");
-    expect((config?.functionQuery as any).className).toBe("Agent");
+    expect(config?.module.versionRange).toBe(">=5.0.0 <6.0.0");
+    expect((config?.functionQuery as any).methodName).toBe("generate");
+    expect((config?.functionQuery as any).index).toBe(0);
     expect((config?.functionQuery as any).methodName).toBe("generate");
     expect((config?.functionQuery as any).kind).toBe("Async");
   });
@@ -62,8 +64,36 @@ describe("AI SDK Instrumentation Configs", () => {
 
     expect(config).toBeDefined();
     expect(config?.module.name).toBe("ai");
-    expect((config?.functionQuery as any).className).toBe("Agent");
+    expect(config?.module.versionRange).toBe(">=5.0.0 <6.0.0");
     expect((config?.functionQuery as any).methodName).toBe("stream");
+    expect((config?.functionQuery as any).index).toBe(0);
+    expect((config?.functionQuery as any).methodName).toBe("stream");
+    expect((config?.functionQuery as any).kind).toBe("Async");
+  });
+
+  it("should have ToolLoopAgent.generate config", () => {
+    const config = aiSDKConfigs.find(
+      (c) => c.channelName === "ToolLoopAgent.generate",
+    );
+
+    expect(config).toBeDefined();
+    expect(config?.module.name).toBe("ai");
+    expect(config?.module.versionRange).toBe(">=6.0.0 <7.0.0");
+    expect((config?.functionQuery as any).methodName).toBe("generate");
+    expect((config?.functionQuery as any).index).toBe(0);
+    expect((config?.functionQuery as any).kind).toBe("Async");
+  });
+
+  it("should have ToolLoopAgent.stream config", () => {
+    const config = aiSDKConfigs.find(
+      (c) => c.channelName === "ToolLoopAgent.stream",
+    );
+
+    expect(config).toBeDefined();
+    expect(config?.module.name).toBe("ai");
+    expect(config?.module.versionRange).toBe(">=6.0.0 <7.0.0");
+    expect((config?.functionQuery as any).methodName).toBe("stream");
+    expect((config?.functionQuery as any).index).toBe(0);
     expect((config?.functionQuery as any).kind).toBe("Async");
   });
 
@@ -105,18 +135,27 @@ describe("AI SDK Instrumentation Configs", () => {
   it("should support appropriate version ranges", () => {
     // Non-Agent methods support all versions >=3.0.0
     const nonAgentConfigs = aiSDKConfigs.filter(
-      (c) => !c.channelName.startsWith("Agent."),
+      (c) =>
+        !c.channelName.startsWith("Agent.") &&
+        !c.channelName.startsWith("ToolLoopAgent."),
     );
     for (const config of nonAgentConfigs) {
       expect(config.module.versionRange).toBe(">=3.0.0");
     }
 
-    // Agent methods only support v3-v5 (Agent structure changed in v6)
+    // Agent methods only support v5
     const agentConfigs = aiSDKConfigs.filter((c) =>
       c.channelName.startsWith("Agent."),
     );
     for (const config of agentConfigs) {
-      expect(config.module.versionRange).toBe(">=3.0.0 <6.0.0");
+      expect(config.module.versionRange).toBe(">=5.0.0 <6.0.0");
+    }
+
+    const toolLoopAgentConfigs = aiSDKConfigs.filter((c) =>
+      c.channelName.startsWith("ToolLoopAgent."),
+    );
+    for (const config of toolLoopAgentConfigs) {
+      expect(config.module.versionRange).toBe(">=6.0.0 <7.0.0");
     }
   });
 });

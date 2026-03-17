@@ -35,6 +35,11 @@ export interface BaseContext {
   traceId?: string;
 
   /**
+   * The original `this` value for the traced call, when applicable.
+   */
+  self?: unknown;
+
+  /**
    * Arbitrary data that can be attached by event handlers
    * and passed between start/end/error events.
    */

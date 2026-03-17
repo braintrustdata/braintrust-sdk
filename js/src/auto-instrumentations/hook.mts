@@ -31,6 +31,31 @@ const dc: any = await import(/* @vite-ignore */ dcPath as any);
 const dummyChannel = dc.tracingChannel("dummy");
 const TracingChannel = dummyChannel.constructor;
 
+if (
+  TracingChannel &&
+  !Object.getOwnPropertyDescriptor(TracingChannel.prototype, "hasSubscribers")
+) {
+  Object.defineProperty(TracingChannel.prototype, "hasSubscribers", {
+    configurable: true,
+    enumerable: false,
+    get(this: {
+      start?: { hasSubscribers?: boolean };
+      end?: { hasSubscribers?: boolean };
+      asyncStart?: { hasSubscribers?: boolean };
+      asyncEnd?: { hasSubscribers?: boolean };
+      error?: { hasSubscribers?: boolean };
+    }) {
+      return Boolean(
+        this.start?.hasSubscribers ||
+        this.end?.hasSubscribers ||
+        this.asyncStart?.hasSubscribers ||
+        this.asyncEnd?.hasSubscribers ||
+        this.error?.hasSubscribers,
+      );
+    },
+  });
+}
+
 if (TracingChannel && TracingChannel.prototype.tracePromise) {
   TracingChannel.prototype.tracePromise = function (
     fn: any,
@@ -58,10 +83,23 @@ if (TracingChannel && TracingChannel.prototype.tracePromise) {
     start?.publish(context);
 
     try {
-      const promise = Reflect.apply(fn, thisArg, args);
       // PATCHED: Removed instanceof Promise check and Promise.resolve() wrapper
       // This allows APIPromise and other Promise subclasses to work correctly
-      return promise.then(resolve, reject);
+
+      const result = Reflect.apply(fn, thisArg, args);
+
+      if (
+        result &&
+        (typeof result === "object" || typeof result === "function") &&
+        typeof result.then === "function"
+      ) {
+        return result.then(resolve, reject);
+      }
+
+      context.result = result;
+      asyncStart?.publish(context);
+      asyncEnd?.publish(context);
+      return result;
     } catch (err) {
       context.error = err;
       error?.publish(context);

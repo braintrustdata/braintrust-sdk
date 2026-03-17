@@ -69,33 +69,71 @@ export const aiSDKConfigs: InstrumentationConfig[] = [
     },
   },
 
-  // Agent.generate - async method (v3-v5 only, Agent structure changed in v6)
+  // Agent.generate - async method (v5 only)
+  // The compiled AI SDK bundle emits this as an anonymous class method, so we
+  // target the first async `generate` method in the file instead of a class name.
   {
     channelName: aiSDKChannels.agentGenerate.channelName,
     module: {
       name: "ai",
-      versionRange: ">=3.0.0 <6.0.0",
+      versionRange: ">=5.0.0 <6.0.0",
       filePath: "dist/index.mjs",
     },
     functionQuery: {
-      className: "Agent",
       methodName: "generate",
       kind: "Async",
+      index: 0,
     },
   },
 
-  // Agent.stream - async method (v3-v5 only, Agent structure changed in v6)
+  // Agent.stream - async method (v5 only)
+  // The compiled AI SDK bundle emits this as an anonymous class method, so we
+  // target the first async `stream` method in the file instead of a class name.
   {
     channelName: aiSDKChannels.agentStream.channelName,
     module: {
       name: "ai",
-      versionRange: ">=3.0.0 <6.0.0",
+      versionRange: ">=5.0.0 <6.0.0",
       filePath: "dist/index.mjs",
     },
     functionQuery: {
-      className: "Agent",
       methodName: "stream",
       kind: "Async",
+      index: 0,
+    },
+  },
+
+  // ToolLoopAgent.generate - async method (v6 only, Experimental_Agent is an alias)
+  // The compiled AI SDK bundle emits this as an anonymous class method, so we
+  // target the first async `generate` method in the file instead of a class name.
+  {
+    channelName: aiSDKChannels.toolLoopAgentGenerate.channelName,
+    module: {
+      name: "ai",
+      versionRange: ">=6.0.0 <7.0.0",
+      filePath: "dist/index.mjs",
+    },
+    functionQuery: {
+      methodName: "generate",
+      kind: "Async",
+      index: 0,
+    },
+  },
+
+  // ToolLoopAgent.stream - async method (v6 only, Experimental_Agent is an alias)
+  // The compiled AI SDK bundle emits this as an anonymous class method, so we
+  // target the first async `stream` method in the file instead of a class name.
+  {
+    channelName: aiSDKChannels.toolLoopAgentStream.channelName,
+    module: {
+      name: "ai",
+      versionRange: ">=6.0.0 <7.0.0",
+      filePath: "dist/index.mjs",
+    },
+    functionQuery: {
+      methodName: "stream",
+      kind: "Async",
+      index: 0,
     },
   },
 ];

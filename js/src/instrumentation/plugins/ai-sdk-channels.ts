@@ -61,4 +61,22 @@ export const aiSDKChannels = defineChannels("ai", {
     channelName: "Agent.stream",
     kind: "async",
   }),
+  toolLoopAgentGenerate: channel<
+    [AISDKCallParams],
+    AISDKStreamResult,
+    Record<string, never>,
+    unknown
+  >({
+    channelName: "ToolLoopAgent.generate",
+    kind: "async",
+  }),
+  toolLoopAgentStream: channel<
+    [AISDKCallParams],
+    AISDKStreamResult,
+    Record<string, never>,
+    unknown
+  >({
+    channelName: "ToolLoopAgent.stream",
+    kind: "async",
+  }),
 });

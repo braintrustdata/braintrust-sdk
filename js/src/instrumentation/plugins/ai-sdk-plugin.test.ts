@@ -106,6 +106,14 @@ describe("AISDKPlugin", () => {
     it("should subscribe to Agent.stream channel on enable", () => {
       expect(() => plugin.enable()).not.toThrow();
     });
+
+    it("should subscribe to ToolLoopAgent.generate channel on enable", () => {
+      expect(() => plugin.enable()).not.toThrow();
+    });
+
+    it("should subscribe to ToolLoopAgent.stream channel on enable", () => {
+      expect(() => plugin.enable()).not.toThrow();
+    });
   });
 });
 
