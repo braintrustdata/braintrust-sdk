@@ -15,6 +15,12 @@ const config = {
     alias: {
       // Prevent resolution into vendor directories
       vendor: false,
+      // Force braintrust subpath imports to resolve to the workspace source,
+      // not the stale npm version pinned in integrations/browser-js/node_modules.
+      "braintrust/auto-instrumentation-configs": path.resolve(
+        __dirname,
+        "src/auto-instrumentations/index.ts",
+      ),
     },
   },
   server: {
