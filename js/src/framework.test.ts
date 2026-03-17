@@ -1498,8 +1498,7 @@ test("classifier-only evaluator populates classifications field", async () => {
     {
       data: [{ input: "hello", expected: "greeting" }],
       task: (input) => input,
-      scores: [],
-      classifications: [
+      classifiers: [
         () => ({
           name: "category",
           id: "greeting",
@@ -1551,8 +1550,7 @@ test("multiple classifiers returning the same name append items correctly", asyn
     {
       data: [{ input: "hello" }],
       task: (input) => input,
-      scores: [],
-      classifications: [
+      classifiers: [
         () => [
           { name: "category", id: "greeting", label: "Greeting" },
           { name: "category", id: "informal", label: "Informal" },
@@ -1586,7 +1584,7 @@ test("mixed evaluator populates both scores and classifications", async () => {
           score: args.output === args.expected ? 1 : 0,
         }),
       ],
-      classifications: [
+      classifiers: [
         () => ({ name: "category", id: "greeting", label: "Greeting" }),
       ],
     },
@@ -1606,8 +1604,7 @@ test("malformed classifier output fails clearly", async () => {
     {
       data: [{ input: "hello" }],
       task: (input) => input,
-      scores: [],
-      classifications: [() => ({}) as never],
+      classifiers: [() => ({}) as never],
     },
     { noSendLogs: true, returnResults: true },
   );
