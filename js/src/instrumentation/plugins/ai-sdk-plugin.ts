@@ -3,6 +3,7 @@ import { traceStreamingChannel, unsubscribeAll } from "../core/channel-tracing";
 import { SpanTypeAttribute } from "../../../util/index";
 import { getCurrentUnixTimestamp } from "../../util";
 import { processInputAttachments } from "../../wrappers/attachment-utils";
+import { serializeAISDKToolsForLogging } from "../../wrappers/ai-sdk/tool-serialization";
 import { aiSDKChannels } from "./ai-sdk-channels";
 import type {
   AISDKCallParams,
@@ -234,8 +235,15 @@ export class AISDKPlugin extends BasePlugin {
 function processAISDKInput(params: AISDKCallParams): unknown {
   if (!params) return params;
 
-  // Use the attachment processing from the manual wrapper
-  return processInputAttachments(params);
+  // Use the attachment processing from the manual wrapper, but keep tool
+  // definitions in metadata to match the OpenAI wrapper convention.
+  const input = processInputAttachments(params);
+  if (!input || typeof input !== "object" || Array.isArray(input)) {
+    return input;
+  }
+
+  const { tools: _tools, ...rest } = input as Record<string, unknown>;
+  return rest;
 }
 
 /**
@@ -259,6 +267,10 @@ function extractMetadataFromParams(
   }
   if (provider) {
     metadata.provider = provider;
+  }
+  const tools = serializeAISDKToolsForLogging(params.tools);
+  if (tools) {
+    metadata.tools = tools;
   }
 
   return metadata;

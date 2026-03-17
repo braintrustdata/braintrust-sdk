@@ -10,6 +10,7 @@ vi.mock("../../isomorph", () => ({
 import { AISDKPlugin } from "./ai-sdk-plugin";
 import { Attachment } from "../../logger";
 import iso from "../../isomorph";
+import { serializeAISDKToolsForLogging } from "../../wrappers/ai-sdk/tool-serialization";
 
 const mockNewTracingChannel = iso.newTracingChannel as ReturnType<typeof vi.fn>;
 
@@ -840,6 +841,36 @@ describe("AI SDK utility functions", () => {
       expect(metadata.model).toBeUndefined();
       expect(metadata.braintrust.integration_name).toBe("ai-sdk");
     });
+
+    it("should put tools in metadata", () => {
+      const params = {
+        model: "gpt-4",
+        tools: {
+          echo: {
+            description: "Echo the message",
+            execute: async () => "ok",
+            parameters: {
+              type: "object",
+              properties: {
+                message: {
+                  type: "string",
+                },
+              },
+            },
+          },
+        },
+      };
+      const metadata = extractMetadataFromParams(params);
+      expect(metadata.tools).toMatchObject({
+        echo: {
+          description: "Echo the message",
+          parameters: {
+            type: "object",
+          },
+        },
+      });
+      expect(metadata.tools).not.toHaveProperty("echo.execute");
+    });
   });
 
   describe("processAISDKOutput", () => {
@@ -1188,6 +1219,10 @@ function extractMetadataFromParams(params: any): Record<string, any> {
   }
   if (provider) {
     metadata.provider = provider;
+  }
+  const tools = serializeAISDKToolsForLogging(params.tools);
+  if (tools) {
+    metadata.tools = tools;
   }
 
   return metadata;

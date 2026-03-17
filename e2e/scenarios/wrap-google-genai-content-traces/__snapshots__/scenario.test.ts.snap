@@ -808,28 +808,6 @@ exports[`wrap-google-genai-content-traces captures generate, attachment, stream,
             "mode": "ANY",
           },
         },
-        "tools": [
-          {
-            "functionDeclarations": [
-              {
-                "description": "Get the current weather in a given location",
-                "name": "get_weather",
-                "parametersJsonSchema": {
-                  "properties": {
-                    "location": {
-                      "description": "The city and state or city and country",
-                      "type": "string",
-                    },
-                  },
-                  "required": [
-                    "location",
-                  ],
-                  "type": "object",
-                },
-              },
-            ],
-          },
-        ],
       },
       "contents": {
         "text": "Use the get_weather function for Paris, France. Do not answer from memory.",
@@ -849,6 +827,28 @@ exports[`wrap-google-genai-content-traces captures generate, attachment, stream,
           "mode": "ANY",
         },
       },
+      "tools": [
+        {
+          "functionDeclarations": [
+            {
+              "description": "Get the current weather in a given location",
+              "name": "get_weather",
+              "parametersJsonSchema": {
+                "properties": {
+                  "location": {
+                    "description": "The city and state or city and country",
+                    "type": "string",
+                  },
+                },
+                "required": [
+                  "location",
+                ],
+                "type": "object",
+              },
+            },
+          ],
+        },
+      ],
     },
     "metrics": {
       "start": 0,

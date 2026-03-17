@@ -147,22 +147,29 @@ test("wrap-google-genai-content-traces captures generate, attachment, stream, ea
 
     expect(JSON.stringify(attachmentSpan?.input)).toContain("file.png");
 
-    const toolInput = toolSpan?.input as
+    const toolMetadata = toolSpan?.row.metadata as
       | {
-          config?: {
-            tools?: Array<{
-              functionDeclarations?: Array<{ name?: string }>;
-            }>;
-          };
+          tools?: Array<{
+            functionDeclarations?: Array<{ name?: string }>;
+          }>;
         }
       | undefined;
     expect(
-      toolInput?.config?.tools?.some((tool) =>
+      toolMetadata?.tools?.some((tool) =>
         tool.functionDeclarations?.some(
           (declaration) => declaration.name === "get_weather",
         ),
       ),
     ).toBe(true);
+
+    const toolInput = toolSpan?.input as
+      | {
+          config?: {
+            tools?: Array<unknown>;
+          };
+        }
+      | undefined;
+    expect(toolInput?.config?.tools).toBeUndefined();
 
     const toolOutput = toolSpan?.output as
       | {

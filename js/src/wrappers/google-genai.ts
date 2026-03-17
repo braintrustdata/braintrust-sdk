@@ -348,11 +348,13 @@ function serializeInput(
   if (params.config) {
     const config = tryToDict(params.config);
     if (config) {
-      const tools = serializeTools(params);
-      if (tools) {
-        config.tools = tools;
-      }
-      input.config = config;
+      const filteredConfig: Record<string, unknown> = {};
+      Object.keys(config).forEach((key) => {
+        if (key !== "tools") {
+          filteredConfig[key] = config[key];
+        }
+      });
+      input.config = filteredConfig;
     }
   }
 
@@ -466,6 +468,11 @@ function extractMetadata(
         }
       });
     }
+  }
+
+  const tools = serializeTools(params);
+  if (tools) {
+    metadata.tools = tools;
   }
 
   return metadata;
