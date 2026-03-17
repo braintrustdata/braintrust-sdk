@@ -149,9 +149,6 @@ exports[`ai sdk auto-instrumentation via node hook collects Agent traces without
           "serviceTier": "default",
         },
       },
-      "request": {
-        "body": "<omitted>",
-      },
       "response": {
         "body": "<omitted>",
         "headers": "<omitted>",
@@ -194,9 +191,6 @@ exports[`ai sdk auto-instrumentation via node hook collects Agent traces without
               "responseId": "<span:9>",
               "serviceTier": "default",
             },
-          },
-          "request": {
-            "body": "<omitted>",
           },
           "response": {
             "body": "<omitted>",
@@ -352,9 +346,6 @@ exports[`ai sdk auto-instrumentation via node hook collects Agent traces without
           "responseId": "<span:9>",
           "serviceTier": "default",
         },
-      },
-      "request": {
-        "body": "<omitted>",
       },
       "response": {
         "body": "<omitted>",
@@ -712,31 +703,6 @@ exports[`ai sdk auto-instrumentation via node hook collects Agent traces without
       "system": "You must inspect live weather via the provided get_weather tool before responding.",
       "temperature": 0,
       "toolChoice": "required",
-      "tools": {
-        "get_weather": {
-          "description": "Get the weather for a location",
-          "inputSchema": {
-            "_cached": null,
-            "_def": {
-              "catchall": {
-                "_def": {
-                  "typeName": "ZodNever",
-                },
-                "~standard": {
-                  "vendor": "zod",
-                  "version": 1,
-                },
-              },
-              "typeName": "ZodObject",
-              "unknownKeys": "strip",
-            },
-            "~standard": {
-              "vendor": "zod",
-              "version": 1,
-            },
-          },
-        },
-      },
     },
     "log_id": "g",
     "metadata": {
@@ -746,6 +712,25 @@ exports[`ai sdk auto-instrumentation via node hook collects Agent traces without
       },
       "model": "gpt-4o-mini",
       "provider": "openai.responses",
+      "tools": {
+        "get_weather": {
+          "description": "Get the weather for a location",
+          "inputSchema": {
+            "$schema": "http://json-schema.org/draft-07/schema#",
+            "additionalProperties": false,
+            "properties": {
+              "location": {
+                "description": "The city and country",
+                "type": "string",
+              },
+            },
+            "required": [
+              "location",
+            ],
+            "type": "object",
+          },
+        },
+      },
     },
     "metrics": {
       "start": 0,
@@ -773,9 +758,6 @@ exports[`ai sdk auto-instrumentation via node hook collects Agent traces without
           "responseId": "<span:33>",
           "serviceTier": "default",
         },
-      },
-      "request": {
-        "body": "<omitted>",
       },
       "response": {
         "body": "<omitted>",
@@ -948,9 +930,6 @@ exports[`ai sdk auto-instrumentation via node hook collects Agent traces without
               "serviceTier": "default",
             },
           },
-          "request": {
-            "body": "<omitted>",
-          },
           "response": {
             "body": "<omitted>",
             "headers": "<omitted>",
@@ -1033,9 +1012,6 @@ exports[`ai sdk auto-instrumentation via node hook collects Agent traces without
               "responseId": "<span:27>",
               "serviceTier": "default",
             },
-          },
-          "request": {
-            "body": "<omitted>",
           },
           "response": {
             "body": "<omitted>",
@@ -1151,9 +1127,6 @@ exports[`ai sdk auto-instrumentation via node hook collects Agent traces without
               "responseId": "<span:30>",
               "serviceTier": "default",
             },
-          },
-          "request": {
-            "body": "<omitted>",
           },
           "response": {
             "body": "<omitted>",
@@ -1301,9 +1274,6 @@ exports[`ai sdk auto-instrumentation via node hook collects Agent traces without
               "responseId": "<span:33>",
               "serviceTier": "default",
             },
-          },
-          "request": {
-            "body": "<omitted>",
           },
           "response": {
             "body": "<omitted>",
@@ -1550,27 +1520,6 @@ exports[`ai sdk auto-instrumentation via node hook collects Agent traces without
       "toolChoice": {
         "type": "required",
       },
-      "tools": [
-        {
-          "description": "Get the weather for a location",
-          "inputSchema": {
-            "$schema": "http://json-schema.org/draft-07/schema#",
-            "additionalProperties": false,
-            "properties": {
-              "location": {
-                "description": "The city and country",
-                "type": "string",
-              },
-            },
-            "required": [
-              "location",
-            ],
-            "type": "object",
-          },
-          "name": "get_weather",
-          "type": "function",
-        },
-      ],
     },
     "log_id": "g",
     "metadata": {
@@ -1626,9 +1575,6 @@ exports[`ai sdk auto-instrumentation via node hook collects Agent traces without
           "responseId": "<span:24>",
           "serviceTier": "default",
         },
-      },
-      "request": {
-        "body": "<omitted>",
       },
       "response": {
         "body": "<omitted>",
@@ -1772,27 +1718,6 @@ exports[`ai sdk auto-instrumentation via node hook collects Agent traces without
       "toolChoice": {
         "type": "required",
       },
-      "tools": [
-        {
-          "description": "Get the weather for a location",
-          "inputSchema": {
-            "$schema": "http://json-schema.org/draft-07/schema#",
-            "additionalProperties": false,
-            "properties": {
-              "location": {
-                "description": "The city and country",
-                "type": "string",
-              },
-            },
-            "required": [
-              "location",
-            ],
-            "type": "object",
-          },
-          "name": "get_weather",
-          "type": "function",
-        },
-      ],
     },
     "log_id": "g",
     "metadata": {
@@ -1848,9 +1773,6 @@ exports[`ai sdk auto-instrumentation via node hook collects Agent traces without
           "responseId": "<span:27>",
           "serviceTier": "default",
         },
-      },
-      "request": {
-        "body": "<omitted>",
       },
       "response": {
         "body": "<omitted>",
@@ -2058,27 +1980,6 @@ exports[`ai sdk auto-instrumentation via node hook collects Agent traces without
       "toolChoice": {
         "type": "required",
       },
-      "tools": [
-        {
-          "description": "Get the weather for a location",
-          "inputSchema": {
-            "$schema": "http://json-schema.org/draft-07/schema#",
-            "additionalProperties": false,
-            "properties": {
-              "location": {
-                "description": "The city and country",
-                "type": "string",
-              },
-            },
-            "required": [
-              "location",
-            ],
-            "type": "object",
-          },
-          "name": "get_weather",
-          "type": "function",
-        },
-      ],
     },
     "log_id": "g",
     "metadata": {
@@ -2134,9 +2035,6 @@ exports[`ai sdk auto-instrumentation via node hook collects Agent traces without
           "responseId": "<span:30>",
           "serviceTier": "default",
         },
-      },
-      "request": {
-        "body": "<omitted>",
       },
       "response": {
         "body": "<omitted>",
@@ -2408,27 +2306,6 @@ exports[`ai sdk auto-instrumentation via node hook collects Agent traces without
       "toolChoice": {
         "type": "required",
       },
-      "tools": [
-        {
-          "description": "Get the weather for a location",
-          "inputSchema": {
-            "$schema": "http://json-schema.org/draft-07/schema#",
-            "additionalProperties": false,
-            "properties": {
-              "location": {
-                "description": "The city and country",
-                "type": "string",
-              },
-            },
-            "required": [
-              "location",
-            ],
-            "type": "object",
-          },
-          "name": "get_weather",
-          "type": "function",
-        },
-      ],
     },
     "log_id": "g",
     "metadata": {
@@ -2484,9 +2361,6 @@ exports[`ai sdk auto-instrumentation via node hook collects Agent traces without
           "responseId": "<span:33>",
           "serviceTier": "default",
         },
-      },
-      "request": {
-        "body": "<omitted>",
       },
       "response": {
         "body": "<omitted>",
@@ -2793,9 +2667,6 @@ exports[`ai sdk auto-instrumentation via node hook collects Agent traces without
           "serviceTier": "default",
         },
       },
-      "request": {
-        "body": "<omitted>",
-      },
       "response": {
         "body": "<omitted>",
         "headers": "<omitted>",
@@ -2930,9 +2801,6 @@ exports[`ai sdk auto-instrumentation via node hook collects Agent traces without
           "responseId": "<span:54>",
           "serviceTier": "default",
         },
-      },
-      "request": {
-        "body": "<omitted>",
       },
       "response": {
         "body": "<omitted>",
@@ -3351,9 +3219,6 @@ exports[`ai sdk auto-instrumentation via node hook collects Agent traces without
           "serviceTier": "default",
         },
       },
-      "request": {
-        "body": "<omitted>",
-      },
       "response": {
         "body": "<omitted>",
         "headers": "<omitted>",
@@ -3396,9 +3261,6 @@ exports[`ai sdk auto-instrumentation via node hook collects Agent traces without
               "responseId": "<span:68>",
               "serviceTier": "default",
             },
-          },
-          "request": {
-            "body": "<omitted>",
           },
           "response": {
             "body": "<omitted>",
@@ -3561,9 +3423,6 @@ exports[`ai sdk auto-instrumentation via node hook collects Agent traces without
           "serviceTier": "default",
         },
       },
-      "request": {
-        "body": "<omitted>",
-      },
       "response": {
         "body": "<omitted>",
         "headers": "<omitted>",
@@ -3606,9 +3465,6 @@ exports[`ai sdk auto-instrumentation via node hook collects Agent traces without
               "responseId": "<span:68>",
               "serviceTier": "default",
             },
-          },
-          "request": {
-            "body": "<omitted>",
           },
           "response": {
             "body": "<omitted>",
@@ -3767,9 +3623,6 @@ exports[`ai sdk auto-instrumentation via node hook collects Agent traces without
           "responseId": "<span:68>",
           "serviceTier": "default",
         },
-      },
-      "request": {
-        "body": "<omitted>",
       },
       "response": {
         "body": "<omitted>",
@@ -4763,9 +4616,6 @@ exports[`ai sdk auto-instrumentation via node hook collects ToolLoopAgent traces
           "serviceTier": "default",
         },
       },
-      "request": {
-        "body": "<omitted>",
-      },
       "response": {
         "body": "<omitted>",
         "headers": "<omitted>",
@@ -4808,9 +4658,6 @@ exports[`ai sdk auto-instrumentation via node hook collects ToolLoopAgent traces
               "responseId": "<span:9>",
               "serviceTier": "default",
             },
-          },
-          "request": {
-            "body": "<omitted>",
           },
           "response": {
             "body": "<omitted>",
@@ -5013,9 +4860,6 @@ exports[`ai sdk auto-instrumentation via node hook collects ToolLoopAgent traces
           "responseId": "<span:9>",
           "serviceTier": "default",
         },
-      },
-      "request": {
-        "body": "<omitted>",
       },
       "response": {
         "body": "<omitted>",
@@ -5406,31 +5250,6 @@ exports[`ai sdk auto-instrumentation via node hook collects ToolLoopAgent traces
       "system": "You must inspect live weather via the provided get_weather tool before responding.",
       "temperature": 0,
       "toolChoice": "required",
-      "tools": {
-        "get_weather": {
-          "description": "Get the weather for a location",
-          "inputSchema": {
-            "_cached": null,
-            "_def": {
-              "catchall": {
-                "_def": {
-                  "typeName": "ZodNever",
-                },
-                "~standard": {
-                  "vendor": "zod",
-                  "version": 1,
-                },
-              },
-              "typeName": "ZodObject",
-              "unknownKeys": "strip",
-            },
-            "~standard": {
-              "vendor": "zod",
-              "version": 1,
-            },
-          },
-        },
-      },
     },
     "log_id": "g",
     "metadata": {
@@ -5440,6 +5259,25 @@ exports[`ai sdk auto-instrumentation via node hook collects ToolLoopAgent traces
       },
       "model": "gpt-4o-mini",
       "provider": "openai.responses",
+      "tools": {
+        "get_weather": {
+          "description": "Get the weather for a location",
+          "inputSchema": {
+            "$schema": "http://json-schema.org/draft-07/schema#",
+            "additionalProperties": false,
+            "properties": {
+              "location": {
+                "description": "The city and country",
+                "type": "string",
+              },
+            },
+            "required": [
+              "location",
+            ],
+            "type": "object",
+          },
+        },
+      },
     },
     "metrics": {
       "start": 0,
@@ -5467,9 +5305,6 @@ exports[`ai sdk auto-instrumentation via node hook collects ToolLoopAgent traces
           "responseId": "<span:33>",
           "serviceTier": "default",
         },
-      },
-      "request": {
-        "body": "<omitted>",
       },
       "response": {
         "body": "<omitted>",
@@ -5667,9 +5502,6 @@ exports[`ai sdk auto-instrumentation via node hook collects ToolLoopAgent traces
               "serviceTier": "default",
             },
           },
-          "request": {
-            "body": "<omitted>",
-          },
           "response": {
             "body": "<omitted>",
             "headers": "<omitted>",
@@ -5780,9 +5612,6 @@ exports[`ai sdk auto-instrumentation via node hook collects ToolLoopAgent traces
               "responseId": "<span:27>",
               "serviceTier": "default",
             },
-          },
-          "request": {
-            "body": "<omitted>",
           },
           "response": {
             "body": "<omitted>",
@@ -5931,9 +5760,6 @@ exports[`ai sdk auto-instrumentation via node hook collects ToolLoopAgent traces
               "responseId": "<span:30>",
               "serviceTier": "default",
             },
-          },
-          "request": {
-            "body": "<omitted>",
           },
           "response": {
             "body": "<omitted>",
@@ -6119,9 +5945,6 @@ exports[`ai sdk auto-instrumentation via node hook collects ToolLoopAgent traces
               "responseId": "<span:33>",
               "serviceTier": "default",
             },
-          },
-          "request": {
-            "body": "<omitted>",
           },
           "response": {
             "body": "<omitted>",
@@ -6437,27 +6260,6 @@ exports[`ai sdk auto-instrumentation via node hook collects ToolLoopAgent traces
       "toolChoice": {
         "type": "required",
       },
-      "tools": [
-        {
-          "description": "Get the weather for a location",
-          "inputSchema": {
-            "$schema": "http://json-schema.org/draft-07/schema#",
-            "additionalProperties": false,
-            "properties": {
-              "location": {
-                "description": "The city and country",
-                "type": "string",
-              },
-            },
-            "required": [
-              "location",
-            ],
-            "type": "object",
-          },
-          "name": "get_weather",
-          "type": "function",
-        },
-      ],
     },
     "log_id": "g",
     "metadata": {
@@ -6516,9 +6318,6 @@ exports[`ai sdk auto-instrumentation via node hook collects ToolLoopAgent traces
           "responseId": "<span:24>",
           "serviceTier": "default",
         },
-      },
-      "request": {
-        "body": "<omitted>",
       },
       "response": {
         "body": "<omitted>",
@@ -6682,27 +6481,6 @@ exports[`ai sdk auto-instrumentation via node hook collects ToolLoopAgent traces
       "toolChoice": {
         "type": "required",
       },
-      "tools": [
-        {
-          "description": "Get the weather for a location",
-          "inputSchema": {
-            "$schema": "http://json-schema.org/draft-07/schema#",
-            "additionalProperties": false,
-            "properties": {
-              "location": {
-                "description": "The city and country",
-                "type": "string",
-              },
-            },
-            "required": [
-              "location",
-            ],
-            "type": "object",
-          },
-          "name": "get_weather",
-          "type": "function",
-        },
-      ],
     },
     "log_id": "g",
     "metadata": {
@@ -6761,9 +6539,6 @@ exports[`ai sdk auto-instrumentation via node hook collects ToolLoopAgent traces
           "responseId": "<span:27>",
           "serviceTier": "default",
         },
-      },
-      "request": {
-        "body": "<omitted>",
       },
       "response": {
         "body": "<omitted>",
@@ -7001,27 +6776,6 @@ exports[`ai sdk auto-instrumentation via node hook collects ToolLoopAgent traces
       "toolChoice": {
         "type": "required",
       },
-      "tools": [
-        {
-          "description": "Get the weather for a location",
-          "inputSchema": {
-            "$schema": "http://json-schema.org/draft-07/schema#",
-            "additionalProperties": false,
-            "properties": {
-              "location": {
-                "description": "The city and country",
-                "type": "string",
-              },
-            },
-            "required": [
-              "location",
-            ],
-            "type": "object",
-          },
-          "name": "get_weather",
-          "type": "function",
-        },
-      ],
     },
     "log_id": "g",
     "metadata": {
@@ -7080,9 +6834,6 @@ exports[`ai sdk auto-instrumentation via node hook collects ToolLoopAgent traces
           "responseId": "<span:30>",
           "serviceTier": "default",
         },
-      },
-      "request": {
-        "body": "<omitted>",
       },
       "response": {
         "body": "<omitted>",
@@ -7394,27 +7145,6 @@ exports[`ai sdk auto-instrumentation via node hook collects ToolLoopAgent traces
       "toolChoice": {
         "type": "required",
       },
-      "tools": [
-        {
-          "description": "Get the weather for a location",
-          "inputSchema": {
-            "$schema": "http://json-schema.org/draft-07/schema#",
-            "additionalProperties": false,
-            "properties": {
-              "location": {
-                "description": "The city and country",
-                "type": "string",
-              },
-            },
-            "required": [
-              "location",
-            ],
-            "type": "object",
-          },
-          "name": "get_weather",
-          "type": "function",
-        },
-      ],
     },
     "log_id": "g",
     "metadata": {
@@ -7473,9 +7203,6 @@ exports[`ai sdk auto-instrumentation via node hook collects ToolLoopAgent traces
           "responseId": "<span:33>",
           "serviceTier": "default",
         },
-      },
-      "request": {
-        "body": "<omitted>",
       },
       "response": {
         "body": "<omitted>",
@@ -7812,9 +7539,6 @@ exports[`ai sdk auto-instrumentation via node hook collects ToolLoopAgent traces
           "serviceTier": "default",
         },
       },
-      "request": {
-        "body": "<omitted>",
-      },
       "response": {
         "body": "<omitted>",
         "headers": "<omitted>",
@@ -7970,9 +7694,6 @@ exports[`ai sdk auto-instrumentation via node hook collects ToolLoopAgent traces
           "responseId": "<span:54>",
           "serviceTier": "default",
         },
-      },
-      "request": {
-        "body": "<omitted>",
       },
       "response": {
         "body": "<omitted>",
@@ -8424,9 +8145,6 @@ exports[`ai sdk auto-instrumentation via node hook collects ToolLoopAgent traces
           "serviceTier": "default",
         },
       },
-      "request": {
-        "body": "<omitted>",
-      },
       "response": {
         "body": "<omitted>",
         "headers": "<omitted>",
@@ -8469,9 +8187,6 @@ exports[`ai sdk auto-instrumentation via node hook collects ToolLoopAgent traces
               "responseId": "<span:68>",
               "serviceTier": "default",
             },
-          },
-          "request": {
-            "body": "<omitted>",
           },
           "response": {
             "body": "<omitted>",
@@ -8677,9 +8392,6 @@ exports[`ai sdk auto-instrumentation via node hook collects ToolLoopAgent traces
           "serviceTier": "default",
         },
       },
-      "request": {
-        "body": "<omitted>",
-      },
       "response": {
         "body": "<omitted>",
         "headers": "<omitted>",
@@ -8722,9 +8434,6 @@ exports[`ai sdk auto-instrumentation via node hook collects ToolLoopAgent traces
               "responseId": "<span:68>",
               "serviceTier": "default",
             },
-          },
-          "request": {
-            "body": "<omitted>",
           },
           "response": {
             "body": "<omitted>",
@@ -8926,9 +8635,6 @@ exports[`ai sdk auto-instrumentation via node hook collects ToolLoopAgent traces
           "responseId": "<span:68>",
           "serviceTier": "default",
         },
-      },
-      "request": {
-        "body": "<omitted>",
       },
       "response": {
         "body": "<omitted>",

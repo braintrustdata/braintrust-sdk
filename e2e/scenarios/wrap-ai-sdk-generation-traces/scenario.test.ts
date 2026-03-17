@@ -48,4 +48,5 @@ test.each(wrapAISDKScenarios)(
       expect(contract.payloadSummary).toMatchSnapshot("log-payloads");
     });
   },
+  AI_SDK_SCENARIO_TIMEOUT_MS,
 );
