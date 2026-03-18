@@ -1016,6 +1016,41 @@ describe("openai client unit tests", TEST_SUITE_OPTIONS, () => {
     expect(unhandledRejection).toBeNull();
   });
 
+  test("embeddings.create returns APIPromise with .withResponse()", async () => {
+    assert.lengthOf(await backgroundLogger.drain(), 0);
+
+    const start = getCurrentUnixTimestamp();
+    const embeddingPromise = client.embeddings.create({
+      model: "text-embedding-3-small",
+      input: "Hello world",
+    });
+
+    // The wrapped promise must expose .withResponse() just like the unwrapped SDK
+    expect(typeof embeddingPromise.withResponse).toBe("function");
+
+    const { data, response } = await embeddingPromise.withResponse();
+    const end = getCurrentUnixTimestamp();
+
+    // Verify data
+    expect(data.data).toBeDefined();
+    expect(data.data.length).toBeGreaterThan(0);
+    expect(data.data[0].embedding.length).toBeGreaterThan(0);
+
+    // Verify response object
+    expect(typeof response.json).toBe("function");
+    expect(typeof response.text).toBe("function");
+    expect(response.headers).toBeDefined();
+    expect(response.status).toBe(200);
+
+    // Also verify that awaiting the promise directly still works
+    const directResult = await client.embeddings.create({
+      model: "text-embedding-3-small",
+      input: "Hello world",
+    });
+    expect(directResult.data).toBeDefined();
+    expect(directResult.data.length).toBeGreaterThan(0);
+  });
+
   test("invalid API key does not cause unhandled rejection without withResponse", async () => {
     // Create client with invalid API key
     const invalidClient = wrapOpenAI(new OpenAI({ apiKey: "invalid-api-key" }));
