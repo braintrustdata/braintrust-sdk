@@ -1,20 +1,15 @@
 import { expect, test } from "vitest";
-import { normalizeForSnapshot, type Json } from "../../helpers/normalize";
 import {
   getOpenAIAutoHookScenarios,
   OPENAI_SCENARIO_TIMEOUT_MS,
-  summarizeOpenAIContract,
 } from "../../helpers/openai";
+import { assertOpenAITraceContract } from "../../helpers/openai-trace-contract";
 import {
   isCanaryMode,
   prepareScenarioDir,
   resolveScenarioDir,
   withScenarioHarness,
 } from "../../helpers/scenario-harness";
-import {
-  findLatestChildSpan,
-  findLatestSpan,
-} from "../../helpers/trace-selectors";
 
 const scenarioDir = await prepareScenarioDir({
   scenarioDir: resolveScenarioDir(import.meta.url),
@@ -31,34 +26,15 @@ for (const scenario of openaiAutoHookScenarios) {
         timeoutMs: OPENAI_SCENARIO_TIMEOUT_MS,
       });
 
-      const capturedEvents = events();
-      const root = findLatestSpan(capturedEvents, "openai-auto-hook-root");
-      const chatCompletion =
-        findLatestChildSpan(capturedEvents, "Chat Completion", root?.span.id) ??
-        findLatestSpan(capturedEvents, "Chat Completion");
-
-      expect(root).toBeDefined();
-      expect(root?.row.metadata).toMatchObject({
-        openaiSdkVersion: scenario.version,
+      const contract = assertOpenAITraceContract({
+        capturedEvents: events(),
+        rootName: "openai-auto-hook-root",
+        scenarioName: "openai-auto-instrumentation-node-hook",
+        version: scenario.version,
       });
-      expect(chatCompletion).toBeDefined();
-      expect(chatCompletion?.span.parentIds).toEqual([root?.span.id ?? ""]);
-      expect(chatCompletion?.row.metadata).toMatchObject({
-        provider: "openai",
-      });
-      expect(
-        typeof (chatCompletion?.row.metadata as { model?: unknown } | undefined)
-          ?.model,
-      ).toBe("string");
 
       if (!isCanaryMode()) {
-        expect(
-          normalizeForSnapshot(
-            [root, chatCompletion].map((event) =>
-              summarizeOpenAIContract(event!),
-            ) as Json,
-          ),
-        ).toMatchSnapshot("span-events");
+        expect(contract.spanSummary).toMatchSnapshot("span-events");
       }
     });
   });

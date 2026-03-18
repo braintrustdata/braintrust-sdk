@@ -1,5 +1,6 @@
 import { expect, test } from "vitest";
 import { normalizeForSnapshot, type Json } from "../../helpers/normalize";
+import { assertClaudeAgentSDKTraceContract } from "../../helpers/claude-agent-sdk-trace-contract";
 import {
   isCanaryMode,
   prepareScenarioDir,
@@ -9,7 +10,6 @@ import {
 import {
   findAllSpans,
   findChildSpans,
-  findLatestChildSpan,
   findLatestSpan,
 } from "../../helpers/trace-selectors";
 import { summarizeWrapperContract } from "../../helpers/wrapper-contract";
@@ -26,10 +26,12 @@ test(
       await runScenarioDir({ scenarioDir, timeoutMs: TIMEOUT_MS });
 
       const capturedEvents = events();
-      const root = findLatestSpan(
+      const contract = assertClaudeAgentSDKTraceContract({
         capturedEvents,
-        "claude-agent-sdk-wrapper-root",
-      );
+        rootName: "claude-agent-sdk-wrapper-root",
+        scenarioName: "wrap-claude-agent-sdk-traces",
+      });
+      const root = contract.refs.root;
       const basicOperation = findLatestSpan(
         capturedEvents,
         "claude-agent-basic-operation",
@@ -46,47 +48,11 @@ test(
         capturedEvents,
         "claude-agent-failure-operation",
       );
-
-      expect(root).toBeDefined();
-      expect(root?.row.metadata).toMatchObject({
-        scenario: "wrap-claude-agent-sdk-traces",
-      });
-
-      for (const operation of [
-        basicOperation,
-        asyncPromptOperation,
-        subAgentOperation,
-        failureOperation,
-      ]) {
-        expect(operation).toBeDefined();
-        expect(operation?.span.parentIds).toEqual([root?.span.id ?? ""]);
-      }
-
-      const basicTask = findLatestChildSpan(
-        capturedEvents,
-        "Claude Agent",
-        basicOperation?.span.id,
-      );
-      const asyncPromptTask = findLatestChildSpan(
-        capturedEvents,
-        "Claude Agent",
-        asyncPromptOperation?.span.id,
-      );
-      const subAgentTaskRoot = findLatestChildSpan(
-        capturedEvents,
-        "Claude Agent",
-        subAgentOperation?.span.id,
-      );
-      const failureTask = findLatestChildSpan(
-        capturedEvents,
-        "Claude Agent",
-        failureOperation?.span.id,
-      );
-
-      expect(basicTask).toBeDefined();
-      expect(asyncPromptTask).toBeDefined();
-      expect(subAgentTaskRoot).toBeDefined();
-      expect(failureTask).toBeDefined();
+      const basicTask = contract.refs.basicTask;
+      const asyncPromptTask = contract.refs.asyncPromptTask;
+      const subAgentTaskRoot = contract.refs.subAgentTaskRoot;
+      const failureTask = contract.refs.failureTask;
+      const asyncPromptLlm = contract.refs.asyncPromptLlm;
 
       const basicLlmSpans = findChildSpans(
         capturedEvents,
@@ -110,14 +76,6 @@ test(
         "Part 2",
       ]);
 
-      const asyncPromptLlm = findChildSpans(
-        capturedEvents,
-        "anthropic.messages.create",
-        asyncPromptTask?.span.id,
-      ).find((event) => {
-        const input = event.input as Array<{ content?: unknown }> | undefined;
-        return Array.isArray(input) && input.some((item) => item.content);
-      });
       expect(asyncPromptLlm).toBeDefined();
       const asyncPromptLlmInput = asyncPromptLlm?.input as Array<{
         content?: string;
