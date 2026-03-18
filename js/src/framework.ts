@@ -1349,6 +1349,7 @@ async function runEvaluatorInternal(
       Math.max(evaluator.maxConcurrency ?? Number.MAX_SAFE_INTEGER, 1),
     );
 
+    let queueError: Error | null = null;
     const enqueuePromise = (async () => {
       for await (const datum of dataIterable) {
         if (cancelled) {
@@ -1364,7 +1365,9 @@ async function runEvaluatorInternal(
           }
           scheduledTrials++;
           progressReporter.setTotal?.(evaluator.evalName, scheduledTrials);
-          q.push({ datum, trialIndex });
+          q.pushAsync({ datum, trialIndex }).catch((e) => {
+            queueError = e;
+          });
         }
       }
     })();
@@ -1409,7 +1412,6 @@ async function runEvaluatorInternal(
       });
     };
 
-    const errorPromise = q.error();
     const waitForQueue = (async () => {
       await enqueuePromise;
       if (q.idle()) {
@@ -1422,11 +1424,9 @@ async function runEvaluatorInternal(
     // if the evaluator is cancelled, the remaining tasks that have not been started will be killed
     try {
       await Promise.race([waitForQueue, cancel()]);
-      await Promise.race([
-        errorPromise,
-        q.drain(),
-        new Promise((res) => (q.idle() ? res(null) : undefined)),
-      ]);
+      if (queueError) {
+        throw queueError;
+      }
     } catch (e) {
       // Always kill the queue to prevent hanging tasks and memory leaks
       q.kill();
