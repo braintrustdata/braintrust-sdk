@@ -1409,6 +1409,7 @@ async function runEvaluatorInternal(
       });
     };
 
+    const errorPromise = q.error();
     const waitForQueue = (async () => {
       await enqueuePromise;
       if (q.idle()) {
@@ -1421,6 +1422,11 @@ async function runEvaluatorInternal(
     // if the evaluator is cancelled, the remaining tasks that have not been started will be killed
     try {
       await Promise.race([waitForQueue, cancel()]);
+      await Promise.race([
+        errorPromise,
+        q.drain(),
+        new Promise((res) => (q.idle() ? res(null) : undefined)),
+      ]);
     } catch (e) {
       // Always kill the queue to prevent hanging tasks and memory leaks
       q.kill();
