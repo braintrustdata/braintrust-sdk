@@ -76,6 +76,7 @@ import {
   type PromptSessionEventType as PromptSessionEvent,
   type RepoInfoType as RepoInfo,
   type PromptBlockDataType as PromptBlockData,
+  type ResponseFormatJsonSchemaType as ResponseFormatJsonSchema,
 } from "./generated_types";
 
 const BRAINTRUST_ATTACHMENT =
@@ -7080,10 +7081,31 @@ export class Dataset<
   }
 }
 
+type CompiledPromptResponseFormat =
+  Exclude<AnyModelParam["response_format"], null> extends infer ResponseFormat
+    ? ResponseFormat extends {
+        type: "json_schema";
+        json_schema: infer JsonSchema;
+      }
+      ? Omit<ResponseFormat, "json_schema"> & {
+          json_schema: Omit<
+            Extract<JsonSchema, ResponseFormatJsonSchema>,
+            "schema"
+          > & {
+            schema?: Record<string, unknown>;
+          };
+        }
+      : ResponseFormat
+    : never;
+
 export type CompiledPromptParams = Omit<
   NonNullable<PromptData["options"]>["params"],
-  "use_cache"
-> & { model: NonNullable<NonNullable<PromptData["options"]>["model"]> };
+  "use_cache" | "response_format"
+> &
+  Omit<AnyModelParam, "use_cache" | "response_format"> & {
+    response_format?: CompiledPromptResponseFormat;
+    model: NonNullable<NonNullable<PromptData["options"]>["model"]>;
+  };
 
 export type ChatPrompt = {
   messages: OpenAIMessage[];
@@ -7503,19 +7525,21 @@ export class Prompt<
   ): CompiledPrompt<Flavor> {
     const { flavor } = options;
 
-    const params = {
-      ...this.defaults,
-      ...Object.fromEntries(
-        Object.entries(this.options.params || {}).filter(
-          ([k, _v]) => !BRAINTRUST_PARAMS.includes(k),
+    const params = Object.fromEntries(
+      Object.entries({
+        ...this.defaults,
+        ...Object.fromEntries(
+          Object.entries(this.options.params || {}).filter(
+            ([k, _v]) => !BRAINTRUST_PARAMS.includes(k),
+          ),
         ),
-      ),
-      ...(!isEmpty(this.options.model)
-        ? {
-            model: this.options.model,
-          }
-        : {}),
-    };
+        ...(!isEmpty(this.options.model)
+          ? {
+              model: this.options.model,
+            }
+          : {}),
+      }).filter(([key, value]) => key !== "response_format" || value !== null),
+    );
 
     if (!("model" in params) || isEmpty(params.model)) {
       throw new Error(
