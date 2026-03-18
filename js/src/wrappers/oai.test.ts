@@ -1019,36 +1019,50 @@ describe("openai client unit tests", TEST_SUITE_OPTIONS, () => {
   test("embeddings.create returns APIPromise with .withResponse()", async () => {
     assert.lengthOf(await backgroundLogger.drain(), 0);
 
-    const start = getCurrentUnixTimestamp();
-    const embeddingPromise = client.embeddings.create({
+    const mockEmbeddingData = {
+      object: "list",
+      data: [{ object: "embedding", index: 0, embedding: [0.1, 0.2, 0.3] }],
+      model: "text-embedding-3-small",
+      usage: { prompt_tokens: 2, total_tokens: 2 },
+    };
+    const mockHeaders = new Headers({
+      "x-ratelimit-limit-requests": "3000",
+      "x-ratelimit-remaining-requests": "2999",
+    });
+    const mockResponse = new Response(null, {
+      status: 200,
+      headers: mockHeaders,
+    });
+
+    const mockCreate = vi.fn().mockImplementation(() => {
+      const p = Promise.resolve(mockEmbeddingData) as any;
+      p.withResponse = () =>
+        Promise.resolve({ data: mockEmbeddingData, response: mockResponse });
+      return p;
+    });
+
+    const mockOai = new OpenAI({ apiKey: "sk-fake" });
+    mockOai.embeddings.create = mockCreate;
+    const wrappedMock = wrapOpenAI(mockOai);
+
+    const embeddingPromise = wrappedMock.embeddings.create({
       model: "text-embedding-3-small",
       input: "Hello world",
     });
 
-    // The wrapped promise must expose .withResponse() just like the unwrapped SDK
     expect(typeof embeddingPromise.withResponse).toBe("function");
 
     const { data, response } = await embeddingPromise.withResponse();
-    const end = getCurrentUnixTimestamp();
-
-    // Verify data
-    expect(data.data).toBeDefined();
-    expect(data.data.length).toBeGreaterThan(0);
-    expect(data.data[0].embedding.length).toBeGreaterThan(0);
-
-    // Verify response object
-    expect(typeof response.json).toBe("function");
-    expect(typeof response.text).toBe("function");
-    expect(response.headers).toBeDefined();
+    expect(data).toEqual(mockEmbeddingData);
     expect(response.status).toBe(200);
+    expect(response.headers.get("x-ratelimit-limit-requests")).toBe("3000");
 
-    // Also verify that awaiting the promise directly still works
-    const directResult = await client.embeddings.create({
+    // Awaiting the promise directly should also work
+    const directResult = await wrappedMock.embeddings.create({
       model: "text-embedding-3-small",
       input: "Hello world",
     });
-    expect(directResult.data).toBeDefined();
-    expect(directResult.data.length).toBeGreaterThan(0);
+    expect(directResult).toEqual(mockEmbeddingData);
   });
 
   test("invalid API key does not cause unhandled rejection without withResponse", async () => {
