@@ -7098,11 +7098,18 @@ type CompiledPromptResponseFormat =
       : ResponseFormat
     : never;
 
+// "none" is not assignable to older openai clients so we gotta exclude it
+type CompiledPromptReasoningEffort = Exclude<
+  AnyModelParam["reasoning_effort"],
+  "none"
+>;
+
 export type CompiledPromptParams = Omit<
   NonNullable<PromptData["options"]>["params"],
-  "use_cache" | "response_format"
+  "use_cache" | "response_format" | "reasoning_effort"
 > &
-  Omit<AnyModelParam, "use_cache" | "response_format"> & {
+  Omit<AnyModelParam, "use_cache" | "response_format" | "reasoning_effort"> & {
+    reasoning_effort?: CompiledPromptReasoningEffort;
     response_format?: CompiledPromptResponseFormat;
     model: NonNullable<NonNullable<PromptData["options"]>["model"]>;
   };
