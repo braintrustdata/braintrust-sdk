@@ -1,8 +1,5 @@
 /* eslint-disable @typescript-eslint/consistent-type-assertions */
-import type {
-  ChatCompletionContentPartText,
-  ChatCompletionContentPartImage,
-} from "openai/resources";
+
 import { vi, expect, test, describe, beforeEach, afterEach } from "vitest";
 import {
   _exportsForTestingOnly,
@@ -19,14 +16,9 @@ import {
   updateSpan,
   Attachment,
   deepCopyEvent,
-  renderMessage,
   renderMessageImpl,
 } from "./logger";
-import {
-  parseTemplateFormat,
-  isTemplateFormat,
-  renderTemplateContent,
-} from "./template/renderer";
+
 import { configureNode } from "./node/config";
 import { writeFile, unlink } from "node:fs/promises";
 import { join } from "node:path";
@@ -34,11 +26,6 @@ import { tmpdir } from "node:os";
 import { SpanComponentsV3 } from "../util/span_identifier_v3";
 
 configureNode();
-
-function getExportVersion(exportedSpan: string): number {
-  const exportedBytes = base64ToUint8Array(exportedSpan);
-  return exportedBytes[0];
-}
 
 test("renderMessage with file content parts", () => {
   const message = {
