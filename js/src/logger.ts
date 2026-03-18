@@ -407,6 +407,10 @@ export interface Span extends Exportable {
   kind: "span";
 }
 
+export const BRAINTRUST_CURRENT_SPAN_STORE = Symbol.for(
+  "braintrust.currentSpanStore",
+);
+
 export abstract class ContextManager {
   abstract getParentSpanIds(): ContextParentSpanIds | undefined;
   abstract runInContext<R>(span: Span, callback: () => R): R;
@@ -415,10 +419,12 @@ export abstract class ContextManager {
 
 class BraintrustContextManager extends ContextManager {
   private _currentSpan: IsoAsyncLocalStorage<Span>;
+  [BRAINTRUST_CURRENT_SPAN_STORE]: IsoAsyncLocalStorage<Span>;
 
   constructor() {
     super();
     this._currentSpan = iso.newAsyncLocalStorage();
+    this[BRAINTRUST_CURRENT_SPAN_STORE] = this._currentSpan;
   }
 
   getParentSpanIds(): ContextParentSpanIds | undefined {
