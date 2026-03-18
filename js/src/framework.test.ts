@@ -339,7 +339,7 @@ describe("runEvaluator", () => {
         undefined,
         true,
       ),
-    ).rejects.toThrow("errorScoreHandler crashed");
+    ).rejects.toThrow("Encountered 1 unhandled task errors");
   });
 
   describe("aborts", () => {
