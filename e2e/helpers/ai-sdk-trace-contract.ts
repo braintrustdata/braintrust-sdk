@@ -98,37 +98,83 @@ function normalizeAISDKAgentGeneratePayload(value: unknown): unknown {
   return normalized;
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function isAISDKModelRef(value: unknown): value is {
+  modelId: unknown;
+  provider: unknown;
+} {
+  return (
+    isRecord(value) &&
+    typeof value.modelId === "string" &&
+    typeof value.provider === "string"
+  );
+}
+
+function normalizeAISDKContext(value: unknown): Record<string, unknown> {
+  return {
+    ...(isRecord(value) ? value : {}),
+    caller_filename: "<caller>",
+    caller_functionname: "<caller>",
+    caller_lineno: 0,
+  };
+}
+
+function normalizeAISDKSnapshotValue(value: unknown): unknown {
+  if (Array.isArray(value)) {
+    return value.map((entry) => normalizeAISDKSnapshotValue(entry));
+  }
+
+  if (!isRecord(value)) {
+    return value;
+  }
+
+  const normalized: Record<string, unknown> = {};
+
+  for (const [key, entry] of Object.entries(value)) {
+    if (key === "context") {
+      normalized[key] = normalizeAISDKContext(entry);
+      continue;
+    }
+
+    if (key === "aiSdkVersion") {
+      normalized[key] = "<ai-sdk-version>";
+      continue;
+    }
+
+    if (
+      key === "user-agent" &&
+      typeof entry === "string" &&
+      entry.startsWith("ai/")
+    ) {
+      normalized[key] = "ai/<version>";
+      continue;
+    }
+
+    if (key === "stepNumber") {
+      continue;
+    }
+
+    if (key === "model" && isAISDKModelRef(entry)) {
+      continue;
+    }
+
+    normalized[key] = normalizeAISDKSnapshotValue(entry);
+  }
+
+  return normalized;
+}
+
 function normalizeAISDKPayloads(payloadRows: unknown[]): unknown[] {
   return payloadRows.map((payload) => {
-    if (!payload || typeof payload !== "object") {
-      return payload;
-    }
+    const normalizedPayload =
+      isRecord(payload) && payload.metadata?.operation === "agent-generate"
+        ? normalizeAISDKAgentGeneratePayload(structuredClone(payload))
+        : structuredClone(payload);
 
-    const row = structuredClone(payload) as {
-      context?: Record<string, unknown>;
-      metadata?: { operation?: string };
-    } & Record<string, unknown>;
-
-    if (row.context && typeof row.context === "object") {
-      row.context = {
-        ...row.context,
-        ...(row.context.caller_filename !== undefined
-          ? { caller_filename: "<caller>" }
-          : {}),
-        ...(row.context.caller_functionname !== undefined
-          ? { caller_functionname: "<caller>" }
-          : {}),
-        ...(row.context.caller_lineno !== undefined
-          ? { caller_lineno: 0 }
-          : {}),
-      };
-    }
-
-    if (row.metadata?.operation === "agent-generate") {
-      return normalizeAISDKAgentGeneratePayload(row);
-    }
-
-    return row;
+    return normalizeAISDKSnapshotValue(normalizedPayload);
   });
 }
 
@@ -378,41 +424,43 @@ export function assertAISDKTraceContract(options: AISDKTraceContractOptions): {
 
   return {
     spanSummary: normalizeForSnapshot(
-      [
-        root,
-        generateOperation,
-        generateParent,
-        generateChild,
-        streamOperation,
-        streamParent,
-        streamChild,
-        toolOperation,
-        toolParent,
-        ...toolSpans,
-        generateObjectOperation,
-        generateObjectParent,
-        generateObjectChild,
-        streamObjectOperation,
-        streamObjectParent,
-        streamObjectChild,
-        agentGenerateOperation,
-        agentGenerateParent,
-        latestAgentGenerateChild,
-        agentStreamOperation,
-        agentStreamParent,
-        latestAgentStreamChild,
-      ]
-        .filter((value) => value !== undefined)
-        .map((event) =>
-          summarizeWrapperContract(event!, [
-            "aiSdkVersion",
-            "provider",
-            "model",
-            "operation",
-            "braintrust",
-            "scenario",
-          ]),
-        ) as Json,
+      normalizeAISDKSnapshotValue(
+        [
+          root,
+          generateOperation,
+          generateParent,
+          generateChild,
+          streamOperation,
+          streamParent,
+          streamChild,
+          toolOperation,
+          toolParent,
+          ...toolSpans,
+          generateObjectOperation,
+          generateObjectParent,
+          generateObjectChild,
+          streamObjectOperation,
+          streamObjectParent,
+          streamObjectChild,
+          agentGenerateOperation,
+          agentGenerateParent,
+          latestAgentGenerateChild,
+          agentStreamOperation,
+          agentStreamParent,
+          latestAgentStreamChild,
+        ]
+          .filter((value) => value !== undefined)
+          .map((event) =>
+            summarizeWrapperContract(event!, [
+              "aiSdkVersion",
+              "provider",
+              "model",
+              "operation",
+              "braintrust",
+              "scenario",
+            ]),
+          ),
+      ) as Json,
     ),
     payloadSummary: normalizeForSnapshot(
       normalizeAISDKPayloads(

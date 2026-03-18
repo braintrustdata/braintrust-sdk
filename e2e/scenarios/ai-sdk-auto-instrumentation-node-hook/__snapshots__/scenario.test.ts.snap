@@ -13,7 +13,7 @@ exports[`ai sdk auto-instrumentation via node hook collects Agent traces without
     "id": "<span:1>",
     "log_id": "g",
     "metadata": {
-      "aiSdkVersion": "5.0.82",
+      "aiSdkVersion": "<ai-sdk-version>",
       "scenario": "ai-sdk-auto-instrumentation-node-hook",
       "testRunId": "<run:1>",
     },
@@ -276,7 +276,7 @@ exports[`ai sdk auto-instrumentation via node hook collects Agent traces without
     "id": "<span:10>",
     "input": {
       "headers": {
-        "user-agent": "ai/5.0.82",
+        "user-agent": "ai/<version>",
       },
       "maxOutputTokens": 16,
       "prompt": [
@@ -1498,7 +1498,7 @@ exports[`ai sdk auto-instrumentation via node hook collects Agent traces without
     "id": "<span:34>",
     "input": {
       "headers": {
-        "user-agent": "ai/5.0.82",
+        "user-agent": "ai/<version>",
       },
       "maxOutputTokens": 128,
       "prompt": [
@@ -1664,7 +1664,7 @@ exports[`ai sdk auto-instrumentation via node hook collects Agent traces without
     "id": "<span:38>",
     "input": {
       "headers": {
-        "user-agent": "ai/5.0.82",
+        "user-agent": "ai/<version>",
       },
       "maxOutputTokens": 128,
       "prompt": [
@@ -1894,7 +1894,7 @@ exports[`ai sdk auto-instrumentation via node hook collects Agent traces without
     "id": "<span:42>",
     "input": {
       "headers": {
-        "user-agent": "ai/5.0.82",
+        "user-agent": "ai/<version>",
       },
       "maxOutputTokens": 128,
       "prompt": [
@@ -2188,7 +2188,7 @@ exports[`ai sdk auto-instrumentation via node hook collects Agent traces without
     "id": "<span:46>",
     "input": {
       "headers": {
-        "user-agent": "ai/5.0.82",
+        "user-agent": "ai/<version>",
       },
       "maxOutputTokens": 128,
       "prompt": [
@@ -2715,7 +2715,7 @@ exports[`ai sdk auto-instrumentation via node hook collects Agent traces without
     "id": "<span:55>",
     "input": {
       "headers": {
-        "user-agent": "ai/5.0.82",
+        "user-agent": "ai/<version>",
       },
       "maxOutputTokens": 32,
       "prompt": [
@@ -3550,7 +3550,7 @@ exports[`ai sdk auto-instrumentation via node hook collects Agent traces without
     "id": "<span:71>",
     "input": {
       "headers": {
-        "user-agent": "ai/5.0.82",
+        "user-agent": "ai/<version>",
       },
       "maxOutputTokens": 16,
       "prompt": [
@@ -4007,7 +4007,7 @@ exports[`ai sdk auto-instrumentation via node hook collects Agent traces without
     "has_input": false,
     "has_output": false,
     "metadata": {
-      "aiSdkVersion": "5.0.82",
+      "aiSdkVersion": "<ai-sdk-version>",
       "scenario": "ai-sdk-auto-instrumentation-node-hook",
     },
     "metric_keys": [],
@@ -4480,7 +4480,7 @@ exports[`ai sdk auto-instrumentation via node hook collects ToolLoopAgent traces
     "id": "<span:1>",
     "log_id": "g",
     "metadata": {
-      "aiSdkVersion": "6.0.1",
+      "aiSdkVersion": "<ai-sdk-version>",
       "scenario": "ai-sdk-auto-instrumentation-node-hook",
       "testRunId": "<run:1>",
     },
@@ -4787,7 +4787,7 @@ exports[`ai sdk auto-instrumentation via node hook collects ToolLoopAgent traces
     "id": "<span:10>",
     "input": {
       "headers": {
-        "user-agent": "ai/6.0.1",
+        "user-agent": "ai/<version>",
       },
       "maxOutputTokens": 16,
       "prompt": [
@@ -6238,7 +6238,7 @@ exports[`ai sdk auto-instrumentation via node hook collects ToolLoopAgent traces
     "id": "<span:34>",
     "input": {
       "headers": {
-        "user-agent": "ai/6.0.1",
+        "user-agent": "ai/<version>",
       },
       "maxOutputTokens": 128,
       "prompt": [
@@ -6422,7 +6422,7 @@ exports[`ai sdk auto-instrumentation via node hook collects ToolLoopAgent traces
     "id": "<span:38>",
     "input": {
       "headers": {
-        "user-agent": "ai/6.0.1",
+        "user-agent": "ai/<version>",
       },
       "maxOutputTokens": 128,
       "prompt": [
@@ -6680,7 +6680,7 @@ exports[`ai sdk auto-instrumentation via node hook collects ToolLoopAgent traces
     "id": "<span:42>",
     "input": {
       "headers": {
-        "user-agent": "ai/6.0.1",
+        "user-agent": "ai/<version>",
       },
       "maxOutputTokens": 128,
       "prompt": [
@@ -7012,7 +7012,7 @@ exports[`ai sdk auto-instrumentation via node hook collects ToolLoopAgent traces
     "id": "<span:46>",
     "input": {
       "headers": {
-        "user-agent": "ai/6.0.1",
+        "user-agent": "ai/<version>",
       },
       "maxOutputTokens": 128,
       "prompt": [
@@ -7605,7 +7605,7 @@ exports[`ai sdk auto-instrumentation via node hook collects ToolLoopAgent traces
     "id": "<span:55>",
     "input": {
       "headers": {
-        "user-agent": "ai/6.0.1",
+        "user-agent": "ai/<version>",
       },
       "maxOutputTokens": 32,
       "prompt": [
@@ -8563,7 +8563,7 @@ exports[`ai sdk auto-instrumentation via node hook collects ToolLoopAgent traces
     "id": "<span:71>",
     "input": {
       "headers": {
-        "user-agent": "ai/6.0.1",
+        "user-agent": "ai/<version>",
       },
       "maxOutputTokens": 16,
       "prompt": [
@@ -9047,7 +9047,7 @@ exports[`ai sdk auto-instrumentation via node hook collects ToolLoopAgent traces
     "has_input": false,
     "has_output": false,
     "metadata": {
-      "aiSdkVersion": "6.0.1",
+      "aiSdkVersion": "<ai-sdk-version>",
       "scenario": "ai-sdk-auto-instrumentation-node-hook",
     },
     "metric_keys": [],

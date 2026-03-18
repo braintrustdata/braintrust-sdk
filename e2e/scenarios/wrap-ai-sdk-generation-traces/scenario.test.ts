@@ -16,7 +16,7 @@ const scenarioDir = await prepareScenarioDir({
 const wrapAISDKScenarios = await getWrapAISDKScenarios(scenarioDir);
 
 test.each(wrapAISDKScenarios)(
-  "wrap-ai-sdk-generation-traces captures wrapper and child model spans (ai $version)",
+  "wrap-ai-sdk-generation-traces captures wrapper and child model spans ($dependencyName)",
   async ({
     agentSpanName,
     entry,
