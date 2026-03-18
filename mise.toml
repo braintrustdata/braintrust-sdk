@@ -11,6 +11,7 @@ _.file = ".env"
 nodejs = "22.15.0"
 npm = "10.9.2"
 pnpm = "10.26.2"
+"npm:@sentry/dotagents" = "1.4.0"
 
 [hooks]
-postinstall = "pnpm install"
+postinstall = "pnpm install && dotagents install"
