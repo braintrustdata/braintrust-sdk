@@ -8,6 +8,7 @@ import { SpanTypeAttribute } from "../../../util/index";
 import { getCurrentUnixTimestamp } from "../../util";
 import { type Span, withCurrent } from "../../logger";
 import { processInputAttachments } from "../../wrappers/attachment-utils";
+import { normalizeAISDKLoggedOutput } from "../../wrappers/ai-sdk/normalize-logged-output";
 import { serializeAISDKToolsForLogging } from "../../wrappers/ai-sdk/tool-serialization";
 import { aiSDKChannels } from "./ai-sdk-channels";
 import type {
@@ -900,70 +901,6 @@ function processAISDKOutput(
 
   // Apply omit to remove unwanted paths
   return normalizeAISDKLoggedOutput(omit(merged, denyOutputPaths));
-}
-
-const REMOVE_NORMALIZED_VALUE = Symbol("braintrust.ai-sdk.remove-normalized");
-
-function normalizeAISDKLoggedOutput(
-  value: unknown,
-): Record<string, unknown> | AISDKResult {
-  const normalized = normalizeAISDKLoggedValue(value);
-  return normalized === REMOVE_NORMALIZED_VALUE
-    ? {}
-    : (normalized as Record<string, unknown> | AISDKResult);
-}
-
-function normalizeAISDKLoggedValue(
-  value: unknown,
-  context: { inProviderMetadata?: boolean; parentKey?: string } = {},
-): unknown {
-  if (Array.isArray(value)) {
-    const normalized = value
-      .map((entry) => normalizeAISDKLoggedValue(entry, context))
-      .filter((entry) => entry !== REMOVE_NORMALIZED_VALUE);
-    return normalized;
-  }
-
-  if (!value || typeof value !== "object") {
-    return value;
-  }
-
-  const nextInProviderMetadata =
-    context.inProviderMetadata ||
-    context.parentKey === "providerMetadata" ||
-    context.parentKey === "experimental_providerMetadata";
-  const normalizedEntries: Array<[string, unknown]> = [];
-
-  for (const [key, entry] of Object.entries(value)) {
-    if (key === "cachedPromptTokens" && entry === 0) {
-      continue;
-    }
-    if (
-      context.parentKey === "request" &&
-      key === "body" &&
-      entry === "<omitted>"
-    ) {
-      continue;
-    }
-
-    const normalizedEntry = normalizeAISDKLoggedValue(entry, {
-      inProviderMetadata: nextInProviderMetadata,
-      parentKey: key,
-    });
-    if (normalizedEntry === REMOVE_NORMALIZED_VALUE) {
-      continue;
-    }
-    normalizedEntries.push([key, normalizedEntry]);
-  }
-
-  if (normalizedEntries.length === 0) {
-    if (context.parentKey === "request" || nextInProviderMetadata) {
-      return REMOVE_NORMALIZED_VALUE;
-    }
-    return {};
-  }
-
-  return Object.fromEntries(normalizedEntries);
 }
 
 /**

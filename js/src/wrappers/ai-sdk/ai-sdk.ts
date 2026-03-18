@@ -7,6 +7,7 @@ import {
   getExtensionFromMediaType,
 } from "../attachment-utils";
 import { zodToJsonSchema } from "../../zod/utils";
+import { normalizeAISDKLoggedOutput } from "./normalize-logged-output";
 import { serializeAISDKToolsForLogging } from "./tool-serialization";
 import type {
   AISDK,
@@ -1891,69 +1892,6 @@ const processOutput = async (
   return normalizeAISDKLoggedOutput(
     omit(merged, denyOutputPaths ?? DENY_OUTPUT_PATHS),
   );
-};
-
-const REMOVE_NORMALIZED_VALUE = Symbol("braintrust.ai-sdk.remove-normalized");
-
-const normalizeAISDKLoggedOutput = (
-  value: unknown,
-): Record<string, unknown> | AISDKResult => {
-  const normalized = normalizeAISDKLoggedValue(value);
-  return normalized === REMOVE_NORMALIZED_VALUE
-    ? {}
-    : (normalized as Record<string, unknown> | AISDKResult);
-};
-
-const normalizeAISDKLoggedValue = (
-  value: unknown,
-  context: { inProviderMetadata?: boolean; parentKey?: string } = {},
-): unknown => {
-  if (Array.isArray(value)) {
-    return value
-      .map((entry) => normalizeAISDKLoggedValue(entry, context))
-      .filter((entry) => entry !== REMOVE_NORMALIZED_VALUE);
-  }
-
-  if (!value || typeof value !== "object") {
-    return value;
-  }
-
-  const nextInProviderMetadata =
-    context.inProviderMetadata ||
-    context.parentKey === "providerMetadata" ||
-    context.parentKey === "experimental_providerMetadata";
-  const normalizedEntries: Array<[string, unknown]> = [];
-
-  for (const [key, entry] of Object.entries(value)) {
-    if (key === "cachedPromptTokens" && entry === 0) {
-      continue;
-    }
-    if (
-      context.parentKey === "request" &&
-      key === "body" &&
-      entry === "<omitted>"
-    ) {
-      continue;
-    }
-
-    const normalizedEntry = normalizeAISDKLoggedValue(entry, {
-      inProviderMetadata: nextInProviderMetadata,
-      parentKey: key,
-    });
-    if (normalizedEntry === REMOVE_NORMALIZED_VALUE) {
-      continue;
-    }
-    normalizedEntries.push([key, normalizedEntry]);
-  }
-
-  if (normalizedEntries.length === 0) {
-    if (context.parentKey === "request" || nextInProviderMetadata) {
-      return REMOVE_NORMALIZED_VALUE;
-    }
-    return {};
-  }
-
-  return Object.fromEntries(normalizedEntries);
 };
 
 const processOutputAttachments = async (output: AISDKResult) => {
