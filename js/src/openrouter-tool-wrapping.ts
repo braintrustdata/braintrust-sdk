@@ -38,7 +38,7 @@ export function patchOpenRouterCallModelRequestTools(
   };
 }
 
-export function wrapOpenRouterTool(tool: OpenRouterTool): OpenRouterTool {
+function wrapOpenRouterTool(tool: OpenRouterTool): OpenRouterTool {
   if (
     isWrappedTool(tool) ||
     !tool.function ||
