@@ -232,6 +232,7 @@ jobs:
       actions: read
       contents: read
       id-token: write
+    environment: npm-publish
     env:
       TARGET_BRANCH: ${{ needs.prepare-release.outputs.branch }}
       VERSION: ${{ needs.prepare-release.outputs.version }}
@@ -245,6 +246,7 @@ jobs:
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version-file: .tool-versions
+          registry-url: "https://registry.npmjs.org"
       - name: Setup mise
         uses: jdx/mise-action@c37c93293d6b742fc901e1406b8f764f6fb19dac # v2.4.4
 
