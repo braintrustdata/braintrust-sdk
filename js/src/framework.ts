@@ -1349,7 +1349,7 @@ async function runEvaluatorInternal(
       Math.max(evaluator.maxConcurrency ?? Number.MAX_SAFE_INTEGER, 1),
     );
 
-    let queueErrors: Error[] = [];
+    const queueErrors: Error[] = [];
     const enqueuePromise = (async () => {
       for await (const datum of dataIterable) {
         if (cancelled) {
