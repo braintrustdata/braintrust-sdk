@@ -25,6 +25,15 @@ export const aiSDKChannels = defineChannels("ai", {
     channelName: "streamText",
     kind: "async",
   }),
+  streamTextSync: channel<
+    [AISDKCallParams],
+    AISDKResult,
+    Record<string, never>,
+    unknown
+  >({
+    channelName: "streamText.sync",
+    kind: "sync-stream",
+  }),
   generateObject: channel<
     [AISDKCallParams],
     AISDKStreamResult,
@@ -43,6 +52,15 @@ export const aiSDKChannels = defineChannels("ai", {
     channelName: "streamObject",
     kind: "async",
   }),
+  streamObjectSync: channel<
+    [AISDKCallParams],
+    AISDKResult,
+    Record<string, never>,
+    unknown
+  >({
+    channelName: "streamObject.sync",
+    kind: "sync-stream",
+  }),
   agentGenerate: channel<
     [AISDKCallParams],
     AISDKStreamResult,
@@ -59,6 +77,24 @@ export const aiSDKChannels = defineChannels("ai", {
     unknown
   >({
     channelName: "Agent.stream",
+    kind: "async",
+  }),
+  toolLoopAgentGenerate: channel<
+    [AISDKCallParams],
+    AISDKStreamResult,
+    Record<string, never>,
+    unknown
+  >({
+    channelName: "ToolLoopAgent.generate",
+    kind: "async",
+  }),
+  toolLoopAgentStream: channel<
+    [AISDKCallParams],
+    AISDKStreamResult,
+    Record<string, never>,
+    unknown
+  >({
+    channelName: "ToolLoopAgent.stream",
     kind: "async",
   }),
 });

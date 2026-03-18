@@ -7,6 +7,7 @@ import {
   getExtensionFromMediaType,
 } from "../attachment-utils";
 import { zodToJsonSchema } from "../../zod/utils";
+import { normalizeAISDKLoggedOutput } from "./normalize-logged-output";
 import { serializeAISDKToolsForLogging } from "./tool-serialization";
 import type {
   AISDK,
@@ -1888,7 +1889,9 @@ const processOutput = async (
   const merged = { ...processed, ...getterValues };
 
   // Apply omit to the merged result to ensure paths are omitted
-  return omit(merged, denyOutputPaths ?? DENY_OUTPUT_PATHS);
+  return normalizeAISDKLoggedOutput(
+    omit(merged, denyOutputPaths ?? DENY_OUTPUT_PATHS),
+  );
 };
 
 const processOutputAttachments = async (output: AISDKResult) => {

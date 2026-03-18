@@ -9,6 +9,7 @@ import type {
   AsyncEndOf,
   ChannelMessage,
   ChunkOf,
+  EndOf,
   ErrorOf,
   ResultOf,
   StartOf,
@@ -27,7 +28,11 @@ type SpanState = {
 
 export type AsyncChannelSpanConfig<TChannel extends AnyAsyncChannel> =
   ChannelConfig & {
-    extractInput: (args: [...ArgsOf<TChannel>]) => {
+    extractInput: (
+      args: [...ArgsOf<TChannel>],
+      event: StartOf<TChannel>,
+      span: Span,
+    ) => {
       input: unknown;
       metadata: unknown;
     };
@@ -53,7 +58,11 @@ type StreamingResult<TChannel extends AnyAsyncChannel> = Exclude<
 
 export type StreamingChannelSpanConfig<TChannel extends AnyAsyncChannel> =
   ChannelConfig & {
-    extractInput: (args: [...ArgsOf<TChannel>]) => {
+    extractInput: (
+      args: [...ArgsOf<TChannel>],
+      event: StartOf<TChannel>,
+      span: Span,
+    ) => {
       input: unknown;
       metadata: unknown;
     };
@@ -80,11 +89,22 @@ export type StreamingChannelSpanConfig<TChannel extends AnyAsyncChannel> =
       metrics: Record<string, number>;
       metadata?: Record<string, unknown>;
     };
+    patchResult?: (args: {
+      channelName: string;
+      endEvent: AsyncEndOf<TChannel>;
+      result: StreamingResult<TChannel>;
+      span: Span;
+      startTime: number;
+    }) => boolean;
   };
 
 export type SyncStreamChannelSpanConfig<TChannel extends AnySyncStreamChannel> =
   ChannelConfig & {
-    extractInput: (args: [...ArgsOf<TChannel>]) => {
+    extractInput: (
+      args: [...ArgsOf<TChannel>],
+      event: StartOf<TChannel>,
+      span: Span,
+    ) => {
       input: unknown;
       metadata: unknown;
     };
@@ -93,6 +113,13 @@ export type SyncStreamChannelSpanConfig<TChannel extends AnySyncStreamChannel> =
       metrics?: Record<string, number>;
       metadata?: Record<string, unknown>;
     };
+    patchResult?: (args: {
+      channelName: string;
+      endEvent: EndOf<TChannel>;
+      result: ResultOf<TChannel>;
+      span: Span;
+      startTime: number;
+    }) => boolean;
   };
 
 type SyncStreamLike<TStreamEvent> = {
@@ -130,7 +157,11 @@ function startSpanForEvent<
   TChannel extends AnyAsyncChannel | AnySyncStreamChannel,
 >(
   config: ChannelConfig & {
-    extractInput: (args: [...ArgsOf<TChannel>]) => {
+    extractInput: (
+      args: [...ArgsOf<TChannel>],
+      event: StartOf<TChannel>,
+      span: Span,
+    ) => {
       input: unknown;
       metadata: unknown;
     };
@@ -149,7 +180,11 @@ function startSpanForEvent<
   const startTime = getCurrentUnixTimestamp();
 
   try {
-    const { input, metadata } = config.extractInput(event.arguments);
+    const { input, metadata } = config.extractInput(
+      event.arguments,
+      event as StartOf<TChannel>,
+      span,
+    );
     span.log({
       input,
       metadata: mergeInputMetadata(metadata, spanInfoMetadata),
@@ -353,6 +388,19 @@ export function traceStreamingChannel<TChannel extends AnyAsyncChannel>(
         return;
       }
 
+      if (
+        config.patchResult?.({
+          channelName,
+          endEvent: asyncEndEvent,
+          result: asyncEndEvent.result as StreamingResult<TChannel>,
+          span,
+          startTime,
+        })
+      ) {
+        states.delete(event as object);
+        return;
+      }
+
       try {
         const output = config.extractOutput(
           asyncEndEvent.result as StreamingResult<TChannel>,
@@ -422,8 +470,21 @@ export function traceSyncStreamChannel<TChannel extends AnySyncStreamChannel>(
       }
 
       const { span, startTime } = spanData;
-      const resultEvent = event as { result: unknown };
-      const stream = resultEvent.result;
+      const endEvent = event as EndOf<TChannel>;
+
+      if (
+        config.patchResult?.({
+          channelName,
+          endEvent,
+          result: endEvent.result,
+          span,
+          startTime,
+        })
+      ) {
+        return;
+      }
+
+      const stream = endEvent.result;
 
       if (!isSyncStreamLike<ChunkOf<TChannel>>(stream)) {
         span.end();
