@@ -9,6 +9,7 @@
     "test:e2e:update": "vitest run --update"
   },
   "devDependencies": {
+    "@braintrust/langchain-js": "workspace:^",
     "@braintrust/otel": "workspace:^",
     "@opentelemetry/api": ">=1.9.0",
     "@opentelemetry/context-async-hooks": ">=1.9.0",

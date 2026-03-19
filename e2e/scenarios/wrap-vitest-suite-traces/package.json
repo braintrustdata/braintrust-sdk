@@ -1,0 +1,16 @@
+{
+  "name": "@braintrust/e2e-wrap-vitest-suite-traces",
+  "private": true,
+  "braintrustScenario": {
+    "canary": {
+      "dependencies": {
+        "vitest-v3": "vitest@3",
+        "vitest-v4": "vitest@4"
+      }
+    }
+  },
+  "dependencies": {
+    "vitest-v3": "npm:vitest@3.2.4",
+    "vitest-v4": "npm:vitest@4.0.16"
+  }
+}
