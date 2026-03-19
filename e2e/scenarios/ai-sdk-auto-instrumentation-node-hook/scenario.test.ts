@@ -1,5 +1,9 @@
 import { expect, test } from "vitest";
 import {
+  formatJsonFileSnapshot,
+  resolveFileSnapshotPath,
+} from "../../helpers/file-snapshot";
+import {
   AI_SDK_SCENARIO_TIMEOUT_MS,
   getAISDKAutoHookScenarios,
 } from "../../helpers/ai-sdk";
@@ -45,8 +49,22 @@ for (const scenario of autoHookScenarios) {
             version: scenario.version,
           });
 
-          expect(contract.spanSummary).toMatchSnapshot("span-events");
-          expect(contract.payloadSummary).toMatchSnapshot("log-payloads");
+          await expect(
+            formatJsonFileSnapshot(contract.spanSummary),
+          ).toMatchFileSnapshot(
+            resolveFileSnapshotPath(
+              import.meta.url,
+              `${scenario.dependencyName}.span-events.json`,
+            ),
+          );
+          await expect(
+            formatJsonFileSnapshot(contract.payloadSummary),
+          ).toMatchFileSnapshot(
+            resolveFileSnapshotPath(
+              import.meta.url,
+              `${scenario.dependencyName}.log-payloads.json`,
+            ),
+          );
         },
       );
     },

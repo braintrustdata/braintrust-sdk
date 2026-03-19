@@ -1,6 +1,9 @@
 import { expect, test } from "vitest";
 import {
-  isCanaryMode,
+  formatJsonFileSnapshot,
+  resolveFileSnapshotPath,
+} from "../../helpers/file-snapshot";
+import {
   prepareScenarioDir,
   readInstalledPackageVersion,
   resolveScenarioDir,
@@ -10,7 +13,6 @@ import {
   extractOtelSpans,
   summarizeRequest,
 } from "../../helpers/trace-summary";
-import { normalizeForSnapshot, type Json } from "../../helpers/normalize";
 import { E2E_TAGS } from "../../helpers/tags";
 
 const scenarioDir = await prepareScenarioDir({
@@ -117,19 +119,22 @@ for (const scenario of scenarios) {
           );
           expect(nonAIRootSpans).toHaveLength(0);
 
-          if (!isCanaryMode()) {
-            // Snapshot the span names and key structure (not full payloads, since
-            // response content and token counts are non-deterministic).
-            const spanSummary = allSpans.map((span) => ({
-              hasParent: !!span.parentSpanId,
-              name: span.name,
-            }));
-            expect(normalizeForSnapshot(spanSummary as Json)).toMatchSnapshot(
-              `otel-spans-ai-${scenario.version}`,
-            );
+          // Snapshot the span names and key structure (not full payloads, since
+          // response content and token counts are non-deterministic).
+          const spanSummary = allSpans.map((span) => ({
+            hasParent: !!span.parentSpanId,
+            name: span.name,
+          }));
+          await expect(formatJsonFileSnapshot(spanSummary)).toMatchFileSnapshot(
+            resolveFileSnapshotPath(
+              import.meta.url,
+              `${scenario.dependencyName}.otel-spans.json`,
+            ),
+          );
 
-            // Snapshot request metadata.
-            expect(
+          // Snapshot request metadata.
+          await expect(
+            formatJsonFileSnapshot(
               otelRequests
                 .map((request) =>
                   summarizeRequest(request, {
@@ -150,8 +155,13 @@ for (const scenario of scenarios) {
                   jsonBody: "<omitted>",
                   rawBody: "<omitted>",
                 })),
-            ).toMatchSnapshot(`otel-requests-ai-${scenario.version}`);
-          }
+            ),
+          ).toMatchFileSnapshot(
+            resolveFileSnapshotPath(
+              import.meta.url,
+              `${scenario.dependencyName}.otel-requests.json`,
+            ),
+          );
         },
       );
     },

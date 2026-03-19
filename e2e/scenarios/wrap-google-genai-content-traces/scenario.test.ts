@@ -1,7 +1,10 @@
 import { expect, test } from "vitest";
 import { assertGoogleGenAITraceContract } from "../../helpers/google-genai-trace-contract";
 import {
-  isCanaryMode,
+  formatJsonFileSnapshot,
+  resolveFileSnapshotPath,
+} from "../../helpers/file-snapshot";
+import {
   prepareScenarioDir,
   resolveScenarioDir,
   withScenarioHarness,
@@ -30,10 +33,16 @@ test(
         scenarioName: "wrap-google-genai-content-traces",
       });
 
-      if (!isCanaryMode()) {
-        expect(contract.spanSummary).toMatchSnapshot("span-events");
-        expect(contract.payloadSummary).toMatchSnapshot("log-payloads");
-      }
+      await expect(
+        formatJsonFileSnapshot(contract.spanSummary),
+      ).toMatchFileSnapshot(
+        resolveFileSnapshotPath(import.meta.url, "span-events.json"),
+      );
+      await expect(
+        formatJsonFileSnapshot(contract.payloadSummary),
+      ).toMatchFileSnapshot(
+        resolveFileSnapshotPath(import.meta.url, "log-payloads.json"),
+      );
     });
   },
 );

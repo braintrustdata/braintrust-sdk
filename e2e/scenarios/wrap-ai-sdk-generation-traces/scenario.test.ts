@@ -1,5 +1,9 @@
 import { expect, test } from "vitest";
 import {
+  formatJsonFileSnapshot,
+  resolveFileSnapshotPath,
+} from "../../helpers/file-snapshot";
+import {
   AI_SDK_SCENARIO_TIMEOUT_MS,
   getWrapAISDKScenarios,
 } from "../../helpers/ai-sdk";
@@ -18,7 +22,7 @@ const wrapAISDKScenarios = await getWrapAISDKScenarios(scenarioDir);
 
 for (const scenario of wrapAISDKScenarios) {
   test(
-    `wrap-ai-sdk-generation-traces captures wrapper and child model spans ('${scenario.dependencyName}')`,
+    `wrap-ai-sdk-generation-traces captures wrapper and child model spans (ai ${scenario.version})`,
     {
       tags: [E2E_TAGS.externalApi],
       timeout: AI_SDK_SCENARIO_TIMEOUT_MS,
@@ -44,8 +48,22 @@ for (const scenario of wrapAISDKScenarios) {
             version: scenario.version,
           });
 
-          expect(contract.spanSummary).toMatchSnapshot("span-events");
-          expect(contract.payloadSummary).toMatchSnapshot("log-payloads");
+          await expect(
+            formatJsonFileSnapshot(contract.spanSummary),
+          ).toMatchFileSnapshot(
+            resolveFileSnapshotPath(
+              import.meta.url,
+              `${scenario.dependencyName}.span-events.json`,
+            ),
+          );
+          await expect(
+            formatJsonFileSnapshot(contract.payloadSummary),
+          ).toMatchFileSnapshot(
+            resolveFileSnapshotPath(
+              import.meta.url,
+              `${scenario.dependencyName}.log-payloads.json`,
+            ),
+          );
         },
       );
     },

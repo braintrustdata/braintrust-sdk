@@ -61,6 +61,8 @@ const WRAP_AI_SDK_GENERATION_TRACES_SCENARIO_PATH =
 const PROVIDER_HELPER_CALLER_REGEX = /^<repo>\/e2e\/helpers\/.+-scenario\.mjs$/;
 const ANTHROPIC_MESSAGE_STREAM_PATH_REGEX =
   /([/\\]node_modules[/\\]\.pnpm[/\\]@anthropic-ai\+sdk@[^/\\\s)]+[/\\]node_modules[/\\]@anthropic-ai[/\\]sdk[/\\])(?:src[/\\]lib[/\\]MessageStream\.ts|lib[/\\]MessageStream\.js)/g;
+const ANTHROPIC_PNPM_VERSION_REGEX =
+  /([/\\]\.pnpm[/\\]@anthropic-ai\+sdk@)[^/\\\s)]+/g;
 
 function isRecord(value: Json | undefined): value is { [key: string]: Json } {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -175,10 +177,9 @@ function normalizeStackLikeString(value: string): string {
 }
 
 function normalizeModuleSourcePath(value: string): string {
-  return value.replace(
-    ANTHROPIC_MESSAGE_STREAM_PATH_REGEX,
-    "$1lib/MessageStream.js",
-  );
+  return value
+    .replace(ANTHROPIC_PNPM_VERSION_REGEX, "$1<version>")
+    .replace(ANTHROPIC_MESSAGE_STREAM_PATH_REGEX, "$1lib/MessageStream.js");
 }
 
 function shouldNormalizeNodeInternalStyleCaller(

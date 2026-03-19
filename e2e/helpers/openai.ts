@@ -74,7 +74,10 @@ export function summarizeOpenAIContract(event: CapturedLogEvent): Json {
     has_output: event.output !== undefined && event.output !== null,
     metadata: {
       has_model: typeof metadata?.model === "string",
-      openaiSdkVersion: metadata?.openaiSdkVersion ?? null,
+      openaiSdkVersion:
+        typeof metadata?.openaiSdkVersion === "string"
+          ? "<openai-sdk-version>"
+          : null,
       operation: metadata?.metadata?.operation ?? null,
       provider: metadata?.provider ?? null,
       scenario: metadata?.scenario ?? null,

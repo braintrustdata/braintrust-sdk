@@ -1,7 +1,6 @@
 import { expect, test } from "vitest";
 import { assertClaudeAgentSDKTraceContract } from "../../helpers/claude-agent-sdk-trace-contract";
 import {
-  isCanaryMode,
   prepareScenarioDir,
   resolveScenarioDir,
   withScenarioHarness,
@@ -33,9 +32,7 @@ test(
         scenarioName: "claude-agent-sdk-auto-instrumentation-node-hook",
       });
 
-      if (!isCanaryMode()) {
-        expect(contract.spanSummary).toMatchSnapshot("span-events");
-      }
+      expect(contract.spanSummary).toMatchSnapshot("span-events");
     });
   },
 );

@@ -2,7 +2,6 @@ import { expect, test } from "vitest";
 import { normalizeForSnapshot, type Json } from "../../helpers/normalize";
 import { assertClaudeAgentSDKTraceContract } from "../../helpers/claude-agent-sdk-trace-contract";
 import {
-  isCanaryMode,
   prepareScenarioDir,
   resolveScenarioDir,
   withScenarioHarness,
@@ -131,39 +130,37 @@ test(
       expect(failureToolSpan).toBeDefined();
       expect(failureToolSpan?.row.error).toBe("division by zero");
 
-      if (!isCanaryMode()) {
-        expect(
-          normalizeForSnapshot(
-            [
-              root,
-              basicOperation,
-              basicTask,
-              basicLlmSpans[0],
-              basicToolSpans[0],
-              asyncPromptOperation,
-              asyncPromptTask,
-              asyncPromptLlm,
-              subAgentOperation,
-              subAgentTaskRoot,
-              subAgentTask,
-              subAgentLlmSpans[0],
-              subAgentToolSpans[0],
-              failureOperation,
-              failureTask,
-              failureToolSpan,
-            ].map((event) =>
-              summarizeWrapperContract(event!, [
-                "provider",
-                "model",
-                "operation",
-                "scenario",
-                "mcp.server",
-                "gen_ai.tool.name",
-              ]),
-            ) as Json,
-          ),
-        ).toMatchSnapshot();
-      }
+      expect(
+        normalizeForSnapshot(
+          [
+            root,
+            basicOperation,
+            basicTask,
+            basicLlmSpans[0],
+            basicToolSpans[0],
+            asyncPromptOperation,
+            asyncPromptTask,
+            asyncPromptLlm,
+            subAgentOperation,
+            subAgentTaskRoot,
+            subAgentTask,
+            subAgentLlmSpans[0],
+            subAgentToolSpans[0],
+            failureOperation,
+            failureTask,
+            failureToolSpan,
+          ].map((event) =>
+            summarizeWrapperContract(event!, [
+              "provider",
+              "model",
+              "operation",
+              "scenario",
+              "mcp.server",
+              "gen_ai.tool.name",
+            ]),
+          ) as Json,
+        ),
+      ).toMatchSnapshot();
     });
   },
 );

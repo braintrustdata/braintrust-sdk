@@ -1,11 +1,14 @@
 import { expect, test } from "vitest";
 import {
+  formatJsonFileSnapshot,
+  resolveFileSnapshotPath,
+} from "../../helpers/file-snapshot";
+import {
   getWrapOpenAIScenarios,
   OPENAI_SCENARIO_TIMEOUT_MS,
 } from "../../helpers/openai";
 import { assertOpenAITraceContract } from "../../helpers/openai-trace-contract";
 import {
-  isCanaryMode,
   prepareScenarioDir,
   resolveScenarioDir,
   withScenarioHarness,
@@ -39,9 +42,14 @@ for (const scenario of wrapOpenAIScenarios) {
           version: scenario.version,
         });
 
-        if (!isCanaryMode()) {
-          expect(contract.spanSummary).toMatchSnapshot("span-events");
-        }
+        await expect(
+          formatJsonFileSnapshot(contract.spanSummary),
+        ).toMatchFileSnapshot(
+          resolveFileSnapshotPath(
+            import.meta.url,
+            `${scenario.dependencyName}.span-events.json`,
+          ),
+        );
       });
     },
   );
