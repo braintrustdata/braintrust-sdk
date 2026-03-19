@@ -84,7 +84,7 @@ const BRAINTRUST_ATTACHMENT =
 const EXTERNAL_ATTACHMENT = ExternalAttachmentReferenceSchema.shape.type.value;
 export const LOGS3_OVERFLOW_REFERENCE_TYPE = "logs3_overflow";
 const BRAINTRUST_PARAMS = Object.keys(braintrustModelParamsSchema.shape);
-const RESET_CONTEXT_MANAGER_STATE = Symbol(
+const RESET_CONTEXT_MANAGER_STATE = Symbol.for(
   "braintrust.resetContextManagerState",
 );
 // 6 MB for the AWS lambda gateway (from our own testing).
