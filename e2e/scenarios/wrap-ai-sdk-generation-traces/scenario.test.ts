@@ -18,7 +18,7 @@ const wrapAISDKScenarios = await getWrapAISDKScenarios(scenarioDir);
 
 for (const scenario of wrapAISDKScenarios) {
   test(
-    `wrap-ai-sdk-generation-traces captures wrapper and child model spans (${scenario.dependencyName})`,
+    `wrap-ai-sdk-generation-traces captures wrapper and child model spans ('${scenario.dependencyName}')`,
     {
       tags: [E2E_TAGS.externalApi],
       timeout: AI_SDK_SCENARIO_TIMEOUT_MS,
