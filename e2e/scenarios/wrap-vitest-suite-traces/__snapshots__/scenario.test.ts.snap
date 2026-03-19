@@ -1,6 +1,6 @@
 // Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
 
-exports[`wrap-vitest-suite-traces captures wrapped Vitest task spans (v2 (e2e default)) > log-payloads-v2 (e2e default) 1`] = `
+exports[`wrap-vitest-suite-traces captures wrapped Vitest task spans (v2) > log-payloads-v2 1`] = `
 [
   {
     "_is_merge": false,
@@ -183,7 +183,7 @@ AssertionError: expected 'wrong' to be 'right' // Object.is equality
 ]
 `;
 
-exports[`wrap-vitest-suite-traces captures wrapped Vitest task spans (v2 (e2e default)) > span-events-v2 (e2e default) 1`] = `
+exports[`wrap-vitest-suite-traces captures wrapped Vitest task spans (v2) > span-events-v2 1`] = `
 [
   {
     "has_input": false,
@@ -526,7 +526,7 @@ exports[`wrap-vitest-suite-traces captures wrapped Vitest task spans (v3) > span
 ]
 `;
 
-exports[`wrap-vitest-suite-traces captures wrapped Vitest task spans (v4) > log-payloads-v4 1`] = `
+exports[`wrap-vitest-suite-traces captures wrapped Vitest task spans (v4.1) > log-payloads-v4.1 1`] = `
 [
   {
     "_is_merge": false,
@@ -709,7 +709,7 @@ AssertionError: expected 'wrong' to be 'right' // Object.is equality
 ]
 `;
 
-exports[`wrap-vitest-suite-traces captures wrapped Vitest task spans (v4) > span-events-v4 1`] = `
+exports[`wrap-vitest-suite-traces captures wrapped Vitest task spans (v4.1) > span-events-v4.1 1`] = `
 [
   {
     "has_input": false,

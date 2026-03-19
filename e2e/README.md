@@ -67,6 +67,27 @@ The main utilities you'll use in test files:
 
 Use `normalizeForSnapshot(...)` before snapshotting. It replaces timestamps and ids with stable tokens and strips machine-specific paths and localhost ports.
 
+### Test tags
+
+Every `scenario.test.ts` must tag each test with exactly one e2e tag from `e2e/helpers/tags.ts`:
+
+- `E2E_TAGS.hermetic` - Uses only the mock Braintrust server and local fixtures. These run in the GitHub checks workflow.
+- `E2E_TAGS.externalApi` - Calls a real provider API. These automatically get `retry: 1` from `e2e/vitest.config.mts`.
+
+Use the tag directly in the Vitest test options:
+
+```ts
+import { E2E_TAGS } from "../../helpers/tags";
+
+test(
+  "trace-primitives-basic collects a minimal manual trace tree",
+  { tags: [E2E_TAGS.hermetic] },
+  async () => {
+    // ...
+  },
+);
+```
+
 ### Wrapper scenario pattern
 
 Wrapper scenarios often create a root span with `testRunId` metadata and then let the wrapper emit child spans that do not repeat that metadata. In those cases:
@@ -89,7 +110,7 @@ Some wrappers execute inside a nested test runner rather than a single SDK call.
 
 ### Environment variables
 
-The wrapper scenarios in this directory require provider credentials in addition to the mock Braintrust server config supplied by the harness:
+`externalApi` scenarios require provider credentials in addition to the mock Braintrust server config supplied by the harness:
 
 - `OPENAI_API_KEY`
 - `ANTHROPIC_API_KEY`
@@ -106,6 +127,8 @@ Scenario-local manifests are optional and should stay slim. They are only for sc
 ## Running
 
 ```bash
-pnpm run test:e2e          # Run tests
-pnpm run test:e2e:update   # Run tests and update snapshots
+pnpm run test:e2e            # Run all e2e tests
+pnpm run test:e2e:hermetic   # Run hermetic-only e2e tests
+pnpm run test:e2e:external   # Run external-api-only e2e tests
+pnpm run test:e2e:update     # Run tests and update snapshots
 ```

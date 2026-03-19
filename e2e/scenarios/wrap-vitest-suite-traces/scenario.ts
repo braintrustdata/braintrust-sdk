@@ -8,7 +8,7 @@ import {
 
 const require = createRequire(import.meta.url);
 const scenarioDir = resolveScenarioDir(import.meta.url);
-const vitestCliPath = require.resolve("vitest/vitest.mjs");
+const vitestCliPath = require.resolve("vitest-v2/vitest.mjs");
 
 async function main() {
   const testRunId = getTestRunId();
