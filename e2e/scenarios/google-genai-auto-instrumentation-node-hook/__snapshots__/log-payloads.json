@@ -60,7 +60,9 @@
       "name": "google-generate-operation"
     },
     "span_id": "<span:4>",
-    "span_parents": ["<span:2>"]
+    "span_parents": [
+      "<span:2>"
+    ]
   },
   {
     "_is_merge": true,
@@ -72,7 +74,9 @@
     "project_id": "<uuid:3>",
     "root_span_id": "<span:2>",
     "span_id": "<span:4>",
-    "span_parents": ["<span:2>"]
+    "span_parents": [
+      "<span:2>"
+    ]
   },
   {
     "context": {
@@ -110,7 +114,9 @@
       "type": "llm"
     },
     "span_id": "<span:6>",
-    "span_parents": ["<span:4>"]
+    "span_parents": [
+      "<span:4>"
+    ]
   },
   {
     "_is_merge": true,
@@ -125,7 +131,9 @@
     "project_id": "<uuid:3>",
     "root_span_id": "<span:2>",
     "span_id": "<span:6>",
-    "span_parents": ["<span:4>"]
+    "span_parents": [
+      "<span:4>"
+    ]
   },
   {
     "_is_merge": true,
@@ -184,7 +192,9 @@
     "project_id": "<uuid:3>",
     "root_span_id": "<span:2>",
     "span_id": "<span:6>",
-    "span_parents": ["<span:4>"]
+    "span_parents": [
+      "<span:4>"
+    ]
   },
   {
     "_is_merge": true,
@@ -196,7 +206,9 @@
     "project_id": "<uuid:3>",
     "root_span_id": "<span:2>",
     "span_id": "<span:6>",
-    "span_parents": ["<span:4>"]
+    "span_parents": [
+      "<span:4>"
+    ]
   },
   {
     "_is_merge": false,
@@ -222,7 +234,9 @@
       "name": "google-attachment-operation"
     },
     "span_id": "<span:9>",
-    "span_parents": ["<span:2>"]
+    "span_parents": [
+      "<span:2>"
+    ]
   },
   {
     "_is_merge": true,
@@ -234,7 +248,9 @@
     "project_id": "<uuid:3>",
     "root_span_id": "<span:2>",
     "span_id": "<span:9>",
-    "span_parents": ["<span:2>"]
+    "span_parents": [
+      "<span:2>"
+    ]
   },
   {
     "context": {
@@ -289,7 +305,9 @@
       "type": "llm"
     },
     "span_id": "<span:11>",
-    "span_parents": ["<span:9>"]
+    "span_parents": [
+      "<span:9>"
+    ]
   },
   {
     "_is_merge": true,
@@ -304,7 +322,9 @@
     "project_id": "<uuid:3>",
     "root_span_id": "<span:2>",
     "span_id": "<span:11>",
-    "span_parents": ["<span:9>"]
+    "span_parents": [
+      "<span:9>"
+    ]
   },
   {
     "_is_merge": true,
@@ -367,7 +387,9 @@
     "project_id": "<uuid:3>",
     "root_span_id": "<span:2>",
     "span_id": "<span:11>",
-    "span_parents": ["<span:9>"]
+    "span_parents": [
+      "<span:9>"
+    ]
   },
   {
     "_is_merge": true,
@@ -379,7 +401,9 @@
     "project_id": "<uuid:3>",
     "root_span_id": "<span:2>",
     "span_id": "<span:11>",
-    "span_parents": ["<span:9>"]
+    "span_parents": [
+      "<span:9>"
+    ]
   },
   {
     "_is_merge": false,
@@ -405,7 +429,9 @@
       "name": "google-stream-operation"
     },
     "span_id": "<span:14>",
-    "span_parents": ["<span:2>"]
+    "span_parents": [
+      "<span:2>"
+    ]
   },
   {
     "_is_merge": true,
@@ -417,7 +443,9 @@
     "project_id": "<uuid:3>",
     "root_span_id": "<span:2>",
     "span_id": "<span:14>",
-    "span_parents": ["<span:2>"]
+    "span_parents": [
+      "<span:2>"
+    ]
   },
   {
     "context": {
@@ -455,7 +483,9 @@
       "type": "llm"
     },
     "span_id": "<span:16>",
-    "span_parents": ["<span:14>"]
+    "span_parents": [
+      "<span:14>"
+    ]
   },
   {
     "_is_merge": true,
@@ -471,7 +501,9 @@
     "project_id": "<uuid:3>",
     "root_span_id": "<span:2>",
     "span_id": "<span:16>",
-    "span_parents": ["<span:14>"]
+    "span_parents": [
+      "<span:14>"
+    ]
   },
   {
     "_is_merge": true,
@@ -513,7 +545,9 @@
     "project_id": "<uuid:3>",
     "root_span_id": "<span:2>",
     "span_id": "<span:16>",
-    "span_parents": ["<span:14>"]
+    "span_parents": [
+      "<span:14>"
+    ]
   },
   {
     "_is_merge": true,
@@ -525,7 +559,9 @@
     "project_id": "<uuid:3>",
     "root_span_id": "<span:2>",
     "span_id": "<span:16>",
-    "span_parents": ["<span:14>"]
+    "span_parents": [
+      "<span:14>"
+    ]
   },
   {
     "_is_merge": false,
@@ -551,7 +587,9 @@
       "name": "google-stream-return-operation"
     },
     "span_id": "<span:18>",
-    "span_parents": ["<span:2>"]
+    "span_parents": [
+      "<span:2>"
+    ]
   },
   {
     "_is_merge": true,
@@ -563,7 +601,9 @@
     "project_id": "<uuid:3>",
     "root_span_id": "<span:2>",
     "span_id": "<span:18>",
-    "span_parents": ["<span:2>"]
+    "span_parents": [
+      "<span:2>"
+    ]
   },
   {
     "context": {
@@ -601,7 +641,9 @@
       "type": "llm"
     },
     "span_id": "<span:20>",
-    "span_parents": ["<span:18>"]
+    "span_parents": [
+      "<span:18>"
+    ]
   },
   {
     "_is_merge": true,
@@ -616,7 +658,9 @@
     "project_id": "<uuid:3>",
     "root_span_id": "<span:2>",
     "span_id": "<span:20>",
-    "span_parents": ["<span:18>"]
+    "span_parents": [
+      "<span:18>"
+    ]
   },
   {
     "_is_merge": true,
@@ -650,7 +694,9 @@
     "project_id": "<uuid:3>",
     "root_span_id": "<span:2>",
     "span_id": "<span:20>",
-    "span_parents": ["<span:18>"]
+    "span_parents": [
+      "<span:18>"
+    ]
   },
   {
     "_is_merge": true,
@@ -662,7 +708,9 @@
     "project_id": "<uuid:3>",
     "root_span_id": "<span:2>",
     "span_id": "<span:20>",
-    "span_parents": ["<span:18>"]
+    "span_parents": [
+      "<span:18>"
+    ]
   },
   {
     "_is_merge": false,
@@ -688,7 +736,9 @@
       "name": "google-tool-operation"
     },
     "span_id": "<span:22>",
-    "span_parents": ["<span:2>"]
+    "span_parents": [
+      "<span:2>"
+    ]
   },
   {
     "_is_merge": true,
@@ -700,7 +750,9 @@
     "project_id": "<uuid:3>",
     "root_span_id": "<span:2>",
     "span_id": "<span:22>",
-    "span_parents": ["<span:2>"]
+    "span_parents": [
+      "<span:2>"
+    ]
   },
   {
     "context": {
@@ -716,7 +768,9 @@
         "temperature": 0,
         "toolConfig": {
           "functionCallingConfig": {
-            "allowedFunctionNames": ["get_weather"],
+            "allowedFunctionNames": [
+              "get_weather"
+            ],
             "mode": "ANY"
           }
         },
@@ -733,7 +787,9 @@
                       "type": "string"
                     }
                   },
-                  "required": ["location"],
+                  "required": [
+                    "location"
+                  ],
                   "type": "object"
                 }
               }
@@ -754,7 +810,9 @@
       "temperature": 0,
       "toolConfig": {
         "functionCallingConfig": {
-          "allowedFunctionNames": ["get_weather"],
+          "allowedFunctionNames": [
+            "get_weather"
+          ],
           "mode": "ANY"
         }
       }
@@ -770,7 +828,9 @@
       "type": "llm"
     },
     "span_id": "<span:24>",
-    "span_parents": ["<span:22>"]
+    "span_parents": [
+      "<span:22>"
+    ]
   },
   {
     "_is_merge": true,
@@ -785,7 +845,9 @@
     "project_id": "<uuid:3>",
     "root_span_id": "<span:2>",
     "span_id": "<span:24>",
-    "span_parents": ["<span:22>"]
+    "span_parents": [
+      "<span:22>"
+    ]
   },
   {
     "_is_merge": true,
@@ -849,7 +911,9 @@
     "project_id": "<uuid:3>",
     "root_span_id": "<span:2>",
     "span_id": "<span:24>",
-    "span_parents": ["<span:22>"]
+    "span_parents": [
+      "<span:22>"
+    ]
   },
   {
     "_is_merge": true,
@@ -861,6 +925,8 @@
     "project_id": "<uuid:3>",
     "root_span_id": "<span:2>",
     "span_id": "<span:24>",
-    "span_parents": ["<span:22>"]
+    "span_parents": [
+      "<span:22>"
+    ]
   }
 ]

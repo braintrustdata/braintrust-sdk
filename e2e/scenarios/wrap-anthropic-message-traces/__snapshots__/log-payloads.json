@@ -60,7 +60,9 @@
       "name": "anthropic-create-operation"
     },
     "span_id": "<span:4>",
-    "span_parents": ["<span:2>"]
+    "span_parents": [
+      "<span:2>"
+    ]
   },
   {
     "_is_merge": true,
@@ -72,7 +74,9 @@
     "project_id": "<uuid:3>",
     "root_span_id": "<span:2>",
     "span_id": "<span:4>",
-    "span_parents": ["<span:2>"]
+    "span_parents": [
+      "<span:2>"
+    ]
   },
   {
     "_is_merge": false,
@@ -107,7 +111,9 @@
       "type": "llm"
     },
     "span_id": "<span:6>",
-    "span_parents": ["<span:4>"]
+    "span_parents": [
+      "<span:4>"
+    ]
   },
   {
     "_is_merge": true,
@@ -124,7 +130,9 @@
     "project_id": "<uuid:3>",
     "root_span_id": "<span:2>",
     "span_id": "<span:6>",
-    "span_parents": ["<span:4>"]
+    "span_parents": [
+      "<span:4>"
+    ]
   },
   {
     "_is_merge": true,
@@ -146,7 +154,9 @@
     "project_id": "<uuid:3>",
     "root_span_id": "<span:2>",
     "span_id": "<span:6>",
-    "span_parents": ["<span:4>"]
+    "span_parents": [
+      "<span:4>"
+    ]
   },
   {
     "_is_merge": true,
@@ -158,7 +168,9 @@
     "project_id": "<uuid:3>",
     "root_span_id": "<span:2>",
     "span_id": "<span:6>",
-    "span_parents": ["<span:4>"]
+    "span_parents": [
+      "<span:4>"
+    ]
   },
   {
     "_is_merge": false,
@@ -184,7 +196,9 @@
       "name": "anthropic-attachment-operation"
     },
     "span_id": "<span:8>",
-    "span_parents": ["<span:2>"]
+    "span_parents": [
+      "<span:2>"
+    ]
   },
   {
     "_is_merge": true,
@@ -196,7 +210,9 @@
     "project_id": "<uuid:3>",
     "root_span_id": "<span:2>",
     "span_id": "<span:8>",
-    "span_parents": ["<span:2>"]
+    "span_parents": [
+      "<span:2>"
+    ]
   },
   {
     "_is_merge": false,
@@ -249,7 +265,9 @@
       "type": "llm"
     },
     "span_id": "<span:10>",
-    "span_parents": ["<span:8>"]
+    "span_parents": [
+      "<span:8>"
+    ]
   },
   {
     "_is_merge": true,
@@ -266,7 +284,9 @@
     "project_id": "<uuid:3>",
     "root_span_id": "<span:2>",
     "span_id": "<span:10>",
-    "span_parents": ["<span:8>"]
+    "span_parents": [
+      "<span:8>"
+    ]
   },
   {
     "_is_merge": true,
@@ -288,7 +308,9 @@
     "project_id": "<uuid:3>",
     "root_span_id": "<span:2>",
     "span_id": "<span:10>",
-    "span_parents": ["<span:8>"]
+    "span_parents": [
+      "<span:8>"
+    ]
   },
   {
     "_is_merge": true,
@@ -300,7 +322,9 @@
     "project_id": "<uuid:3>",
     "root_span_id": "<span:2>",
     "span_id": "<span:10>",
-    "span_parents": ["<span:8>"]
+    "span_parents": [
+      "<span:8>"
+    ]
   },
   {
     "_is_merge": false,
@@ -326,7 +350,9 @@
       "name": "anthropic-stream-operation"
     },
     "span_id": "<span:12>",
-    "span_parents": ["<span:2>"]
+    "span_parents": [
+      "<span:2>"
+    ]
   },
   {
     "_is_merge": true,
@@ -338,7 +364,9 @@
     "project_id": "<uuid:3>",
     "root_span_id": "<span:2>",
     "span_id": "<span:12>",
-    "span_parents": ["<span:2>"]
+    "span_parents": [
+      "<span:2>"
+    ]
   },
   {
     "_is_merge": false,
@@ -374,7 +402,9 @@
       "type": "llm"
     },
     "span_id": "<span:14>",
-    "span_parents": ["<span:12>"]
+    "span_parents": [
+      "<span:12>"
+    ]
   },
   {
     "_is_merge": true,
@@ -389,7 +419,9 @@
     "project_id": "<uuid:3>",
     "root_span_id": "<span:2>",
     "span_id": "<span:14>",
-    "span_parents": ["<span:12>"]
+    "span_parents": [
+      "<span:12>"
+    ]
   },
   {
     "_is_merge": true,
@@ -406,7 +438,9 @@
     "project_id": "<uuid:3>",
     "root_span_id": "<span:2>",
     "span_id": "<span:14>",
-    "span_parents": ["<span:12>"]
+    "span_parents": [
+      "<span:12>"
+    ]
   },
   {
     "_is_merge": true,
@@ -423,7 +457,9 @@
     "project_id": "<uuid:3>",
     "root_span_id": "<span:2>",
     "span_id": "<span:14>",
-    "span_parents": ["<span:12>"]
+    "span_parents": [
+      "<span:12>"
+    ]
   },
   {
     "_is_merge": true,
@@ -433,7 +469,9 @@
     "project_id": "<uuid:3>",
     "root_span_id": "<span:2>",
     "span_id": "<span:14>",
-    "span_parents": ["<span:12>"]
+    "span_parents": [
+      "<span:12>"
+    ]
   },
   {
     "_is_merge": true,
@@ -446,7 +484,9 @@
     "project_id": "<uuid:3>",
     "root_span_id": "<span:2>",
     "span_id": "<span:14>",
-    "span_parents": ["<span:12>"]
+    "span_parents": [
+      "<span:12>"
+    ]
   },
   {
     "_is_merge": true,
@@ -458,7 +498,9 @@
     "project_id": "<uuid:3>",
     "root_span_id": "<span:2>",
     "span_id": "<span:14>",
-    "span_parents": ["<span:12>"]
+    "span_parents": [
+      "<span:12>"
+    ]
   },
   {
     "_is_merge": false,
@@ -484,7 +526,9 @@
       "name": "anthropic-stream-with-response-operation"
     },
     "span_id": "<span:16>",
-    "span_parents": ["<span:2>"]
+    "span_parents": [
+      "<span:2>"
+    ]
   },
   {
     "_is_merge": true,
@@ -496,7 +540,9 @@
     "project_id": "<uuid:3>",
     "root_span_id": "<span:2>",
     "span_id": "<span:16>",
-    "span_parents": ["<span:2>"]
+    "span_parents": [
+      "<span:2>"
+    ]
   },
   {
     "_is_merge": false,
@@ -532,7 +578,9 @@
       "type": "llm"
     },
     "span_id": "<span:18>",
-    "span_parents": ["<span:16>"]
+    "span_parents": [
+      "<span:16>"
+    ]
   },
   {
     "_is_merge": true,
@@ -547,7 +595,9 @@
     "project_id": "<uuid:3>",
     "root_span_id": "<span:2>",
     "span_id": "<span:18>",
-    "span_parents": ["<span:16>"]
+    "span_parents": [
+      "<span:16>"
+    ]
   },
   {
     "_is_merge": true,
@@ -564,7 +614,9 @@
     "project_id": "<uuid:3>",
     "root_span_id": "<span:2>",
     "span_id": "<span:18>",
-    "span_parents": ["<span:16>"]
+    "span_parents": [
+      "<span:16>"
+    ]
   },
   {
     "_is_merge": true,
@@ -581,7 +633,9 @@
     "project_id": "<uuid:3>",
     "root_span_id": "<span:2>",
     "span_id": "<span:18>",
-    "span_parents": ["<span:16>"]
+    "span_parents": [
+      "<span:16>"
+    ]
   },
   {
     "_is_merge": true,
@@ -591,7 +645,9 @@
     "project_id": "<uuid:3>",
     "root_span_id": "<span:2>",
     "span_id": "<span:18>",
-    "span_parents": ["<span:16>"]
+    "span_parents": [
+      "<span:16>"
+    ]
   },
   {
     "_is_merge": true,
@@ -604,7 +660,9 @@
     "project_id": "<uuid:3>",
     "root_span_id": "<span:2>",
     "span_id": "<span:18>",
-    "span_parents": ["<span:16>"]
+    "span_parents": [
+      "<span:16>"
+    ]
   },
   {
     "_is_merge": true,
@@ -616,7 +674,9 @@
     "project_id": "<uuid:3>",
     "root_span_id": "<span:2>",
     "span_id": "<span:18>",
-    "span_parents": ["<span:16>"]
+    "span_parents": [
+      "<span:16>"
+    ]
   },
   {
     "_is_merge": false,
@@ -642,7 +702,9 @@
       "name": "anthropic-tool-operation"
     },
     "span_id": "<span:20>",
-    "span_parents": ["<span:2>"]
+    "span_parents": [
+      "<span:2>"
+    ]
   },
   {
     "_is_merge": true,
@@ -654,7 +716,9 @@
     "project_id": "<uuid:3>",
     "root_span_id": "<span:2>",
     "span_id": "<span:20>",
-    "span_parents": ["<span:2>"]
+    "span_parents": [
+      "<span:2>"
+    ]
   },
   {
     "_is_merge": false,
@@ -687,7 +751,9 @@
                 "type": "string"
               }
             },
-            "required": ["location"],
+            "required": [
+              "location"
+            ],
             "type": "object"
           },
           "name": "get_weather"
@@ -705,7 +771,9 @@
       "type": "llm"
     },
     "span_id": "<span:22>",
-    "span_parents": ["<span:20>"]
+    "span_parents": [
+      "<span:20>"
+    ]
   },
   {
     "_is_merge": true,
@@ -722,7 +790,9 @@
     "project_id": "<uuid:3>",
     "root_span_id": "<span:2>",
     "span_id": "<span:22>",
-    "span_parents": ["<span:20>"]
+    "span_parents": [
+      "<span:20>"
+    ]
   },
   {
     "_is_merge": true,
@@ -751,7 +821,9 @@
     "project_id": "<uuid:3>",
     "root_span_id": "<span:2>",
     "span_id": "<span:22>",
-    "span_parents": ["<span:20>"]
+    "span_parents": [
+      "<span:20>"
+    ]
   },
   {
     "_is_merge": true,
@@ -763,7 +835,9 @@
     "project_id": "<uuid:3>",
     "root_span_id": "<span:2>",
     "span_id": "<span:22>",
-    "span_parents": ["<span:20>"]
+    "span_parents": [
+      "<span:20>"
+    ]
   },
   {
     "_is_merge": false,
@@ -789,7 +863,9 @@
       "name": "anthropic-beta-create-operation"
     },
     "span_id": "<span:25>",
-    "span_parents": ["<span:2>"]
+    "span_parents": [
+      "<span:2>"
+    ]
   },
   {
     "_is_merge": true,
@@ -801,7 +877,9 @@
     "project_id": "<uuid:3>",
     "root_span_id": "<span:2>",
     "span_id": "<span:25>",
-    "span_parents": ["<span:2>"]
+    "span_parents": [
+      "<span:2>"
+    ]
   },
   {
     "_is_merge": false,
@@ -836,7 +914,9 @@
       "type": "llm"
     },
     "span_id": "<span:27>",
-    "span_parents": ["<span:25>"]
+    "span_parents": [
+      "<span:25>"
+    ]
   },
   {
     "_is_merge": true,
@@ -853,7 +933,9 @@
     "project_id": "<uuid:3>",
     "root_span_id": "<span:2>",
     "span_id": "<span:27>",
-    "span_parents": ["<span:25>"]
+    "span_parents": [
+      "<span:25>"
+    ]
   },
   {
     "_is_merge": true,
@@ -875,7 +957,9 @@
     "project_id": "<uuid:3>",
     "root_span_id": "<span:2>",
     "span_id": "<span:27>",
-    "span_parents": ["<span:25>"]
+    "span_parents": [
+      "<span:25>"
+    ]
   },
   {
     "_is_merge": true,
@@ -887,7 +971,9 @@
     "project_id": "<uuid:3>",
     "root_span_id": "<span:2>",
     "span_id": "<span:27>",
-    "span_parents": ["<span:25>"]
+    "span_parents": [
+      "<span:25>"
+    ]
   },
   {
     "_is_merge": false,
@@ -913,7 +999,9 @@
       "name": "anthropic-beta-stream-operation"
     },
     "span_id": "<span:29>",
-    "span_parents": ["<span:2>"]
+    "span_parents": [
+      "<span:2>"
+    ]
   },
   {
     "_is_merge": true,
@@ -925,7 +1013,9 @@
     "project_id": "<uuid:3>",
     "root_span_id": "<span:2>",
     "span_id": "<span:29>",
-    "span_parents": ["<span:2>"]
+    "span_parents": [
+      "<span:2>"
+    ]
   },
   {
     "_is_merge": false,
@@ -961,7 +1051,9 @@
       "type": "llm"
     },
     "span_id": "<span:31>",
-    "span_parents": ["<span:29>"]
+    "span_parents": [
+      "<span:29>"
+    ]
   },
   {
     "_is_merge": true,
@@ -976,7 +1068,9 @@
     "project_id": "<uuid:3>",
     "root_span_id": "<span:2>",
     "span_id": "<span:31>",
-    "span_parents": ["<span:29>"]
+    "span_parents": [
+      "<span:29>"
+    ]
   },
   {
     "_is_merge": true,
@@ -993,7 +1087,9 @@
     "project_id": "<uuid:3>",
     "root_span_id": "<span:2>",
     "span_id": "<span:31>",
-    "span_parents": ["<span:29>"]
+    "span_parents": [
+      "<span:29>"
+    ]
   },
   {
     "_is_merge": true,
@@ -1010,7 +1106,9 @@
     "project_id": "<uuid:3>",
     "root_span_id": "<span:2>",
     "span_id": "<span:31>",
-    "span_parents": ["<span:29>"]
+    "span_parents": [
+      "<span:29>"
+    ]
   },
   {
     "_is_merge": true,
@@ -1020,7 +1118,9 @@
     "project_id": "<uuid:3>",
     "root_span_id": "<span:2>",
     "span_id": "<span:31>",
-    "span_parents": ["<span:29>"]
+    "span_parents": [
+      "<span:29>"
+    ]
   },
   {
     "_is_merge": true,
@@ -1033,7 +1133,9 @@
     "project_id": "<uuid:3>",
     "root_span_id": "<span:2>",
     "span_id": "<span:31>",
-    "span_parents": ["<span:29>"]
+    "span_parents": [
+      "<span:29>"
+    ]
   },
   {
     "_is_merge": true,
@@ -1045,6 +1147,8 @@
     "project_id": "<uuid:3>",
     "root_span_id": "<span:2>",
     "span_id": "<span:31>",
-    "span_parents": ["<span:29>"]
+    "span_parents": [
+      "<span:29>"
+    ]
   }
 ]
