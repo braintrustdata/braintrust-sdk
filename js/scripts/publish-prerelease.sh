@@ -50,6 +50,16 @@ fi
 
 DIST_TAG="rc"
 
+set_package_version() {
+  local version="$1"
+  VERSION_TO_SET="$version" node -e '
+    const fs = require("fs");
+    const pkg = JSON.parse(fs.readFileSync("package.json", "utf8"));
+    pkg.version = process.env.VERSION_TO_SET;
+    fs.writeFileSync("package.json", JSON.stringify(pkg, null, 2) + "\n");
+  '
+}
+
 echo "================================================"
 echo " Publishing Pre-release"
 echo "================================================"
@@ -66,7 +76,7 @@ echo "Current version: $CURRENT_VERSION"
 # Set the explicit version (updates package.json temporarily)
 echo ""
 echo "Setting version to $VERSION..."
-npm version "$VERSION" --no-git-tag-version --allow-same-version
+set_package_version "$VERSION"
 
 NEW_VERSION=$(node -p "require('./package.json').version")
 echo "New version: $NEW_VERSION"
@@ -74,8 +84,8 @@ echo ""
 
 # Build the SDK
 echo "Building SDK..."
-npm install
-npm run build
+pnpm install --frozen-lockfile
+pnpm run build
 echo "Build complete."
 echo ""
 
@@ -98,7 +108,7 @@ else
     echo "Publish cancelled."
     echo ""
     echo "Restoring package.json to original version..."
-    npm version "$CURRENT_VERSION" --no-git-tag-version --allow-same-version
+    set_package_version "$CURRENT_VERSION"
     exit 1
   fi
 fi
@@ -120,6 +130,6 @@ echo ""
 # Restore package.json if not in CI (local development)
 if [ -z "${CI:-}" ] && [ -z "${GITHUB_ACTIONS:-}" ]; then
   echo "Restoring package.json to original version..."
-  npm version "$CURRENT_VERSION" --no-git-tag-version --allow-same-version
+  set_package_version "$CURRENT_VERSION"
   echo "Done. Local package.json restored to $CURRENT_VERSION"
 fi

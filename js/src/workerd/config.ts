@@ -1,10 +1,6 @@
 import iso from "../isomorph";
 import { _internalSetInitialState } from "../logger";
-import type { AsyncLocalStorage as NodeAsyncLocalStorage } from "node:async_hooks";
-
-declare global {
-  var AsyncLocalStorage: typeof NodeAsyncLocalStorage;
-}
+import { resolveRuntimeAsyncLocalStorage } from "../runtime-async-local-storage";
 
 let workerdConfigured = false;
 
@@ -18,12 +14,10 @@ export function configureWorkerd(): void {
 
   iso.buildType = "workerd";
 
-  try {
-    if (typeof AsyncLocalStorage !== "undefined") {
-      iso.newAsyncLocalStorage = <T>() => new AsyncLocalStorage<T>();
-    }
-  } catch {
-    // ignore
+  const runtimeAsyncLocalStorage = resolveRuntimeAsyncLocalStorage();
+
+  if (runtimeAsyncLocalStorage) {
+    iso.newAsyncLocalStorage = <T>() => new runtimeAsyncLocalStorage<T>();
   }
 
   iso.getEnv = (name: string) => {
