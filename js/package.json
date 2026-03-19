@@ -139,7 +139,7 @@
     "test:vitest": "pnpm --filter @braintrust/vitest-wrapper-tests test",
     "test:output": "tsx scripts/test-output.ts --with-comparison --with-metrics --with-progress",
     "bench": "npx tsx src/queue.bench.ts",
-    "publish:validate": "./scripts/validate-release.sh && npm install && npm run build && npm publish",
+    "publish:validate": "./scripts/validate-release.sh && pnpm install --frozen-lockfile && pnpm run build && npm publish",
     "lint": "eslint .",
     "fix:lint": "eslint --fix .",
     "playground": "tsx playground.ts",
