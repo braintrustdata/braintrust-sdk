@@ -1,11 +1,6 @@
 import iso from "../isomorph";
 import { _internalSetInitialState } from "../logger";
-
-import type { AsyncLocalStorage as NodeAsyncLocalStorage } from "node:async_hooks";
-
-declare global {
-  var AsyncLocalStorage: typeof NodeAsyncLocalStorage;
-}
+import { resolveRuntimeAsyncLocalStorage } from "../runtime-async-local-storage";
 
 let edgeLightConfigured = false;
 
@@ -19,12 +14,10 @@ export function configureEdgeLight(): void {
 
   iso.buildType = "edge-light";
 
-  try {
-    if (typeof AsyncLocalStorage !== "undefined") {
-      iso.newAsyncLocalStorage = <T>() => new AsyncLocalStorage<T>();
-    }
-  } catch {
-    // Ignore
+  const runtimeAsyncLocalStorage = resolveRuntimeAsyncLocalStorage();
+
+  if (runtimeAsyncLocalStorage) {
+    iso.newAsyncLocalStorage = <T>() => new runtimeAsyncLocalStorage<T>();
   }
 
   iso.getEnv = (name: string) => {
