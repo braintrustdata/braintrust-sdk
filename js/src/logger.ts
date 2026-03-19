@@ -4208,7 +4208,7 @@ export async function loadPrompt({
     }
   } catch (e) {
     // If environment or version was specified, don't fall back to cache
-    if (versionOrEnvironment) {
+    if (version || environment) {
       throw new Error(`Prompt not found with specified parameters: ${e}`);
     }
 
@@ -4381,7 +4381,7 @@ export async function loadParameters<
       });
     }
   } catch (e) {
-    if (versionOrEnvironment) {
+    if (version || environment) {
       throw new Error(`Parameters not found with specified parameters: ${e}`);
     }
 
