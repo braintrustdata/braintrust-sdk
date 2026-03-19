@@ -179,17 +179,21 @@ function normalizeArgs(args: unknown[] | unknown): unknown[] {
     return args;
   }
 
-  if (
-    isObject(args) &&
-    "length" in args &&
-    typeof args.length === "number" &&
-    Number.isInteger(args.length) &&
-    args.length >= 0
-  ) {
-    return Array.from(args as ArrayLike<unknown>);
+  if (isArrayLike(args)) {
+    return Array.from(args);
   }
 
   return [args];
+}
+
+function isArrayLike(value: unknown): value is ArrayLike<unknown> {
+  return (
+    isObject(value) &&
+    "length" in value &&
+    typeof value.length === "number" &&
+    Number.isInteger(value.length) &&
+    value.length >= 0
+  );
 }
 
 function getOpenRouterRequestArg(
