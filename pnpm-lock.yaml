@@ -29,6 +29,9 @@ importers:
 
   e2e:
     devDependencies:
+      '@braintrust/langchain-js':
+        specifier: workspace:^
+        version: link:../integrations/langchain-js
       '@braintrust/otel':
         specifier: workspace:^
         version: link:../integrations/otel-js
@@ -267,18 +270,6 @@ importers:
       vitest:
         specifier: ^2.1.9
         version: 2.1.9(@types/node@20.10.5)(msw@2.6.6(@types/node@20.10.5)(typescript@5.3.3))(terser@5.44.1)
-
-  internal/golden:
-    dependencies:
-      '@google/genai':
-        specifier: ^1.25.0
-        version: 1.25.0(@modelcontextprotocol/sdk@1.18.0)
-      openai:
-        specifier: ^6.3.0
-        version: 6.4.0(ws@8.18.3)(zod@3.25.76)
-      zod:
-        specifier: ^3.23.8
-        version: 3.25.76
 
   js:
     dependencies:
@@ -4787,18 +4778,6 @@ packages:
 
   openai@6.25.0:
     resolution: {integrity: sha512-mEh6VZ2ds2AGGokWARo18aPISI1OhlgdEIC1ewhkZr8pSIT31dec0ecr9Nhxx0JlybyOgoAT1sWeKtwPZzJyww==}
-    hasBin: true
-    peerDependencies:
-      ws: ^8.18.0
-      zod: ^3.25 || ^4.0
-    peerDependenciesMeta:
-      ws:
-        optional: true
-      zod:
-        optional: true
-
-  openai@6.4.0:
-    resolution: {integrity: sha512-vSoVBRTPMgg3oSaoHIGfbYM2zwGN0D4F2aiNHMeu1lZHFOwfJMAF0X110HDdedYvcsIo578ujQ11WL5kP687Cw==}
     hasBin: true
     peerDependencies:
       ws: ^8.18.0
@@ -11329,11 +11308,6 @@ snapshots:
       zod: 3.25.76
 
   openai@6.25.0(ws@8.18.3)(zod@3.25.76):
-    optionalDependencies:
-      ws: 8.18.3
-      zod: 3.25.76
-
-  openai@6.4.0(ws@8.18.3)(zod@3.25.76):
     optionalDependencies:
       ws: 8.18.3
       zod: 3.25.76

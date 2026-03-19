@@ -2,6 +2,7 @@ import { expect, test } from "vitest";
 import { normalizeForSnapshot, type Json } from "../../helpers/normalize";
 import {
   prepareScenarioDir,
+  readInstalledPackageVersion,
   resolveScenarioDir,
   withScenarioHarness,
 } from "../../helpers/scenario-harness";
@@ -16,89 +17,110 @@ const scenarioDir = await prepareScenarioDir({
 });
 const TIMEOUT_MS = 90_000;
 
-test("wrap-vitest-suite-traces captures wrapped Vitest task spans", async () => {
-  await withScenarioHarness(
-    async ({ payloads, runScenarioDir, testRunEvents, testRunId }) => {
-      await runScenarioDir({ scenarioDir, timeoutMs: TIMEOUT_MS });
+interface VitestScenario {
+  entry: string;
+  label: string;
+}
 
-      const capturedEvents = testRunEvents();
-      const simplePass = findLatestSpan(capturedEvents, "vitest simple pass");
-      const configured = findLatestSpan(
-        capturedEvents,
-        "vitest configured span",
-      );
-      const concurrentAlpha = findLatestSpan(
-        capturedEvents,
-        "vitest concurrent alpha",
-      );
-      const concurrentBeta = findLatestSpan(
-        capturedEvents,
-        "vitest concurrent beta",
-      );
-      const expectedFailure = findLatestSpan(
-        capturedEvents,
-        "vitest expected failure",
-      );
+const scenarios: VitestScenario[] = [
+  { entry: "scenario.ts", label: "v2 (e2e default)" },
+  { entry: "scenario.vitest-v3.ts", label: "v3" },
+  { entry: "scenario.vitest-v4.ts", label: "v4" },
+];
 
-      for (const span of [
-        simplePass,
-        configured,
-        concurrentAlpha,
-        concurrentBeta,
-        expectedFailure,
-      ]) {
-        expect(span).toBeDefined();
-        expect(span?.span.type).toBe("task");
-      }
+for (const scenario of scenarios) {
+  test(`wrap-vitest-suite-traces captures wrapped Vitest task spans (${scenario.label})`, async () => {
+    await withScenarioHarness(
+      async ({ payloads, runScenarioDir, testRunEvents, testRunId }) => {
+        await runScenarioDir({
+          entry: scenario.entry,
+          scenarioDir,
+          timeoutMs: TIMEOUT_MS,
+        });
 
-      expect(configured?.input).toEqual({ value: 5 });
-      expect(configured?.expected).toBe(10);
-      expect(configured?.row.metadata).toMatchObject({
-        case: "configured-span",
-        scenario: "wrap-vitest-suite-traces",
-        testRunId,
-      });
-      expect(configured?.row.tags).toEqual(["math", "configured"]);
-      expect(configured?.scores).toMatchObject({
-        correctness: 1,
-        pass: 1,
-        quality: 0.9,
-      });
-      expect(configured?.output).toMatchObject({
-        phase: "configured-span",
-        result: 10,
-      });
+        const capturedEvents = testRunEvents();
+        const simplePass = findLatestSpan(capturedEvents, "vitest simple pass");
+        const configured = findLatestSpan(
+          capturedEvents,
+          "vitest configured span",
+        );
+        const concurrentAlpha = findLatestSpan(
+          capturedEvents,
+          "vitest concurrent alpha",
+        );
+        const concurrentBeta = findLatestSpan(
+          capturedEvents,
+          "vitest concurrent beta",
+        );
+        const expectedFailure = findLatestSpan(
+          capturedEvents,
+          "vitest expected failure",
+        );
 
-      expect(concurrentAlpha?.output).toMatchObject({
-        phase: "concurrent-alpha",
-      });
-      expect(concurrentBeta?.output).toMatchObject({
-        phase: "concurrent-beta",
-      });
+        for (const span of [
+          simplePass,
+          configured,
+          concurrentAlpha,
+          concurrentBeta,
+          expectedFailure,
+        ]) {
+          expect(span).toBeDefined();
+          expect(span?.span.type).toBe("task");
+        }
 
-      expect(expectedFailure?.scores).toMatchObject({
-        pass: 0,
-      });
+        expect(configured?.input).toEqual({ value: 5 });
+        expect(configured?.expected).toBe(10);
+        expect(configured?.row.metadata).toMatchObject({
+          case: "configured-span",
+          scenario: "wrap-vitest-suite-traces",
+          testRunId,
+        });
+        expect(configured?.row.tags).toEqual(["math", "configured"]);
+        expect(configured?.scores).toMatchObject({
+          correctness: 1,
+          pass: 1,
+          quality: 0.9,
+        });
+        expect(configured?.output).toMatchObject({
+          phase: "configured-span",
+          result: 10,
+        });
 
-      expect(
-        normalizeForSnapshot(
-          [
-            simplePass,
-            configured,
-            concurrentAlpha,
-            concurrentBeta,
-            expectedFailure,
-          ].map((event) =>
-            summarizeWrapperContract(event!, ["case", "scenario", "testRunId"]),
-          ) as Json,
-        ),
-      ).toMatchSnapshot("span-events");
+        expect(concurrentAlpha?.output).toMatchObject({
+          phase: "concurrent-alpha",
+        });
+        expect(concurrentBeta?.output).toMatchObject({
+          phase: "concurrent-beta",
+        });
 
-      expect(
-        normalizeForSnapshot(
-          payloadRowsForTestRunId(payloads(), testRunId) as Json,
-        ),
-      ).toMatchSnapshot("log-payloads");
-    },
-  );
-});
+        expect(expectedFailure?.scores).toMatchObject({
+          pass: 0,
+        });
+
+        expect(
+          normalizeForSnapshot(
+            [
+              simplePass,
+              configured,
+              concurrentAlpha,
+              concurrentBeta,
+              expectedFailure,
+            ].map((event) =>
+              summarizeWrapperContract(event!, [
+                "case",
+                "scenario",
+                "testRunId",
+              ]),
+            ) as Json,
+          ),
+        ).toMatchSnapshot(`span-events-${scenario.label}`);
+
+        expect(
+          normalizeForSnapshot(
+            payloadRowsForTestRunId(payloads(), testRunId) as Json,
+          ),
+        ).toMatchSnapshot(`log-payloads-${scenario.label}`);
+      },
+    );
+  });
+}

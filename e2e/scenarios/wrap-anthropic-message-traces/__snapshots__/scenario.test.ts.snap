@@ -5,8 +5,8 @@ exports[`wrap-anthropic-message-traces captures create, stream, beta, attachment
   {
     "_is_merge": false,
     "context": {
-      "caller_filename": "<repo>/e2e/scenarios/wrap-anthropic-message-traces/scenario.ts",
-      "caller_functionname": "main",
+      "caller_filename": "<repo>/e2e/helpers/provider-runtime.mjs",
+      "caller_functionname": "runTracedScenario",
       "caller_lineno": 0,
     },
     "created": "<timestamp>",
@@ -42,8 +42,8 @@ exports[`wrap-anthropic-message-traces captures create, stream, beta, attachment
   {
     "_is_merge": false,
     "context": {
-      "caller_filename": "<repo>/e2e/scenarios/wrap-anthropic-message-traces/scenario.ts",
-      "caller_functionname": "logger.traced.name",
+      "caller_filename": "<repo>/e2e/helpers/provider-runtime.mjs",
+      "caller_functionname": "runOperation",
       "caller_lineno": 0,
     },
     "created": "<timestamp>",
@@ -178,8 +178,8 @@ exports[`wrap-anthropic-message-traces captures create, stream, beta, attachment
   {
     "_is_merge": false,
     "context": {
-      "caller_filename": "<repo>/e2e/scenarios/wrap-anthropic-message-traces/scenario.ts",
-      "caller_functionname": "logger.traced.name",
+      "caller_filename": "<repo>/e2e/helpers/provider-runtime.mjs",
+      "caller_functionname": "runOperation",
       "caller_lineno": 0,
     },
     "created": "<timestamp>",
@@ -332,8 +332,8 @@ exports[`wrap-anthropic-message-traces captures create, stream, beta, attachment
   {
     "_is_merge": false,
     "context": {
-      "caller_filename": "<repo>/e2e/scenarios/wrap-anthropic-message-traces/scenario.ts",
-      "caller_functionname": "logger.traced.name",
+      "caller_filename": "<repo>/e2e/helpers/provider-runtime.mjs",
+      "caller_functionname": "runOperation",
       "caller_lineno": 0,
     },
     "created": "<timestamp>",
@@ -510,8 +510,8 @@ exports[`wrap-anthropic-message-traces captures create, stream, beta, attachment
   {
     "_is_merge": false,
     "context": {
-      "caller_filename": "<repo>/e2e/scenarios/wrap-anthropic-message-traces/scenario.ts",
-      "caller_functionname": "logger.traced.name",
+      "caller_filename": "<repo>/e2e/helpers/provider-runtime.mjs",
+      "caller_functionname": "runOperation",
       "caller_lineno": 0,
     },
     "created": "<timestamp>",
@@ -688,8 +688,8 @@ exports[`wrap-anthropic-message-traces captures create, stream, beta, attachment
   {
     "_is_merge": false,
     "context": {
-      "caller_filename": "<repo>/e2e/scenarios/wrap-anthropic-message-traces/scenario.ts",
-      "caller_functionname": "logger.traced.name",
+      "caller_filename": "<repo>/e2e/helpers/provider-runtime.mjs",
+      "caller_functionname": "runOperation",
       "caller_lineno": 0,
     },
     "created": "<timestamp>",
@@ -849,8 +849,8 @@ exports[`wrap-anthropic-message-traces captures create, stream, beta, attachment
   {
     "_is_merge": false,
     "context": {
-      "caller_filename": "<repo>/e2e/scenarios/wrap-anthropic-message-traces/scenario.ts",
-      "caller_functionname": "logger.traced.name",
+      "caller_filename": "<repo>/e2e/helpers/provider-runtime.mjs",
+      "caller_functionname": "runOperation",
       "caller_lineno": 0,
     },
     "created": "<timestamp>",
@@ -985,8 +985,8 @@ exports[`wrap-anthropic-message-traces captures create, stream, beta, attachment
   {
     "_is_merge": false,
     "context": {
-      "caller_filename": "<repo>/e2e/scenarios/wrap-anthropic-message-traces/scenario.ts",
-      "caller_functionname": "logger.traced.name",
+      "caller_filename": "<repo>/e2e/helpers/provider-runtime.mjs",
+      "caller_functionname": "runOperation",
       "caller_lineno": 0,
     },
     "created": "<timestamp>",

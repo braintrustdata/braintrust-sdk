@@ -2,10 +2,8 @@ packages:
   - e2e
   - js
   - integrations/*
-  - internal/golden
   - js/src/wrappers/*
   - "!js/vendor/**"
-  - "!internal/golden/*"
 
 ignoredBuiltDependencies:
   - esbuild

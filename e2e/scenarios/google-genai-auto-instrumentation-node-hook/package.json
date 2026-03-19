@@ -1,0 +1,14 @@
+{
+  "name": "@braintrust/e2e-google-genai-auto-instrumentation-node-hook",
+  "private": true,
+  "braintrustScenario": {
+    "canary": {
+      "dependencies": {
+        "@google/genai": "latest"
+      }
+    }
+  },
+  "dependencies": {
+    "@google/genai": "1.25.0"
+  }
+}

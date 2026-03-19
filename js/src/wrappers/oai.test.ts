@@ -1016,6 +1016,55 @@ describe("openai client unit tests", TEST_SUITE_OPTIONS, () => {
     expect(unhandledRejection).toBeNull();
   });
 
+  test("embeddings.create returns APIPromise with .withResponse()", async () => {
+    assert.lengthOf(await backgroundLogger.drain(), 0);
+
+    const mockEmbeddingData = {
+      object: "list",
+      data: [{ object: "embedding", index: 0, embedding: [0.1, 0.2, 0.3] }],
+      model: "text-embedding-3-small",
+      usage: { prompt_tokens: 2, total_tokens: 2 },
+    };
+    const mockHeaders = new Headers({
+      "x-ratelimit-limit-requests": "3000",
+      "x-ratelimit-remaining-requests": "2999",
+    });
+    const mockResponse = new Response(null, {
+      status: 200,
+      headers: mockHeaders,
+    });
+
+    const mockCreate = vi.fn().mockImplementation(() => {
+      const p = Promise.resolve(mockEmbeddingData) as any;
+      p.withResponse = () =>
+        Promise.resolve({ data: mockEmbeddingData, response: mockResponse });
+      return p;
+    });
+
+    const mockOai = new OpenAI({ apiKey: "sk-fake" });
+    mockOai.embeddings.create = mockCreate;
+    const wrappedMock = wrapOpenAI(mockOai);
+
+    const embeddingPromise = wrappedMock.embeddings.create({
+      model: "text-embedding-3-small",
+      input: "Hello world",
+    });
+
+    expect(typeof embeddingPromise.withResponse).toBe("function");
+
+    const { data, response } = await embeddingPromise.withResponse();
+    expect(data).toEqual(mockEmbeddingData);
+    expect(response.status).toBe(200);
+    expect(response.headers.get("x-ratelimit-limit-requests")).toBe("3000");
+
+    // Awaiting the promise directly should also work
+    const directResult = await wrappedMock.embeddings.create({
+      model: "text-embedding-3-small",
+      input: "Hello world",
+    });
+    expect(directResult).toEqual(mockEmbeddingData);
+  });
+
   test("invalid API key does not cause unhandled rejection without withResponse", async () => {
     // Create client with invalid API key
     const invalidClient = wrapOpenAI(new OpenAI({ apiKey: "invalid-api-key" }));
