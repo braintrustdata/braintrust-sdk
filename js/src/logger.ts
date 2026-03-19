@@ -87,6 +87,16 @@ const BRAINTRUST_PARAMS = Object.keys(braintrustModelParamsSchema.shape);
 // 6 MB for the AWS lambda gateway (from our own testing).
 export const DEFAULT_MAX_REQUEST_SIZE = 6 * 1024 * 1024;
 
+const datasetSnapshotResponseSchema = z.object({
+  id: z.string().uuid(),
+  dataset_id: z.string().uuid(),
+  name: z.string(),
+  description: z.string().nullish(),
+  xact_id: z.string(),
+  created_at: z.string(),
+});
+export type DatasetSnapshot = z.infer<typeof datasetSnapshotResponseSchema>;
+
 const parametersRowSchema = z.object({
   id: z.string().uuid(),
   _xact_id: z.string(),
@@ -1251,6 +1261,50 @@ class HTTPConnection {
     const resp = await this.post(`${object_type}`, args, {
       headers: { "Content-Type": "application/json" },
     });
+    return await resp.json();
+  }
+
+  async put_json(
+    path: string,
+    args: Record<string, unknown> | undefined = undefined,
+  ) {
+    const this_fetch = this.fetch;
+    const this_base_url = this.base_url;
+    const this_headers = this.headers;
+    const resp = await checkResponse(
+      await this_fetch(_urljoin(this_base_url, path), {
+        method: "PUT",
+        headers: {
+          Accept: "application/json",
+          "Content-Type": "application/json",
+          ...this_headers,
+        },
+        body: args ? JSON.stringify(args) : undefined,
+        keepalive: true,
+      }),
+    );
+    return await resp.json();
+  }
+
+  async delete_json(
+    path: string,
+    args: Record<string, unknown> | undefined = undefined,
+  ) {
+    const this_fetch = this.fetch;
+    const this_base_url = this.base_url;
+    const this_headers = this.headers;
+    const resp = await checkResponse(
+      await this_fetch(_urljoin(this_base_url, path), {
+        method: "DELETE",
+        headers: {
+          Accept: "application/json",
+          "Content-Type": "application/json",
+          ...this_headers,
+        },
+        body: args ? JSON.stringify(args) : undefined,
+        keepalive: true,
+      }),
+    );
     return await resp.json();
   }
 
@@ -3682,7 +3736,7 @@ export function init<IsOpen extends boolean = false>(
  * Alias for init(options).
  */
 export function initExperiment<IsOpen extends boolean = false>(
-  options: Readonly<InitOptions<IsOpen>>,
+  options: Readonly<FullInitOptions<IsOpen>>,
 ): InitializedExperiment<IsOpen>;
 
 /**
@@ -3699,7 +3753,7 @@ export function initExperiment<IsOpen extends boolean = false>(
  * `initExperiment(project, options)`.
  */
 export function initExperiment<IsOpen extends boolean = false>(
-  projectOrOptions: string | Readonly<InitOptions<IsOpen>>,
+  projectOrOptions: string | Readonly<FullInitOptions<IsOpen>>,
   optionalOptions?: Readonly<InitOptions<IsOpen>>,
 ): InitializedExperiment<IsOpen> {
   const options = ((): Readonly<FullInitOptions<IsOpen>> => {
@@ -3759,6 +3813,7 @@ export type InitDatasetOptions<IsLegacyDataset extends boolean> =
     dataset?: string;
     description?: string;
     version?: string;
+    environment?: string;
     projectId?: string;
     metadata?: Record<string, unknown>;
     state?: BraintrustState;
@@ -3769,6 +3824,64 @@ export type FullInitDatasetOptions<IsLegacyDataset extends boolean> = {
   project?: string;
 } & InitDatasetOptions<IsLegacyDataset>;
 
+async function resolveDatasetVersion({
+  state,
+  lazyMetadata,
+  version,
+}: {
+  state: BraintrustState;
+  lazyMetadata: LazyValue<ProjectDatasetMetadata>;
+  version: string;
+}): Promise<string | undefined> {
+  // If it looks like a numeric xact_id, use it directly.
+  if (/^\d+$/.test(version)) {
+    return version;
+  }
+  // Otherwise, treat it as a snapshot name and resolve via API.
+  const metadata = await lazyMetadata.get();
+  const datasetId = metadata.dataset.id;
+  try {
+    const snapshots = await state.appConn().get_json("api/dataset_snapshot/list", {
+      dataset_id: datasetId,
+    });
+    const match = (snapshots as { name: string; xact_id: string }[]).find(
+      (s) => s.name === version,
+    );
+    if (match) {
+      return match.xact_id;
+    }
+  } catch {
+    // Fall through to HEAD on error.
+  }
+  return undefined;
+}
+
+async function resolveDatasetEnvironment({
+  state,
+  lazyMetadata,
+  environment,
+}: {
+  state: BraintrustState;
+  lazyMetadata: LazyValue<ProjectDatasetMetadata>;
+  environment: string;
+}): Promise<string | undefined> {
+  const metadata = await lazyMetadata.get();
+  const datasetId = metadata.dataset.id;
+  try {
+    const envObject = await state
+      .apiConn()
+      .get_json(`environment-object/dataset/${datasetId}/${environment}`);
+    const objectVersion = (envObject as { object_version?: string })
+      .object_version;
+    if (objectVersion) {
+      return objectVersion;
+    }
+  } catch {
+    // Fall through to HEAD if no association found.
+  }
+  return undefined;
+}
+
 /**
  * Create a new dataset in a specified project. If the project does not exist, it will be created.
  *
@@ -3776,6 +3889,8 @@ export type FullInitDatasetOptions<IsLegacyDataset extends boolean> = {
  * @param options.project The name of the project to create the dataset in. Must specify at least one of `project` or `projectId`.
  * @param options.dataset The name of the dataset to create. If not specified, a name will be generated automatically.
  * @param options.description An optional description of the dataset.
+ * @param options.version Pin the dataset to a specific version. Can be a numeric xact_id or a snapshot name. If a snapshot name is provided and no matching snapshot is found, falls back to the latest version.
+ * @param options.environment Pin the dataset to the version tagged with this environment slug. If no version is tagged with the environment, falls back to the latest version.
  * @param options.appUrl The URL of the Braintrust App. Defaults to https://www.braintrust.dev.
  * @param options.apiKey The API key to use. If the parameter is not specified, will try to use the `BRAINTRUST_API_KEY` environment variable. If no API key is specified, will prompt the user to login.
  * @param options.orgName (Optional) The name of a specific organization to connect to. This is useful if you belong to multiple.
@@ -3832,6 +3947,7 @@ export function initDataset<
     dataset,
     description,
     version,
+    environment,
     appUrl,
     apiKey,
     orgName,
@@ -3843,6 +3959,12 @@ export function initDataset<
     state: stateArg,
     _internal_btql,
   } = options;
+
+  if (version !== undefined && environment !== undefined) {
+    throw new Error(
+      "Cannot specify both `version` and `environment`. Use one or the other.",
+    );
+  }
 
   const state = stateArg ?? _globalState;
 
@@ -3883,10 +4005,29 @@ export function initDataset<
     },
   );
 
+  const resolvedVersion: LazyValue<string | undefined> = new LazyValue(
+    async () => {
+      if (version !== undefined) {
+        return await resolveDatasetVersion({
+          state,
+          lazyMetadata,
+          version,
+        });
+      } else if (environment !== undefined) {
+        return await resolveDatasetEnvironment({
+          state,
+          lazyMetadata,
+          environment,
+        });
+      }
+      return undefined;
+    },
+  );
+
   return new Dataset(
     stateArg ?? _globalState,
     lazyMetadata,
-    version,
+    resolvedVersion,
     legacy,
     _internal_btql,
   );
@@ -5589,9 +5730,7 @@ function validateAndSanitizeExperimentLogFullArgs(
     throw new Error("scores must be specified");
   }
 
-  if (hasDataset && event.datasetRecordId === undefined) {
-    throw new Error("datasetRecordId must be specified when using a dataset");
-  } else if (!hasDataset && event.datasetRecordId !== undefined) {
+  if (!hasDataset && event.datasetRecordId !== undefined) {
     throw new Error(
       "datasetRecordId cannot be specified when not using a dataset",
     );
@@ -5618,7 +5757,7 @@ export class ObjectFetcher<RecordType> implements AsyncIterable<
       | "experiment"
       | "project_logs"
       | "playground_logs",
-    private pinnedVersion: string | undefined,
+    protected pinnedVersion: string | undefined,
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     private mutateRecord?: (r: any) => WithTransactionId<RecordType>,
     private _internal_btql?: Record<string, unknown>,
@@ -5752,6 +5891,10 @@ export class ObjectFetcher<RecordType> implements AsyncIterable<
   }
 
   public async version(options?: { batchSize?: number }) {
+    // Resolve any lazy pinned version (e.g. from environment lookup) before
+    // checking the field — subclasses like Dataset populate pinnedVersion
+    // inside getState().
+    await this.getState();
     if (this.pinnedVersion !== undefined) {
       return this.pinnedVersion;
     } else {
@@ -6764,13 +6907,14 @@ export class Dataset<
   IsLegacyDataset extends boolean = typeof DEFAULT_IS_LEGACY_DATASET,
 > extends ObjectFetcher<DatasetRecord<IsLegacyDataset>> {
   private readonly lazyMetadata: LazyValue<ProjectDatasetMetadata>;
+  private readonly lazyPinnedVersion: LazyValue<string | undefined> | undefined;
   private readonly __braintrust_dataset_marker = true;
   private newRecords = 0;
 
   constructor(
     private state: BraintrustState,
     lazyMetadata: LazyValue<ProjectDatasetMetadata>,
-    pinnedVersion?: string,
+    pinnedVersion?: string | LazyValue<string | undefined>,
     legacy?: IsLegacyDataset,
     _internal_btql?: Record<string, unknown>,
   ) {
@@ -6784,9 +6928,11 @@ export class Dataset<
           `Records will be fetched from this dataset in the legacy format, with the "expected" field renamed to "output". Please update your code to use "expected", and use \`braintrust.initDataset()\` with \`{ useOutput: false }\`, which will become the default in a future version of Braintrust.`,
         );
     }
+    const staticVersion =
+      pinnedVersion instanceof LazyValue ? undefined : pinnedVersion;
     super(
       "dataset",
-      pinnedVersion,
+      staticVersion,
       (r: AnyDatasetRecord) =>
         // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
         ensureDatasetRecord(
@@ -6796,6 +6942,8 @@ export class Dataset<
       _internal_btql,
     );
     this.lazyMetadata = lazyMetadata;
+    this.lazyPinnedVersion =
+      pinnedVersion instanceof LazyValue ? pinnedVersion : undefined;
   }
 
   public get id(): Promise<string> {
@@ -6823,6 +6971,10 @@ export class Dataset<
   protected async getState(): Promise<BraintrustState> {
     // Ensure the login state is populated by awaiting lazyMetadata.
     await this.lazyMetadata.get();
+    // Resolve lazy pinned version (e.g. from environment or snapshot name lookup).
+    if (this.lazyPinnedVersion !== undefined && this.pinnedVersion === undefined) {
+      this.pinnedVersion = await this.lazyPinnedVersion.get();
+    }
     return this.state;
   }
 
@@ -7000,6 +7152,68 @@ export class Dataset<
 
     this.state.bgLogger().log([args]);
     return id;
+  }
+
+  /**
+   * Create a named snapshot of the dataset at the current version. Flushes any pending writes first.
+   *
+   * @param options.name A human-readable name for the snapshot. Must be unique within the dataset.
+   * @param options.description An optional description of the snapshot.
+   * @returns The created snapshot object.
+   */
+  public async createSnapshot({
+    name,
+    description,
+  }: {
+    readonly name: string;
+    readonly description?: string;
+  }): Promise<DatasetSnapshot> {
+    await this.flush();
+    const state = await this.getState();
+    const datasetId = await this.id;
+    const currentVersion = await this.version();
+    if (currentVersion === undefined) {
+      throw new Error("Cannot create snapshot: dataset has no records");
+    }
+    const response = await state
+      .appConn()
+      .post_json("api/dataset_snapshot/create", {
+        dataset_id: datasetId,
+        name,
+        description,
+        xact_id: currentVersion,
+      });
+    return datasetSnapshotResponseSchema.parse(response);
+  }
+
+  /**
+   * List all named snapshots for this dataset.
+   *
+   * @returns An array of snapshot objects, ordered by creation time (newest first).
+   */
+  public async listSnapshots(): Promise<DatasetSnapshot[]> {
+    const state = await this.getState();
+    const datasetId = await this.id;
+    const response = await state.appConn().get_json("api/dataset_snapshot/list", {
+      dataset_id: datasetId,
+    });
+    return datasetSnapshotResponseSchema.array().parse(response);
+  }
+
+  /**
+   * Delete a named snapshot from this dataset.
+   *
+   * @param snapshotId The unique identifier of the snapshot to delete.
+   * @returns The deleted snapshot object.
+   */
+  public async deleteSnapshot(snapshotId: string): Promise<DatasetSnapshot> {
+    const state = await this.getState();
+    const response = await state
+      .appConn()
+      .post_json("api/dataset_snapshot/delete_id", {
+        id: snapshotId,
+      });
+    return datasetSnapshotResponseSchema.parse(response);
   }
 
   /**
