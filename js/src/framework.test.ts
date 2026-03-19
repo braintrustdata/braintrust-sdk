@@ -317,6 +317,31 @@ describe("runEvaluator", () => {
     });
   });
 
+  test("re-throws unhandled queue worker errors", async () => {
+    await expect(
+      runEvaluator(
+        null,
+        {
+          projectName: "proj",
+          evalName: "eval",
+          data: [{ input: 1 }],
+          task: async () => {
+            throw new Error("task error");
+          },
+          scores: [makeTestScorer("scorer_0")],
+          errorScoreHandler: () => {
+            throw new Error("errorScoreHandler crashed");
+          },
+        },
+        new NoopProgressReporter(),
+        [],
+        undefined,
+        undefined,
+        true,
+      ),
+    ).rejects.toThrow("Encountered 1 unhandled task errors");
+  });
+
   describe("aborts", () => {
     beforeEach(() => {
       vi.useFakeTimers();
