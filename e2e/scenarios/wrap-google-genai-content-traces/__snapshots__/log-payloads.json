@@ -169,6 +169,7 @@
           "vary": "Origin, X-Origin, Referer",
           "x-content-type-options": "nosniff",
           "x-frame-options": "SAMEORIGIN",
+          "x-gemini-service-tier": "<x-gemini-service-tier>",
           "x-xss-protection": "0"
         }
       },
@@ -372,6 +373,7 @@
           "vary": "Origin, X-Origin, Referer",
           "x-content-type-options": "nosniff",
           "x-frame-options": "SAMEORIGIN",
+          "x-gemini-service-tier": "<x-gemini-service-tier>",
           "x-xss-protection": "0"
         }
       },
@@ -914,6 +916,7 @@
           "vary": "Origin, X-Origin, Referer",
           "x-content-type-options": "nosniff",
           "x-frame-options": "SAMEORIGIN",
+          "x-gemini-service-tier": "<x-gemini-service-tier>",
           "x-xss-protection": "0"
         }
       },

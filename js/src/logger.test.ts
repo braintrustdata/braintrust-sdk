@@ -1,8 +1,5 @@
 /* eslint-disable @typescript-eslint/consistent-type-assertions */
-import type {
-  ChatCompletionContentPartText,
-  ChatCompletionContentPartImage,
-} from "openai/resources";
+
 import { vi, expect, test, describe, beforeEach, afterEach } from "vitest";
 import {
   _exportsForTestingOnly,
@@ -10,6 +7,8 @@ import {
   initLogger,
   Prompt,
   BraintrustState,
+  loadPrompt,
+  loadParameters,
   wrapTraced,
   currentSpan,
   withParent,
@@ -17,14 +16,9 @@ import {
   updateSpan,
   Attachment,
   deepCopyEvent,
-  renderMessage,
   renderMessageImpl,
 } from "./logger";
-import {
-  parseTemplateFormat,
-  isTemplateFormat,
-  renderTemplateContent,
-} from "./template/renderer";
+
 import { configureNode } from "./node/config";
 import { writeFile, unlink } from "node:fs/promises";
 import { join } from "node:path";
@@ -32,11 +26,6 @@ import { tmpdir } from "node:os";
 import { SpanComponentsV3 } from "../util/span_identifier_v3";
 
 configureNode();
-
-function getExportVersion(exportedSpan: string): number {
-  const exportedBytes = base64ToUint8Array(exportedSpan);
-  return exportedBytes[0];
-}
 
 test("renderMessage with file content parts", () => {
   const message = {
@@ -462,6 +451,169 @@ test("init accepts dataset with id and version", () => {
   // This should compile without type errors
   expect(datasetWithVersion.id).toBe("dataset-id-123");
   expect(datasetWithVersion.version).toBe("v2");
+});
+
+describe("loader version precedence", () => {
+  let state: BraintrustState;
+  let getJson: ReturnType<typeof vi.spyOn>;
+  const promptRow = {
+    id: "11111111-1111-4111-8111-111111111111",
+    _xact_id: "v1",
+    project_id: "22222222-2222-4222-8222-222222222222",
+    log_id: "p",
+    org_id: "33333333-3333-4333-8333-333333333333",
+    name: "Saved prompt",
+    slug: "saved-prompt",
+    description: null,
+    tags: null,
+    prompt_data: {
+      prompt: {
+        type: "chat",
+        messages: [{ role: "user", content: "Hello" }],
+      },
+      options: { model: "gpt-5-mini" },
+    },
+  } satisfies {
+    id: string;
+    _xact_id: string;
+    project_id: string;
+    log_id: "p";
+    org_id: string;
+    name: string;
+    slug: string;
+    description: null;
+    tags: null;
+    prompt_data: {
+      prompt: {
+        type: "chat";
+        messages: Array<{ role: "user"; content: string }>;
+      };
+      options: { model: string };
+    };
+  };
+  const parametersRow = {
+    id: "44444444-4444-4444-8444-444444444444",
+    _xact_id: "v1",
+    project_id: "55555555-5555-4555-8555-555555555555",
+    name: "Saved parameters",
+    slug: "saved-parameters",
+    description: null,
+    function_type: "parameters",
+    function_data: {
+      type: "parameters",
+      data: { prefix: "hello" },
+      __schema: {
+        type: "object",
+        properties: {
+          prefix: { type: "string", default: "hello" },
+        },
+        additionalProperties: true,
+      },
+    },
+  } satisfies {
+    id: string;
+    _xact_id: string;
+    project_id: string;
+    name: string;
+    slug: string;
+    description: null;
+    function_type: "parameters";
+    function_data: {
+      type: "parameters";
+      data: { prefix: string };
+      __schema: {
+        type: string;
+        properties: { prefix: { type: string; default: string } };
+        additionalProperties: boolean;
+      };
+    };
+  };
+
+  beforeEach(async () => {
+    state = await _exportsForTestingOnly.simulateLoginForTests();
+    vi.spyOn(state, "login").mockResolvedValue(state);
+    getJson = vi.spyOn(state.apiConn(), "get_json");
+  });
+
+  afterEach(() => {
+    _exportsForTestingOnly.simulateLogoutForTests();
+    vi.restoreAllMocks();
+  });
+
+  test("loadPrompt prefers version over environment for project lookup", async () => {
+    getJson.mockResolvedValue({ objects: [promptRow] });
+
+    await loadPrompt({
+      projectName: "test-project",
+      slug: "saved-prompt",
+      version: "v1",
+      environment: "production",
+      state,
+    });
+
+    expect(getJson).toHaveBeenCalledWith(
+      "v1/prompt",
+      expect.objectContaining({
+        project_name: "test-project",
+        slug: "saved-prompt",
+        version: "v1",
+      }),
+    );
+    expect(getJson.mock.calls[0][1]).not.toHaveProperty("environment");
+  });
+
+  test("loadPrompt prefers version over environment for id lookup", async () => {
+    getJson.mockResolvedValue(promptRow);
+
+    await loadPrompt({
+      id: promptRow.id,
+      version: "v1",
+      environment: "production",
+      state,
+    });
+
+    expect(getJson).toHaveBeenCalledWith(`v1/prompt/${promptRow.id}`, {
+      version: "v1",
+    });
+  });
+
+  test("loadParameters prefers version over environment for project lookup", async () => {
+    getJson.mockResolvedValue({ objects: [parametersRow] });
+
+    await loadParameters({
+      projectName: "test-project",
+      slug: "saved-parameters",
+      version: "v1",
+      environment: "production",
+      state,
+    });
+
+    expect(getJson).toHaveBeenCalledWith(
+      "v1/function",
+      expect.objectContaining({
+        project_name: "test-project",
+        slug: "saved-parameters",
+        version: "v1",
+        function_type: "parameters",
+      }),
+    );
+    expect(getJson.mock.calls[0][1]).not.toHaveProperty("environment");
+  });
+
+  test("loadParameters prefers version over environment for id lookup", async () => {
+    getJson.mockResolvedValue(parametersRow);
+
+    await loadParameters({
+      id: parametersRow.id,
+      version: "v1",
+      environment: "production",
+      state,
+    });
+
+    expect(getJson).toHaveBeenCalledWith(`v1/function/${parametersRow.id}`, {
+      version: "v1",
+    });
+  });
 });
 
 describe("prompt.build structured output templating", () => {
