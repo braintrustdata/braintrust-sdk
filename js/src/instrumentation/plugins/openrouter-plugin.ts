@@ -174,10 +174,29 @@ export class OpenRouterPlugin extends BasePlugin {
   }
 }
 
+function normalizeArgs(args: unknown[] | unknown): unknown[] {
+  if (Array.isArray(args)) {
+    return args;
+  }
+
+  if (
+    isObject(args) &&
+    "length" in args &&
+    typeof args.length === "number" &&
+    Number.isInteger(args.length) &&
+    args.length >= 0
+  ) {
+    return Array.from(args as ArrayLike<unknown>);
+  }
+
+  return [args];
+}
+
 function getOpenRouterRequestArg(
-  args: unknown[],
+  args: unknown[] | unknown,
 ): Record<string, unknown> | undefined {
-  const keyedCandidate = args.find(
+  const normalizedArgs = normalizeArgs(args);
+  const keyedCandidate = normalizedArgs.find(
     (arg) =>
       isObject(arg) &&
       ("chatGenerationParams" in arg ||
@@ -189,14 +208,14 @@ function getOpenRouterRequestArg(
     return keyedCandidate;
   }
 
-  const firstObjectArg = args.find((arg) => isObject(arg));
+  const firstObjectArg = normalizedArgs.find((arg) => isObject(arg));
   return isObject(firstObjectArg) ? firstObjectArg : undefined;
 }
 
 function getOpenRouterCallModelRequestArg(
-  args: unknown[],
+  args: unknown[] | unknown,
 ): OpenRouterCallModelRequest | undefined {
-  const firstObjectArg = args.find((arg) => isObject(arg));
+  const firstObjectArg = normalizeArgs(args).find((arg) => isObject(arg));
   return isObject(firstObjectArg)
     ? (firstObjectArg as OpenRouterCallModelRequest)
     : undefined;
