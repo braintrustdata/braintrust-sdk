@@ -15,6 +15,8 @@ cd e2e && npx vitest run scenarios/<name>/scenario.test.ts          # Run one sc
 cd e2e && npx vitest run --reporter=verbose scenarios/<name>/scenario.test.ts  # Verbose
 cd e2e && npx vitest run --update scenarios/<name>/scenario.test.ts # Update snapshots
 pnpm run test:e2e                     # Run all (from repo root)
+pnpm run test:e2e:hermetic            # Run hermetic-only e2e tests
+pnpm run test:e2e:external            # Run external-api-only e2e tests
 pnpm run fix:formatting               # Always run before committing
 ```
 
@@ -43,26 +45,38 @@ import {
   withScenarioHarness,
 } from "../../helpers/scenario-harness";
 import { findLatestSpan } from "../../helpers/trace-selectors";
+import { E2E_TAGS } from "../../helpers/tags";
 
 // Module-level: copies scenario to temp dir + installs deps once
 const scenarioDir = await prepareScenarioDir({
   scenarioDir: resolveScenarioDir(import.meta.url),
 });
 
-test("my-scenario captures expected spans", async () => {
-  await withScenarioHarness(async ({ runScenarioDir, testRunEvents }) => {
-    await runScenarioDir({ scenarioDir, timeoutMs: 90_000 });
-    const events = testRunEvents();
-    const root = findLatestSpan(events, "my-root");
-    expect(root).toBeDefined();
-    // ...assertions and snapshots
-  });
-});
+test(
+  "my-scenario captures expected spans",
+  { tags: [E2E_TAGS.hermetic] },
+  async () => {
+    await withScenarioHarness(async ({ runScenarioDir, testRunEvents }) => {
+      await runScenarioDir({ scenarioDir, timeoutMs: 90_000 });
+      const events = testRunEvents();
+      const root = findLatestSpan(events, "my-root");
+      expect(root).toBeDefined();
+      // ...assertions and snapshots
+    });
+  },
+);
 ```
 
 Key harness methods: `runScenarioDir()`, `runNodeScenarioDir()`, `testRunEvents()`, `events()`, `payloads()`, `requestsAfter(cursor)`, `testRunId`.
 
 For wrapper scenarios use `events()` (not `testRunEvents()`) and scope payloads via `payloadRowsForRootSpan()`.
+
+Tagging rules:
+
+- Tag every e2e test with exactly one tag from `e2e/helpers/tags.ts`.
+- Use `E2E_TAGS.hermetic` for scenarios that only use local mocks and fixtures.
+- Use `E2E_TAGS.externalApi` for provider-backed scenarios. The shared Vitest config applies `retry: 1` to this tag automatically.
+- Hermetic e2e tests are expected to run in the GitHub checks workflow. External-api tests run in the integration workflow.
 
 ### 3. Scenario-local dependencies (optional)
 

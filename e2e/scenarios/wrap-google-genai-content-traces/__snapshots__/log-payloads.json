@@ -1,147 +1,144 @@
-// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
-
-exports[`wrap-google-genai-content-traces captures generate, attachment, stream, early-return, and tool spans > log-payloads 1`] = `
 [
   {
     "_is_merge": false,
     "context": {
       "caller_filename": "<repo>/e2e/helpers/provider-runtime.mjs",
       "caller_functionname": "runTracedScenario",
-      "caller_lineno": 0,
+      "caller_lineno": 0
     },
     "created": "<timestamp>",
     "id": "<span:1>",
     "log_id": "g",
     "metadata": {
       "scenario": "wrap-google-genai-content-traces",
-      "testRunId": "<run:1>",
+      "testRunId": "<run:1>"
     },
     "metrics": {
-      "start": 0,
+      "start": 0
     },
     "project_id": "<uuid:3>",
     "root_span_id": "<span:2>",
     "span_attributes": {
       "exec_counter": 0,
       "name": "google-genai-wrapper-root",
-      "type": "task",
+      "type": "task"
     },
-    "span_id": "<span:2>",
+    "span_id": "<span:2>"
   },
   {
     "_is_merge": true,
     "id": "<span:1>",
     "log_id": "g",
     "metrics": {
-      "end": 0,
+      "end": 0
     },
     "project_id": "<uuid:3>",
     "root_span_id": "<span:2>",
-    "span_id": "<span:2>",
+    "span_id": "<span:2>"
   },
   {
     "_is_merge": false,
     "context": {
       "caller_filename": "<repo>/e2e/helpers/provider-runtime.mjs",
       "caller_functionname": "runOperation",
-      "caller_lineno": 0,
+      "caller_lineno": 0
     },
     "created": "<timestamp>",
-    "id": "<span:4>",
+    "id": "<span:3>",
     "log_id": "g",
     "metadata": {
       "operation": "generate",
-      "testRunId": "<run:1>",
+      "testRunId": "<run:1>"
     },
     "metrics": {
-      "start": 0,
+      "start": 0
     },
     "project_id": "<uuid:3>",
     "root_span_id": "<span:2>",
     "span_attributes": {
       "exec_counter": 1,
-      "name": "google-generate-operation",
+      "name": "google-generate-operation"
     },
-    "span_id": "<span:5>",
+    "span_id": "<span:4>",
     "span_parents": [
-      "<span:2>",
-    ],
+      "<span:2>"
+    ]
   },
   {
     "_is_merge": true,
-    "id": "<span:4>",
+    "id": "<span:3>",
     "log_id": "g",
     "metrics": {
-      "end": 0,
+      "end": 0
     },
     "project_id": "<uuid:3>",
     "root_span_id": "<span:2>",
-    "span_id": "<span:5>",
+    "span_id": "<span:4>",
     "span_parents": [
-      "<span:2>",
-    ],
+      "<span:2>"
+    ]
   },
   {
     "_is_merge": false,
     "context": {
       "caller_filename": "<node-internal>",
       "caller_functionname": "<node-internal>",
-      "caller_lineno": 0,
+      "caller_lineno": 0
     },
     "created": "<timestamp>",
-    "id": "<span:6>",
+    "id": "<span:5>",
     "input": {
       "config": {
         "maxOutputTokens": 16,
-        "temperature": 0,
+        "temperature": 0
       },
       "contents": {
-        "text": "Reply with exactly PARIS.",
+        "text": "Reply with exactly PARIS."
       },
-      "model": "gemini-2.0-flash-001",
+      "model": "gemini-2.0-flash-001"
     },
     "log_id": "g",
     "metadata": {
       "maxOutputTokens": 16,
       "model": "gemini-2.0-flash-001",
-      "temperature": 0,
+      "temperature": 0
     },
     "metrics": {
-      "start": 0,
+      "start": 0
     },
     "project_id": "<uuid:3>",
     "root_span_id": "<span:2>",
     "span_attributes": {
       "exec_counter": 2,
       "name": "generate_content",
-      "type": "llm",
+      "type": "llm"
     },
-    "span_id": "<span:7>",
+    "span_id": "<span:6>",
     "span_parents": [
-      "<span:5>",
-    ],
+      "<span:4>"
+    ]
   },
   {
     "_is_merge": true,
-    "id": "<span:6>",
+    "id": "<span:5>",
     "log_id": "g",
     "metrics": {
       "completion_tokens": 3,
       "duration": 0,
       "prompt_tokens": 5,
       "start": 0,
-      "tokens": 8,
+      "tokens": 8
     },
     "project_id": "<uuid:3>",
     "root_span_id": "<span:2>",
-    "span_id": "<span:7>",
+    "span_id": "<span:6>",
     "span_parents": [
-      "<span:5>",
-    ],
+      "<span:4>"
+    ]
   },
   {
     "_is_merge": true,
-    "id": "<span:6>",
+    "id": "<span:5>",
     "log_id": "g",
     "output": {
       "candidates": [
@@ -150,20 +147,19 @@ exports[`wrap-google-genai-content-traces captures generate, attachment, stream,
           "content": {
             "parts": [
               {
-                "text": "PARIS
-",
-              },
+                "text": "PARIS\n"
+              }
             ],
-            "role": "model",
+            "role": "model"
           },
-          "finishReason": "STOP",
-        },
+          "finishReason": "STOP"
+        }
       ],
       "modelVersion": "gemini-2.0-flash-001",
-      "responseId": "<responseId:8>",
+      "responseId": "<responseId:7>",
       "sdkHttpResponse": {
         "headers": {
-          "alt-svc": "h3=":443"; ma=2592000,h3-29=":443"; ma=2592000",
+          "alt-svc": "h3=\":443\"; ma=2592000,h3-29=\":443\"; ma=2592000",
           "content-encoding": "gzip",
           "content-type": "application/json; charset=UTF-8",
           "date": "<timestamp>",
@@ -173,114 +169,114 @@ exports[`wrap-google-genai-content-traces captures generate, attachment, stream,
           "vary": "Origin, X-Origin, Referer",
           "x-content-type-options": "nosniff",
           "x-frame-options": "SAMEORIGIN",
-          "x-xss-protection": "0",
-        },
+          "x-xss-protection": "0"
+        }
       },
       "usageMetadata": {
         "candidatesTokenCount": 3,
         "candidatesTokensDetails": [
           {
             "modality": "TEXT",
-            "tokenCount": 3,
-          },
+            "tokenCount": 3
+          }
         ],
         "promptTokenCount": 5,
         "promptTokensDetails": [
           {
             "modality": "TEXT",
-            "tokenCount": 5,
-          },
+            "tokenCount": 5
+          }
         ],
-        "totalTokenCount": 8,
-      },
+        "totalTokenCount": 8
+      }
     },
     "project_id": "<uuid:3>",
     "root_span_id": "<span:2>",
-    "span_id": "<span:7>",
+    "span_id": "<span:6>",
     "span_parents": [
-      "<span:5>",
-    ],
+      "<span:4>"
+    ]
   },
   {
     "_is_merge": true,
-    "id": "<span:6>",
+    "id": "<span:5>",
     "log_id": "g",
     "metrics": {
-      "end": 0,
+      "end": 0
     },
     "project_id": "<uuid:3>",
     "root_span_id": "<span:2>",
-    "span_id": "<span:7>",
+    "span_id": "<span:6>",
     "span_parents": [
-      "<span:5>",
-    ],
+      "<span:4>"
+    ]
   },
   {
     "_is_merge": true,
-    "id": "<span:6>",
+    "id": "<span:5>",
     "log_id": "g",
     "project_id": "<uuid:3>",
     "root_span_id": "<span:2>",
-    "span_id": "<span:7>",
+    "span_id": "<span:6>",
     "span_parents": [
-      "<span:5>",
-    ],
+      "<span:4>"
+    ]
   },
   {
     "_is_merge": false,
     "context": {
       "caller_filename": "<repo>/e2e/helpers/provider-runtime.mjs",
       "caller_functionname": "runOperation",
-      "caller_lineno": 0,
+      "caller_lineno": 0
     },
     "created": "<timestamp>",
-    "id": "<span:9>",
+    "id": "<span:8>",
     "log_id": "g",
     "metadata": {
       "operation": "attachment",
-      "testRunId": "<run:1>",
+      "testRunId": "<run:1>"
     },
     "metrics": {
-      "start": 0,
+      "start": 0
     },
     "project_id": "<uuid:3>",
     "root_span_id": "<span:2>",
     "span_attributes": {
       "exec_counter": 3,
-      "name": "google-attachment-operation",
+      "name": "google-attachment-operation"
     },
-    "span_id": "<span:10>",
+    "span_id": "<span:9>",
     "span_parents": [
-      "<span:2>",
-    ],
+      "<span:2>"
+    ]
   },
   {
     "_is_merge": true,
-    "id": "<span:9>",
+    "id": "<span:8>",
     "log_id": "g",
     "metrics": {
-      "end": 0,
+      "end": 0
     },
     "project_id": "<uuid:3>",
     "root_span_id": "<span:2>",
-    "span_id": "<span:10>",
+    "span_id": "<span:9>",
     "span_parents": [
-      "<span:2>",
-    ],
+      "<span:2>"
+    ]
   },
   {
     "_is_merge": false,
     "context": {
       "caller_filename": "<node-internal>",
       "caller_functionname": "<node-internal>",
-      "caller_lineno": 0,
+      "caller_lineno": 0
     },
     "created": "<timestamp>",
-    "id": "<span:11>",
+    "id": "<span:10>",
     "input": {
       "config": {
         "maxOutputTokens": 24,
-        "temperature": 0,
+        "temperature": 0
       },
       "contents": [
         {
@@ -291,61 +287,61 @@ exports[`wrap-google-genai-content-traces captures generate, attachment, stream,
                   "content_type": "image/png",
                   "filename": "file.png",
                   "key": "<uuid:13>",
-                  "type": "braintrust_attachment",
-                },
-              },
+                  "type": "braintrust_attachment"
+                }
+              }
             },
             {
-              "text": "Describe the attached image in one short sentence.",
-            },
+              "text": "Describe the attached image in one short sentence."
+            }
           ],
-          "role": "user",
-        },
+          "role": "user"
+        }
       ],
-      "model": "gemini-2.0-flash-001",
+      "model": "gemini-2.0-flash-001"
     },
     "log_id": "g",
     "metadata": {
       "maxOutputTokens": 24,
       "model": "gemini-2.0-flash-001",
-      "temperature": 0,
+      "temperature": 0
     },
     "metrics": {
-      "start": 0,
+      "start": 0
     },
     "project_id": "<uuid:3>",
     "root_span_id": "<span:2>",
     "span_attributes": {
       "exec_counter": 4,
       "name": "generate_content",
-      "type": "llm",
+      "type": "llm"
     },
-    "span_id": "<span:12>",
+    "span_id": "<span:11>",
     "span_parents": [
-      "<span:10>",
-    ],
+      "<span:9>"
+    ]
   },
   {
     "_is_merge": true,
-    "id": "<span:11>",
+    "id": "<span:10>",
     "log_id": "g",
     "metrics": {
       "completion_tokens": 16,
       "duration": 0,
       "prompt_tokens": 1299,
       "start": 0,
-      "tokens": 1315,
+      "tokens": 1315
     },
     "project_id": "<uuid:3>",
     "root_span_id": "<span:2>",
-    "span_id": "<span:12>",
+    "span_id": "<span:11>",
     "span_parents": [
-      "<span:10>",
-    ],
+      "<span:9>"
+    ]
   },
   {
     "_is_merge": true,
-    "id": "<span:11>",
+    "id": "<span:10>",
     "log_id": "g",
     "output": {
       "candidates": [
@@ -354,20 +350,19 @@ exports[`wrap-google-genai-content-traces captures generate, attachment, stream,
           "content": {
             "parts": [
               {
-                "text": "A tall ship braves a stormy sea with lightning flashing in the background.
-",
-              },
+                "text": "A tall ship braves a stormy sea with lightning flashing in the background.\n"
+              }
             ],
-            "role": "model",
+            "role": "model"
           },
-          "finishReason": "STOP",
-        },
+          "finishReason": "STOP"
+        }
       ],
       "modelVersion": "gemini-2.0-flash-001",
-      "responseId": "<responseId:14>",
+      "responseId": "<responseId:12>",
       "sdkHttpResponse": {
         "headers": {
-          "alt-svc": "h3=":443"; ma=2592000,h3-29=":443"; ma=2592000",
+          "alt-svc": "h3=\":443\"; ma=2592000,h3-29=\":443\"; ma=2592000",
           "content-encoding": "gzip",
           "content-type": "application/json; charset=UTF-8",
           "date": "<timestamp>",
@@ -377,148 +372,148 @@ exports[`wrap-google-genai-content-traces captures generate, attachment, stream,
           "vary": "Origin, X-Origin, Referer",
           "x-content-type-options": "nosniff",
           "x-frame-options": "SAMEORIGIN",
-          "x-xss-protection": "0",
-        },
+          "x-xss-protection": "0"
+        }
       },
       "usageMetadata": {
         "candidatesTokenCount": 16,
         "candidatesTokensDetails": [
           {
             "modality": "TEXT",
-            "tokenCount": 16,
-          },
+            "tokenCount": 16
+          }
         ],
         "promptTokenCount": 1299,
         "promptTokensDetails": [
           {
             "modality": "IMAGE",
-            "tokenCount": 1290,
+            "tokenCount": 1290
           },
           {
             "modality": "TEXT",
-            "tokenCount": 9,
-          },
+            "tokenCount": 9
+          }
         ],
-        "totalTokenCount": 1315,
-      },
+        "totalTokenCount": 1315
+      }
     },
     "project_id": "<uuid:3>",
     "root_span_id": "<span:2>",
-    "span_id": "<span:12>",
+    "span_id": "<span:11>",
     "span_parents": [
-      "<span:10>",
-    ],
+      "<span:9>"
+    ]
   },
   {
     "_is_merge": true,
-    "id": "<span:11>",
+    "id": "<span:10>",
     "log_id": "g",
     "metrics": {
-      "end": 0,
+      "end": 0
     },
     "project_id": "<uuid:3>",
     "root_span_id": "<span:2>",
-    "span_id": "<span:12>",
+    "span_id": "<span:11>",
     "span_parents": [
-      "<span:10>",
-    ],
+      "<span:9>"
+    ]
   },
   {
     "_is_merge": true,
-    "id": "<span:11>",
+    "id": "<span:10>",
     "log_id": "g",
     "project_id": "<uuid:3>",
     "root_span_id": "<span:2>",
-    "span_id": "<span:12>",
+    "span_id": "<span:11>",
     "span_parents": [
-      "<span:10>",
-    ],
+      "<span:9>"
+    ]
   },
   {
     "_is_merge": false,
     "context": {
       "caller_filename": "<repo>/e2e/helpers/provider-runtime.mjs",
       "caller_functionname": "runOperation",
-      "caller_lineno": 0,
+      "caller_lineno": 0
     },
     "created": "<timestamp>",
-    "id": "<span:15>",
+    "id": "<span:13>",
     "log_id": "g",
     "metadata": {
       "operation": "stream",
-      "testRunId": "<run:1>",
+      "testRunId": "<run:1>"
     },
     "metrics": {
-      "start": 0,
+      "start": 0
     },
     "project_id": "<uuid:3>",
     "root_span_id": "<span:2>",
     "span_attributes": {
       "exec_counter": 5,
-      "name": "google-stream-operation",
+      "name": "google-stream-operation"
     },
-    "span_id": "<span:16>",
+    "span_id": "<span:14>",
     "span_parents": [
-      "<span:2>",
-    ],
+      "<span:2>"
+    ]
   },
   {
     "_is_merge": true,
-    "id": "<span:15>",
+    "id": "<span:13>",
     "log_id": "g",
     "metrics": {
-      "end": 0,
+      "end": 0
     },
     "project_id": "<uuid:3>",
     "root_span_id": "<span:2>",
-    "span_id": "<span:16>",
+    "span_id": "<span:14>",
     "span_parents": [
-      "<span:2>",
-    ],
+      "<span:2>"
+    ]
   },
   {
     "_is_merge": false,
     "context": {
       "caller_filename": "<repo>/e2e/helpers/provider-runtime.mjs",
       "caller_functionname": "collectAsync",
-      "caller_lineno": 0,
+      "caller_lineno": 0
     },
     "created": "<timestamp>",
-    "id": "<span:17>",
+    "id": "<span:15>",
     "input": {
       "config": {
         "maxOutputTokens": 32,
-        "temperature": 0,
+        "temperature": 0
       },
       "contents": {
-        "text": "Count from 1 to 3 and include the words one two three.",
+        "text": "Count from 1 to 3 and include the words one two three."
       },
-      "model": "gemini-2.0-flash-001",
+      "model": "gemini-2.0-flash-001"
     },
     "log_id": "g",
     "metadata": {
       "maxOutputTokens": 32,
       "model": "gemini-2.0-flash-001",
-      "temperature": 0,
+      "temperature": 0
     },
     "metrics": {
-      "start": 0,
+      "start": 0
     },
     "project_id": "<uuid:3>",
     "root_span_id": "<span:2>",
     "span_attributes": {
       "exec_counter": 6,
       "name": "generate_content_stream",
-      "type": "llm",
+      "type": "llm"
     },
-    "span_id": "<span:18>",
+    "span_id": "<span:16>",
     "span_parents": [
-      "<span:16>",
-    ],
+      "<span:14>"
+    ]
   },
   {
     "_is_merge": true,
-    "id": "<span:17>",
+    "id": "<span:15>",
     "log_id": "g",
     "metrics": {
       "completion_tokens": 7,
@@ -526,18 +521,18 @@ exports[`wrap-google-genai-content-traces captures generate, attachment, stream,
       "prompt_tokens": 15,
       "start": 0,
       "time_to_first_token": 0,
-      "tokens": 22,
+      "tokens": 22
     },
     "project_id": "<uuid:3>",
     "root_span_id": "<span:2>",
-    "span_id": "<span:18>",
+    "span_id": "<span:16>",
     "span_parents": [
-      "<span:16>",
-    ],
+      "<span:14>"
+    ]
   },
   {
     "_is_merge": true,
-    "id": "<span:17>",
+    "id": "<span:15>",
     "log_id": "g",
     "output": {
       "candidates": [
@@ -545,159 +540,157 @@ exports[`wrap-google-genai-content-traces captures generate, attachment, stream,
           "content": {
             "parts": [
               {
-                "text": "One, two, three.
-",
-              },
+                "text": "One, two, three.\n"
+              }
             ],
-            "role": "model",
+            "role": "model"
           },
-          "finishReason": "STOP",
-        },
+          "finishReason": "STOP"
+        }
       ],
-      "text": "One, two, three.
-",
+      "text": "One, two, three.\n",
       "usageMetadata": {
         "candidatesTokenCount": 7,
         "candidatesTokensDetails": [
           {
             "modality": "TEXT",
-            "tokenCount": 7,
-          },
+            "tokenCount": 7
+          }
         ],
         "promptTokenCount": 15,
         "promptTokensDetails": [
           {
             "modality": "TEXT",
-            "tokenCount": 15,
-          },
+            "tokenCount": 15
+          }
         ],
-        "totalTokenCount": 22,
-      },
+        "totalTokenCount": 22
+      }
     },
     "project_id": "<uuid:3>",
     "root_span_id": "<span:2>",
-    "span_id": "<span:18>",
+    "span_id": "<span:16>",
     "span_parents": [
-      "<span:16>",
-    ],
+      "<span:14>"
+    ]
   },
   {
     "_is_merge": true,
-    "id": "<span:17>",
+    "id": "<span:15>",
     "log_id": "g",
     "metrics": {
-      "end": 0,
+      "end": 0
     },
     "project_id": "<uuid:3>",
     "root_span_id": "<span:2>",
-    "span_id": "<span:18>",
+    "span_id": "<span:16>",
     "span_parents": [
-      "<span:16>",
-    ],
+      "<span:14>"
+    ]
   },
   {
     "_is_merge": false,
     "context": {
       "caller_filename": "<repo>/e2e/helpers/provider-runtime.mjs",
       "caller_functionname": "runOperation",
-      "caller_lineno": 0,
+      "caller_lineno": 0
     },
     "created": "<timestamp>",
-    "id": "<span:19>",
+    "id": "<span:17>",
     "log_id": "g",
     "metadata": {
       "operation": "stream-return",
-      "testRunId": "<run:1>",
+      "testRunId": "<run:1>"
     },
     "metrics": {
-      "start": 0,
+      "start": 0
     },
     "project_id": "<uuid:3>",
     "root_span_id": "<span:2>",
     "span_attributes": {
       "exec_counter": 7,
-      "name": "google-stream-return-operation",
+      "name": "google-stream-return-operation"
     },
-    "span_id": "<span:20>",
+    "span_id": "<span:18>",
     "span_parents": [
-      "<span:2>",
-    ],
+      "<span:2>"
+    ]
   },
   {
     "_is_merge": true,
-    "id": "<span:19>",
+    "id": "<span:17>",
     "log_id": "g",
     "metrics": {
-      "end": 0,
+      "end": 0
     },
     "project_id": "<uuid:3>",
     "root_span_id": "<span:2>",
-    "span_id": "<span:20>",
+    "span_id": "<span:18>",
     "span_parents": [
-      "<span:2>",
-    ],
+      "<span:2>"
+    ]
   },
   {
     "_is_merge": false,
     "context": {
       "caller_filename": "<node-internal>",
       "caller_functionname": "<node-internal>",
-      "caller_lineno": 0,
+      "caller_lineno": 0
     },
     "created": "<timestamp>",
-    "id": "<span:21>",
+    "id": "<span:19>",
     "input": {
       "config": {
         "maxOutputTokens": 48,
-        "temperature": 0,
+        "temperature": 0
       },
       "contents": {
-        "text": "Write a short poem about Paris.",
+        "text": "Write a short poem about Paris."
       },
-      "model": "gemini-2.0-flash-001",
+      "model": "gemini-2.0-flash-001"
     },
     "log_id": "g",
     "metadata": {
       "maxOutputTokens": 48,
       "model": "gemini-2.0-flash-001",
-      "temperature": 0,
+      "temperature": 0
     },
     "metrics": {
-      "start": 0,
+      "start": 0
     },
     "project_id": "<uuid:3>",
     "root_span_id": "<span:2>",
     "span_attributes": {
       "exec_counter": 8,
       "name": "generate_content_stream",
-      "type": "llm",
+      "type": "llm"
     },
-    "span_id": "<span:22>",
+    "span_id": "<span:20>",
     "span_parents": [
-      "<span:20>",
-    ],
+      "<span:18>"
+    ]
   },
   {
     "_is_merge": true,
-    "id": "<span:21>",
+    "id": "<span:19>",
     "log_id": "g",
     "metrics": {
       "duration": 0,
       "prompt_tokens": 8,
       "start": 0,
       "time_to_first_token": 0,
-      "tokens": 8,
+      "tokens": 8
     },
     "project_id": "<uuid:3>",
     "root_span_id": "<span:2>",
-    "span_id": "<span:22>",
+    "span_id": "<span:20>",
     "span_parents": [
-      "<span:20>",
-    ],
+      "<span:18>"
+    ]
   },
   {
     "_is_merge": true,
-    "id": "<span:21>",
+    "id": "<span:19>",
     "log_id": "g",
     "output": {
       "candidates": [
@@ -705,12 +698,12 @@ exports[`wrap-google-genai-content-traces captures generate, attachment, stream,
           "content": {
             "parts": [
               {
-                "text": "City",
-              },
+                "text": "City"
+              }
             ],
-            "role": "model",
-          },
-        },
+            "role": "model"
+          }
+        }
       ],
       "text": "City",
       "usageMetadata": {
@@ -718,84 +711,84 @@ exports[`wrap-google-genai-content-traces captures generate, attachment, stream,
         "promptTokensDetails": [
           {
             "modality": "TEXT",
-            "tokenCount": 8,
-          },
+            "tokenCount": 8
+          }
         ],
-        "totalTokenCount": 8,
-      },
+        "totalTokenCount": 8
+      }
     },
     "project_id": "<uuid:3>",
     "root_span_id": "<span:2>",
-    "span_id": "<span:22>",
+    "span_id": "<span:20>",
     "span_parents": [
-      "<span:20>",
-    ],
+      "<span:18>"
+    ]
   },
   {
     "_is_merge": true,
-    "id": "<span:21>",
+    "id": "<span:19>",
     "log_id": "g",
     "metrics": {
-      "end": 0,
+      "end": 0
     },
     "project_id": "<uuid:3>",
     "root_span_id": "<span:2>",
-    "span_id": "<span:22>",
+    "span_id": "<span:20>",
     "span_parents": [
-      "<span:20>",
-    ],
+      "<span:18>"
+    ]
   },
   {
     "_is_merge": false,
     "context": {
       "caller_filename": "<repo>/e2e/helpers/provider-runtime.mjs",
       "caller_functionname": "runOperation",
-      "caller_lineno": 0,
+      "caller_lineno": 0
     },
     "created": "<timestamp>",
-    "id": "<span:23>",
+    "id": "<span:21>",
     "log_id": "g",
     "metadata": {
       "operation": "tool",
-      "testRunId": "<run:1>",
+      "testRunId": "<run:1>"
     },
     "metrics": {
-      "start": 0,
+      "start": 0
     },
     "project_id": "<uuid:3>",
     "root_span_id": "<span:2>",
     "span_attributes": {
       "exec_counter": 9,
-      "name": "google-tool-operation",
+      "name": "google-tool-operation"
     },
-    "span_id": "<span:24>",
+    "span_id": "<span:22>",
     "span_parents": [
-      "<span:2>",
-    ],
+      "<span:2>"
+    ]
   },
   {
     "_is_merge": true,
-    "id": "<span:23>",
+    "id": "<span:21>",
     "log_id": "g",
     "metrics": {
-      "end": 0,
+      "end": 0
     },
     "project_id": "<uuid:3>",
     "root_span_id": "<span:2>",
-    "span_id": "<span:24>",
+    "span_id": "<span:22>",
     "span_parents": [
-      "<span:2>",
-    ],
+      "<span:2>"
+    ]
   },
   {
     "_is_merge": false,
     "context": {
       "caller_filename": "<node-internal>",
       "caller_functionname": "<node-internal>",
-      "caller_lineno": 0,
+      "caller_lineno": 0
     },
     "created": "<timestamp>",
-    "id": "<span:25>",
+    "id": "<span:23>",
     "input": {
       "config": {
         "maxOutputTokens": 128,
@@ -803,16 +796,16 @@ exports[`wrap-google-genai-content-traces captures generate, attachment, stream,
         "toolConfig": {
           "functionCallingConfig": {
             "allowedFunctionNames": [
-              "get_weather",
+              "get_weather"
             ],
-            "mode": "ANY",
-          },
-        },
+            "mode": "ANY"
+          }
+        }
       },
       "contents": {
-        "text": "Use the get_weather function for Paris, France. Do not answer from memory.",
+        "text": "Use the get_weather function for Paris, France. Do not answer from memory."
       },
-      "model": "gemini-2.0-flash-001",
+      "model": "gemini-2.0-flash-001"
     },
     "log_id": "g",
     "metadata": {
@@ -822,10 +815,10 @@ exports[`wrap-google-genai-content-traces captures generate, attachment, stream,
       "toolConfig": {
         "functionCallingConfig": {
           "allowedFunctionNames": [
-            "get_weather",
+            "get_weather"
           ],
-          "mode": "ANY",
-        },
+          "mode": "ANY"
+        }
       },
       "tools": [
         {
@@ -837,55 +830,55 @@ exports[`wrap-google-genai-content-traces captures generate, attachment, stream,
                 "properties": {
                   "location": {
                     "description": "The city and state or city and country",
-                    "type": "string",
-                  },
+                    "type": "string"
+                  }
                 },
                 "required": [
-                  "location",
+                  "location"
                 ],
-                "type": "object",
-              },
-            },
-          ],
-        },
-      ],
+                "type": "object"
+              }
+            }
+          ]
+        }
+      ]
     },
     "metrics": {
-      "start": 0,
+      "start": 0
     },
     "project_id": "<uuid:3>",
     "root_span_id": "<span:2>",
     "span_attributes": {
       "exec_counter": 10,
       "name": "generate_content",
-      "type": "llm",
+      "type": "llm"
     },
-    "span_id": "<span:26>",
+    "span_id": "<span:24>",
     "span_parents": [
-      "<span:24>",
-    ],
+      "<span:22>"
+    ]
   },
   {
     "_is_merge": true,
-    "id": "<span:25>",
+    "id": "<span:23>",
     "log_id": "g",
     "metrics": {
       "completion_tokens": 7,
       "duration": 0,
       "prompt_tokens": 28,
       "start": 0,
-      "tokens": 35,
+      "tokens": 35
     },
     "project_id": "<uuid:3>",
     "root_span_id": "<span:2>",
-    "span_id": "<span:26>",
+    "span_id": "<span:24>",
     "span_parents": [
-      "<span:24>",
-    ],
+      "<span:22>"
+    ]
   },
   {
     "_is_merge": true,
-    "id": "<span:25>",
+    "id": "<span:23>",
     "log_id": "g",
     "output": {
       "candidates": [
@@ -896,22 +889,22 @@ exports[`wrap-google-genai-content-traces captures generate, attachment, stream,
               {
                 "functionCall": {
                   "args": {
-                    "location": "Paris, France",
+                    "location": "Paris, France"
                   },
-                  "name": "get_weather",
-                },
-              },
+                  "name": "get_weather"
+                }
+              }
             ],
-            "role": "model",
+            "role": "model"
           },
-          "finishReason": "STOP",
-        },
+          "finishReason": "STOP"
+        }
       ],
       "modelVersion": "gemini-2.0-flash-001",
-      "responseId": "<responseId:27>",
+      "responseId": "<responseId:25>",
       "sdkHttpResponse": {
         "headers": {
-          "alt-svc": "h3=":443"; ma=2592000,h3-29=":443"; ma=2592000",
+          "alt-svc": "h3=\":443\"; ma=2592000,h3-29=\":443\"; ma=2592000",
           "content-encoding": "gzip",
           "content-type": "application/json; charset=UTF-8",
           "date": "<timestamp>",
@@ -921,252 +914,57 @@ exports[`wrap-google-genai-content-traces captures generate, attachment, stream,
           "vary": "Origin, X-Origin, Referer",
           "x-content-type-options": "nosniff",
           "x-frame-options": "SAMEORIGIN",
-          "x-xss-protection": "0",
-        },
+          "x-xss-protection": "0"
+        }
       },
       "usageMetadata": {
         "candidatesTokenCount": 7,
         "candidatesTokensDetails": [
           {
             "modality": "TEXT",
-            "tokenCount": 7,
-          },
+            "tokenCount": 7
+          }
         ],
         "promptTokenCount": 28,
         "promptTokensDetails": [
           {
             "modality": "TEXT",
-            "tokenCount": 28,
-          },
+            "tokenCount": 28
+          }
         ],
-        "totalTokenCount": 35,
-      },
+        "totalTokenCount": 35
+      }
     },
     "project_id": "<uuid:3>",
     "root_span_id": "<span:2>",
-    "span_id": "<span:26>",
+    "span_id": "<span:24>",
     "span_parents": [
-      "<span:24>",
-    ],
+      "<span:22>"
+    ]
   },
   {
     "_is_merge": true,
-    "id": "<span:25>",
+    "id": "<span:23>",
     "log_id": "g",
     "metrics": {
-      "end": 0,
+      "end": 0
     },
     "project_id": "<uuid:3>",
     "root_span_id": "<span:2>",
-    "span_id": "<span:26>",
+    "span_id": "<span:24>",
     "span_parents": [
-      "<span:24>",
-    ],
+      "<span:22>"
+    ]
   },
   {
     "_is_merge": true,
-    "id": "<span:25>",
+    "id": "<span:23>",
     "log_id": "g",
     "project_id": "<uuid:3>",
     "root_span_id": "<span:2>",
-    "span_id": "<span:26>",
+    "span_id": "<span:24>",
     "span_parents": [
-      "<span:24>",
-    ],
-  },
+      "<span:22>"
+    ]
+  }
 ]
-`;
-
-exports[`wrap-google-genai-content-traces captures generate, attachment, stream, early-return, and tool spans > span-events 1`] = `
-[
-  {
-    "has_input": false,
-    "has_output": false,
-    "metadata": {
-      "scenario": "wrap-google-genai-content-traces",
-    },
-    "metric_keys": [],
-    "name": "google-genai-wrapper-root",
-    "root_span_id": "<span:1>",
-    "span_id": "<span:1>",
-    "span_parents": [],
-    "type": "task",
-  },
-  {
-    "has_input": false,
-    "has_output": false,
-    "metadata": {
-      "operation": "generate",
-    },
-    "metric_keys": [],
-    "name": "google-generate-operation",
-    "root_span_id": "<span:1>",
-    "span_id": "<span:2>",
-    "span_parents": [
-      "<span:1>",
-    ],
-    "type": null,
-  },
-  {
-    "has_input": true,
-    "has_output": true,
-    "metadata": {
-      "model": "gemini-2.0-flash-001",
-    },
-    "metric_keys": [
-      "completion_tokens",
-      "duration",
-      "prompt_tokens",
-      "tokens",
-    ],
-    "name": "generate_content",
-    "root_span_id": "<span:1>",
-    "span_id": "<span:3>",
-    "span_parents": [
-      "<span:2>",
-    ],
-    "type": "llm",
-  },
-  {
-    "has_input": false,
-    "has_output": false,
-    "metadata": {
-      "operation": "attachment",
-    },
-    "metric_keys": [],
-    "name": "google-attachment-operation",
-    "root_span_id": "<span:1>",
-    "span_id": "<span:4>",
-    "span_parents": [
-      "<span:1>",
-    ],
-    "type": null,
-  },
-  {
-    "has_input": true,
-    "has_output": true,
-    "metadata": {
-      "model": "gemini-2.0-flash-001",
-    },
-    "metric_keys": [
-      "completion_tokens",
-      "duration",
-      "prompt_tokens",
-      "tokens",
-    ],
-    "name": "generate_content",
-    "root_span_id": "<span:1>",
-    "span_id": "<span:5>",
-    "span_parents": [
-      "<span:4>",
-    ],
-    "type": "llm",
-  },
-  {
-    "has_input": false,
-    "has_output": false,
-    "metadata": {
-      "operation": "stream",
-    },
-    "metric_keys": [],
-    "name": "google-stream-operation",
-    "root_span_id": "<span:1>",
-    "span_id": "<span:6>",
-    "span_parents": [
-      "<span:1>",
-    ],
-    "type": null,
-  },
-  {
-    "has_input": true,
-    "has_output": true,
-    "metadata": {
-      "model": "gemini-2.0-flash-001",
-    },
-    "metric_keys": [
-      "completion_tokens",
-      "duration",
-      "prompt_tokens",
-      "time_to_first_token",
-      "tokens",
-    ],
-    "name": "generate_content_stream",
-    "root_span_id": "<span:1>",
-    "span_id": "<span:7>",
-    "span_parents": [
-      "<span:6>",
-    ],
-    "type": "llm",
-  },
-  {
-    "has_input": false,
-    "has_output": false,
-    "metadata": {
-      "operation": "stream-return",
-    },
-    "metric_keys": [],
-    "name": "google-stream-return-operation",
-    "root_span_id": "<span:1>",
-    "span_id": "<span:8>",
-    "span_parents": [
-      "<span:1>",
-    ],
-    "type": null,
-  },
-  {
-    "has_input": true,
-    "has_output": true,
-    "metadata": {
-      "model": "gemini-2.0-flash-001",
-    },
-    "metric_keys": [
-      "duration",
-      "prompt_tokens",
-      "time_to_first_token",
-      "tokens",
-    ],
-    "name": "generate_content_stream",
-    "root_span_id": "<span:1>",
-    "span_id": "<span:9>",
-    "span_parents": [
-      "<span:8>",
-    ],
-    "type": "llm",
-  },
-  {
-    "has_input": false,
-    "has_output": false,
-    "metadata": {
-      "operation": "tool",
-    },
-    "metric_keys": [],
-    "name": "google-tool-operation",
-    "root_span_id": "<span:1>",
-    "span_id": "<span:10>",
-    "span_parents": [
-      "<span:1>",
-    ],
-    "type": null,
-  },
-  {
-    "has_input": true,
-    "has_output": true,
-    "metadata": {
-      "model": "gemini-2.0-flash-001",
-    },
-    "metric_keys": [
-      "completion_tokens",
-      "duration",
-      "prompt_tokens",
-      "tokens",
-    ],
-    "name": "generate_content",
-    "root_span_id": "<span:1>",
-    "span_id": "<span:11>",
-    "span_parents": [
-      "<span:10>",
-    ],
-    "type": "llm",
-  },
-]
-`;
