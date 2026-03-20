@@ -334,7 +334,7 @@ describe("OpenRouter Plugin", () => {
   });
 
   describe("callModel tool patching", () => {
-    it("patches tools on callModel start so auto-instrumentation emits tool spans", async () => {
+    it("patches tools on callModel and records child llm turns plus the final response", async () => {
       const tool = {
         type: "function",
         function: {
@@ -344,48 +344,171 @@ describe("OpenRouter Plugin", () => {
           }),
         },
       };
+      const initialResponse = {
+        id: "resp_initial",
+        model: "openai/gpt-4.1-mini",
+        status: "completed",
+        output: [
+          {
+            type: "function_call",
+            id: "fc_1",
+            callId: "call_1",
+            name: "lookup_weather",
+            arguments: '{"city":"Vienna"}',
+          },
+        ],
+        usage: {
+          inputTokens: 10,
+          outputTokens: 4,
+          totalTokens: 14,
+        },
+      };
+      const finalResponse = {
+        id: "resp_final",
+        model: "openai/gpt-4.1-mini",
+        status: "completed",
+        output: [
+          {
+            type: "message",
+            role: "assistant",
+            content: [{ type: "output_text", text: "Sunny in Vienna" }],
+          },
+        ],
+        usage: {
+          inputTokens: 12,
+          outputTokens: 3,
+          totalTokens: 15,
+        },
+      };
       const request = {
+        input:
+          "Use the lookup_weather tool for Vienna exactly once, then answer with only the forecast.",
+        maxOutputTokens: 32,
         model: "openai/gpt-4.1-mini",
         tools: [tool],
       };
-      const event = {
-        arguments: [request],
-      };
-      const tracingChannel = openRouterChannels.callModel.tracingChannel();
+      const result = openRouterChannels.callModel.traceSync(
+        () => {
+          const modelResult = {
+            allToolExecutionRounds: [],
+            finalResponse,
+            resolvedRequest: {
+              input:
+                "Use the lookup_weather tool for Vienna exactly once, then answer with only the forecast.",
+              maxOutputTokens: 32,
+              model: "openai/gpt-4.1-mini",
+              tools: [{ type: "function", name: "lookup_weather" }],
+            },
+            async getInitialResponse() {
+              return initialResponse;
+            },
+            async makeFollowupRequest(
+              currentResponse: unknown,
+              toolResults: unknown[],
+            ) {
+              modelResult.allToolExecutionRounds.push({
+                round: 0,
+                response: currentResponse,
+                toolResults,
+              });
+              return finalResponse;
+            },
+            async getResponse() {
+              return finalResponse;
+            },
+            async getText() {
+              const currentResponse = await modelResult.getInitialResponse();
+              const toolResult = await request.tools[0].function.execute(
+                { city: "Vienna" },
+                {
+                  toolCall: {
+                    id: "call_1",
+                    name: "lookup_weather",
+                  },
+                },
+              );
+              await modelResult.makeFollowupRequest(currentResponse, [
+                {
+                  type: "function_call_output",
+                  id: "output_call_1",
+                  callId: "call_1",
+                  output: JSON.stringify(toolResult),
+                },
+              ]);
+              return "Sunny in Vienna";
+            },
+          };
 
-      tracingChannel.start!.publish(event);
+          return modelResult;
+        },
+        { arguments: [request] },
+      );
       expect(request.tools[0]).not.toBe(tool);
 
-      const result = await request.tools[0].function.execute(
-        { city: "Vienna" },
-        {
-          toolCall: {
-            id: "call_1",
-            name: "lookup_weather",
-          },
-        },
-      );
-      expect(result).toMatchObject({
-        forecast: "Sunny in Vienna",
-      });
+      await expect(result.getText()).resolves.toBe("Sunny in Vienna");
       expect(request.tools[0]).not.toBe(tool);
 
       const spans = await backgroundLogger.drain();
-      expect(spans).toHaveLength(1);
-      const span = spans[0] as Record<string, any>;
-      expect(span.span_attributes).toMatchObject({
+      expect(spans).toHaveLength(4);
+      const callModelSpan = spans.find(
+        (span) => span.span_attributes?.name === "openrouter.callModel",
+      ) as Record<string, any> | undefined;
+      const turnSpans = spans.filter(
+        (span) =>
+          span.span_attributes?.name === "openrouter.beta.responses.send",
+      ) as Array<Record<string, any>>;
+      const toolSpan = spans.find(
+        (span) => span.span_attributes?.name === "lookup_weather",
+      ) as Record<string, any> | undefined;
+
+      expect(callModelSpan?.span_attributes).toMatchObject({
+        name: "openrouter.callModel",
+        type: "llm",
+      });
+      expect(callModelSpan?.metadata).toMatchObject({
+        provider: "openrouter",
+        model: "openai/gpt-4.1-mini",
+        maxOutputTokens: 32,
+        turn_count: 2,
+      });
+      expect(callModelSpan?.output).toMatchObject(finalResponse.output);
+      expect(callModelSpan?.metrics).toMatchObject({
+        prompt_tokens: 22,
+        completion_tokens: 7,
+        tokens: 29,
+      });
+
+      expect(turnSpans).toHaveLength(2);
+      expect(turnSpans[0]?.metadata).toMatchObject({
+        provider: "openrouter",
+        model: "openai/gpt-4.1-mini",
+        id: "resp_initial",
+        status: "completed",
+        step: 1,
+        step_type: "initial",
+      });
+      expect(turnSpans[1]?.metadata).toMatchObject({
+        provider: "openrouter",
+        model: "openai/gpt-4.1-mini",
+        id: "resp_final",
+        status: "completed",
+        step: 2,
+        step_type: "continue",
+      });
+
+      expect(toolSpan?.span_attributes).toMatchObject({
         name: "lookup_weather",
         type: "tool",
       });
-      expect(span.input).toMatchObject({
+      expect(toolSpan?.input).toMatchObject({
         city: "Vienna",
       });
-      expect(span.metadata).toMatchObject({
+      expect(toolSpan?.metadata).toMatchObject({
         provider: "openrouter",
         tool_name: "lookup_weather",
         tool_call_id: "call_1",
       });
-      expect(span.output).toMatchObject({
+      expect(toolSpan?.output).toMatchObject({
         forecast: "Sunny in Vienna",
       });
     });

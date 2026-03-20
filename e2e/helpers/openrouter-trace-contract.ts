@@ -28,7 +28,7 @@ const OPERATIONS = [
   },
   {
     childNames: ["openrouter.embeddings.generate"],
-    expectedModel: EMBEDDING_MODEL,
+    expectedModelPrefix: "text-embedding-3-small",
     expectsOutput: true,
     expectsTimeToFirstToken: false,
     name: "openrouter-embeddings-operation",
@@ -54,12 +54,16 @@ const OPERATIONS = [
     type: "llm",
   },
   {
-    childNames: ["lookup_weather", "openrouter.tool"],
+    childNames: ["openrouter.callModel"],
+    expectedModelPrefix: CHAT_MODEL,
     expectsOutput: true,
     expectsTimeToFirstToken: false,
     name: "openrouter-call-model-operation",
+    nestedLLMChildMinCount: 2,
+    nestedLLMChildNames: ["openrouter.beta.responses.send"],
+    nestedChildNames: ["lookup_weather", "openrouter.tool"],
     operation: "call-model",
-    type: "tool",
+    type: "llm",
   },
 ] as const;
 
@@ -76,6 +80,61 @@ function findChildrenForOperation(
   }
 
   return [];
+}
+
+function assertNestedToolSpan(
+  capturedEvents: CapturedLogEvent[],
+  childNames: readonly string[],
+  parentId: string | undefined,
+) {
+  const nestedChildren = findChildrenForOperation(
+    capturedEvents,
+    childNames,
+    parentId,
+  );
+  expect(nestedChildren.length).toBeGreaterThanOrEqual(1);
+
+  const nestedChild =
+    nestedChildren.find((candidate) => candidate.output !== undefined) ??
+    nestedChildren.at(-1);
+  expect(nestedChild?.span.type).toBe("tool");
+  expect(nestedChild?.input).toMatchObject({
+    city: "Vienna",
+  });
+  expect(nestedChild?.row.metadata).toMatchObject({
+    provider: "openrouter",
+    tool_name: "lookup_weather",
+  });
+  expect(nestedChild?.output).toMatchObject({
+    forecast: "Sunny in Vienna",
+  });
+}
+
+function assertNestedLLMSpans(args: {
+  capturedEvents: CapturedLogEvent[];
+  childNames: readonly string[];
+  expectedMinCount: number;
+  expectedModelPrefix: string;
+  parentId: string | undefined;
+}) {
+  const nestedChildren = findChildrenForOperation(
+    args.capturedEvents,
+    args.childNames,
+    args.parentId,
+  );
+  expect(nestedChildren.length).toBeGreaterThanOrEqual(args.expectedMinCount);
+
+  for (const [index, nestedChild] of nestedChildren.entries()) {
+    expect(nestedChild?.span.type).toBe("llm");
+    expect(nestedChild?.row.metadata).toMatchObject({
+      provider: "openrouter",
+      step: index + 1,
+    });
+    expect(String(nestedChild?.row.metadata?.model)).toContain(
+      args.expectedModelPrefix,
+    );
+    expect(nestedChild?.output).toBeDefined();
+  }
 }
 
 export function assertOpenRouterTraceContract(options: {
@@ -178,6 +237,24 @@ export function assertOpenRouterTraceContract(options: {
 
     if (operationSpec.expectsTimeToFirstToken) {
       expect(child?.metrics?.time_to_first_token).toEqual(expect.any(Number));
+    }
+
+    if ("nestedChildNames" in operationSpec) {
+      assertNestedToolSpan(
+        options.capturedEvents,
+        operationSpec.nestedChildNames,
+        child?.span.id,
+      );
+    }
+
+    if ("nestedLLMChildNames" in operationSpec) {
+      assertNestedLLMSpans({
+        capturedEvents: options.capturedEvents,
+        childNames: operationSpec.nestedLLMChildNames,
+        expectedMinCount: operationSpec.nestedLLMChildMinCount,
+        expectedModelPrefix: operationSpec.expectedModelPrefix,
+        parentId: child?.span.id,
+      });
     }
   }
 

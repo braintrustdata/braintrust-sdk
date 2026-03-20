@@ -2,15 +2,23 @@ import { BasePlugin } from "../core";
 import {
   traceAsyncChannel,
   traceStreamingChannel,
+  traceSyncStreamChannel,
   unsubscribeAll,
 } from "../core/channel-tracing";
 import { SpanTypeAttribute, isObject } from "../../../util/index";
 import { getCurrentUnixTimestamp } from "../../util";
-import { patchOpenRouterCallModelRequestTools } from "../../openrouter-tool-wrapping";
 import {
-  extractOpenRouterUsageMetadata,
-  parseOpenRouterMetricsFromUsage,
-} from "../../openrouter-utils";
+  patchOpenRouterCallModelRequestTools,
+  patchOpenRouterCallModelResult,
+} from "../../openrouter-tool-wrapping";
+import {
+  buildOpenRouterMetadata,
+  extractOpenRouterCallModelInput,
+  extractOpenRouterCallModelMetadata,
+  extractOpenRouterResponseMetadata,
+  extractOpenRouterResponseOutput,
+} from "../../openrouter-logging";
+import { parseOpenRouterMetricsFromUsage } from "../../openrouter-utils";
 import { openRouterChannels } from "./openrouter-channels";
 import type {
   OpenRouterChatChoice,
@@ -94,7 +102,7 @@ export class OpenRouterPlugin extends BasePlugin {
             return undefined;
           }
 
-          return extractOpenRouterUsageMetadata(result.usage);
+          return extractOpenRouterResponseMetadata(result);
         },
         extractMetrics: (result) => {
           return isObject(result)
@@ -121,7 +129,8 @@ export class OpenRouterPlugin extends BasePlugin {
             metadata: buildOpenRouterMetadata(metadata, httpReferer, xTitle),
           };
         },
-        extractOutput: (result) => result?.output,
+        extractOutput: (result) =>
+          extractOpenRouterResponseOutput(result as Record<string, unknown>),
         extractMetadata: (result) => extractOpenRouterResponseMetadata(result),
         extractMetrics: (result, startTime) => {
           const metrics = parseOpenRouterMetricsFromUsage(result?.usage);
@@ -131,6 +140,31 @@ export class OpenRouterPlugin extends BasePlugin {
           return metrics;
         },
         aggregateChunks: aggregateOpenRouterResponseStreamEvents,
+      }),
+    );
+
+    this.unsubscribers.push(
+      traceSyncStreamChannel(openRouterChannels.callModel, {
+        name: "openrouter.callModel",
+        type: SpanTypeAttribute.LLM,
+        extractInput: (args) => {
+          const request = getOpenRouterCallModelRequestArg(args);
+          return {
+            input: request
+              ? extractOpenRouterCallModelInput(request)
+              : undefined,
+            metadata: request
+              ? extractOpenRouterCallModelMetadata(request)
+              : { provider: "openrouter" },
+          };
+        },
+        patchResult: ({ endEvent, result, span }) => {
+          return patchOpenRouterCallModelResult(
+            span,
+            result,
+            getOpenRouterCallModelRequestArg(endEvent.arguments),
+          );
+        },
       }),
     );
 
@@ -223,21 +257,6 @@ function getOpenRouterCallModelRequestArg(
   return isObject(firstObjectArg)
     ? (firstObjectArg as OpenRouterCallModelRequest)
     : undefined;
-}
-
-function buildOpenRouterMetadata(
-  metadata: Record<string, unknown>,
-  httpReferer: unknown,
-  xTitle: unknown,
-): Record<string, unknown> {
-  const { provider: providerRouting, ...rest } = metadata;
-  return {
-    ...rest,
-    ...(providerRouting !== undefined ? { providerRouting } : {}),
-    ...(httpReferer !== undefined ? { httpReferer } : {}),
-    ...(xTitle !== undefined ? { xTitle } : {}),
-    provider: "openrouter",
-  };
 }
 
 export function aggregateOpenRouterChatChunks(
@@ -397,29 +416,12 @@ export function aggregateOpenRouterResponseStreamEvents(
   }
 
   return {
-    output: finalResponse.output,
+    output: extractOpenRouterResponseOutput(finalResponse),
     metrics: parseOpenRouterMetricsFromUsage(finalResponse.usage),
     ...(extractOpenRouterResponseMetadata(finalResponse)
       ? { metadata: extractOpenRouterResponseMetadata(finalResponse) }
       : {}),
   };
-}
-
-function extractOpenRouterResponseMetadata(
-  result: OpenRouterResponse | OpenRouterEmbeddingResponse | undefined,
-): Record<string, unknown> | undefined {
-  if (!isObject(result)) {
-    return undefined;
-  }
-
-  const { output: _output, data: _data, usage, ...metadata } = result;
-  const usageMetadata = extractOpenRouterUsageMetadata(usage);
-  const combined = {
-    ...metadata,
-    ...(usageMetadata || {}),
-  };
-
-  return Object.keys(combined).length > 0 ? combined : undefined;
 }
 
 export { parseOpenRouterMetricsFromUsage };

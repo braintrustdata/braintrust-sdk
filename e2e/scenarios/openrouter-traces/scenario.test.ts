@@ -2,7 +2,6 @@ import { expect, test } from "vitest";
 import { assertOpenRouterTraceContract } from "../../helpers/openrouter-trace-contract";
 import { resolveFileSnapshotPath } from "../../helpers/file-snapshot";
 import {
-  isCanaryMode,
   prepareScenarioDir,
   readInstalledPackageVersion,
   resolveScenarioDir,
@@ -22,33 +21,41 @@ const sharedSpanSnapshotPath = resolveFileSnapshotPath(
   "span-events.json",
 );
 
-test(
-  "wrap-openrouter-traces captures wrapper instrumentation",
-  async () => {
+type OpenRouterContract = ReturnType<typeof assertOpenRouterTraceContract>;
+
+let wrapperContractPromise: Promise<OpenRouterContract> | undefined;
+let autoContractPromise: Promise<OpenRouterContract> | undefined;
+
+function getWrapperContract(): Promise<OpenRouterContract> {
+  wrapperContractPromise ??= (async () => {
+    let contract: OpenRouterContract | undefined;
+
     await withScenarioHarness(async ({ events, runScenarioDir }) => {
       await runScenarioDir({ scenarioDir, timeoutMs: TIMEOUT_MS });
 
-      const contract = assertOpenRouterTraceContract({
+      contract = assertOpenRouterTraceContract({
         capturedEvents: events(),
         rootName: "openrouter-wrapper-root",
         scenarioName: "openrouter-traces",
         snapshotRootName: "openrouter-root",
         version: openrouterSdkVersion,
       });
-
-      if (!isCanaryMode()) {
-        await expect(
-          `${JSON.stringify(contract.spanSummary, null, 2)}\n`,
-        ).toMatchFileSnapshot(sharedSpanSnapshotPath);
-      }
     });
-  },
-  TIMEOUT_MS,
-);
 
-test(
-  "openrouter auto-instrumentation via node hook collects traces without manual wrapping",
-  async () => {
+    if (!contract) {
+      throw new Error("Failed to capture OpenRouter wrapper contract");
+    }
+
+    return contract;
+  })();
+
+  return wrapperContractPromise;
+}
+
+function getAutoContract(): Promise<OpenRouterContract> {
+  autoContractPromise ??= (async () => {
+    let contract: OpenRouterContract | undefined;
+
     await withScenarioHarness(async ({ events, runNodeScenarioDir }) => {
       await runNodeScenarioDir({
         nodeArgs: ["--import", "braintrust/hook.mjs"],
@@ -56,20 +63,52 @@ test(
         timeoutMs: TIMEOUT_MS,
       });
 
-      const contract = assertOpenRouterTraceContract({
+      contract = assertOpenRouterTraceContract({
         capturedEvents: events(),
         rootName: "openrouter-auto-hook-root",
         scenarioName: "openrouter-traces",
         snapshotRootName: "openrouter-root",
         version: openrouterSdkVersion,
       });
-
-      if (!isCanaryMode()) {
-        await expect(
-          `${JSON.stringify(contract.spanSummary, null, 2)}\n`,
-        ).toMatchFileSnapshot(sharedSpanSnapshotPath);
-      }
     });
+
+    if (!contract) {
+      throw new Error(
+        "Failed to capture OpenRouter auto-instrumentation contract",
+      );
+    }
+
+    return contract;
+  })();
+
+  return autoContractPromise;
+}
+
+test(
+  "wrap-openrouter-traces captures wrapper instrumentation",
+  async () => {
+    const contract = await getWrapperContract();
+
+    await expect(
+      `${JSON.stringify(contract.spanSummary, null, 2)}\n`,
+    ).toMatchFileSnapshot(sharedSpanSnapshotPath);
+  },
+  TIMEOUT_MS,
+);
+
+test(
+  "openrouter auto-instrumentation via node hook collects traces without manual wrapping",
+  async () => {
+    const [wrapperContract, autoContract] = await Promise.all([
+      getWrapperContract(),
+      getAutoContract(),
+    ]);
+
+    expect(autoContract.spanSummary).toEqual(wrapperContract.spanSummary);
+
+    await expect(
+      `${JSON.stringify(autoContract.spanSummary, null, 2)}\n`,
+    ).toMatchFileSnapshot(sharedSpanSnapshotPath);
   },
   TIMEOUT_MS,
 );

@@ -325,24 +325,105 @@ describe("openrouter wrapper", () => {
   });
 
   test("wraps callModel tool execution with tool spans", async () => {
-    const callModel = vi.fn((request) => {
-      const tool = request.tools[0];
-      return tool.function.execute(
-        { city: "Vienna" },
+    const initialResponse = {
+      id: "resp_initial",
+      model: TEST_MODEL,
+      status: "completed",
+      output: [
         {
-          toolCall: {
-            id: "call_1",
-            name: "lookup_weather",
-          },
+          type: "function_call",
+          id: "fc_1",
+          callId: "call_1",
+          name: "lookup_weather",
+          arguments: '{"city":"Vienna"}',
         },
-      );
+      ],
+      usage: {
+        inputTokens: 10,
+        outputTokens: 4,
+        totalTokens: 14,
+      },
+    };
+    const finalResponse = {
+      id: "resp_final",
+      model: TEST_MODEL,
+      status: "completed",
+      output: [
+        {
+          type: "message",
+          role: "assistant",
+          content: [{ type: "output_text", text: "Sunny in Vienna" }],
+        },
+      ],
+      usage: {
+        inputTokens: 12,
+        outputTokens: 3,
+        totalTokens: 15,
+      },
+    };
+    const callModel = vi.fn((request) => {
+      const result = {
+        allToolExecutionRounds: [],
+        finalResponse,
+        resolvedRequest: {
+          input:
+            "Use the lookup_weather tool for Vienna exactly once, then answer with only the forecast.",
+          maxOutputTokens: 32,
+          model: TEST_MODEL,
+          tools: [{ type: "function", name: "lookup_weather" }],
+        },
+        async getInitialResponse() {
+          return initialResponse;
+        },
+        async makeFollowupRequest(
+          currentResponse: unknown,
+          toolResults: unknown[],
+        ) {
+          result.allToolExecutionRounds.push({
+            round: 0,
+            response: currentResponse,
+            toolResults,
+          });
+          return finalResponse;
+        },
+        async getResponse() {
+          return finalResponse;
+        },
+        async getText() {
+          const currentResponse = await result.getInitialResponse();
+          const tool = request.tools[0];
+          const toolResult = await tool.function.execute(
+            { city: "Vienna" },
+            {
+              toolCall: {
+                id: "call_1",
+                name: "lookup_weather",
+              },
+            },
+          );
+          await result.makeFollowupRequest(currentResponse, [
+            {
+              type: "function_call_output",
+              id: "output_call_1",
+              callId: "call_1",
+              output: JSON.stringify(toolResult),
+            },
+          ]);
+          return "Sunny in Vienna";
+        },
+      };
+
+      return result;
     });
 
     const client = wrapOpenRouter({
       callModel,
     });
 
-    const result = await client.callModel({
+    const result = client.callModel({
+      input:
+        "Use the lookup_weather tool for Vienna exactly once, then answer with only the forecast.",
+      maxOutputTokens: 32,
       model: TEST_MODEL,
       tools: [
         {
@@ -357,26 +438,96 @@ describe("openrouter wrapper", () => {
       ],
     });
 
-    expect(result).toMatchObject({
-      forecast: "Sunny in Vienna",
-    });
+    await expect(result.getText()).resolves.toBe("Sunny in Vienna");
 
     const spans = await backgroundLogger.drain();
-    expect(spans).toHaveLength(1);
-    const span = spans[0] as Record<string, any>;
-    expect(span.span_attributes).toMatchObject({
+    expect(spans).toHaveLength(4);
+    const callModelSpan = spans.find(
+      (span) => span.span_attributes?.name === "openrouter.callModel",
+    ) as Record<string, any> | undefined;
+    const turnSpans = spans.filter(
+      (span) => span.span_attributes?.name === "openrouter.beta.responses.send",
+    ) as Array<Record<string, any>>;
+    const toolSpan = spans.find(
+      (span) => span.span_attributes?.name === "lookup_weather",
+    ) as Record<string, any> | undefined;
+
+    expect(callModelSpan?.span_attributes).toMatchObject({
+      name: "openrouter.callModel",
+      type: "llm",
+    });
+    expect(callModelSpan?.metadata).toMatchObject({
+      provider: "openrouter",
+      model: TEST_MODEL,
+      maxOutputTokens: 32,
+      turn_count: 2,
+      tools: [
+        {
+          type: "function",
+          function: {
+            name: "lookup_weather",
+          },
+        },
+      ],
+    });
+    expect(
+      callModelSpan?.metadata?.tools?.[0]?.function?.execute,
+    ).toBeUndefined();
+    expect(callModelSpan?.output).toMatchObject(finalResponse.output);
+    expect(callModelSpan?.metrics).toMatchObject({
+      prompt_tokens: 22,
+      completion_tokens: 7,
+      tokens: 29,
+    });
+
+    expect(turnSpans).toHaveLength(2);
+    expect(turnSpans[0]?.input).toBe(
+      "Use the lookup_weather tool for Vienna exactly once, then answer with only the forecast.",
+    );
+    expect(turnSpans[0]?.output).toMatchObject(initialResponse.output);
+    expect(turnSpans[0]?.metadata).toMatchObject({
+      provider: "openrouter",
+      model: TEST_MODEL,
+      id: "resp_initial",
+      status: "completed",
+      step: 1,
+      step_type: "initial",
+    });
+    expect(turnSpans[1]?.input).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          type: "function_call",
+          callId: "call_1",
+        }),
+        expect.objectContaining({
+          type: "function_call_output",
+          callId: "call_1",
+        }),
+      ]),
+    );
+    expect(turnSpans[1]?.output).toMatchObject(finalResponse.output);
+    expect(turnSpans[1]?.metadata).toMatchObject({
+      provider: "openrouter",
+      model: TEST_MODEL,
+      id: "resp_final",
+      status: "completed",
+      step: 2,
+      step_type: "continue",
+    });
+
+    expect(toolSpan?.span_attributes).toMatchObject({
       name: "lookup_weather",
       type: "tool",
     });
-    expect(span.input).toMatchObject({
+    expect(toolSpan?.input).toMatchObject({
       city: "Vienna",
     });
-    expect(span.metadata).toMatchObject({
+    expect(toolSpan?.metadata).toMatchObject({
       provider: "openrouter",
       tool_name: "lookup_weather",
       tool_call_id: "call_1",
     });
-    expect(span.output).toMatchObject({
+    expect(toolSpan?.output).toMatchObject({
       forecast: "Sunny in Vienna",
     });
   });
@@ -422,16 +573,31 @@ describe("openrouter wrapper", () => {
     expect(chunks).toHaveLength(2);
 
     const spans = await backgroundLogger.drain();
-    expect(spans).toHaveLength(1);
-    const span = spans[0] as Record<string, any>;
-    expect(span.span_attributes).toMatchObject({
+    expect(spans).toHaveLength(2);
+    const callModelSpan = spans.find(
+      (span) => span.span_attributes?.name === "openrouter.callModel",
+    ) as Record<string, any> | undefined;
+    const toolSpan = spans.find(
+      (span) => span.span_attributes?.name === "lookup_weather",
+    ) as Record<string, any> | undefined;
+
+    expect(callModelSpan?.span_attributes).toMatchObject({
+      name: "openrouter.callModel",
+      type: "llm",
+    });
+    expect(callModelSpan?.metadata).toMatchObject({
+      provider: "openrouter",
+      model: TEST_MODEL,
+    });
+
+    expect(toolSpan?.span_attributes).toMatchObject({
       name: "lookup_weather",
       type: "tool",
     });
-    expect(span.input).toMatchObject({
+    expect(toolSpan?.input).toMatchObject({
       city: "Vienna",
     });
-    expect(span.output).toMatchObject({
+    expect(toolSpan?.output).toMatchObject({
       forecast: "Sunny in Vienna",
     });
   });

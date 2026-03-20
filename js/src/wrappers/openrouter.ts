@@ -1,5 +1,9 @@
 import { openRouterChannels } from "../instrumentation/plugins/openrouter-channels";
-import { patchOpenRouterCallModelRequestTools } from "../openrouter-tool-wrapping";
+import {
+  patchOpenRouterCallModelRequestTools,
+  patchOpenRouterCallModelResult,
+  startOpenRouterCallModelSpan,
+} from "../openrouter-tool-wrapping";
 import type {
   OpenRouterBeta,
   OpenRouterCallModelRequest,
@@ -161,6 +165,20 @@ function wrapCallModel(
   return (request, options) => {
     const patchedRequest = { ...request };
     patchOpenRouterCallModelRequestTools(patchedRequest);
-    return callModel(patchedRequest, options);
+    const span = startOpenRouterCallModelSpan(patchedRequest);
+
+    try {
+      const result = callModel(patchedRequest, options);
+      if (!patchOpenRouterCallModelResult(span, result, patchedRequest)) {
+        span.end();
+      }
+      return result;
+    } catch (error) {
+      span.log({
+        error: error instanceof Error ? error.message : String(error),
+      });
+      span.end();
+      throw error;
+    }
   };
 }
