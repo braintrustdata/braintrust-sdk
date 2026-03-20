@@ -135,20 +135,40 @@ export type SyncResultChannelSpanConfig<
   };
   extractOutput?: (
     result: ResultOf<TChannel>,
-    endEvent?: EndOf<TChannel>,
+    endEvent?: TChannel extends AnyAsyncChannel
+      ? EndOf<TChannel> | AsyncEndOf<TChannel>
+      : EndOf<TChannel>,
   ) => unknown;
   extractMetadata?: (
     result: ResultOf<TChannel>,
-    endEvent?: EndOf<TChannel>,
+    endEvent?: TChannel extends AnyAsyncChannel
+      ? EndOf<TChannel> | AsyncEndOf<TChannel>
+      : EndOf<TChannel>,
   ) => unknown;
   extractMetrics?: (
     result: ResultOf<TChannel>,
     startTime?: number,
-    endEvent?: EndOf<TChannel>,
+    endEvent?: TChannel extends AnyAsyncChannel
+      ? EndOf<TChannel> | AsyncEndOf<TChannel>
+      : EndOf<TChannel>,
   ) => Record<string, number>;
+  aggregateChunks?: TChannel extends AnyAsyncChannel
+    ? (
+        chunks: ChunkOf<TChannel>[],
+        result?: ResultOf<TChannel>,
+        endEvent?: EndOf<TChannel> | AsyncEndOf<TChannel>,
+        startTime?: number,
+      ) => {
+        output: unknown;
+        metrics: Record<string, number>;
+        metadata?: Record<string, unknown>;
+      }
+    : never;
   patchResult?: (args: {
     channelName: string;
-    endEvent: EndOf<TChannel>;
+    endEvent: TChannel extends AnyAsyncChannel
+      ? EndOf<TChannel> | AsyncEndOf<TChannel>
+      : EndOf<TChannel>;
     result: ResultOf<TChannel>;
     span: Span;
     startTime: number;
@@ -242,6 +262,124 @@ function logErrorAndEnd<
   });
   spanData.span.end();
   states.delete(event as object);
+}
+
+function logResultAndEnd<
+  TChannel extends AnyAsyncChannel | AnySyncStreamChannel,
+>(
+  states: WeakMap<object, SpanState>,
+  config: SyncResultChannelSpanConfig<TChannel>,
+  channelName: string,
+  event: TChannel extends AnyAsyncChannel
+    ? EndOf<TChannel> | AsyncEndOf<TChannel>
+    : EndOf<TChannel>,
+): void {
+  const spanData = states.get(event as object);
+  if (!spanData) {
+    return;
+  }
+
+  const { span, startTime } = spanData;
+  const result = event.result as ResultOf<TChannel>;
+
+  if (
+    config.patchResult?.({
+      channelName,
+      endEvent: event,
+      result,
+      span,
+      startTime,
+    })
+  ) {
+    states.delete(event as object);
+    return;
+  }
+
+  if (config.aggregateChunks && isAsyncIterable(result)) {
+    let firstChunkTime: number | undefined;
+
+    patchStreamIfNeeded(result, {
+      onChunk: () => {
+        if (firstChunkTime === undefined) {
+          firstChunkTime = getCurrentUnixTimestamp();
+        }
+      },
+      onComplete: (chunks) => {
+        try {
+          const aggregated = config.aggregateChunks?.(
+            chunks as ChunkOf<Extract<TChannel, AnyAsyncChannel>>[],
+            result,
+            event,
+            startTime,
+          );
+
+          if (!aggregated) {
+            span.end();
+            return;
+          }
+
+          if (
+            aggregated.metrics.time_to_first_token === undefined &&
+            firstChunkTime !== undefined
+          ) {
+            aggregated.metrics.time_to_first_token = firstChunkTime - startTime;
+          } else if (
+            aggregated.metrics.time_to_first_token === undefined &&
+            chunks.length > 0
+          ) {
+            aggregated.metrics.time_to_first_token =
+              getCurrentUnixTimestamp() - startTime;
+          }
+
+          span.log({
+            output: aggregated.output,
+            ...(aggregated.metadata !== undefined
+              ? { metadata: aggregated.metadata }
+              : {}),
+            metrics: aggregated.metrics,
+          });
+        } catch (error) {
+          console.error(`Error extracting output for ${channelName}:`, error);
+        } finally {
+          span.end();
+          states.delete(event as object);
+        }
+      },
+      onError: (error: Error) => {
+        span.log({
+          error: error.message,
+        });
+        span.end();
+        states.delete(event as object);
+      },
+    });
+    return;
+  }
+
+  try {
+    const output = config.extractOutput?.(result, event);
+    const metrics = config.extractMetrics?.(result, startTime, event);
+    const metadata = config.extractMetadata?.(result, event);
+
+    if (
+      output !== undefined ||
+      metrics !== undefined ||
+      normalizeMetadata(metadata) !== undefined
+    ) {
+      span.log({
+        ...(output !== undefined ? { output } : {}),
+        ...(normalizeMetadata(metadata) !== undefined
+          ? { metadata: normalizeMetadata(metadata) }
+          : {}),
+        ...(metrics !== undefined ? { metrics } : {}),
+      });
+    }
+  } catch (error) {
+    console.error(`Error extracting output for ${channelName}:`, error);
+  } finally {
+    span.end();
+    states.delete(event as object);
+  }
 }
 
 export function traceAsyncChannel<TChannel extends AnyAsyncChannel>(
@@ -520,34 +658,19 @@ export function traceSyncResultChannel<
         return;
       }
 
-      try {
-        const output = config.extractOutput?.(endEvent.result, endEvent);
-        const metrics = config.extractMetrics?.(
-          endEvent.result,
-          startTime,
-          endEvent,
-        );
-        const metadata = config.extractMetadata?.(endEvent.result, endEvent);
-
-        if (
-          output !== undefined ||
-          metrics !== undefined ||
-          normalizeMetadata(metadata) !== undefined
-        ) {
-          span.log({
-            ...(output !== undefined ? { output } : {}),
-            ...(normalizeMetadata(metadata) !== undefined
-              ? { metadata: normalizeMetadata(metadata) }
-              : {}),
-            ...(metrics !== undefined ? { metrics } : {}),
-          });
-        }
-      } catch (error) {
-        console.error(`Error extracting output for ${channelName}:`, error);
-      } finally {
-        span.end();
-        states.delete(event as object);
+      if (channel.kind === "async") {
+        return;
       }
+
+      logResultAndEnd(states, config, channelName, endEvent);
+    },
+    asyncEnd: (event) => {
+      logResultAndEnd(
+        states,
+        config,
+        channelName,
+        event as AsyncEndOf<TChannel>,
+      );
     },
     error: (event) => {
       logErrorAndEnd(states, event as ErrorOf<TChannel>);

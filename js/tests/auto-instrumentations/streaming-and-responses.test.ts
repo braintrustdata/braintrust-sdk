@@ -239,7 +239,7 @@ describe("Streaming Methods and Responses API", () => {
 
       // Verify events were captured
       expect(collector.start.length).toBeGreaterThan(0);
-      expect(collector.asyncEnd.length).toBeGreaterThan(0);
+      expect(collector.end.length).toBeGreaterThan(0);
 
       // Verify input was captured
       const startEvent = collector.start[0];
@@ -336,7 +336,7 @@ describe("Streaming Methods and Responses API", () => {
 
       // Verify events were captured
       expect(collector.start.length).toBeGreaterThan(0);
-      expect(collector.asyncEnd.length).toBeGreaterThan(0);
+      expect(collector.end.length).toBeGreaterThan(0);
     });
   });
 
@@ -484,7 +484,7 @@ describe("Streaming Methods and Responses API", () => {
 
       // Verify events were captured
       expect(collector.start.length).toBeGreaterThan(0);
-      expect(collector.asyncEnd.length).toBeGreaterThan(0);
+      expect(collector.end.length).toBeGreaterThan(0);
 
       // Verify input was captured
       const startEvent = collector.start[0];
@@ -581,7 +581,7 @@ describe("Streaming Methods and Responses API", () => {
 
       // Verify events were captured
       expect(collector.start.length).toBeGreaterThan(0);
-      expect(collector.asyncEnd.length).toBeGreaterThan(0);
+      expect(collector.end.length).toBeGreaterThan(0);
     });
   });
 });

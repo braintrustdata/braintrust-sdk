@@ -118,6 +118,9 @@ export class OpenAIPlugin extends BasePlugin {
             metadata: { ...metadata, provider: "openai" },
           };
         },
+        aggregateChunks: chatConfig.aggregateChunks,
+        extractMetrics: chatConfig.extractMetrics,
+        extractOutput: chatConfig.extractOutput,
         patchResult: ({ result, span, startTime }) =>
           patchOpenAIAPIPromiseResult({
             config: chatConfig,
@@ -138,6 +141,22 @@ export class OpenAIPlugin extends BasePlugin {
             input,
             metadata: { ...metadata, provider: "openai" },
           };
+        },
+        extractMetrics: (
+          resolvedResult: any,
+          _startTime,
+          endEvent,
+        ): Record<string, number> =>
+          withCachedMetric(
+            parseMetricsFromUsage(resolvedResult?.usage),
+            resolvedResult,
+            endEvent,
+          ),
+        extractOutput: (resolvedResult: any) => {
+          const embedding = resolvedResult?.data?.[0]?.embedding;
+          return Array.isArray(embedding)
+            ? { embedding_length: embedding.length }
+            : undefined;
         },
         patchResult: ({ result, span, startTime }) =>
           patchOpenAIAPIPromiseResult({
@@ -177,6 +196,9 @@ export class OpenAIPlugin extends BasePlugin {
             metadata: { ...metadata, provider: "openai" },
           };
         },
+        aggregateChunks: chatConfig.aggregateChunks,
+        extractMetrics: chatConfig.extractMetrics,
+        extractOutput: chatConfig.extractOutput,
         patchResult: ({ result, span, startTime }) =>
           patchOpenAIAPIPromiseResult({
             config: chatConfig,
@@ -212,6 +234,17 @@ export class OpenAIPlugin extends BasePlugin {
             metadata: { ...metadata, provider: "openai" },
           };
         },
+        extractMetrics: (
+          resolvedResult: any,
+          _startTime,
+          endEvent,
+        ): Record<string, number> =>
+          withCachedMetric(
+            parseMetricsFromUsage(resolvedResult?.usage),
+            resolvedResult,
+            endEvent,
+          ),
+        extractOutput: (resolvedResult: any) => resolvedResult?.results,
         patchResult: ({ result, span, startTime }) =>
           patchOpenAIAPIPromiseResult({
             config: {
@@ -245,6 +278,10 @@ export class OpenAIPlugin extends BasePlugin {
             metadata: { ...metadata, provider: "openai" },
           };
         },
+        aggregateChunks: responsesConfig.aggregateChunks,
+        extractMetadata: responsesConfig.extractMetadata,
+        extractMetrics: responsesConfig.extractMetrics,
+        extractOutput: responsesConfig.extractOutput,
         patchResult: ({ result, span, startTime }) =>
           patchOpenAIAPIPromiseResult({
             config: responsesConfig,
@@ -300,6 +337,10 @@ export class OpenAIPlugin extends BasePlugin {
             metadata: { ...metadata, provider: "openai" },
           };
         },
+        aggregateChunks: responsesConfig.aggregateChunks,
+        extractMetadata: responsesConfig.extractMetadata,
+        extractMetrics: responsesConfig.extractMetrics,
+        extractOutput: responsesConfig.extractOutput,
         patchResult: ({ result, span, startTime }) =>
           patchOpenAIAPIPromiseResult({
             config: responsesConfig,

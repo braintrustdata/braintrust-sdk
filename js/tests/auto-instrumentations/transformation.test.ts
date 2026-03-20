@@ -68,7 +68,7 @@ describe("Orchestrion Transformation Tests", () => {
       // Verify orchestrion transformed the code
       expect(output).toContain("tracingChannel");
       expect(output).toContain("orchestrion:openai:chat.completions.create");
-      expect(output).toContain("tracePromise");
+      expect(output).toContain("traceSync");
     });
 
     it("should bundle dc-browser module when browser: true", async () => {
@@ -149,7 +149,7 @@ describe("Orchestrion Transformation Tests", () => {
       // Verify orchestrion transformed the code
       expect(output).toContain("tracingChannel");
       expect(output).toContain("orchestrion:openai:chat.completions.create");
-      expect(output).toContain("tracePromise");
+      expect(output).toContain("traceSync");
     });
 
     it("should bundle dc-browser module when browser: true", async () => {
@@ -243,7 +243,7 @@ describe("Orchestrion Transformation Tests", () => {
       // Verify orchestrion transformed the code
       expect(output).toContain("tracingChannel");
       expect(output).toContain("orchestrion:openai:chat.completions.create");
-      expect(output).toContain("tracePromise");
+      expect(output).toContain("traceSync");
     });
 
     it("should bundle dc-browser module when browser: true", async () => {
