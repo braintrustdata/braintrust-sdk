@@ -12,6 +12,7 @@ import {
   patchOpenRouterCallModelResult,
 } from "../../openrouter-tool-wrapping";
 import {
+  buildOpenRouterEmbeddingMetadata,
   buildOpenRouterMetadata,
   extractOpenRouterCallModelInput,
   extractOpenRouterCallModelMetadata,
@@ -84,7 +85,11 @@ export class OpenRouterPlugin extends BasePlugin {
           const { input, ...metadata } = requestBody;
           return {
             input,
-            metadata: buildOpenRouterMetadata(metadata, httpReferer, xTitle),
+            metadata: buildOpenRouterEmbeddingMetadata(
+              metadata,
+              httpReferer,
+              xTitle,
+            ),
           };
         },
         extractOutput: (result) => {

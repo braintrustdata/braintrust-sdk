@@ -16,6 +16,9 @@ import {
   parseOpenRouterMetricsFromUsage,
 } from "./openrouter-plugin";
 
+const TEST_PROVIDER = "openai";
+const TEST_MODEL = "gpt-4.1-mini";
+
 try {
   configureNode();
 } catch {
@@ -314,7 +317,8 @@ describe("OpenRouter Plugin", () => {
         },
         metadata: {
           id: "resp_123",
-          model: "openai/gpt-4.1-mini",
+          model: TEST_MODEL,
+          provider: TEST_PROVIDER,
           is_byok: true,
         },
       });
@@ -466,8 +470,8 @@ describe("OpenRouter Plugin", () => {
         type: "llm",
       });
       expect(callModelSpan?.metadata).toMatchObject({
-        provider: "openrouter",
-        model: "openai/gpt-4.1-mini",
+        provider: TEST_PROVIDER,
+        model: TEST_MODEL,
         maxOutputTokens: 32,
         turn_count: 2,
       });
@@ -480,16 +484,16 @@ describe("OpenRouter Plugin", () => {
 
       expect(turnSpans).toHaveLength(2);
       expect(turnSpans[0]?.metadata).toMatchObject({
-        provider: "openrouter",
-        model: "openai/gpt-4.1-mini",
+        provider: TEST_PROVIDER,
+        model: TEST_MODEL,
         id: "resp_initial",
         status: "completed",
         step: 1,
         step_type: "initial",
       });
       expect(turnSpans[1]?.metadata).toMatchObject({
-        provider: "openrouter",
-        model: "openai/gpt-4.1-mini",
+        provider: TEST_PROVIDER,
+        model: TEST_MODEL,
         id: "resp_final",
         status: "completed",
         step: 2,

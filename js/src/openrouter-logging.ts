@@ -15,6 +15,25 @@ const OMITTED_OPENROUTER_KEYS = new Set([
   "requireApproval",
 ]);
 
+function parseOpenRouterModelString(model: unknown): {
+  model: unknown;
+  provider?: string;
+} {
+  if (typeof model !== "string") {
+    return { model };
+  }
+
+  const slashIndex = model.indexOf("/");
+  if (slashIndex > 0 && slashIndex < model.length - 1) {
+    return {
+      provider: model.substring(0, slashIndex),
+      model: model.substring(slashIndex + 1),
+    };
+  }
+
+  return { model };
+}
+
 function isZodSchema(value: unknown): boolean {
   return (
     value != null &&
@@ -108,15 +127,33 @@ export function buildOpenRouterMetadata(
 ): Record<string, unknown> {
   const sanitized = sanitizeOpenRouterLoggedValue(metadata);
   const metadataRecord = isObject(sanitized) ? sanitized : {};
-  const { provider: providerRouting, ...rest } = metadataRecord;
+  const { model, provider: providerRouting, ...rest } = metadataRecord;
+  const normalizedModel = parseOpenRouterModelString(model);
 
   return {
     ...rest,
+    ...(normalizedModel.model !== undefined
+      ? { model: normalizedModel.model }
+      : {}),
     ...(providerRouting !== undefined ? { providerRouting } : {}),
     ...(httpReferer !== undefined ? { httpReferer } : {}),
     ...(xTitle !== undefined ? { xTitle } : {}),
-    provider: "openrouter",
+    provider: normalizedModel.provider || "openrouter",
   };
+}
+
+export function buildOpenRouterEmbeddingMetadata(
+  metadata: Record<string, unknown>,
+  httpReferer: unknown,
+  xTitle: unknown,
+): Record<string, unknown> {
+  const normalized = buildOpenRouterMetadata(metadata, httpReferer, xTitle);
+  return typeof normalized.model === "string"
+    ? {
+        ...normalized,
+        embedding_model: normalized.model,
+      }
+    : normalized;
 }
 
 export function extractOpenRouterCallModelInput(
@@ -147,10 +184,22 @@ export function extractOpenRouterResponseMetadata(
 
   const { output: _output, data: _data, usage, ...metadata } = result;
   const sanitized = sanitizeOpenRouterLoggedValue(metadata);
+  const metadataRecord = isObject(sanitized) ? sanitized : {};
+  const { model, provider, ...rest } = metadataRecord;
+  const normalizedModel = parseOpenRouterModelString(model);
+  const normalizedProvider =
+    (typeof provider === "string" ? provider : undefined) ||
+    normalizedModel.provider;
   const usageMetadata = extractOpenRouterUsageMetadata(usage);
   const combined = {
-    ...(isObject(sanitized) ? sanitized : {}),
+    ...rest,
+    ...(normalizedModel.model !== undefined
+      ? { model: normalizedModel.model }
+      : {}),
     ...(usageMetadata || {}),
+    ...(normalizedProvider !== undefined
+      ? { provider: normalizedProvider }
+      : {}),
   };
 
   return Object.keys(combined).length > 0 ? combined : undefined;

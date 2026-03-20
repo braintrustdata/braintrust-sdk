@@ -4,8 +4,8 @@ import type { CapturedLogEvent } from "./mock-braintrust-server";
 import { findChildSpans, findLatestSpan } from "./trace-selectors";
 import { summarizeWrapperContract } from "./wrapper-contract";
 
-const CHAT_MODEL = "openai/gpt-4.1-mini";
-const EMBEDDING_MODEL = "openai/text-embedding-3-small";
+const CHAT_MODEL = "gpt-4.1-mini";
+const EMBEDDING_MODEL = "text-embedding-3-small";
 
 const OPERATIONS = [
   {
@@ -28,7 +28,7 @@ const OPERATIONS = [
   },
   {
     childNames: ["openrouter.embeddings.generate"],
-    expectedModelPrefix: "text-embedding-3-small",
+    expectedModelPrefix: EMBEDDING_MODEL,
     expectsOutput: true,
     expectsTimeToFirstToken: false,
     name: "openrouter-embeddings-operation",
@@ -66,6 +66,8 @@ const OPERATIONS = [
     type: "llm",
   },
 ] as const;
+
+const OPENROUTER_MODEL_PROVIDER = "openai";
 
 function findChildrenForOperation(
   capturedEvents: CapturedLogEvent[],
@@ -127,7 +129,7 @@ function assertNestedLLMSpans(args: {
   for (const [index, nestedChild] of nestedChildren.entries()) {
     expect(nestedChild?.span.type).toBe("llm");
     expect(nestedChild?.row.metadata).toMatchObject({
-      provider: "openrouter",
+      provider: OPENROUTER_MODEL_PROVIDER,
       step: index + 1,
     });
     expect(String(nestedChild?.row.metadata?.model)).toContain(
@@ -192,7 +194,7 @@ export function assertOpenRouterTraceContract(options: {
       });
     } else {
       expect(child?.row.metadata).toMatchObject({
-        provider: "openrouter",
+        provider: OPENROUTER_MODEL_PROVIDER,
       });
 
       const childMetadata = child?.row.metadata as
@@ -211,6 +213,9 @@ export function assertOpenRouterTraceContract(options: {
       }
 
       if (operationSpec.name === "openrouter-embeddings-operation") {
+        expect(child?.row.metadata).toMatchObject({
+          embedding_model: EMBEDDING_MODEL,
+        });
         expect(child?.output).toMatchObject({
           embedding_length: expect.any(Number),
         });
@@ -262,6 +267,7 @@ export function assertOpenRouterTraceContract(options: {
     spanSummary: normalizeForSnapshot(
       snapshotRows.map((event) => {
         const summary = summarizeWrapperContract(event!, [
+          "embedding_model",
           "model",
           "openrouterSdkVersion",
           "operation",

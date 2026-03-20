@@ -32,8 +32,8 @@
     "has_input": true,
     "has_output": true,
     "metadata": {
-      "model": "openai/gpt-4.1-mini",
-      "provider": "openrouter"
+      "model": "gpt-4.1-mini",
+      "provider": "openai"
     },
     "metric_keys": [
       "completion_audio_tokens",
@@ -74,8 +74,8 @@
     "has_input": true,
     "has_output": true,
     "metadata": {
-      "model": "openai/gpt-4.1-mini",
-      "provider": "openrouter"
+      "model": "gpt-4.1-mini",
+      "provider": "openai"
     },
     "metric_keys": [
       "completion_audio_tokens",
@@ -116,8 +116,9 @@
     "has_input": true,
     "has_output": true,
     "metadata": {
+      "embedding_model": "text-embedding-3-small",
       "model": "text-embedding-3-small",
-      "provider": "openrouter"
+      "provider": "openai"
     },
     "metric_keys": [
       "cost",
@@ -151,8 +152,8 @@
     "has_input": true,
     "has_output": true,
     "metadata": {
-      "model": "openai/gpt-4.1-mini-2025-04-14",
-      "provider": "openrouter"
+      "model": "gpt-4.1-mini-2025-04-14",
+      "provider": "openai"
     },
     "metric_keys": [
       "completion_reasoning_tokens",
@@ -193,8 +194,8 @@
     "has_input": true,
     "has_output": true,
     "metadata": {
-      "model": "openai/gpt-4.1-mini-2025-04-14",
-      "provider": "openrouter"
+      "model": "gpt-4.1-mini-2025-04-14",
+      "provider": "openai"
     },
     "metric_keys": [
       "completion_reasoning_tokens",
@@ -235,8 +236,8 @@
     "has_input": true,
     "has_output": true,
     "metadata": {
-      "model": "openai/gpt-4.1-mini-2025-04-14",
-      "provider": "openrouter"
+      "model": "gpt-4.1-mini-2025-04-14",
+      "provider": "openai"
     },
     "metric_keys": [
       "completion_reasoning_tokens",

@@ -12,7 +12,10 @@ import { _exportsForTestingOnly, initLogger } from "../logger";
 import { wrapOpenRouter } from "./openrouter";
 
 const TEST_MODEL = "openai/gpt-4.1-mini";
+const TEST_MODEL_ID = "gpt-4.1-mini";
+const TEST_PROVIDER = "openai";
 const TEST_EMBEDDING_MODEL = "openai/text-embedding-3-small";
+const TEST_EMBEDDING_MODEL_ID = "text-embedding-3-small";
 
 try {
   configureNode();
@@ -108,8 +111,8 @@ describe("openrouter wrapper", () => {
     });
     expect(span.input).toEqual(request.chatGenerationParams.messages);
     expect(span.metadata).toMatchObject({
-      provider: "openrouter",
-      model: TEST_MODEL,
+      provider: TEST_PROVIDER,
+      model: TEST_MODEL_ID,
       temperature: 0,
     });
     expect(span.output).toMatchObject([
@@ -292,8 +295,8 @@ describe("openrouter wrapper", () => {
 
     expect(responseSpan).toBeDefined();
     expect(responseSpan?.metadata).toMatchObject({
-      provider: "openrouter",
-      model: TEST_MODEL,
+      provider: TEST_PROVIDER,
+      model: TEST_MODEL_ID,
       status: "completed",
       id: "resp_123",
     });
@@ -311,8 +314,9 @@ describe("openrouter wrapper", () => {
 
     expect(embeddingSpan).toBeDefined();
     expect(embeddingSpan?.metadata).toMatchObject({
-      provider: "openrouter",
-      model: TEST_EMBEDDING_MODEL,
+      provider: TEST_PROVIDER,
+      model: TEST_EMBEDDING_MODEL_ID,
+      embedding_model: TEST_EMBEDDING_MODEL_ID,
       inputType: "query",
     });
     expect(embeddingSpan?.output).toMatchObject({
@@ -457,8 +461,8 @@ describe("openrouter wrapper", () => {
       type: "llm",
     });
     expect(callModelSpan?.metadata).toMatchObject({
-      provider: "openrouter",
-      model: TEST_MODEL,
+      provider: TEST_PROVIDER,
+      model: TEST_MODEL_ID,
       maxOutputTokens: 32,
       turn_count: 2,
       tools: [
@@ -486,8 +490,8 @@ describe("openrouter wrapper", () => {
     );
     expect(turnSpans[0]?.output).toMatchObject(initialResponse.output);
     expect(turnSpans[0]?.metadata).toMatchObject({
-      provider: "openrouter",
-      model: TEST_MODEL,
+      provider: TEST_PROVIDER,
+      model: TEST_MODEL_ID,
       id: "resp_initial",
       status: "completed",
       step: 1,
@@ -507,8 +511,8 @@ describe("openrouter wrapper", () => {
     );
     expect(turnSpans[1]?.output).toMatchObject(finalResponse.output);
     expect(turnSpans[1]?.metadata).toMatchObject({
-      provider: "openrouter",
-      model: TEST_MODEL,
+      provider: TEST_PROVIDER,
+      model: TEST_MODEL_ID,
       id: "resp_final",
       status: "completed",
       step: 2,
@@ -586,8 +590,8 @@ describe("openrouter wrapper", () => {
       type: "llm",
     });
     expect(callModelSpan?.metadata).toMatchObject({
-      provider: "openrouter",
-      model: TEST_MODEL,
+      provider: TEST_PROVIDER,
+      model: TEST_MODEL_ID,
     });
 
     expect(toolSpan?.span_attributes).toMatchObject({
