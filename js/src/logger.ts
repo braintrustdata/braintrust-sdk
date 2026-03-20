@@ -5669,7 +5669,7 @@ export class ObjectFetcher<RecordType> implements AsyncIterable<
     let iterations = 0;
     while (true) {
       const resp = await state.apiConn().post(
-        `btql`,
+        `sql`,
         {
           query: {
             select: [
@@ -8013,7 +8013,7 @@ export async function getPromptVersions(
   };
 
   const response = await state.apiConn().post(
-    "btql",
+    "sql",
     {
       query,
       audit_log: true,
