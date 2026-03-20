@@ -65,19 +65,17 @@ if (TracingChannel && TracingChannel.prototype.tracePromise) {
   ) {
     const { start, end, asyncStart, asyncEnd, error } = this;
 
-    function reject(err: any) {
+    function publishRejected(err: any) {
       context.error = err;
       error?.publish(context);
       asyncStart?.publish(context);
       asyncEnd?.publish(context);
-      return Promise.reject(err);
     }
 
-    function resolve(result: any) {
+    function publishResolved(result: any) {
       context.result = result;
       asyncStart?.publish(context);
       asyncEnd?.publish(context);
-      return result;
     }
 
     start?.publish(context);
@@ -93,16 +91,31 @@ if (TracingChannel && TracingChannel.prototype.tracePromise) {
         (typeof result === "object" || typeof result === "function") &&
         typeof result.then === "function"
       ) {
-        return result.then(resolve, reject);
+        // Preserve the original promise-like object so SDK helper methods
+        // like Anthropic APIPromise.withResponse() remain available.
+        void result.then(
+          (resolved: any) => {
+            try {
+              publishResolved(resolved);
+            } catch {
+              // Preserve wrapped promise semantics even if instrumentation fails.
+            }
+          },
+          (err: any) => {
+            try {
+              publishRejected(err);
+            } catch {
+              // Preserve wrapped promise semantics even if instrumentation fails.
+            }
+          },
+        );
+        return result;
       }
 
-      context.result = result;
-      asyncStart?.publish(context);
-      asyncEnd?.publish(context);
+      publishResolved(result);
       return result;
     } catch (err) {
-      context.error = err;
-      error?.publish(context);
+      publishRejected(err);
       throw err;
     } finally {
       end?.publish(context);
