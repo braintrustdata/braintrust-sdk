@@ -152,7 +152,7 @@ jobs:
           git push origin "${RELEASE_TAG}"
 
       - name: Upload build artifacts
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
         with:
           name: javascript-sdk-release-dist
           path: js/dist/
@@ -211,7 +211,7 @@ jobs:
         run: ./scripts/publish-prerelease.sh "rc" "$VERSION"
 
       - name: Upload build artifacts
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
         with:
           name: javascript-sdk-prerelease-dist
           path: js/dist/
@@ -232,6 +232,7 @@ jobs:
       actions: read
       contents: read
       id-token: write
+    environment: npm-publish
     env:
       TARGET_BRANCH: ${{ needs.prepare-release.outputs.branch }}
       VERSION: ${{ needs.prepare-release.outputs.version }}
@@ -245,6 +246,7 @@ jobs:
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version-file: .tool-versions
+          registry-url: "https://registry.npmjs.org"
       - name: Setup mise
         uses: jdx/mise-action@c37c93293d6b742fc901e1406b8f764f6fb19dac # v2.4.4
 
@@ -358,7 +360,7 @@ jobs:
 
       - name: Upload build artifacts
         if: steps.should_publish.outputs.should_publish == 'true' && steps.ci_status.outputs.should_publish == 'true'
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
         with:
           name: javascript-sdk-canary-dist
           path: js/dist/

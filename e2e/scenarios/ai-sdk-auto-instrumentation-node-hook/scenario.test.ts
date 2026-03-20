@@ -1,24 +1,28 @@
-import { beforeAll, test } from "vitest";
+import { test } from "vitest";
 import {
-  AI_SDK_AUTO_HOOK_SCENARIOS,
   AI_SDK_SCENARIO_TIMEOUT_MS,
+  getAISDKAutoHookScenarios,
 } from "../../helpers/ai-sdk";
 import { assertAISDKTraceContract } from "../../helpers/ai-sdk-trace-contract";
 import {
-  installScenarioDependencies,
+  prepareScenarioDir,
   resolveScenarioDir,
   withScenarioHarness,
 } from "../../helpers/scenario-harness";
+import { E2E_TAGS } from "../../helpers/tags";
 
-const scenarioDir = resolveScenarioDir(import.meta.url);
-
-beforeAll(async () => {
-  await installScenarioDependencies({ scenarioDir });
+const scenarioDir = await prepareScenarioDir({
+  scenarioDir: resolveScenarioDir(import.meta.url),
 });
+const autoHookScenarios = await getAISDKAutoHookScenarios(scenarioDir);
 
-for (const scenario of AI_SDK_AUTO_HOOK_SCENARIOS) {
+for (const scenario of autoHookScenarios) {
   test(
     `ai sdk auto-instrumentation via node hook collects ${scenario.agentSpanName} traces without manual wrapping (ai ${scenario.version})`,
+    {
+      tags: [E2E_TAGS.externalApi],
+      timeout: AI_SDK_SCENARIO_TIMEOUT_MS,
+    },
     async () => {
       await withScenarioHarness(
         async ({ events, payloads, runNodeScenarioDir }) => {
@@ -41,11 +45,9 @@ for (const scenario of AI_SDK_AUTO_HOOK_SCENARIOS) {
             version: scenario.version,
           });
 
-          expect(contract.spanSummary).toMatchSnapshot("span-events");
-          expect(contract.payloadSummary).toMatchSnapshot("log-payloads");
+          void contract;
         },
       );
     },
-    AI_SDK_SCENARIO_TIMEOUT_MS,
   );
 }

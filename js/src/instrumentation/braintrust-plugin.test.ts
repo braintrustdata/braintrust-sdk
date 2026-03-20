@@ -6,6 +6,15 @@ import { AISDKPlugin } from "./plugins/ai-sdk-plugin";
 import { ClaudeAgentSDKPlugin } from "./plugins/claude-agent-sdk-plugin";
 import { GoogleGenAIPlugin } from "./plugins/google-genai-plugin";
 
+function createPluginClassMock() {
+  return vi.fn(
+    class MockPlugin {
+      enable = vi.fn();
+      disable = vi.fn();
+    },
+  );
+}
+
 // Mock all sub-plugins but preserve the utility functions
 vi.mock("./plugins/openai-plugin", async () => {
   const actual = await vi.importActual<
@@ -13,39 +22,24 @@ vi.mock("./plugins/openai-plugin", async () => {
   >("./plugins/openai-plugin");
   return {
     ...actual,
-    OpenAIPlugin: vi.fn().mockImplementation(() => ({
-      enable: vi.fn(),
-      disable: vi.fn(),
-    })),
+    OpenAIPlugin: createPluginClassMock(),
   };
 });
 
 vi.mock("./plugins/anthropic-plugin", () => ({
-  AnthropicPlugin: vi.fn().mockImplementation(() => ({
-    enable: vi.fn(),
-    disable: vi.fn(),
-  })),
+  AnthropicPlugin: createPluginClassMock(),
 }));
 
 vi.mock("./plugins/ai-sdk-plugin", () => ({
-  AISDKPlugin: vi.fn().mockImplementation(() => ({
-    enable: vi.fn(),
-    disable: vi.fn(),
-  })),
+  AISDKPlugin: createPluginClassMock(),
 }));
 
 vi.mock("./plugins/claude-agent-sdk-plugin", () => ({
-  ClaudeAgentSDKPlugin: vi.fn().mockImplementation(() => ({
-    enable: vi.fn(),
-    disable: vi.fn(),
-  })),
+  ClaudeAgentSDKPlugin: createPluginClassMock(),
 }));
 
 vi.mock("./plugins/google-genai-plugin", () => ({
-  GoogleGenAIPlugin: vi.fn().mockImplementation(() => ({
-    enable: vi.fn(),
-    disable: vi.fn(),
-  })),
+  GoogleGenAIPlugin: createPluginClassMock(),
 }));
 
 describe("BraintrustPlugin", () => {

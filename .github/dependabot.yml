@@ -18,5 +18,3 @@ updates:
       prefix: feat
       prefix-development: chore
       include: scope
-    exclude-paths:
-      - "internal/golden/**"

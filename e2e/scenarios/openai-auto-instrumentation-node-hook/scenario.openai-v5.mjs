@@ -7,4 +7,5 @@ import {
 runOpenAIAutoInstrumentationNodeHookOrExit(
   OpenAI,
   await getInstalledPackageVersion(import.meta.url, "openai-v5"),
+  "ga",
 );

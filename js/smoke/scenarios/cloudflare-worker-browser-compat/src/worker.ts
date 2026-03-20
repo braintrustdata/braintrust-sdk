@@ -57,16 +57,8 @@ export default {
           testMultipleSpans,
           testDirectLogging,
           testJSONAttachment,
-          expectFailure(
-            testAsyncLocalStorageTraced,
-            (e: { message: string }) => e.message.includes("span_parents"),
-            "No AsyncLocalStorage available",
-          ),
-          expectFailure(
-            testNestedTraced,
-            (e: { message: string }) => e.message.includes("span_parents"),
-            "No AsyncLocalStorage available",
-          ),
+          testAsyncLocalStorageTraced,
+          testNestedTraced,
           testCurrentSpan,
           testEvalSmoke,
           testMustacheTemplate,

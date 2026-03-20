@@ -288,22 +288,28 @@ function wrapApiCreateWithChannel<
 ): (
   params: ArgsOf<TChannel>[0] & SpanInfo,
   options?: unknown,
-) => Promise<unknown> {
-  return async (
-    allParams: ArgsOf<TChannel>[0] & SpanInfo,
-    options?: unknown,
-  ) => {
+) => APIPromise<ResultOf<TChannel>> {
+  return (allParams: ArgsOf<TChannel>[0] & SpanInfo, options?: unknown) => {
     const { span_info, params } = splitSpanInfo<
       ArgsOf<TChannel>[0],
       SpanInfo["span_info"]
     >(allParams);
-    const traceContext = createChannelContext(channel, params, span_info);
-    const { data } = await tracePromiseWithResponse(
-      channel,
-      traceContext,
-      create(params, options),
-    );
-    return data;
+    let executionPromise: Promise<EnhancedResponse<ResultOf<TChannel>>> | null =
+      null;
+    const ensureExecuted = () => {
+      if (!executionPromise) {
+        executionPromise = (async () => {
+          const traceContext = createChannelContext(channel, params, span_info);
+          return tracePromiseWithResponse(
+            channel,
+            traceContext,
+            create(params, options),
+          );
+        })();
+      }
+      return executionPromise;
+    };
+    return createLazyAPIPromise(ensureExecuted);
   };
 }
 
