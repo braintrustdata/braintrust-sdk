@@ -76,7 +76,7 @@ function serializeOpenRouterTool(tool: OpenRouterTool): OpenRouterTool {
   return serialized as OpenRouterTool;
 }
 
-export function serializeOpenRouterToolsForLogging(
+function serializeOpenRouterToolsForLogging(
   tools: readonly OpenRouterTool[] | undefined,
 ): OpenRouterTool[] | undefined {
   if (!Array.isArray(tools)) {

@@ -25,7 +25,6 @@ import type {
   OpenRouterChatChoice,
   OpenRouterChatCompletionChunk,
   OpenRouterCallModelRequest,
-  OpenRouterEmbeddingResponse,
   OpenRouterResponse,
   OpenRouterResponseStreamEvent,
 } from "../../vendor-sdk-types/openrouter";
