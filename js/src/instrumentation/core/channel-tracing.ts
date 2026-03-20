@@ -122,6 +122,39 @@ export type SyncStreamChannelSpanConfig<TChannel extends AnySyncStreamChannel> =
     }) => boolean;
   };
 
+export type SyncResultChannelSpanConfig<
+  TChannel extends AnyAsyncChannel | AnySyncStreamChannel,
+> = ChannelConfig & {
+  extractInput: (
+    args: [...ArgsOf<TChannel>],
+    event: StartOf<TChannel>,
+    span: Span,
+  ) => {
+    input: unknown;
+    metadata: unknown;
+  };
+  extractOutput?: (
+    result: ResultOf<TChannel>,
+    endEvent?: EndOf<TChannel>,
+  ) => unknown;
+  extractMetadata?: (
+    result: ResultOf<TChannel>,
+    endEvent?: EndOf<TChannel>,
+  ) => unknown;
+  extractMetrics?: (
+    result: ResultOf<TChannel>,
+    startTime?: number,
+    endEvent?: EndOf<TChannel>,
+  ) => Record<string, number>;
+  patchResult?: (args: {
+    channelName: string;
+    endEvent: EndOf<TChannel>;
+    result: ResultOf<TChannel>;
+    span: Span;
+    startTime: number;
+  }) => boolean;
+};
+
 type SyncStreamLike<TStreamEvent> = {
   on(event: "chunk", handler: (payload?: unknown) => void): unknown;
   on(
@@ -423,6 +456,92 @@ export function traceStreamingChannel<TChannel extends AnyAsyncChannel>(
             : {}),
           metrics,
         });
+      } catch (error) {
+        console.error(`Error extracting output for ${channelName}:`, error);
+      } finally {
+        span.end();
+        states.delete(event as object);
+      }
+    },
+    error: (event) => {
+      logErrorAndEnd(states, event as ErrorOf<TChannel>);
+    },
+  };
+
+  tracingChannel.subscribe(handlers);
+
+  return () => {
+    tracingChannel.unsubscribe(handlers);
+  };
+}
+
+export function traceSyncResultChannel<
+  TChannel extends AnyAsyncChannel | AnySyncStreamChannel,
+>(
+  channel: TChannel,
+  config: SyncResultChannelSpanConfig<TChannel>,
+): () => void {
+  const tracingChannel = channel.tracingChannel() as IsoTracingChannel<
+    ChannelMessage<TChannel>
+  >;
+  const states = new WeakMap<object, SpanState>();
+  const channelName = channel.channelName;
+
+  const handlers: IsoChannelHandlers<ChannelMessage<TChannel>> = {
+    start: (event) => {
+      states.set(
+        event as object,
+        startSpanForEvent<TChannel>(
+          config,
+          event as StartOf<TChannel>,
+          channelName,
+        ),
+      );
+    },
+    end: (event) => {
+      const spanData = states.get(event as object);
+      if (!spanData) {
+        return;
+      }
+
+      const { span, startTime } = spanData;
+      const endEvent = event as EndOf<TChannel>;
+
+      if (
+        config.patchResult?.({
+          channelName,
+          endEvent,
+          result: endEvent.result,
+          span,
+          startTime,
+        })
+      ) {
+        states.delete(event as object);
+        return;
+      }
+
+      try {
+        const output = config.extractOutput?.(endEvent.result, endEvent);
+        const metrics = config.extractMetrics?.(
+          endEvent.result,
+          startTime,
+          endEvent,
+        );
+        const metadata = config.extractMetadata?.(endEvent.result, endEvent);
+
+        if (
+          output !== undefined ||
+          metrics !== undefined ||
+          normalizeMetadata(metadata) !== undefined
+        ) {
+          span.log({
+            ...(output !== undefined ? { output } : {}),
+            ...(normalizeMetadata(metadata) !== undefined
+              ? { metadata: normalizeMetadata(metadata) }
+              : {}),
+            ...(metrics !== undefined ? { metrics } : {}),
+          });
+        }
       } catch (error) {
         console.error(`Error extracting output for ${channelName}:`, error);
       } finally {

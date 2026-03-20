@@ -24,7 +24,7 @@ export const openaiConfigs: InstrumentationConfig[] = [
     functionQuery: {
       className: "Completions",
       methodName: "create",
-      kind: "Async",
+      kind: "Sync",
     },
   },
 
@@ -38,7 +38,7 @@ export const openaiConfigs: InstrumentationConfig[] = [
     functionQuery: {
       className: "Completions",
       methodName: "create",
-      kind: "Async",
+      kind: "Sync",
     },
   },
 
@@ -52,7 +52,7 @@ export const openaiConfigs: InstrumentationConfig[] = [
     functionQuery: {
       className: "Completions",
       methodName: "create",
-      kind: "Async",
+      kind: "Sync",
     },
   },
 
@@ -67,7 +67,7 @@ export const openaiConfigs: InstrumentationConfig[] = [
     functionQuery: {
       className: "Embeddings",
       methodName: "create",
-      kind: "Async",
+      kind: "Sync",
     },
   },
 
@@ -82,7 +82,7 @@ export const openaiConfigs: InstrumentationConfig[] = [
     functionQuery: {
       className: "Completions",
       methodName: "parse",
-      kind: "Async",
+      kind: "Sync",
     },
   },
 
@@ -96,7 +96,7 @@ export const openaiConfigs: InstrumentationConfig[] = [
     functionQuery: {
       className: "Completions",
       methodName: "parse",
-      kind: "Async",
+      kind: "Sync",
     },
   },
 
@@ -111,7 +111,7 @@ export const openaiConfigs: InstrumentationConfig[] = [
     functionQuery: {
       className: "Moderations",
       methodName: "create",
-      kind: "Async",
+      kind: "Sync",
     },
   },
 
@@ -155,7 +155,7 @@ export const openaiConfigs: InstrumentationConfig[] = [
     functionQuery: {
       className: "Responses",
       methodName: "create",
-      kind: "Async",
+      kind: "Sync",
     },
   },
 
@@ -183,7 +183,7 @@ export const openaiConfigs: InstrumentationConfig[] = [
     functionQuery: {
       className: "Responses",
       methodName: "parse",
-      kind: "Async",
+      kind: "Sync",
     },
   },
 ];

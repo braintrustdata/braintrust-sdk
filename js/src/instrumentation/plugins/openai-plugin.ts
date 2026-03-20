@@ -1,31 +1,62 @@
-import { BasePlugin } from "../core";
-import {
-  traceAsyncChannel,
-  traceStreamingChannel,
-  traceSyncStreamChannel,
-  unsubscribeAll,
-} from "../core/channel-tracing";
+import type { Span } from "../../logger";
 import { Attachment } from "../../logger";
-import { SpanTypeAttribute, isObject } from "../../../util/index";
-import { getCurrentUnixTimestamp } from "../../util";
-import { processInputAttachments } from "../../wrappers/attachment-utils";
-import { openAIChannels } from "./openai-channels";
 import {
   BRAINTRUST_CACHED_STREAM_METRIC,
   getCachedMetricFromHeaders,
   parseMetricsFromUsage,
 } from "../../openai-utils";
+import { getCurrentUnixTimestamp } from "../../util";
+import { processInputAttachments } from "../../wrappers/attachment-utils";
+import { SpanTypeAttribute, isObject } from "../../../util/index";
+import { BasePlugin } from "../core";
+import {
+  traceSyncResultChannel,
+  traceSyncStreamChannel,
+  unsubscribeAll,
+} from "../core/channel-tracing";
+import { isAsyncIterable, patchStreamIfNeeded } from "../core/stream-patcher";
+import { openAIChannels } from "./openai-channels";
 import type {
   OpenAIChatChoice,
   OpenAIChatCompletionChunk,
   OpenAIResponseStreamEvent,
 } from "../../vendor-sdk-types/openai";
 
+type OpenAIWithResponseLike<TResult> = {
+  data: TResult;
+  response: Response;
+  [key: string]: unknown;
+};
+
+type OpenAIAPIPromiseLike<TResult> = Promise<TResult> & {
+  withResponse(): Promise<OpenAIWithResponseLike<TResult>>;
+};
+
+type OpenAIPromisePatchConfig<TResult, TChunk = never> = {
+  extractOutput: (result: TResult, endEvent?: unknown) => unknown;
+  extractMetadata?: (result: TResult, endEvent?: unknown) => unknown;
+  extractMetrics: (
+    result: TResult,
+    startTime?: number,
+    endEvent?: unknown,
+  ) => Record<string, number>;
+  aggregateChunks?: (
+    chunks: TChunk[],
+    result?: TResult,
+    endEvent?: unknown,
+    startTime?: number,
+  ) => {
+    output: unknown;
+    metrics: Record<string, number>;
+    metadata?: Record<string, unknown>;
+  };
+};
+
 /**
  * Plugin for OpenAI SDK instrumentation.
  *
  * Handles instrumentation for:
- * - Chat completions (streaming and non-streaming)
+ * - Chat completions
  * - Embeddings
  * - Moderations
  * - Beta API (parse, stream)
@@ -37,9 +68,47 @@ export class OpenAIPlugin extends BasePlugin {
   }
 
   protected onEnable(): void {
-    // Chat Completions - supports streaming
+    const chatConfig = {
+      aggregateChunks: aggregateChatCompletionChunks,
+      extractMetrics: (result: any, startTime?: number, endEvent?: unknown) => {
+        const metrics = withCachedMetric(
+          parseMetricsFromUsage(result?.usage),
+          result,
+          endEvent,
+        );
+        if (startTime) {
+          metrics.time_to_first_token = getCurrentUnixTimestamp() - startTime;
+        }
+        return metrics;
+      },
+      extractOutput: (result: any) => result?.choices,
+    } satisfies OpenAIPromisePatchConfig<any, OpenAIChatCompletionChunk>;
+
+    const responsesConfig = {
+      aggregateChunks: aggregateResponseStreamEvents,
+      extractMetadata: (result: any) => {
+        if (!result) {
+          return undefined;
+        }
+        const { output: _output, usage: _usage, ...metadata } = result;
+        return Object.keys(metadata).length > 0 ? metadata : undefined;
+      },
+      extractMetrics: (result: any, startTime?: number, endEvent?: unknown) => {
+        const metrics = withCachedMetric(
+          parseMetricsFromUsage(result?.usage),
+          result,
+          endEvent,
+        );
+        if (startTime) {
+          metrics.time_to_first_token = getCurrentUnixTimestamp() - startTime;
+        }
+        return metrics;
+      },
+      extractOutput: (result: any) => processImagesInOutput(result?.output),
+    } satisfies OpenAIPromisePatchConfig<any, OpenAIResponseStreamEvent>;
+
     this.unsubscribers.push(
-      traceStreamingChannel(openAIChannels.chatCompletionsCreate, {
+      traceSyncResultChannel(openAIChannels.chatCompletionsCreate, {
         name: "Chat Completion",
         type: SpanTypeAttribute.LLM,
         extractInput: ([params]) => {
@@ -49,27 +118,18 @@ export class OpenAIPlugin extends BasePlugin {
             metadata: { ...metadata, provider: "openai" },
           };
         },
-        extractOutput: (result) => {
-          return result?.choices;
-        },
-        extractMetrics: (result, startTime, endEvent) => {
-          const metrics = withCachedMetric(
-            parseMetricsFromUsage(result?.usage),
+        patchResult: ({ result, span, startTime }) =>
+          patchOpenAIAPIPromiseResult({
+            config: chatConfig,
             result,
-            endEvent,
-          );
-          if (startTime) {
-            metrics.time_to_first_token = getCurrentUnixTimestamp() - startTime;
-          }
-          return metrics;
-        },
-        aggregateChunks: aggregateChatCompletionChunks,
+            span,
+            startTime,
+          }),
       }),
     );
 
-    // Embeddings
     this.unsubscribers.push(
-      traceAsyncChannel(openAIChannels.embeddingsCreate, {
+      traceSyncResultChannel(openAIChannels.embeddingsCreate, {
         name: "Embedding",
         type: SpanTypeAttribute.LLM,
         extractInput: ([params]) => {
@@ -79,25 +139,35 @@ export class OpenAIPlugin extends BasePlugin {
             metadata: { ...metadata, provider: "openai" },
           };
         },
-        extractOutput: (result) => {
-          const embedding = result?.data?.[0]?.embedding;
-          return Array.isArray(embedding)
-            ? { embedding_length: embedding.length }
-            : undefined;
-        },
-        extractMetrics: (result, _startTime, endEvent) => {
-          return withCachedMetric(
-            parseMetricsFromUsage(result?.usage),
+        patchResult: ({ result, span, startTime }) =>
+          patchOpenAIAPIPromiseResult({
+            config: {
+              extractMetrics: (
+                resolvedResult: any,
+                _startTime,
+                endEvent,
+              ): Record<string, number> =>
+                withCachedMetric(
+                  parseMetricsFromUsage(resolvedResult?.usage),
+                  resolvedResult,
+                  endEvent,
+                ),
+              extractOutput: (resolvedResult: any) => {
+                const embedding = resolvedResult?.data?.[0]?.embedding;
+                return Array.isArray(embedding)
+                  ? { embedding_length: embedding.length }
+                  : undefined;
+              },
+            },
             result,
-            endEvent,
-          );
-        },
+            span,
+            startTime,
+          }),
       }),
     );
 
-    // Beta Chat Completions Parse
     this.unsubscribers.push(
-      traceStreamingChannel(openAIChannels.betaChatCompletionsParse, {
+      traceSyncResultChannel(openAIChannels.betaChatCompletionsParse, {
         name: "Chat Completion",
         type: SpanTypeAttribute.LLM,
         extractInput: ([params]) => {
@@ -107,25 +177,16 @@ export class OpenAIPlugin extends BasePlugin {
             metadata: { ...metadata, provider: "openai" },
           };
         },
-        extractOutput: (result) => {
-          return result?.choices;
-        },
-        extractMetrics: (result, startTime, endEvent) => {
-          const metrics = withCachedMetric(
-            parseMetricsFromUsage(result?.usage),
+        patchResult: ({ result, span, startTime }) =>
+          patchOpenAIAPIPromiseResult({
+            config: chatConfig,
             result,
-            endEvent,
-          );
-          if (startTime) {
-            metrics.time_to_first_token = getCurrentUnixTimestamp() - startTime;
-          }
-          return metrics;
-        },
-        aggregateChunks: aggregateChatCompletionChunks,
+            span,
+            startTime,
+          }),
       }),
     );
 
-    // Beta Chat Completions Stream (sync method returning event-based stream)
     this.unsubscribers.push(
       traceSyncStreamChannel(openAIChannels.betaChatCompletionsStream, {
         name: "Chat Completion",
@@ -140,9 +201,8 @@ export class OpenAIPlugin extends BasePlugin {
       }),
     );
 
-    // Moderations
     this.unsubscribers.push(
-      traceAsyncChannel(openAIChannels.moderationsCreate, {
+      traceSyncResultChannel(openAIChannels.moderationsCreate, {
         name: "Moderation",
         type: SpanTypeAttribute.LLM,
         extractInput: ([params]) => {
@@ -152,22 +212,30 @@ export class OpenAIPlugin extends BasePlugin {
             metadata: { ...metadata, provider: "openai" },
           };
         },
-        extractOutput: (result) => {
-          return result?.results;
-        },
-        extractMetrics: (result, _startTime, endEvent) => {
-          return withCachedMetric(
-            parseMetricsFromUsage(result?.usage),
+        patchResult: ({ result, span, startTime }) =>
+          patchOpenAIAPIPromiseResult({
+            config: {
+              extractMetrics: (
+                resolvedResult: any,
+                _startTime,
+                endEvent,
+              ): Record<string, number> =>
+                withCachedMetric(
+                  parseMetricsFromUsage(resolvedResult?.usage),
+                  resolvedResult,
+                  endEvent,
+                ),
+              extractOutput: (resolvedResult: any) => resolvedResult?.results,
+            },
             result,
-            endEvent,
-          );
-        },
+            span,
+            startTime,
+          }),
       }),
     );
 
-    // Responses API - create (supports streaming via stream=true param)
     this.unsubscribers.push(
-      traceStreamingChannel(openAIChannels.responsesCreate, {
+      traceSyncResultChannel(openAIChannels.responsesCreate, {
         name: "openai.responses.create",
         type: SpanTypeAttribute.LLM,
         extractInput: ([params]) => {
@@ -177,32 +245,16 @@ export class OpenAIPlugin extends BasePlugin {
             metadata: { ...metadata, provider: "openai" },
           };
         },
-        extractOutput: (result) => {
-          return processImagesInOutput(result?.output);
-        },
-        extractMetadata: (result) => {
-          if (!result) {
-            return undefined;
-          }
-          const { output: _output, usage: _usage, ...metadata } = result;
-          return Object.keys(metadata).length > 0 ? metadata : undefined;
-        },
-        extractMetrics: (result, startTime, endEvent) => {
-          const metrics = withCachedMetric(
-            parseMetricsFromUsage(result?.usage),
+        patchResult: ({ result, span, startTime }) =>
+          patchOpenAIAPIPromiseResult({
+            config: responsesConfig,
             result,
-            endEvent,
-          );
-          if (startTime) {
-            metrics.time_to_first_token = getCurrentUnixTimestamp() - startTime;
-          }
-          return metrics;
-        },
-        aggregateChunks: aggregateResponseStreamEvents,
+            span,
+            startTime,
+          }),
       }),
     );
 
-    // Responses API - stream (sync method returning event-based stream)
     this.unsubscribers.push(
       traceSyncStreamChannel(openAIChannels.responsesStream, {
         name: "openai.responses.create",
@@ -237,9 +289,8 @@ export class OpenAIPlugin extends BasePlugin {
       }),
     );
 
-    // Responses API - parse
     this.unsubscribers.push(
-      traceStreamingChannel(openAIChannels.responsesParse, {
+      traceSyncResultChannel(openAIChannels.responsesParse, {
         name: "openai.responses.parse",
         type: SpanTypeAttribute.LLM,
         extractInput: ([params]) => {
@@ -249,28 +300,13 @@ export class OpenAIPlugin extends BasePlugin {
             metadata: { ...metadata, provider: "openai" },
           };
         },
-        extractOutput: (result) => {
-          return processImagesInOutput(result?.output);
-        },
-        extractMetadata: (result) => {
-          if (!result) {
-            return undefined;
-          }
-          const { output: _output, usage: _usage, ...metadata } = result;
-          return Object.keys(metadata).length > 0 ? metadata : undefined;
-        },
-        extractMetrics: (result, startTime, endEvent) => {
-          const metrics = withCachedMetric(
-            parseMetricsFromUsage(result?.usage),
+        patchResult: ({ result, span, startTime }) =>
+          patchOpenAIAPIPromiseResult({
+            config: responsesConfig,
             result,
-            endEvent,
-          );
-          if (startTime) {
-            metrics.time_to_first_token = getCurrentUnixTimestamp() - startTime;
-          }
-          return metrics;
-        },
-        aggregateChunks: aggregateResponseStreamEvents,
+            span,
+            startTime,
+          }),
       }),
     );
   }
@@ -278,6 +314,187 @@ export class OpenAIPlugin extends BasePlugin {
   protected onDisable(): void {
     this.unsubscribers = unsubscribeAll(this.unsubscribers);
   }
+}
+
+function isOpenAIAPIPromiseLike<TResult>(
+  value: unknown,
+): value is OpenAIAPIPromiseLike<TResult> {
+  return (
+    !!value &&
+    (typeof value === "object" || typeof value === "function") &&
+    typeof (value as { then?: unknown }).then === "function" &&
+    typeof (value as { withResponse?: unknown }).withResponse === "function"
+  );
+}
+
+export function patchOpenAIAPIPromiseResult<TResult, TChunk = never>(args: {
+  config: OpenAIPromisePatchConfig<TResult, TChunk>;
+  result: unknown;
+  span: Span;
+  startTime: number;
+}): boolean {
+  const { config, result, span, startTime } = args;
+
+  if (
+    !isOpenAIAPIPromiseLike<TResult>(result) ||
+    !Object.isExtensible(result)
+  ) {
+    return false;
+  }
+
+  const apiPromise = result;
+  const originalWithResponse = apiPromise.withResponse.bind(apiPromise);
+  let executionPromise: Promise<OpenAIWithResponseLike<TResult>> | null = null;
+  let dataPromise: Promise<TResult> | null = null;
+
+  const ensureExecuted = (): Promise<OpenAIWithResponseLike<TResult>> => {
+    if (!executionPromise) {
+      executionPromise = originalWithResponse()
+        .then((enhancedResponse) => {
+          const endEvent = { response: enhancedResponse.response };
+
+          if (isAsyncIterable(enhancedResponse.data)) {
+            let firstChunkTime: number | undefined;
+
+            patchStreamIfNeeded<TChunk>(enhancedResponse.data, {
+              onChunk: () => {
+                if (firstChunkTime === undefined) {
+                  firstChunkTime = getCurrentUnixTimestamp();
+                }
+              },
+              onComplete: (chunks) => {
+                try {
+                  if (!config.aggregateChunks) {
+                    span.end();
+                    return;
+                  }
+
+                  const aggregated = config.aggregateChunks(
+                    chunks,
+                    enhancedResponse.data,
+                    endEvent,
+                    startTime,
+                  );
+
+                  if (
+                    aggregated.metrics.time_to_first_token === undefined &&
+                    firstChunkTime !== undefined
+                  ) {
+                    aggregated.metrics.time_to_first_token =
+                      firstChunkTime - startTime;
+                  } else if (
+                    aggregated.metrics.time_to_first_token === undefined &&
+                    chunks.length > 0
+                  ) {
+                    aggregated.metrics.time_to_first_token =
+                      getCurrentUnixTimestamp() - startTime;
+                  }
+
+                  span.log({
+                    output: aggregated.output,
+                    ...(aggregated.metadata !== undefined
+                      ? { metadata: aggregated.metadata }
+                      : {}),
+                    metrics: aggregated.metrics,
+                  });
+                } catch (error) {
+                  console.error(
+                    "Error extracting OpenAI stream output:",
+                    error,
+                  );
+                } finally {
+                  span.end();
+                }
+              },
+              onError: (error) => {
+                span.log({
+                  error: error.message,
+                });
+                span.end();
+              },
+            });
+
+            return enhancedResponse;
+          }
+
+          const output = config.extractOutput(enhancedResponse.data, endEvent);
+          const metrics = config.extractMetrics(
+            enhancedResponse.data,
+            startTime,
+            endEvent,
+          );
+          const metadata = config.extractMetadata?.(
+            enhancedResponse.data,
+            endEvent,
+          );
+          const normalizedMetadata = isObject(metadata)
+            ? (metadata as Record<string, unknown>)
+            : undefined;
+
+          span.log({
+            output,
+            ...(normalizedMetadata !== undefined
+              ? { metadata: normalizedMetadata }
+              : {}),
+            metrics,
+          });
+          span.end();
+
+          return enhancedResponse;
+        })
+        .catch((error: unknown) => {
+          const resolvedError =
+            error instanceof Error ? error : new Error(String(error));
+          span.log({
+            error: resolvedError.message,
+          });
+          span.end();
+          throw resolvedError;
+        });
+    }
+
+    return executionPromise;
+  };
+
+  const ensureDataPromise = (): Promise<TResult> => {
+    if (!dataPromise) {
+      dataPromise = ensureExecuted().then(({ data }) => data);
+    }
+
+    return dataPromise;
+  };
+
+  Object.defineProperties(apiPromise, {
+    catch: {
+      configurable: true,
+      value(onRejected?: (reason: unknown) => unknown) {
+        return ensureDataPromise().catch(onRejected);
+      },
+    },
+    finally: {
+      configurable: true,
+      value(onFinally?: () => void) {
+        return ensureDataPromise().finally(onFinally);
+      },
+    },
+    then: {
+      configurable: true,
+      value(
+        onFulfilled?: (value: TResult) => unknown,
+        onRejected?: (reason: unknown) => unknown,
+      ) {
+        return ensureDataPromise().then(onFulfilled, onRejected);
+      },
+    },
+    withResponse: {
+      configurable: true,
+      value() {
+        return ensureExecuted();
+      },
+    },
+  });
+
+  return true;
 }
 
 function getCachedMetricFromEndEvent(endEvent: unknown): number | undefined {
@@ -357,7 +574,6 @@ export function processImagesInOutput(output: any): any {
           : "generated_image";
       const filename = `${baseFilename}.${fileExtension}`;
 
-      // Convert base64 string to Blob
       const binaryString = atob(output.result);
       const bytes = new Uint8Array(binaryString.length);
       for (let i = 0; i < binaryString.length; i++) {
