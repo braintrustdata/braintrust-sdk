@@ -115,6 +115,7 @@ Some wrappers execute inside a nested test runner rather than a single SDK call.
 - `OPENAI_API_KEY`
 - `ANTHROPIC_API_KEY`
 - `GEMINI_API_KEY` or `GOOGLE_API_KEY`
+- `OPENROUTER_API_KEY`
 
 `wrap-claude-agent-sdk-traces` also uses `ANTHROPIC_API_KEY`, because it runs the real Claude Agent SDK against Anthropic in the same style as the existing live Anthropic wrapper coverage.
 

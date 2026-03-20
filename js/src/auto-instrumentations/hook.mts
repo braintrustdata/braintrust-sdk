@@ -19,6 +19,7 @@ import { anthropicConfigs } from "./configs/anthropic.js";
 import { aiSDKConfigs } from "./configs/ai-sdk.js";
 import { claudeAgentSDKConfigs } from "./configs/claude-agent-sdk.js";
 import { googleGenAIConfigs } from "./configs/google-genai.js";
+import { openRouterConfigs } from "./configs/openrouter.js";
 import { ModulePatch } from "./loader/cjs-patch.js";
 
 // Patch diagnostics_channel.tracePromise to handle APIPromise correctly
@@ -117,6 +118,7 @@ const allConfigs = [
   ...aiSDKConfigs,
   ...claudeAgentSDKConfigs,
   ...googleGenAIConfigs,
+  ...openRouterConfigs,
 ];
 
 // 1. Register ESM loader for ESM modules
