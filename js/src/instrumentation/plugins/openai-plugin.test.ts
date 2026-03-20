@@ -1327,4 +1327,41 @@ describe("patchOpenAIAPIPromiseResult", () => {
     });
     expect(span.end).toHaveBeenCalledTimes(1);
   });
+
+  it("traces plain promise results when withResponse is unavailable", async () => {
+    const result = Promise.resolve({
+      choices: [{ message: { content: "ok", role: "assistant" } }],
+      usage: {
+        prompt_tokens: 1,
+        completion_tokens: 1,
+        total_tokens: 2,
+      },
+    });
+
+    const span = {
+      end: vi.fn(),
+      log: vi.fn(),
+    };
+
+    expect(
+      patchOpenAIAPIPromiseResult({
+        config: {
+          extractMetrics: () => ({ tokens: 2 }),
+          extractOutput: (resolvedResult: any) => resolvedResult.choices,
+        },
+        result,
+        span: span as any,
+        startTime: 0,
+      }),
+    ).toBe(true);
+
+    const data = await result;
+
+    expect(data.choices).toHaveLength(1);
+    expect(span.log).toHaveBeenCalledWith({
+      metrics: { tokens: 2 },
+      output: data.choices,
+    });
+    expect(span.end).toHaveBeenCalledTimes(1);
+  });
 });

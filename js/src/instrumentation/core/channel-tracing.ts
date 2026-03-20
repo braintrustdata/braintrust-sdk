@@ -175,6 +175,12 @@ export type SyncResultChannelSpanConfig<
   }) => boolean;
 };
 
+type SyncResultEndEvent<
+  TChannel extends AnyAsyncChannel | AnySyncStreamChannel,
+> = TChannel extends AnyAsyncChannel
+  ? EndOf<TChannel> | AsyncEndOf<TChannel>
+  : EndOf<TChannel>;
+
 type SyncStreamLike<TStreamEvent> = {
   on(event: "chunk", handler: (payload?: unknown) => void): unknown;
   on(
@@ -270,9 +276,7 @@ function logResultAndEnd<
   states: WeakMap<object, SpanState>,
   config: SyncResultChannelSpanConfig<TChannel>,
   channelName: string,
-  event: TChannel extends AnyAsyncChannel
-    ? EndOf<TChannel> | AsyncEndOf<TChannel>
-    : EndOf<TChannel>,
+  event: SyncResultEndEvent<TChannel>,
 ): void {
   const spanData = states.get(event as object);
   if (!spanData) {
@@ -285,7 +289,7 @@ function logResultAndEnd<
   if (
     config.patchResult?.({
       channelName,
-      endEvent: event,
+      endEvent: event as SyncResultEndEvent<TChannel>,
       result,
       span,
       startTime,
@@ -648,7 +652,7 @@ export function traceSyncResultChannel<
       if (
         config.patchResult?.({
           channelName,
-          endEvent,
+          endEvent: endEvent as SyncResultEndEvent<TChannel>,
           result: endEvent.result,
           span,
           startTime,
@@ -662,14 +666,19 @@ export function traceSyncResultChannel<
         return;
       }
 
-      logResultAndEnd(states, config, channelName, endEvent);
+      logResultAndEnd(
+        states,
+        config,
+        channelName,
+        endEvent as SyncResultEndEvent<TChannel>,
+      );
     },
     asyncEnd: (event) => {
       logResultAndEnd(
         states,
         config,
         channelName,
-        event as AsyncEndOf<TChannel>,
+        event as SyncResultEndEvent<TChannel>,
       );
     },
     error: (event) => {

@@ -32,6 +32,10 @@ type OpenAIAPIPromiseLike<TResult> = Promise<TResult> & {
   withResponse(): Promise<OpenAIWithResponseLike<TResult>>;
 };
 
+type OpenAIThenableLike<TResult> = Promise<TResult> & {
+  withResponse?: () => Promise<OpenAIWithResponseLike<TResult>>;
+};
+
 type OpenAIPromisePatchConfig<TResult, TChunk = never> = {
   extractOutput: (result: TResult, endEvent?: unknown) => unknown;
   extractMetadata?: (result: TResult, endEvent?: unknown) => unknown;
@@ -368,6 +372,16 @@ function isOpenAIAPIPromiseLike<TResult>(
   );
 }
 
+function isPromiseLike<TResult>(
+  value: unknown,
+): value is PromiseLike<TResult> & object {
+  return (
+    !!value &&
+    (typeof value === "object" || typeof value === "function") &&
+    typeof (value as { then?: unknown }).then === "function"
+  );
+}
+
 export function patchOpenAIAPIPromiseResult<TResult, TChunk = never>(args: {
   config: OpenAIPromisePatchConfig<TResult, TChunk>;
   result: unknown;
@@ -376,114 +390,126 @@ export function patchOpenAIAPIPromiseResult<TResult, TChunk = never>(args: {
 }): boolean {
   const { config, result, span, startTime } = args;
 
-  if (
-    !isOpenAIAPIPromiseLike<TResult>(result) ||
-    !Object.isExtensible(result)
-  ) {
+  if (!isPromiseLike<TResult>(result) || !Object.isExtensible(result)) {
     return false;
   }
 
-  const apiPromise = result;
-  const originalWithResponse = apiPromise.withResponse.bind(apiPromise);
+  const promiseLike = result as OpenAIThenableLike<TResult>;
+  const originalThen = promiseLike.then.bind(promiseLike);
+  const originalWithResponse = isOpenAIAPIPromiseLike<TResult>(promiseLike)
+    ? promiseLike.withResponse.bind(promiseLike)
+    : null;
   let executionPromise: Promise<OpenAIWithResponseLike<TResult>> | null = null;
   let dataPromise: Promise<TResult> | null = null;
 
-  const ensureExecuted = (): Promise<OpenAIWithResponseLike<TResult>> => {
-    if (!executionPromise) {
-      executionPromise = originalWithResponse()
-        .then((enhancedResponse) => {
-          const endEvent = { response: enhancedResponse.response };
+  const logResolvedData = (data: TResult, response?: Response): TResult => {
+    const endEvent = response ? { response } : undefined;
 
-          if (isAsyncIterable(enhancedResponse.data)) {
-            let firstChunkTime: number | undefined;
+    if (isAsyncIterable(data)) {
+      let firstChunkTime: number | undefined;
 
-            patchStreamIfNeeded<TChunk>(enhancedResponse.data, {
-              onChunk: () => {
-                if (firstChunkTime === undefined) {
-                  firstChunkTime = getCurrentUnixTimestamp();
-                }
-              },
-              onComplete: (chunks) => {
-                try {
-                  if (!config.aggregateChunks) {
-                    span.end();
-                    return;
-                  }
-
-                  const aggregated = config.aggregateChunks(
-                    chunks,
-                    enhancedResponse.data,
-                    endEvent,
-                    startTime,
-                  );
-
-                  if (
-                    aggregated.metrics.time_to_first_token === undefined &&
-                    firstChunkTime !== undefined
-                  ) {
-                    aggregated.metrics.time_to_first_token =
-                      firstChunkTime - startTime;
-                  } else if (
-                    aggregated.metrics.time_to_first_token === undefined &&
-                    chunks.length > 0
-                  ) {
-                    aggregated.metrics.time_to_first_token =
-                      getCurrentUnixTimestamp() - startTime;
-                  }
-
-                  span.log({
-                    output: aggregated.output,
-                    ...(aggregated.metadata !== undefined
-                      ? { metadata: aggregated.metadata }
-                      : {}),
-                    metrics: aggregated.metrics,
-                  });
-                } catch (error) {
-                  console.error(
-                    "Error extracting OpenAI stream output:",
-                    error,
-                  );
-                } finally {
-                  span.end();
-                }
-              },
-              onError: (error) => {
-                span.log({
-                  error: error.message,
-                });
-                span.end();
-              },
-            });
-
-            return enhancedResponse;
+      patchStreamIfNeeded<TChunk>(data, {
+        onChunk: () => {
+          if (firstChunkTime === undefined) {
+            firstChunkTime = getCurrentUnixTimestamp();
           }
+        },
+        onComplete: (chunks) => {
+          try {
+            if (!config.aggregateChunks) {
+              span.end();
+              return;
+            }
 
-          const output = config.extractOutput(enhancedResponse.data, endEvent);
-          const metrics = config.extractMetrics(
-            enhancedResponse.data,
-            startTime,
-            endEvent,
-          );
-          const metadata = config.extractMetadata?.(
-            enhancedResponse.data,
-            endEvent,
-          );
-          const normalizedMetadata = isObject(metadata)
-            ? (metadata as Record<string, unknown>)
-            : undefined;
+            const aggregated = config.aggregateChunks(
+              chunks,
+              data,
+              endEvent,
+              startTime,
+            );
 
+            if (
+              aggregated.metrics.time_to_first_token === undefined &&
+              firstChunkTime !== undefined
+            ) {
+              aggregated.metrics.time_to_first_token =
+                firstChunkTime - startTime;
+            } else if (
+              aggregated.metrics.time_to_first_token === undefined &&
+              chunks.length > 0
+            ) {
+              aggregated.metrics.time_to_first_token =
+                getCurrentUnixTimestamp() - startTime;
+            }
+
+            span.log({
+              output: aggregated.output,
+              ...(aggregated.metadata !== undefined
+                ? { metadata: aggregated.metadata }
+                : {}),
+              metrics: aggregated.metrics,
+            });
+          } catch (error) {
+            console.error("Error extracting OpenAI stream output:", error);
+          } finally {
+            span.end();
+          }
+        },
+        onError: (error) => {
           span.log({
-            output,
-            ...(normalizedMetadata !== undefined
-              ? { metadata: normalizedMetadata }
-              : {}),
-            metrics,
+            error: error.message,
           });
           span.end();
+        },
+      });
 
-          return enhancedResponse;
-        })
-        .catch((error: unknown) => {
+      return data;
+    }
+
+    const output = config.extractOutput(data, endEvent);
+    const metrics = config.extractMetrics(data, startTime, endEvent);
+    const metadata = config.extractMetadata?.(data, endEvent);
+    const normalizedMetadata = isObject(metadata)
+      ? (metadata as Record<string, unknown>)
+      : undefined;
+
+    span.log({
+      output,
+      ...(normalizedMetadata !== undefined
+        ? { metadata: normalizedMetadata }
+        : {}),
+      metrics,
+    });
+    span.end();
+
+    return data;
+  };
+
+  const ensureDataPromise = (): Promise<TResult> => {
+    if (!dataPromise) {
+      if (originalWithResponse) {
+        if (!executionPromise) {
+          executionPromise = originalWithResponse()
+            .then((enhancedResponse) => {
+              logResolvedData(enhancedResponse.data, enhancedResponse.response);
+              return enhancedResponse;
+            })
+            .catch((error: unknown) => {
+              const resolvedError =
+                error instanceof Error ? error : new Error(String(error));
+              span.log({
+                error: resolvedError.message,
+              });
+              span.end();
+              throw resolvedError;
+            });
+        }
+
+        dataPromise = executionPromise.then(({ data }) => data);
+      } else {
+        dataPromise = Promise.resolve(
+          originalThen((data) => logResolvedData(data)),
+        ).catch((error: unknown) => {
           const resolvedError =
             error instanceof Error ? error : new Error(String(error));
           span.log({
@@ -492,20 +518,18 @@ export function patchOpenAIAPIPromiseResult<TResult, TChunk = never>(args: {
           span.end();
           throw resolvedError;
         });
-    }
-
-    return executionPromise;
-  };
-
-  const ensureDataPromise = (): Promise<TResult> => {
-    if (!dataPromise) {
-      dataPromise = ensureExecuted().then(({ data }) => data);
+      }
     }
 
     return dataPromise;
   };
 
-  Object.defineProperties(apiPromise, {
+  if (!originalWithResponse) {
+    void ensureDataPromise();
+    return true;
+  }
+
+  Object.defineProperties(promiseLike, {
     catch: {
       configurable: true,
       value(onRejected?: (reason: unknown) => unknown) {
@@ -527,11 +551,16 @@ export function patchOpenAIAPIPromiseResult<TResult, TChunk = never>(args: {
         return ensureDataPromise().then(onFulfilled, onRejected);
       },
     },
-    withResponse: {
-      configurable: true,
-      value() {
-        return ensureExecuted();
-      },
+  });
+
+  Object.defineProperty(promiseLike, "withResponse", {
+    configurable: true,
+    value() {
+      if (!executionPromise) {
+        void ensureDataPromise();
+      }
+
+      return executionPromise!;
     },
   });
 
