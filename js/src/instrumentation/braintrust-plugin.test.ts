@@ -8,12 +8,13 @@ import { GoogleGenAIPlugin } from "./plugins/google-genai-plugin";
 import { OpenRouterPlugin } from "./plugins/openrouter-plugin";
 
 function createPluginClassMock() {
-  return vi.fn(
-    class MockPlugin {
-      enable = vi.fn();
-      disable = vi.fn();
-    },
-  );
+  return vi.fn(function MockPlugin(this: {
+    enable: ReturnType<typeof vi.fn>;
+    disable: ReturnType<typeof vi.fn>;
+  }) {
+    this.enable = vi.fn();
+    this.disable = vi.fn();
+  });
 }
 
 // Mock all sub-plugins but preserve the utility functions
@@ -44,10 +45,7 @@ vi.mock("./plugins/google-genai-plugin", () => ({
 }));
 
 vi.mock("./plugins/openrouter-plugin", () => ({
-  OpenRouterPlugin: vi.fn().mockImplementation(() => ({
-    enable: vi.fn(),
-    disable: vi.fn(),
-  })),
+  OpenRouterPlugin: createPluginClassMock(),
 }));
 
 describe("BraintrustPlugin", () => {

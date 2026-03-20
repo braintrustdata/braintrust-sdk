@@ -1,6 +1,6 @@
-import { fileURLToPath } from "node:url";
 import { expect, test } from "vitest";
 import { assertOpenRouterTraceContract } from "../../helpers/openrouter-trace-contract";
+import { resolveFileSnapshotPath } from "../../helpers/file-snapshot";
 import {
   isCanaryMode,
   prepareScenarioDir,
@@ -17,8 +17,9 @@ const openrouterSdkVersion = await readInstalledPackageVersion(
   "@openrouter/sdk",
 );
 const TIMEOUT_MS = 90_000;
-const sharedSpanSnapshotPath = fileURLToPath(
-  new URL("./span-events.json", import.meta.url),
+const sharedSpanSnapshotPath = resolveFileSnapshotPath(
+  import.meta.url,
+  "span-events.json",
 );
 
 test(
