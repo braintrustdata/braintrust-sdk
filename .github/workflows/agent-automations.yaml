@@ -1,6 +1,7 @@
-name: agent-automation
+name: Agent Automation
 
 on:
+  pull_request:
   schedule:
     - cron: "0 6 * * *"
   workflow_dispatch:
@@ -15,6 +16,7 @@ concurrency:
 
 jobs:
   audit-sdk-coverage:
+    name: Audit SDK Coverage
     runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:
