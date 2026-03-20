@@ -1,112 +1,109 @@
-// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
-
-exports[`wrap-langchain-js-traces captures invoke, chain, stream, and tool spans via BraintrustCallbackHandler > log-payloads 1`] = `
 [
   {
     "_is_merge": false,
     "context": {
       "caller_filename": "<repo>/e2e/helpers/provider-runtime.mjs",
       "caller_functionname": "runTracedScenario",
-      "caller_lineno": 0,
+      "caller_lineno": 0
     },
     "created": "<timestamp>",
     "id": "<span:1>",
     "log_id": "g",
     "metadata": {
       "scenario": "wrap-langchain-js-traces",
-      "testRunId": "<run:1>",
+      "testRunId": "<run:1>"
     },
     "metrics": {
-      "start": 0,
+      "start": 0
     },
     "project_id": "<uuid:3>",
     "root_span_id": "<span:2>",
     "span_attributes": {
       "exec_counter": 0,
       "name": "langchain-wrapper-root",
-      "type": "task",
+      "type": "task"
     },
-    "span_id": "<span:2>",
+    "span_id": "<span:2>"
   },
   {
     "_is_merge": true,
     "id": "<span:1>",
     "log_id": "g",
     "metrics": {
-      "end": 0,
+      "end": 0
     },
     "project_id": "<uuid:3>",
     "root_span_id": "<span:2>",
-    "span_id": "<span:2>",
+    "span_id": "<span:2>"
   },
   {
     "_is_merge": false,
     "context": {
       "caller_filename": "<repo>/e2e/helpers/provider-runtime.mjs",
       "caller_functionname": "runOperation",
-      "caller_lineno": 0,
+      "caller_lineno": 0
     },
     "created": "<timestamp>",
-    "id": "<span:4>",
+    "id": "<span:3>",
     "log_id": "g",
     "metadata": {
       "operation": "invoke",
-      "testRunId": "<run:1>",
+      "testRunId": "<run:1>"
     },
     "metrics": {
-      "start": 0,
+      "start": 0
     },
     "project_id": "<uuid:3>",
     "root_span_id": "<span:2>",
     "span_attributes": {
       "exec_counter": 1,
-      "name": "langchain-invoke-operation",
+      "name": "langchain-invoke-operation"
     },
-    "span_id": "<span:5>",
+    "span_id": "<span:4>",
     "span_parents": [
-      "<span:2>",
-    ],
+      "<span:2>"
+    ]
   },
   {
     "_is_merge": true,
-    "id": "<span:4>",
+    "id": "<span:3>",
     "log_id": "g",
     "metrics": {
-      "end": 0,
+      "end": 0
     },
     "project_id": "<uuid:3>",
     "root_span_id": "<span:2>",
-    "span_id": "<span:5>",
+    "span_id": "<span:4>",
     "span_parents": [
-      "<span:2>",
-    ],
+      "<span:2>"
+    ]
   },
   {
     "_is_merge": false,
     "context": {
       "caller_filename": "<repo>/integrations/langchain-js/dist/index.js",
       "caller_functionname": "BraintrustCallbackHandler.startSpan",
-      "caller_lineno": 0,
+      "caller_lineno": 0
     },
     "created": "<timestamp>",
-    "id": "<span:6>",
+    "id": "<span:5>",
     "input": [
       [
         {
           "id": [
             "langchain_core",
             "messages",
-            "HumanMessage",
+            "HumanMessage"
           ],
           "kwargs": {
             "additional_kwargs": {},
             "content": "Reply with exactly OK.",
-            "response_metadata": {},
+            "response_metadata": {}
           },
           "lc": 1,
-          "type": "constructor",
-        },
-      ],
+          "type": "constructor"
+        }
+      ]
     ],
     "log_id": "g",
     "metadata": {
@@ -114,13 +111,13 @@ exports[`wrap-langchain-js-traces captures invoke, chain, stream, and tool spans
       "braintrust": {
         "integration_name": "langchain-js",
         "integration_version": "0.2.0",
-        "sdk_language": "javascript",
+        "sdk_language": "javascript"
       },
       "invocation_params": {
         "max_tokens": 16,
         "model": "gpt-4o-mini",
         "stream": false,
-        "temperature": 0,
+        "temperature": 0
       },
       "metadata": {
         "ls_max_tokens": 16,
@@ -128,6 +125,14 @@ exports[`wrap-langchain-js-traces captures invoke, chain, stream, and tool spans
         "ls_model_type": "chat",
         "ls_provider": "openai",
         "ls_temperature": 0,
+        "max_tokens": 16,
+        "model": "gpt-4o-mini",
+        "stream": false,
+        "temperature": 0,
+        "versions": {
+          "@langchain/core": "1.1.34",
+          "@langchain/openai": "1.3.0"
+        }
       },
       "options": {},
       "run_id": "<uuid:8>",
@@ -136,82 +141,82 @@ exports[`wrap-langchain-js-traces captures invoke, chain, stream, and tool spans
           "langchain",
           "chat_models",
           "openai",
-          "ChatOpenAI",
+          "ChatOpenAI"
         ],
         "kwargs": {
           "max_tokens": 16,
           "model": "gpt-4o-mini",
           "openai_api_key": {
             "id": [
-              "OPENAI_API_KEY",
+              "OPENAI_API_KEY"
             ],
             "lc": 1,
-            "type": "secret",
+            "type": "secret"
           },
-          "temperature": 0,
+          "temperature": 0
         },
         "lc": 1,
-        "type": "constructor",
+        "type": "constructor"
       },
-      "tags": [],
+      "tags": []
     },
     "metrics": {
-      "start": 0,
+      "start": 0
     },
     "project_id": "<uuid:3>",
     "root_span_id": "<span:2>",
     "span_attributes": {
       "exec_counter": 2,
       "name": "ChatOpenAI",
-      "type": "llm",
+      "type": "llm"
     },
-    "span_id": "<span:7>",
+    "span_id": "<span:6>",
     "span_parents": [
-      "<span:5>",
-    ],
+      "<span:4>"
+    ]
   },
   {
     "_is_merge": true,
-    "id": "<span:6>",
+    "id": "<span:5>",
     "log_id": "g",
     "metrics": {
       "completion_tokens": 0,
       "prompt_cached_tokens": 0,
       "prompt_tokens": 0,
-      "total_tokens": 0,
+      "total_tokens": 0
     },
     "project_id": "<uuid:3>",
     "root_span_id": "<span:2>",
-    "span_id": "<span:7>",
+    "span_id": "<span:6>",
     "span_parents": [
-      "<span:5>",
-    ],
+      "<span:4>"
+    ]
   },
   {
     "_is_merge": true,
-    "id": "<span:6>",
+    "id": "<span:5>",
     "log_id": "g",
     "metadata": {
       "model": "gpt-4o-mini-2024-07-18",
-      "tags": [],
+      "tags": []
     },
     "output": {
       "generations": [
         [
           {
             "generationInfo": {
-              "finish_reason": "stop",
+              "finish_reason": "stop"
             },
             "message": {
               "id": [
                 "langchain_core",
                 "messages",
-                "AIMessage",
+                "AIMessage"
               ],
               "kwargs": {
                 "additional_kwargs": {},
                 "content": "<llm-response>",
-                "id": "<span:9>",
+                "id": "<span:7>",
                 "invalid_tool_calls": [],
                 "response_metadata": {
                   "finish_reason": "stop",
@@ -221,7 +226,7 @@ exports[`wrap-langchain-js-traces captures invoke, chain, stream, and tool spans
                   "tokenUsage": {
                     "completionTokens": 0,
                     "promptTokens": 0,
-                    "totalTokens": 0,
+                    "totalTokens": 0
                   },
                   "usage": {
                     "completion_tokens": 0,
@@ -229,128 +234,128 @@ exports[`wrap-langchain-js-traces captures invoke, chain, stream, and tool spans
                       "accepted_prediction_tokens": 0,
                       "audio_tokens": 0,
                       "reasoning_tokens": 0,
-                      "rejected_prediction_tokens": 0,
+                      "rejected_prediction_tokens": 0
                     },
                     "prompt_tokens": 0,
                     "prompt_tokens_details": {
                       "audio_tokens": 0,
-                      "cached_tokens": 0,
+                      "cached_tokens": 0
                     },
-                    "total_tokens": 0,
-                  },
+                    "total_tokens": 0
+                  }
                 },
                 "tool_calls": [],
                 "type": "ai",
                 "usage_metadata": {
                   "input_token_details": {
                     "audio": 0,
-                    "cache_read": 0,
+                    "cache_read": 0
                   },
                   "input_tokens": 0,
                   "output_token_details": {
                     "audio": 0,
-                    "reasoning": 0,
+                    "reasoning": 0
                   },
                   "output_tokens": 0,
-                  "total_tokens": 0,
-                },
+                  "total_tokens": 0
+                }
               },
               "lc": 1,
-              "type": "constructor",
+              "type": "constructor"
             },
-            "text": "<llm-response>",
-          },
-        ],
+            "text": "<llm-response>"
+          }
+        ]
       ],
       "llmOutput": {
         "tokenUsage": {
           "completionTokens": 0,
           "promptTokens": 0,
-          "totalTokens": 0,
-        },
-      },
+          "totalTokens": 0
+        }
+      }
     },
     "project_id": "<uuid:3>",
     "root_span_id": "<span:2>",
-    "span_id": "<span:7>",
+    "span_id": "<span:6>",
     "span_parents": [
-      "<span:5>",
-    ],
+      "<span:4>"
+    ]
   },
   {
     "_is_merge": true,
-    "id": "<span:6>",
+    "id": "<span:5>",
     "log_id": "g",
     "metrics": {
-      "end": 0,
+      "end": 0
     },
     "project_id": "<uuid:3>",
     "root_span_id": "<span:2>",
-    "span_id": "<span:7>",
+    "span_id": "<span:6>",
     "span_parents": [
-      "<span:5>",
-    ],
+      "<span:4>"
+    ]
   },
   {
     "_is_merge": false,
     "context": {
       "caller_filename": "<repo>/e2e/helpers/provider-runtime.mjs",
       "caller_functionname": "runOperation",
-      "caller_lineno": 0,
+      "caller_lineno": 0
     },
     "created": "<timestamp>",
-    "id": "<span:10>",
+    "id": "<span:8>",
     "log_id": "g",
     "metadata": {
       "operation": "chain",
-      "testRunId": "<run:1>",
+      "testRunId": "<run:1>"
     },
     "metrics": {
-      "start": 0,
+      "start": 0
     },
     "project_id": "<uuid:3>",
     "root_span_id": "<span:2>",
     "span_attributes": {
       "exec_counter": 3,
-      "name": "langchain-chain-operation",
+      "name": "langchain-chain-operation"
     },
-    "span_id": "<span:11>",
+    "span_id": "<span:9>",
     "span_parents": [
-      "<span:2>",
-    ],
+      "<span:2>"
+    ]
   },
   {
     "_is_merge": true,
-    "id": "<span:10>",
+    "id": "<span:8>",
     "log_id": "g",
     "metrics": {
-      "end": 0,
+      "end": 0
     },
     "project_id": "<uuid:3>",
     "root_span_id": "<span:2>",
-    "span_id": "<span:11>",
+    "span_id": "<span:9>",
     "span_parents": [
-      "<span:2>",
-    ],
+      "<span:2>"
+    ]
   },
   {
     "_is_merge": false,
     "context": {
       "caller_filename": "<repo>/integrations/langchain-js/dist/index.js",
       "caller_functionname": "BraintrustCallbackHandler.startSpan",
-      "caller_lineno": 0,
+      "caller_lineno": 0
     },
     "created": "<timestamp>",
-    "id": "<span:12>",
+    "id": "<span:10>",
     "input": {
-      "word": "PARIS",
+      "word": "PARIS"
     },
     "log_id": "g",
     "metadata": {
       "braintrust": {
         "integration_name": "langchain-js",
         "integration_version": "0.2.0",
-        "sdk_language": "javascript",
+        "sdk_language": "javascript"
       },
       "metadata": {},
       "run_id": "<uuid:14>",
@@ -358,7 +363,7 @@ exports[`wrap-langchain-js-traces captures invoke, chain, stream, and tool spans
         "id": [
           "langchain_core",
           "runnables",
-          "RunnableSequence",
+          "RunnableSequence"
         ],
         "kwargs": {
           "first": {
@@ -366,11 +371,11 @@ exports[`wrap-langchain-js-traces captures invoke, chain, stream, and tool spans
               "langchain_core",
               "prompts",
               "chat",
-              "ChatPromptTemplate",
+              "ChatPromptTemplate"
             ],
             "kwargs": {
               "input_variables": [
-                "word",
+                "word"
               ],
               "messages": [
                 {
@@ -378,7 +383,7 @@ exports[`wrap-langchain-js-traces captures invoke, chain, stream, and tool spans
                     "langchain_core",
                     "prompts",
                     "chat",
-                    "HumanMessagePromptTemplate",
+                    "HumanMessagePromptTemplate"
                   ],
                   "kwargs": {
                     "prompt": {
@@ -386,87 +391,87 @@ exports[`wrap-langchain-js-traces captures invoke, chain, stream, and tool spans
                         "langchain_core",
                         "prompts",
                         "prompt",
-                        "PromptTemplate",
+                        "PromptTemplate"
                       ],
                       "kwargs": {
                         "input_variables": [
-                          "word",
+                          "word"
                         ],
                         "template": "Reply with the single word {word} and nothing else.",
-                        "template_format": "f-string",
+                        "template_format": "f-string"
                       },
                       "lc": 1,
-                      "type": "constructor",
-                    },
+                      "type": "constructor"
+                    }
                   },
                   "lc": 1,
-                  "type": "constructor",
-                },
-              ],
+                  "type": "constructor"
+                }
+              ]
             },
             "lc": 1,
-            "type": "constructor",
+            "type": "constructor"
           },
           "last": {
             "id": [
               "langchain",
               "chat_models",
               "openai",
-              "ChatOpenAI",
+              "ChatOpenAI"
             ],
             "kwargs": {
               "max_tokens": 32,
               "model": "gpt-4o-mini",
               "openai_api_key": {
                 "id": [
-                  "OPENAI_API_KEY",
+                  "OPENAI_API_KEY"
                 ],
                 "lc": 1,
-                "type": "secret",
+                "type": "secret"
               },
-              "temperature": 0,
+              "temperature": 0
             },
             "lc": 1,
-            "type": "constructor",
-          },
+            "type": "constructor"
+          }
         },
         "lc": 1,
-        "type": "constructor",
+        "type": "constructor"
       },
-      "tags": [],
+      "tags": []
     },
     "metrics": {
-      "start": 0,
+      "start": 0
     },
     "project_id": "<uuid:3>",
     "root_span_id": "<span:2>",
     "span_attributes": {
       "exec_counter": 4,
       "name": "RunnableSequence",
-      "type": "task",
+      "type": "task"
     },
-    "span_id": "<span:13>",
+    "span_id": "<span:11>",
     "span_parents": [
-      "<span:11>",
-    ],
+      "<span:9>"
+    ]
   },
   {
     "_is_merge": true,
-    "id": "<span:12>",
+    "id": "<span:10>",
     "log_id": "g",
     "metadata": {
-      "tags": [],
+      "tags": []
     },
     "output": {
       "id": [
         "langchain_core",
         "messages",
-        "AIMessage",
+        "AIMessage"
       ],
       "kwargs": {
         "additional_kwargs": {},
         "content": "PARIS",
-        "id": "<span:15>",
+        "id": "<span:12>",
         "invalid_tool_calls": [],
         "response_metadata": {
           "finish_reason": "stop",
@@ -476,7 +481,7 @@ exports[`wrap-langchain-js-traces captures invoke, chain, stream, and tool spans
           "tokenUsage": {
             "completionTokens": 2,
             "promptTokens": 18,
-            "totalTokens": 20,
+            "totalTokens": 20
           },
           "usage": {
             "completion_tokens": 2,
@@ -484,73 +489,73 @@ exports[`wrap-langchain-js-traces captures invoke, chain, stream, and tool spans
               "accepted_prediction_tokens": 0,
               "audio_tokens": 0,
               "reasoning_tokens": 0,
-              "rejected_prediction_tokens": 0,
+              "rejected_prediction_tokens": 0
             },
             "prompt_tokens": 18,
             "prompt_tokens_details": {
               "audio_tokens": 0,
-              "cached_tokens": 0,
+              "cached_tokens": 0
             },
-            "total_tokens": 20,
-          },
+            "total_tokens": 20
+          }
         },
         "tool_calls": [],
         "type": "ai",
         "usage_metadata": {
           "input_token_details": {
             "audio": 0,
-            "cache_read": 0,
+            "cache_read": 0
           },
           "input_tokens": 18,
           "output_token_details": {
             "audio": 0,
-            "reasoning": 0,
+            "reasoning": 0
           },
           "output_tokens": 2,
-          "total_tokens": 20,
-        },
+          "total_tokens": 20
+        }
       },
       "lc": 1,
-      "type": "constructor",
+      "type": "constructor"
     },
     "project_id": "<uuid:3>",
     "root_span_id": "<span:2>",
-    "span_id": "<span:13>",
+    "span_id": "<span:11>",
     "span_parents": [
-      "<span:11>",
-    ],
+      "<span:9>"
+    ]
   },
   {
     "_is_merge": true,
-    "id": "<span:12>",
+    "id": "<span:10>",
     "log_id": "g",
     "metrics": {
-      "end": 0,
+      "end": 0
     },
     "project_id": "<uuid:3>",
     "root_span_id": "<span:2>",
-    "span_id": "<span:13>",
+    "span_id": "<span:11>",
     "span_parents": [
-      "<span:11>",
-    ],
+      "<span:9>"
+    ]
   },
   {
     "context": {
       "caller_filename": "<repo>/integrations/langchain-js/dist/index.js",
       "caller_functionname": "BraintrustCallbackHandler.startSpan",
-      "caller_lineno": 0,
+      "caller_lineno": 0
     },
     "created": "<timestamp>",
-    "id": "<span:16>",
+    "id": "<span:13>",
     "input": {
-      "word": "PARIS",
+      "word": "PARIS"
     },
     "log_id": "g",
     "metadata": {
       "braintrust": {
         "integration_name": "langchain-js",
         "integration_version": "0.2.0",
-        "sdk_language": "javascript",
+        "sdk_language": "javascript"
       },
       "metadata": {},
       "name": "ChatPromptTemplate",
@@ -562,11 +567,11 @@ exports[`wrap-langchain-js-traces captures invoke, chain, stream, and tool spans
           "langchain_core",
           "prompts",
           "chat",
-          "ChatPromptTemplate",
+          "ChatPromptTemplate"
         ],
         "kwargs": {
           "input_variables": [
-            "word",
+            "word"
           ],
           "messages": [
             {
@@ -574,7 +579,7 @@ exports[`wrap-langchain-js-traces captures invoke, chain, stream, and tool spans
                 "langchain_core",
                 "prompts",
                 "chat",
-                "HumanMessagePromptTemplate",
+                "HumanMessagePromptTemplate"
               ],
               "kwargs": {
                 "prompt": {
@@ -582,40 +587,40 @@ exports[`wrap-langchain-js-traces captures invoke, chain, stream, and tool spans
                     "langchain_core",
                     "prompts",
                     "prompt",
-                    "PromptTemplate",
+                    "PromptTemplate"
                   ],
                   "kwargs": {
                     "input_variables": [
-                      "word",
+                      "word"
                     ],
                     "template": "Reply with the single word {word} and nothing else.",
-                    "template_format": "f-string",
+                    "template_format": "f-string"
                   },
                   "lc": 1,
-                  "type": "constructor",
-                },
+                  "type": "constructor"
+                }
               },
               "lc": 1,
-              "type": "constructor",
-            },
-          ],
+              "type": "constructor"
+            }
+          ]
         },
         "lc": 1,
-        "type": "constructor",
+        "type": "constructor"
       },
       "tags": [
-        "seq:step:1",
-      ],
+        "seq:step:1"
+      ]
     },
     "metrics": {
       "end": 0,
-      "start": 0,
+      "start": 0
     },
     "output": {
       "id": [
         "langchain_core",
         "prompt_values",
-        "ChatPromptValue",
+        "ChatPromptValue"
       ],
       "kwargs": {
         "messages": [
@@ -623,59 +628,59 @@ exports[`wrap-langchain-js-traces captures invoke, chain, stream, and tool spans
             "id": [
               "langchain_core",
               "messages",
-              "HumanMessage",
+              "HumanMessage"
             ],
             "kwargs": {
               "additional_kwargs": {},
               "content": "Reply with the single word PARIS and nothing else.",
-              "response_metadata": {},
+              "response_metadata": {}
             },
             "lc": 1,
-            "type": "constructor",
-          },
-        ],
+            "type": "constructor"
+          }
+        ]
       },
       "lc": 1,
-      "type": "constructor",
+      "type": "constructor"
     },
     "project_id": "<uuid:3>",
     "root_span_id": "<span:2>",
     "span_attributes": {
       "exec_counter": 5,
       "name": "ChatPromptTemplate",
-      "type": "task",
+      "type": "task"
     },
-    "span_id": "<span:18>",
+    "span_id": "<span:14>",
     "span_parents": [
-      "<span:13>",
-    ],
+      "<span:11>"
+    ]
   },
   {
     "_is_merge": false,
     "context": {
       "caller_filename": "<repo>/integrations/langchain-js/dist/index.js",
       "caller_functionname": "BraintrustCallbackHandler.startSpan",
-      "caller_lineno": 0,
+      "caller_lineno": 0
     },
     "created": "<timestamp>",
-    "id": "<span:19>",
+    "id": "<span:15>",
     "input": [
       [
         {
           "id": [
             "langchain_core",
             "messages",
-            "HumanMessage",
+            "HumanMessage"
           ],
           "kwargs": {
             "additional_kwargs": {},
             "content": "Reply with the single word PARIS and nothing else.",
-            "response_metadata": {},
+            "response_metadata": {}
           },
           "lc": 1,
-          "type": "constructor",
-        },
-      ],
+          "type": "constructor"
+        }
+      ]
     ],
     "log_id": "g",
     "metadata": {
@@ -683,13 +688,13 @@ exports[`wrap-langchain-js-traces captures invoke, chain, stream, and tool spans
       "braintrust": {
         "integration_name": "langchain-js",
         "integration_version": "0.2.0",
-        "sdk_language": "javascript",
+        "sdk_language": "javascript"
       },
       "invocation_params": {
         "max_tokens": 32,
         "model": "gpt-4o-mini",
         "stream": false,
-        "temperature": 0,
+        "temperature": 0
       },
       "metadata": {
         "ls_max_tokens": 32,
@@ -697,6 +702,14 @@ exports[`wrap-langchain-js-traces captures invoke, chain, stream, and tool spans
         "ls_model_type": "chat",
         "ls_provider": "openai",
         "ls_temperature": 0,
+        "max_tokens": 32,
+        "model": "gpt-4o-mini",
+        "stream": false,
+        "temperature": 0,
+        "versions": {
+          "@langchain/core": "1.1.34",
+          "@langchain/openai": "1.3.0"
+        }
       },
       "options": {},
       "parent_run_id": "<uuid:14>",
@@ -706,86 +719,86 @@ exports[`wrap-langchain-js-traces captures invoke, chain, stream, and tool spans
           "langchain",
           "chat_models",
           "openai",
-          "ChatOpenAI",
+          "ChatOpenAI"
         ],
         "kwargs": {
           "max_tokens": 32,
           "model": "gpt-4o-mini",
           "openai_api_key": {
             "id": [
-              "OPENAI_API_KEY",
+              "OPENAI_API_KEY"
             ],
             "lc": 1,
-            "type": "secret",
+            "type": "secret"
           },
-          "temperature": 0,
+          "temperature": 0
         },
         "lc": 1,
-        "type": "constructor",
+        "type": "constructor"
       },
       "tags": [
-        "seq:step:2",
-      ],
+        "seq:step:2"
+      ]
     },
     "metrics": {
-      "start": 0,
+      "start": 0
     },
     "project_id": "<uuid:3>",
     "root_span_id": "<span:2>",
     "span_attributes": {
       "exec_counter": 6,
       "name": "ChatOpenAI",
-      "type": "llm",
+      "type": "llm"
     },
-    "span_id": "<span:20>",
+    "span_id": "<span:16>",
     "span_parents": [
-      "<span:13>",
-    ],
+      "<span:11>"
+    ]
   },
   {
     "_is_merge": true,
-    "id": "<span:19>",
+    "id": "<span:15>",
     "log_id": "g",
     "metrics": {
       "completion_tokens": 0,
       "prompt_cached_tokens": 0,
       "prompt_tokens": 0,
-      "total_tokens": 0,
+      "total_tokens": 0
     },
     "project_id": "<uuid:3>",
     "root_span_id": "<span:2>",
-    "span_id": "<span:20>",
+    "span_id": "<span:16>",
     "span_parents": [
-      "<span:13>",
-    ],
+      "<span:11>"
+    ]
   },
   {
     "_is_merge": true,
-    "id": "<span:19>",
+    "id": "<span:15>",
     "log_id": "g",
     "metadata": {
       "model": "gpt-4o-mini-2024-07-18",
       "tags": [
-        "seq:step:2",
-      ],
+        "seq:step:2"
+      ]
     },
     "output": {
       "generations": [
         [
           {
             "generationInfo": {
-              "finish_reason": "stop",
+              "finish_reason": "stop"
             },
             "message": {
               "id": [
                 "langchain_core",
                 "messages",
-                "AIMessage",
+                "AIMessage"
               ],
               "kwargs": {
                 "additional_kwargs": {},
                 "content": "<llm-response>",
-                "id": "<span:15>",
+                "id": "<span:12>",
                 "invalid_tool_calls": [],
                 "response_metadata": {
                   "finish_reason": "stop",
@@ -795,7 +808,7 @@ exports[`wrap-langchain-js-traces captures invoke, chain, stream, and tool spans
                   "tokenUsage": {
                     "completionTokens": 0,
                     "promptTokens": 0,
-                    "totalTokens": 0,
+                    "totalTokens": 0
                   },
                   "usage": {
                     "completion_tokens": 0,
@@ -803,136 +816,136 @@ exports[`wrap-langchain-js-traces captures invoke, chain, stream, and tool spans
                       "accepted_prediction_tokens": 0,
                       "audio_tokens": 0,
                       "reasoning_tokens": 0,
-                      "rejected_prediction_tokens": 0,
+                      "rejected_prediction_tokens": 0
                     },
                     "prompt_tokens": 0,
                     "prompt_tokens_details": {
                       "audio_tokens": 0,
-                      "cached_tokens": 0,
+                      "cached_tokens": 0
                     },
-                    "total_tokens": 0,
-                  },
+                    "total_tokens": 0
+                  }
                 },
                 "tool_calls": [],
                 "type": "ai",
                 "usage_metadata": {
                   "input_token_details": {
                     "audio": 0,
-                    "cache_read": 0,
+                    "cache_read": 0
                   },
                   "input_tokens": 0,
                   "output_token_details": {
                     "audio": 0,
-                    "reasoning": 0,
+                    "reasoning": 0
                   },
                   "output_tokens": 0,
-                  "total_tokens": 0,
-                },
+                  "total_tokens": 0
+                }
               },
               "lc": 1,
-              "type": "constructor",
+              "type": "constructor"
             },
-            "text": "<llm-response>",
-          },
-        ],
+            "text": "<llm-response>"
+          }
+        ]
       ],
       "llmOutput": {
         "tokenUsage": {
           "completionTokens": 0,
           "promptTokens": 0,
-          "totalTokens": 0,
-        },
-      },
+          "totalTokens": 0
+        }
+      }
     },
     "project_id": "<uuid:3>",
     "root_span_id": "<span:2>",
-    "span_id": "<span:20>",
+    "span_id": "<span:16>",
     "span_parents": [
-      "<span:13>",
-    ],
+      "<span:11>"
+    ]
   },
   {
     "_is_merge": true,
-    "id": "<span:19>",
+    "id": "<span:15>",
     "log_id": "g",
     "metrics": {
-      "end": 0,
+      "end": 0
     },
     "project_id": "<uuid:3>",
     "root_span_id": "<span:2>",
-    "span_id": "<span:20>",
+    "span_id": "<span:16>",
     "span_parents": [
-      "<span:13>",
-    ],
+      "<span:11>"
+    ]
   },
   {
     "_is_merge": false,
     "context": {
       "caller_filename": "<repo>/e2e/helpers/provider-runtime.mjs",
       "caller_functionname": "runOperation",
-      "caller_lineno": 0,
+      "caller_lineno": 0
     },
     "created": "<timestamp>",
-    "id": "<span:22>",
+    "id": "<span:17>",
     "log_id": "g",
     "metadata": {
       "operation": "stream",
-      "testRunId": "<run:1>",
+      "testRunId": "<run:1>"
     },
     "metrics": {
-      "start": 0,
+      "start": 0
     },
     "project_id": "<uuid:3>",
     "root_span_id": "<span:2>",
     "span_attributes": {
       "exec_counter": 7,
-      "name": "langchain-stream-operation",
+      "name": "langchain-stream-operation"
     },
-    "span_id": "<span:23>",
+    "span_id": "<span:18>",
     "span_parents": [
-      "<span:2>",
-    ],
+      "<span:2>"
+    ]
   },
   {
     "_is_merge": true,
-    "id": "<span:22>",
+    "id": "<span:17>",
     "log_id": "g",
     "metrics": {
-      "end": 0,
+      "end": 0
     },
     "project_id": "<uuid:3>",
     "root_span_id": "<span:2>",
-    "span_id": "<span:23>",
+    "span_id": "<span:18>",
     "span_parents": [
-      "<span:2>",
-    ],
+      "<span:2>"
+    ]
   },
   {
     "_is_merge": false,
     "context": {
       "caller_filename": "<repo>/integrations/langchain-js/dist/index.js",
       "caller_functionname": "BraintrustCallbackHandler.startSpan",
-      "caller_lineno": 0,
+      "caller_lineno": 0
     },
     "created": "<timestamp>",
-    "id": "<span:24>",
+    "id": "<span:19>",
     "input": [
       [
         {
           "id": [
             "langchain_core",
             "messages",
-            "HumanMessage",
+            "HumanMessage"
           ],
           "kwargs": {
             "additional_kwargs": {},
             "content": "Count from 1 to 3 and include the words one two three.",
-            "response_metadata": {},
+            "response_metadata": {}
           },
           "lc": 1,
-          "type": "constructor",
-        },
-      ],
+          "type": "constructor"
+        }
+      ]
     ],
     "log_id": "g",
     "metadata": {
@@ -940,16 +953,16 @@ exports[`wrap-langchain-js-traces captures invoke, chain, stream, and tool spans
       "braintrust": {
         "integration_name": "langchain-js",
         "integration_version": "0.2.0",
-        "sdk_language": "javascript",
+        "sdk_language": "javascript"
       },
       "invocation_params": {
         "max_tokens": 32,
         "model": "gpt-4o-mini",
         "stream": true,
         "stream_options": {
-          "include_usage": true,
+          "include_usage": true
         },
-        "temperature": 0,
+        "temperature": 0
       },
       "metadata": {
         "ls_max_tokens": 32,
@@ -957,6 +970,17 @@ exports[`wrap-langchain-js-traces captures invoke, chain, stream, and tool spans
         "ls_model_type": "chat",
         "ls_provider": "openai",
         "ls_temperature": 0,
+        "max_tokens": 32,
+        "model": "gpt-4o-mini",
+        "stream": true,
+        "stream_options": {
+          "include_usage": true
+        },
+        "temperature": 0,
+        "versions": {
+          "@langchain/core": "1.1.34",
+          "@langchain/openai": "1.3.0"
+        }
       },
       "options": {},
       "run_id": "<uuid:26>",
@@ -965,66 +989,66 @@ exports[`wrap-langchain-js-traces captures invoke, chain, stream, and tool spans
           "langchain",
           "chat_models",
           "openai",
-          "ChatOpenAI",
+          "ChatOpenAI"
         ],
         "kwargs": {
           "max_tokens": 32,
           "model": "gpt-4o-mini",
           "openai_api_key": {
             "id": [
-              "OPENAI_API_KEY",
+              "OPENAI_API_KEY"
             ],
             "lc": 1,
-            "type": "secret",
+            "type": "secret"
           },
           "streaming": true,
-          "temperature": 0,
+          "temperature": 0
         },
         "lc": 1,
-        "type": "constructor",
+        "type": "constructor"
       },
-      "tags": [],
+      "tags": []
     },
     "metrics": {
-      "start": 0,
+      "start": 0
     },
     "project_id": "<uuid:3>",
     "root_span_id": "<span:2>",
     "span_attributes": {
       "exec_counter": 8,
       "name": "ChatOpenAI",
-      "type": "llm",
+      "type": "llm"
     },
-    "span_id": "<span:25>",
+    "span_id": "<span:20>",
     "span_parents": [
-      "<span:23>",
-    ],
+      "<span:18>"
+    ]
   },
   {
     "_is_merge": true,
-    "id": "<span:24>",
+    "id": "<span:19>",
     "log_id": "g",
     "metrics": {
       "completion_tokens": 0,
       "prompt_cached_tokens": 0,
       "prompt_tokens": 0,
       "time_to_first_token": 0,
-      "total_tokens": 0,
+      "total_tokens": 0
     },
     "project_id": "<uuid:3>",
     "root_span_id": "<span:2>",
-    "span_id": "<span:25>",
+    "span_id": "<span:20>",
     "span_parents": [
-      "<span:23>",
-    ],
+      "<span:18>"
+    ]
   },
   {
     "_is_merge": true,
-    "id": "<span:24>",
+    "id": "<span:19>",
     "log_id": "g",
     "metadata": {
       "model": "gpt-4o-mini-2024-07-18",
-      "tags": [],
+      "tags": []
     },
     "output": {
       "generations": [
@@ -1036,18 +1060,18 @@ exports[`wrap-langchain-js-traces captures invoke, chain, stream, and tool spans
               "model_name": "gpt-4o-mini-2024-07-18",
               "prompt": 0,
               "service_tier": "default",
-              "system_fingerprint": "<system_fingerprint>",
+              "system_fingerprint": "<system_fingerprint>"
             },
             "message": {
               "id": [
                 "langchain_core",
                 "messages",
-                "AIMessageChunk",
+                "AIMessageChunk"
               ],
               "kwargs": {
                 "additional_kwargs": {},
                 "content": "<llm-response>",
-                "id": "<span:27>",
+                "id": "<span:21>",
                 "invalid_tool_calls": [],
                 "response_metadata": {
                   "completion": 0,
@@ -1063,136 +1087,136 @@ exports[`wrap-langchain-js-traces captures invoke, chain, stream, and tool spans
                       "accepted_prediction_tokens": 0,
                       "audio_tokens": 0,
                       "reasoning_tokens": 0,
-                      "rejected_prediction_tokens": 0,
+                      "rejected_prediction_tokens": 0
                     },
                     "prompt_tokens": 0,
                     "prompt_tokens_details": {
                       "audio_tokens": 0,
-                      "cached_tokens": 0,
+                      "cached_tokens": 0
                     },
-                    "total_tokens": 0,
-                  },
+                    "total_tokens": 0
+                  }
                 },
                 "tool_call_chunks": [],
                 "tool_calls": [],
                 "usage_metadata": {
                   "input_token_details": {
                     "audio": 0,
-                    "cache_read": 0,
+                    "cache_read": 0
                   },
                   "input_tokens": 0,
                   "output_token_details": {
                     "audio": 0,
-                    "reasoning": 0,
+                    "reasoning": 0
                   },
                   "output_tokens": 0,
-                  "total_tokens": 0,
-                },
+                  "total_tokens": 0
+                }
               },
               "lc": 1,
-              "type": "constructor",
+              "type": "constructor"
             },
-            "text": "<llm-response>",
-          },
-        ],
+            "text": "<llm-response>"
+          }
+        ]
       ],
       "llmOutput": {
         "tokenUsage": {
           "completionTokens": 0,
           "promptTokens": 0,
-          "totalTokens": 0,
-        },
-      },
+          "totalTokens": 0
+        }
+      }
     },
     "project_id": "<uuid:3>",
     "root_span_id": "<span:2>",
-    "span_id": "<span:25>",
+    "span_id": "<span:20>",
     "span_parents": [
-      "<span:23>",
-    ],
+      "<span:18>"
+    ]
   },
   {
     "_is_merge": true,
-    "id": "<span:24>",
+    "id": "<span:19>",
     "log_id": "g",
     "metrics": {
-      "end": 0,
+      "end": 0
     },
     "project_id": "<uuid:3>",
     "root_span_id": "<span:2>",
-    "span_id": "<span:25>",
+    "span_id": "<span:20>",
     "span_parents": [
-      "<span:23>",
-    ],
+      "<span:18>"
+    ]
   },
   {
     "_is_merge": false,
     "context": {
       "caller_filename": "<repo>/e2e/helpers/provider-runtime.mjs",
       "caller_functionname": "runOperation",
-      "caller_lineno": 0,
+      "caller_lineno": 0
     },
     "created": "<timestamp>",
-    "id": "<span:28>",
+    "id": "<span:22>",
     "log_id": "g",
     "metadata": {
       "operation": "tool",
-      "testRunId": "<run:1>",
+      "testRunId": "<run:1>"
     },
     "metrics": {
-      "start": 0,
+      "start": 0
     },
     "project_id": "<uuid:3>",
     "root_span_id": "<span:2>",
     "span_attributes": {
       "exec_counter": 9,
-      "name": "langchain-tool-operation",
+      "name": "langchain-tool-operation"
     },
-    "span_id": "<span:29>",
+    "span_id": "<span:23>",
     "span_parents": [
-      "<span:2>",
-    ],
+      "<span:2>"
+    ]
   },
   {
     "_is_merge": true,
-    "id": "<span:28>",
+    "id": "<span:22>",
     "log_id": "g",
     "metrics": {
-      "end": 0,
+      "end": 0
     },
     "project_id": "<uuid:3>",
     "root_span_id": "<span:2>",
-    "span_id": "<span:29>",
+    "span_id": "<span:23>",
     "span_parents": [
-      "<span:2>",
-    ],
+      "<span:2>"
+    ]
   },
   {
     "_is_merge": false,
     "context": {
       "caller_filename": "<repo>/integrations/langchain-js/dist/index.js",
       "caller_functionname": "BraintrustCallbackHandler.startSpan",
-      "caller_lineno": 0,
+      "caller_lineno": 0
     },
     "created": "<timestamp>",
-    "id": "<span:30>",
+    "id": "<span:24>",
     "input": [
       [
         {
           "id": [
             "langchain_core",
             "messages",
-            "HumanMessage",
+            "HumanMessage"
           ],
           "kwargs": {
             "additional_kwargs": {},
             "content": "Use the get_weather tool for Paris, France. Do not answer from memory.",
-            "response_metadata": {},
+            "response_metadata": {}
           },
           "lc": 1,
-          "type": "constructor",
-        },
-      ],
+          "type": "constructor"
+        }
+      ]
     ],
     "log_id": "g",
     "metadata": {
@@ -1200,7 +1224,7 @@ exports[`wrap-langchain-js-traces captures invoke, chain, stream, and tool spans
       "braintrust": {
         "integration_name": "langchain-js",
         "integration_version": "0.2.0",
-        "sdk_language": "javascript",
+        "sdk_language": "javascript"
       },
       "invocation_params": {
         "max_tokens": 128,
@@ -1218,18 +1242,18 @@ exports[`wrap-langchain-js-traces captures invoke, chain, stream, and tool spans
                 "properties": {
                   "location": {
                     "description": "The city and state or city and country",
-                    "type": "string",
-                  },
+                    "type": "string"
+                  }
                 },
                 "required": [
-                  "location",
+                  "location"
                 ],
-                "type": "object",
-              },
+                "type": "object"
+              }
             },
-            "type": "function",
-          },
-        ],
+            "type": "function"
+          }
+        ]
       },
       "metadata": {
         "ls_max_tokens": 128,
@@ -1237,6 +1261,14 @@ exports[`wrap-langchain-js-traces captures invoke, chain, stream, and tool spans
         "ls_model_type": "chat",
         "ls_provider": "openai",
         "ls_temperature": 0,
+        "max_tokens": 128,
+        "model": "gpt-4o-mini",
+        "stream": false,
+        "temperature": 0,
+        "versions": {
+          "@langchain/core": "1.1.34",
+          "@langchain/openai": "1.3.0"
+        }
       },
       "options": {
         "tools": [
@@ -1250,18 +1282,18 @@ exports[`wrap-langchain-js-traces captures invoke, chain, stream, and tool spans
                 "properties": {
                   "location": {
                     "description": "The city and state or city and country",
-                    "type": "string",
-                  },
+                    "type": "string"
+                  }
                 },
                 "required": [
-                  "location",
+                  "location"
                 ],
-                "type": "object",
-              },
+                "type": "object"
+              }
             },
-            "type": "function",
-          },
-        ],
+            "type": "function"
+          }
+        ]
       },
       "run_id": "<uuid:32>",
       "serialized": {
@@ -1269,93 +1301,93 @@ exports[`wrap-langchain-js-traces captures invoke, chain, stream, and tool spans
           "langchain",
           "chat_models",
           "openai",
-          "ChatOpenAI",
+          "ChatOpenAI"
         ],
         "kwargs": {
           "max_tokens": 128,
           "model": "gpt-4o-mini",
           "openai_api_key": {
             "id": [
-              "OPENAI_API_KEY",
+              "OPENAI_API_KEY"
             ],
             "lc": 1,
-            "type": "secret",
+            "type": "secret"
           },
-          "temperature": 0,
+          "temperature": 0
         },
         "lc": 1,
-        "type": "constructor",
+        "type": "constructor"
       },
-      "tags": [],
+      "tags": []
     },
     "metrics": {
-      "start": 0,
+      "start": 0
     },
     "project_id": "<uuid:3>",
     "root_span_id": "<span:2>",
     "span_attributes": {
       "exec_counter": 10,
       "name": "ChatOpenAI",
-      "type": "llm",
+      "type": "llm"
     },
-    "span_id": "<span:31>",
+    "span_id": "<span:25>",
     "span_parents": [
-      "<span:29>",
-    ],
+      "<span:23>"
+    ]
   },
   {
     "_is_merge": true,
-    "id": "<span:30>",
+    "id": "<span:24>",
     "log_id": "g",
     "metrics": {
       "completion_tokens": 0,
       "prompt_cached_tokens": 0,
       "prompt_tokens": 0,
-      "total_tokens": 0,
+      "total_tokens": 0
     },
     "project_id": "<uuid:3>",
     "root_span_id": "<span:2>",
-    "span_id": "<span:31>",
+    "span_id": "<span:25>",
     "span_parents": [
-      "<span:29>",
-    ],
+      "<span:23>"
+    ]
   },
   {
     "_is_merge": true,
-    "id": "<span:30>",
+    "id": "<span:24>",
     "log_id": "g",
     "metadata": {
       "model": "gpt-4o-mini-2024-07-18",
-      "tags": [],
+      "tags": []
     },
     "output": {
       "generations": [
         [
           {
             "generationInfo": {
-              "finish_reason": "tool_calls",
+              "finish_reason": "tool_calls"
             },
             "message": {
               "id": [
                 "langchain_core",
                 "messages",
-                "AIMessage",
+                "AIMessage"
               ],
               "kwargs": {
                 "additional_kwargs": {
                   "tool_calls": [
                     {
                       "function": {
-                        "arguments": "{"location":"Paris, France"}",
-                        "name": "get_weather",
+                        "arguments": "{\"location\":\"Paris, France\"}",
+                        "name": "get_weather"
                       },
-                      "id": "<span:34>",
-                      "type": "function",
-                    },
-                  ],
+                      "id": "<span:27>",
+                      "type": "function"
+                    }
+                  ]
                 },
                 "content": "",
-                "id": "<span:33>",
+                "id": "<span:26>",
                 "invalid_tool_calls": [],
                 "response_metadata": {
                   "finish_reason": "tool_calls",
@@ -1365,7 +1397,7 @@ exports[`wrap-langchain-js-traces captures invoke, chain, stream, and tool spans
                   "tokenUsage": {
                     "completionTokens": 0,
                     "promptTokens": 0,
-                    "totalTokens": 0,
+                    "totalTokens": 0
                   },
                   "usage": {
                     "completion_tokens": 0,
@@ -1373,145 +1405,145 @@ exports[`wrap-langchain-js-traces captures invoke, chain, stream, and tool spans
                       "accepted_prediction_tokens": 0,
                       "audio_tokens": 0,
                       "reasoning_tokens": 0,
-                      "rejected_prediction_tokens": 0,
+                      "rejected_prediction_tokens": 0
                     },
                     "prompt_tokens": 0,
                     "prompt_tokens_details": {
                       "audio_tokens": 0,
-                      "cached_tokens": 0,
+                      "cached_tokens": 0
                     },
-                    "total_tokens": 0,
-                  },
+                    "total_tokens": 0
+                  }
                 },
                 "tool_calls": [
                   {
                     "args": {
-                      "location": "Paris, France",
+                      "location": "Paris, France"
                     },
-                    "id": "<span:34>",
+                    "id": "<span:27>",
                     "name": "get_weather",
-                    "type": "tool_call",
-                  },
+                    "type": "tool_call"
+                  }
                 ],
                 "type": "ai",
                 "usage_metadata": {
                   "input_token_details": {
                     "audio": 0,
-                    "cache_read": 0,
+                    "cache_read": 0
                   },
                   "input_tokens": 0,
                   "output_token_details": {
                     "audio": 0,
-                    "reasoning": 0,
+                    "reasoning": 0
                   },
                   "output_tokens": 0,
-                  "total_tokens": 0,
-                },
+                  "total_tokens": 0
+                }
               },
               "lc": 1,
-              "type": "constructor",
+              "type": "constructor"
             },
-            "text": "<llm-response>",
-          },
-        ],
+            "text": "<llm-response>"
+          }
+        ]
       ],
       "llmOutput": {
         "tokenUsage": {
           "completionTokens": 0,
           "promptTokens": 0,
-          "totalTokens": 0,
-        },
-      },
+          "totalTokens": 0
+        }
+      }
     },
     "project_id": "<uuid:3>",
     "root_span_id": "<span:2>",
-    "span_id": "<span:31>",
+    "span_id": "<span:25>",
     "span_parents": [
-      "<span:29>",
-    ],
+      "<span:23>"
+    ]
   },
   {
     "_is_merge": true,
-    "id": "<span:30>",
+    "id": "<span:24>",
     "log_id": "g",
     "metrics": {
-      "end": 0,
+      "end": 0
     },
     "project_id": "<uuid:3>",
     "root_span_id": "<span:2>",
-    "span_id": "<span:31>",
+    "span_id": "<span:25>",
     "span_parents": [
-      "<span:29>",
-    ],
+      "<span:23>"
+    ]
   },
   {
     "_is_merge": false,
     "context": {
       "caller_filename": "<repo>/e2e/helpers/provider-runtime.mjs",
       "caller_functionname": "runOperation",
-      "caller_lineno": 0,
+      "caller_lineno": 0
     },
     "created": "<timestamp>",
-    "id": "<span:35>",
+    "id": "<span:28>",
     "log_id": "g",
     "metadata": {
       "operation": "tool-result",
-      "testRunId": "<run:1>",
+      "testRunId": "<run:1>"
     },
     "metrics": {
-      "start": 0,
+      "start": 0
     },
     "project_id": "<uuid:3>",
     "root_span_id": "<span:2>",
     "span_attributes": {
       "exec_counter": 11,
-      "name": "langchain-tool-result-operation",
+      "name": "langchain-tool-result-operation"
     },
-    "span_id": "<span:36>",
+    "span_id": "<span:29>",
     "span_parents": [
-      "<span:2>",
-    ],
+      "<span:2>"
+    ]
   },
   {
     "_is_merge": true,
-    "id": "<span:35>",
+    "id": "<span:28>",
     "log_id": "g",
     "metrics": {
-      "end": 0,
+      "end": 0
     },
     "project_id": "<uuid:3>",
     "root_span_id": "<span:2>",
-    "span_id": "<span:36>",
+    "span_id": "<span:29>",
     "span_parents": [
-      "<span:2>",
-    ],
+      "<span:2>"
+    ]
   },
   {
     "_is_merge": false,
     "context": {
       "caller_filename": "<repo>/integrations/langchain-js/dist/index.js",
       "caller_functionname": "BraintrustCallbackHandler.startSpan",
-      "caller_lineno": 0,
+      "caller_lineno": 0
     },
     "created": "<timestamp>",
-    "id": "<span:37>",
+    "id": "<span:30>",
     "input": [
       [
         {
           "id": [
             "langchain_core",
             "messages",
-            "HumanMessage",
+            "HumanMessage"
           ],
           "kwargs": {
             "additional_kwargs": {},
             "content": "What is 127 multiplied by 49? Use the calculate tool.",
-            "response_metadata": {},
+            "response_metadata": {}
           },
           "lc": 1,
-          "type": "constructor",
-        },
-      ],
+          "type": "constructor"
+        }
+      ]
     ],
     "log_id": "g",
     "metadata": {
@@ -1519,7 +1551,7 @@ exports[`wrap-langchain-js-traces captures invoke, chain, stream, and tool spans
       "braintrust": {
         "integration_name": "langchain-js",
         "integration_version": "0.2.0",
-        "sdk_language": "javascript",
+        "sdk_language": "javascript"
       },
       "invocation_params": {
         "max_tokens": 128,
@@ -1536,32 +1568,32 @@ exports[`wrap-langchain-js-traces captures invoke, chain, stream, and tool spans
                 "additionalProperties": false,
                 "properties": {
                   "a": {
-                    "type": "number",
+                    "type": "number"
                   },
                   "b": {
-                    "type": "number",
+                    "type": "number"
                   },
                   "operation": {
                     "enum": [
                       "add",
                       "subtract",
                       "multiply",
-                      "divide",
+                      "divide"
                     ],
-                    "type": "string",
-                  },
+                    "type": "string"
+                  }
                 },
                 "required": [
                   "operation",
                   "a",
-                  "b",
+                  "b"
                 ],
-                "type": "object",
-              },
+                "type": "object"
+              }
             },
-            "type": "function",
-          },
-        ],
+            "type": "function"
+          }
+        ]
       },
       "metadata": {
         "ls_max_tokens": 128,
@@ -1569,6 +1601,14 @@ exports[`wrap-langchain-js-traces captures invoke, chain, stream, and tool spans
         "ls_model_type": "chat",
         "ls_provider": "openai",
         "ls_temperature": 0,
+        "max_tokens": 128,
+        "model": "gpt-4o-mini",
+        "stream": false,
+        "temperature": 0,
+        "versions": {
+          "@langchain/core": "1.1.34",
+          "@langchain/openai": "1.3.0"
+        }
       },
       "options": {
         "tools": [
@@ -1581,32 +1621,32 @@ exports[`wrap-langchain-js-traces captures invoke, chain, stream, and tool spans
                 "additionalProperties": false,
                 "properties": {
                   "a": {
-                    "type": "number",
+                    "type": "number"
                   },
                   "b": {
-                    "type": "number",
+                    "type": "number"
                   },
                   "operation": {
                     "enum": [
                       "add",
                       "subtract",
                       "multiply",
-                      "divide",
+                      "divide"
                     ],
-                    "type": "string",
-                  },
+                    "type": "string"
+                  }
                 },
                 "required": [
                   "operation",
                   "a",
-                  "b",
+                  "b"
                 ],
-                "type": "object",
-              },
+                "type": "object"
+              }
             },
-            "type": "function",
-          },
-        ],
+            "type": "function"
+          }
+        ]
       },
       "run_id": "<uuid:39>",
       "serialized": {
@@ -1614,93 +1654,93 @@ exports[`wrap-langchain-js-traces captures invoke, chain, stream, and tool spans
           "langchain",
           "chat_models",
           "openai",
-          "ChatOpenAI",
+          "ChatOpenAI"
         ],
         "kwargs": {
           "max_tokens": 128,
           "model": "gpt-4o-mini",
           "openai_api_key": {
             "id": [
-              "OPENAI_API_KEY",
+              "OPENAI_API_KEY"
             ],
             "lc": 1,
-            "type": "secret",
+            "type": "secret"
           },
-          "temperature": 0,
+          "temperature": 0
         },
         "lc": 1,
-        "type": "constructor",
+        "type": "constructor"
       },
-      "tags": [],
+      "tags": []
     },
     "metrics": {
-      "start": 0,
+      "start": 0
     },
     "project_id": "<uuid:3>",
     "root_span_id": "<span:2>",
     "span_attributes": {
       "exec_counter": 12,
       "name": "ChatOpenAI",
-      "type": "llm",
+      "type": "llm"
     },
-    "span_id": "<span:38>",
+    "span_id": "<span:31>",
     "span_parents": [
-      "<span:36>",
-    ],
+      "<span:29>"
+    ]
   },
   {
     "_is_merge": true,
-    "id": "<span:37>",
+    "id": "<span:30>",
     "log_id": "g",
     "metrics": {
       "completion_tokens": 0,
       "prompt_cached_tokens": 0,
       "prompt_tokens": 0,
-      "total_tokens": 0,
+      "total_tokens": 0
     },
     "project_id": "<uuid:3>",
     "root_span_id": "<span:2>",
-    "span_id": "<span:38>",
+    "span_id": "<span:31>",
     "span_parents": [
-      "<span:36>",
-    ],
+      "<span:29>"
+    ]
   },
   {
     "_is_merge": true,
-    "id": "<span:37>",
+    "id": "<span:30>",
     "log_id": "g",
     "metadata": {
       "model": "gpt-4o-mini-2024-07-18",
-      "tags": [],
+      "tags": []
     },
     "output": {
       "generations": [
         [
           {
             "generationInfo": {
-              "finish_reason": "tool_calls",
+              "finish_reason": "tool_calls"
             },
             "message": {
               "id": [
                 "langchain_core",
                 "messages",
-                "AIMessage",
+                "AIMessage"
               ],
               "kwargs": {
                 "additional_kwargs": {
                   "tool_calls": [
                     {
                       "function": {
-                        "arguments": "{"operation":"multiply","a":127,"b":49}",
-                        "name": "calculate",
+                        "arguments": "{\"operation\":\"multiply\",\"a\":127,\"b\":49}",
+                        "name": "calculate"
                       },
-                      "id": "<span:34>",
-                      "type": "function",
-                    },
-                  ],
+                      "id": "<span:27>",
+                      "type": "function"
+                    }
+                  ]
                 },
                 "content": "",
-                "id": "<span:40>",
+                "id": "<span:32>",
                 "invalid_tool_calls": [],
                 "response_metadata": {
                   "finish_reason": "tool_calls",
@@ -1710,7 +1750,7 @@ exports[`wrap-langchain-js-traces captures invoke, chain, stream, and tool spans
                   "tokenUsage": {
                     "completionTokens": 0,
                     "promptTokens": 0,
-                    "totalTokens": 0,
+                    "totalTokens": 0
                   },
                   "usage": {
                     "completion_tokens": 0,
@@ -1718,109 +1758,109 @@ exports[`wrap-langchain-js-traces captures invoke, chain, stream, and tool spans
                       "accepted_prediction_tokens": 0,
                       "audio_tokens": 0,
                       "reasoning_tokens": 0,
-                      "rejected_prediction_tokens": 0,
+                      "rejected_prediction_tokens": 0
                     },
                     "prompt_tokens": 0,
                     "prompt_tokens_details": {
                       "audio_tokens": 0,
-                      "cached_tokens": 0,
+                      "cached_tokens": 0
                     },
-                    "total_tokens": 0,
-                  },
+                    "total_tokens": 0
+                  }
                 },
                 "tool_calls": [
                   {
                     "args": {
                       "a": 127,
                       "b": 49,
-                      "operation": "multiply",
+                      "operation": "multiply"
                     },
-                    "id": "<span:34>",
+                    "id": "<span:27>",
                     "name": "calculate",
-                    "type": "tool_call",
-                  },
+                    "type": "tool_call"
+                  }
                 ],
                 "type": "ai",
                 "usage_metadata": {
                   "input_token_details": {
                     "audio": 0,
-                    "cache_read": 0,
+                    "cache_read": 0
                   },
                   "input_tokens": 0,
                   "output_token_details": {
                     "audio": 0,
-                    "reasoning": 0,
+                    "reasoning": 0
                   },
                   "output_tokens": 0,
-                  "total_tokens": 0,
-                },
+                  "total_tokens": 0
+                }
               },
               "lc": 1,
-              "type": "constructor",
+              "type": "constructor"
             },
-            "text": "<llm-response>",
-          },
-        ],
+            "text": "<llm-response>"
+          }
+        ]
       ],
       "llmOutput": {
         "tokenUsage": {
           "completionTokens": 0,
           "promptTokens": 0,
-          "totalTokens": 0,
-        },
-      },
+          "totalTokens": 0
+        }
+      }
     },
     "project_id": "<uuid:3>",
     "root_span_id": "<span:2>",
-    "span_id": "<span:38>",
+    "span_id": "<span:31>",
     "span_parents": [
-      "<span:36>",
-    ],
+      "<span:29>"
+    ]
   },
   {
     "_is_merge": true,
-    "id": "<span:37>",
+    "id": "<span:30>",
     "log_id": "g",
     "metrics": {
-      "end": 0,
+      "end": 0
     },
     "project_id": "<uuid:3>",
     "root_span_id": "<span:2>",
-    "span_id": "<span:38>",
+    "span_id": "<span:31>",
     "span_parents": [
-      "<span:36>",
-    ],
+      "<span:29>"
+    ]
   },
   {
     "_is_merge": false,
     "context": {
       "caller_filename": "<repo>/integrations/langchain-js/dist/index.js",
       "caller_functionname": "BraintrustCallbackHandler.startSpan",
-      "caller_lineno": 0,
+      "caller_lineno": 0
     },
     "created": "<timestamp>",
-    "id": "<span:41>",
+    "id": "<span:33>",
     "input": [
       [
         {
           "id": [
             "langchain_core",
             "messages",
-            "HumanMessage",
+            "HumanMessage"
           ],
           "kwargs": {
             "additional_kwargs": {},
             "content": "What is 127 multiplied by 49? Use the calculate tool.",
-            "response_metadata": {},
+            "response_metadata": {}
           },
           "lc": 1,
-          "type": "constructor",
+          "type": "constructor"
         },
         {
           "id": [
             "langchain_core",
             "messages",
-            "AIMessage",
+            "AIMessage"
           ],
           "kwargs": {
             "additional_kwargs": {},
@@ -1832,33 +1872,33 @@ exports[`wrap-langchain-js-traces captures invoke, chain, stream, and tool spans
                 "args": {
                   "a": 127,
                   "b": 49,
-                  "operation": "multiply",
+                  "operation": "multiply"
                 },
-                "id": "<span:34>",
+                "id": "<span:27>",
                 "name": "calculate",
-                "type": "tool_call",
-              },
-            ],
+                "type": "tool_call"
+              }
+            ]
           },
           "lc": 1,
-          "type": "constructor",
+          "type": "constructor"
         },
         {
           "id": [
             "langchain_core",
             "messages",
-            "ToolMessage",
+            "ToolMessage"
           ],
           "kwargs": {
             "additional_kwargs": {},
             "content": "6223",
             "response_metadata": {},
-            "tool_call_id": "<tool_call_id>",
+            "tool_call_id": "<tool_call_id>"
           },
           "lc": 1,
-          "type": "constructor",
-        },
-      ],
+          "type": "constructor"
+        }
+      ]
     ],
     "log_id": "g",
     "metadata": {
@@ -1866,7 +1906,7 @@ exports[`wrap-langchain-js-traces captures invoke, chain, stream, and tool spans
       "braintrust": {
         "integration_name": "langchain-js",
         "integration_version": "0.2.0",
-        "sdk_language": "javascript",
+        "sdk_language": "javascript"
       },
       "invocation_params": {
         "max_tokens": 128,
@@ -1883,32 +1923,32 @@ exports[`wrap-langchain-js-traces captures invoke, chain, stream, and tool spans
                 "additionalProperties": false,
                 "properties": {
                   "a": {
-                    "type": "number",
+                    "type": "number"
                   },
                   "b": {
-                    "type": "number",
+                    "type": "number"
                   },
                   "operation": {
                     "enum": [
                       "add",
                       "subtract",
                       "multiply",
-                      "divide",
+                      "divide"
                     ],
-                    "type": "string",
-                  },
+                    "type": "string"
+                  }
                 },
                 "required": [
                   "operation",
                   "a",
-                  "b",
+                  "b"
                 ],
-                "type": "object",
-              },
+                "type": "object"
+              }
             },
-            "type": "function",
-          },
-        ],
+            "type": "function"
+          }
+        ]
       },
       "metadata": {
         "ls_max_tokens": 128,
@@ -1916,6 +1956,14 @@ exports[`wrap-langchain-js-traces captures invoke, chain, stream, and tool spans
         "ls_model_type": "chat",
         "ls_provider": "openai",
         "ls_temperature": 0,
+        "max_tokens": 128,
+        "model": "gpt-4o-mini",
+        "stream": false,
+        "temperature": 0,
+        "versions": {
+          "@langchain/core": "1.1.34",
+          "@langchain/openai": "1.3.0"
+        }
       },
       "options": {
         "tools": [
@@ -1928,32 +1976,32 @@ exports[`wrap-langchain-js-traces captures invoke, chain, stream, and tool spans
                 "additionalProperties": false,
                 "properties": {
                   "a": {
-                    "type": "number",
+                    "type": "number"
                   },
                   "b": {
-                    "type": "number",
+                    "type": "number"
                   },
                   "operation": {
                     "enum": [
                       "add",
                       "subtract",
                       "multiply",
-                      "divide",
+                      "divide"
                     ],
-                    "type": "string",
-                  },
+                    "type": "string"
+                  }
                 },
                 "required": [
                   "operation",
                   "a",
-                  "b",
+                  "b"
                 ],
-                "type": "object",
-              },
+                "type": "object"
+              }
             },
-            "type": "function",
-          },
-        ],
+            "type": "function"
+          }
+        ]
       },
       "run_id": "<uuid:43>",
       "serialized": {
@@ -1961,82 +2009,82 @@ exports[`wrap-langchain-js-traces captures invoke, chain, stream, and tool spans
           "langchain",
           "chat_models",
           "openai",
-          "ChatOpenAI",
+          "ChatOpenAI"
         ],
         "kwargs": {
           "max_tokens": 128,
           "model": "gpt-4o-mini",
           "openai_api_key": {
             "id": [
-              "OPENAI_API_KEY",
+              "OPENAI_API_KEY"
             ],
             "lc": 1,
-            "type": "secret",
+            "type": "secret"
           },
-          "temperature": 0,
+          "temperature": 0
         },
         "lc": 1,
-        "type": "constructor",
+        "type": "constructor"
       },
-      "tags": [],
+      "tags": []
     },
     "metrics": {
-      "start": 0,
+      "start": 0
     },
     "project_id": "<uuid:3>",
     "root_span_id": "<span:2>",
     "span_attributes": {
       "exec_counter": 13,
       "name": "ChatOpenAI",
-      "type": "llm",
+      "type": "llm"
     },
-    "span_id": "<span:42>",
+    "span_id": "<span:34>",
     "span_parents": [
-      "<span:36>",
-    ],
+      "<span:29>"
+    ]
   },
   {
     "_is_merge": true,
-    "id": "<span:41>",
+    "id": "<span:33>",
     "log_id": "g",
     "metrics": {
       "completion_tokens": 0,
       "prompt_cached_tokens": 0,
       "prompt_tokens": 0,
-      "total_tokens": 0,
+      "total_tokens": 0
     },
     "project_id": "<uuid:3>",
     "root_span_id": "<span:2>",
-    "span_id": "<span:42>",
+    "span_id": "<span:34>",
     "span_parents": [
-      "<span:36>",
-    ],
+      "<span:29>"
+    ]
   },
   {
     "_is_merge": true,
-    "id": "<span:41>",
+    "id": "<span:33>",
     "log_id": "g",
     "metadata": {
       "model": "gpt-4o-mini-2024-07-18",
-      "tags": [],
+      "tags": []
     },
     "output": {
       "generations": [
         [
           {
             "generationInfo": {
-              "finish_reason": "stop",
+              "finish_reason": "stop"
             },
             "message": {
               "id": [
                 "langchain_core",
                 "messages",
-                "AIMessage",
+                "AIMessage"
               ],
               "kwargs": {
                 "additional_kwargs": {},
                 "content": "<llm-response>",
-                "id": "<span:44>",
+                "id": "<span:35>",
                 "invalid_tool_calls": [],
                 "response_metadata": {
                   "finish_reason": "stop",
@@ -2046,7 +2094,7 @@ exports[`wrap-langchain-js-traces captures invoke, chain, stream, and tool spans
                   "tokenUsage": {
                     "completionTokens": 0,
                     "promptTokens": 0,
-                    "totalTokens": 0,
+                    "totalTokens": 0
                   },
                   "usage": {
                     "completion_tokens": 0,
@@ -2054,353 +2102,66 @@ exports[`wrap-langchain-js-traces captures invoke, chain, stream, and tool spans
                       "accepted_prediction_tokens": 0,
                       "audio_tokens": 0,
                       "reasoning_tokens": 0,
-                      "rejected_prediction_tokens": 0,
+                      "rejected_prediction_tokens": 0
                     },
                     "prompt_tokens": 0,
                     "prompt_tokens_details": {
                       "audio_tokens": 0,
-                      "cached_tokens": 0,
+                      "cached_tokens": 0
                     },
-                    "total_tokens": 0,
-                  },
+                    "total_tokens": 0
+                  }
                 },
                 "tool_calls": [],
                 "type": "ai",
                 "usage_metadata": {
                   "input_token_details": {
                     "audio": 0,
-                    "cache_read": 0,
+                    "cache_read": 0
                   },
                   "input_tokens": 0,
                   "output_token_details": {
                     "audio": 0,
-                    "reasoning": 0,
+                    "reasoning": 0
                   },
                   "output_tokens": 0,
-                  "total_tokens": 0,
-                },
+                  "total_tokens": 0
+                }
               },
               "lc": 1,
-              "type": "constructor",
+              "type": "constructor"
             },
-            "text": "<llm-response>",
-          },
-        ],
+            "text": "<llm-response>"
+          }
+        ]
       ],
       "llmOutput": {
         "tokenUsage": {
           "completionTokens": 0,
           "promptTokens": 0,
-          "totalTokens": 0,
-        },
-      },
+          "totalTokens": 0
+        }
+      }
     },
     "project_id": "<uuid:3>",
     "root_span_id": "<span:2>",
-    "span_id": "<span:42>",
+    "span_id": "<span:34>",
     "span_parents": [
-      "<span:36>",
-    ],
+      "<span:29>"
+    ]
   },
   {
     "_is_merge": true,
-    "id": "<span:41>",
+    "id": "<span:33>",
     "log_id": "g",
     "metrics": {
-      "end": 0,
+      "end": 0
     },
     "project_id": "<uuid:3>",
     "root_span_id": "<span:2>",
-    "span_id": "<span:42>",
+    "span_id": "<span:34>",
     "span_parents": [
-      "<span:36>",
-    ],
-  },
+      "<span:29>"
+    ]
+  }
 ]
-`;
-
-exports[`wrap-langchain-js-traces captures invoke, chain, stream, and tool spans via BraintrustCallbackHandler > span-events 1`] = `
-[
-  {
-    "has_input": false,
-    "has_output": false,
-    "metadata": {
-      "scenario": "wrap-langchain-js-traces",
-    },
-    "metric_keys": [],
-    "name": "langchain-wrapper-root",
-    "root_span_id": "<span:1>",
-    "span_id": "<span:1>",
-    "span_parents": [],
-    "type": "task",
-  },
-  {
-    "has_input": false,
-    "has_output": false,
-    "metadata": {
-      "operation": "invoke",
-    },
-    "metric_keys": [],
-    "name": "langchain-invoke-operation",
-    "root_span_id": "<span:1>",
-    "span_id": "<span:2>",
-    "span_parents": [
-      "<span:1>",
-    ],
-    "type": null,
-  },
-  {
-    "has_input": true,
-    "has_output": true,
-    "metadata": {
-      "model": "gpt-4o-mini-2024-07-18",
-    },
-    "metric_keys": [
-      "completion_tokens",
-      "prompt_cached_tokens",
-      "prompt_tokens",
-      "total_tokens",
-    ],
-    "name": "ChatOpenAI",
-    "root_span_id": "<span:1>",
-    "span_id": "<span:3>",
-    "span_parents": [
-      "<span:2>",
-    ],
-    "type": "llm",
-  },
-  {
-    "has_input": false,
-    "has_output": false,
-    "metadata": {
-      "operation": "chain",
-    },
-    "metric_keys": [],
-    "name": "langchain-chain-operation",
-    "root_span_id": "<span:1>",
-    "span_id": "<span:4>",
-    "span_parents": [
-      "<span:1>",
-    ],
-    "type": null,
-  },
-  {
-    "has_input": true,
-    "has_output": false,
-    "metadata": null,
-    "metric_keys": [],
-    "name": "RunnableSequence",
-    "root_span_id": "<span:1>",
-    "span_id": "<span:5>",
-    "span_parents": [
-      "<span:4>",
-    ],
-    "type": "task",
-  },
-  {
-    "has_input": true,
-    "has_output": true,
-    "metadata": null,
-    "metric_keys": [],
-    "name": "RunnableSequence",
-    "root_span_id": "<span:1>",
-    "span_id": "<span:5>",
-    "span_parents": [
-      "<span:4>",
-    ],
-    "type": "task",
-  },
-  {
-    "has_input": false,
-    "has_output": false,
-    "metadata": {
-      "operation": "stream",
-    },
-    "metric_keys": [],
-    "name": "langchain-stream-operation",
-    "root_span_id": "<span:1>",
-    "span_id": "<span:6>",
-    "span_parents": [
-      "<span:1>",
-    ],
-    "type": null,
-  },
-  {
-    "has_input": true,
-    "has_output": true,
-    "metadata": {
-      "model": "gpt-4o-mini-2024-07-18",
-    },
-    "metric_keys": [
-      "completion_tokens",
-      "prompt_cached_tokens",
-      "prompt_tokens",
-      "time_to_first_token",
-      "total_tokens",
-    ],
-    "name": "ChatOpenAI",
-    "root_span_id": "<span:1>",
-    "span_id": "<span:7>",
-    "span_parents": [
-      "<span:6>",
-    ],
-    "type": "llm",
-  },
-  {
-    "has_input": false,
-    "has_output": false,
-    "metadata": {
-      "operation": "tool",
-    },
-    "metric_keys": [],
-    "name": "langchain-tool-operation",
-    "root_span_id": "<span:1>",
-    "span_id": "<span:8>",
-    "span_parents": [
-      "<span:1>",
-    ],
-    "type": null,
-  },
-  {
-    "has_input": true,
-    "has_output": true,
-    "metadata": {
-      "model": "gpt-4o-mini-2024-07-18",
-    },
-    "metric_keys": [
-      "completion_tokens",
-      "prompt_cached_tokens",
-      "prompt_tokens",
-      "total_tokens",
-    ],
-    "name": "ChatOpenAI",
-    "root_span_id": "<span:1>",
-    "span_id": "<span:9>",
-    "span_parents": [
-      "<span:8>",
-    ],
-    "type": "llm",
-  },
-  {
-    "has_input": false,
-    "has_output": false,
-    "metadata": {
-      "operation": "tool-result",
-    },
-    "metric_keys": [],
-    "name": "langchain-tool-result-operation",
-    "root_span_id": "<span:1>",
-    "span_id": "<span:10>",
-    "span_parents": [
-      "<span:1>",
-    ],
-    "type": null,
-  },
-  {
-    "has_input": true,
-    "has_output": false,
-    "metadata": null,
-    "metric_keys": [],
-    "name": "ChatOpenAI",
-    "root_span_id": "<span:1>",
-    "span_id": "<span:11>",
-    "span_parents": [
-      "<span:10>",
-    ],
-    "type": "llm",
-  },
-  {
-    "has_input": true,
-    "has_output": true,
-    "metadata": {
-      "model": "gpt-4o-mini-2024-07-18",
-    },
-    "metric_keys": [
-      "completion_tokens",
-      "prompt_cached_tokens",
-      "prompt_tokens",
-      "total_tokens",
-    ],
-    "name": "ChatOpenAI",
-    "root_span_id": "<span:1>",
-    "span_id": "<span:11>",
-    "span_parents": [
-      "<span:10>",
-    ],
-    "type": "llm",
-  },
-  {
-    "has_input": true,
-    "has_output": true,
-    "metadata": {
-      "model": "gpt-4o-mini-2024-07-18",
-    },
-    "metric_keys": [
-      "completion_tokens",
-      "prompt_cached_tokens",
-      "prompt_tokens",
-      "total_tokens",
-    ],
-    "name": "ChatOpenAI",
-    "root_span_id": "<span:1>",
-    "span_id": "<span:11>",
-    "span_parents": [
-      "<span:10>",
-    ],
-    "type": "llm",
-  },
-  {
-    "has_input": true,
-    "has_output": false,
-    "metadata": null,
-    "metric_keys": [],
-    "name": "ChatOpenAI",
-    "root_span_id": "<span:1>",
-    "span_id": "<span:12>",
-    "span_parents": [
-      "<span:10>",
-    ],
-    "type": "llm",
-  },
-  {
-    "has_input": true,
-    "has_output": true,
-    "metadata": {
-      "model": "gpt-4o-mini-2024-07-18",
-    },
-    "metric_keys": [
-      "completion_tokens",
-      "prompt_cached_tokens",
-      "prompt_tokens",
-      "total_tokens",
-    ],
-    "name": "ChatOpenAI",
-    "root_span_id": "<span:1>",
-    "span_id": "<span:12>",
-    "span_parents": [
-      "<span:10>",
-    ],
-    "type": "llm",
-  },
-  {
-    "has_input": true,
-    "has_output": true,
-    "metadata": {
-      "model": "gpt-4o-mini-2024-07-18",
-    },
-    "metric_keys": [
-      "completion_tokens",
-      "prompt_cached_tokens",
-      "prompt_tokens",
-      "total_tokens",
-    ],
-    "name": "ChatOpenAI",
-    "root_span_id": "<span:1>",
-    "span_id": "<span:12>",
-    "span_parents": [
-      "<span:10>",
-    ],
-    "type": "llm",
-  },
-]
-`;

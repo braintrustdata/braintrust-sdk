@@ -4074,6 +4074,7 @@ export type LoadParametersByIdOptions = LoadParametersBaseOptions & {
 export type LoadParametersByIdWithEnvOptions = LoadParametersBaseOptions & {
   id: string;
   environment: string;
+  version?: string;
 };
 
 export type LoadParametersByProjectNameOptions = LoadParametersBaseOptions & {
@@ -4087,6 +4088,7 @@ export type LoadParametersByProjectNameWithEnvOptions =
     projectName: string;
     slug: string;
     environment: string;
+    version?: string;
   };
 
 export type LoadParametersByProjectIdOptions = LoadParametersBaseOptions & {
@@ -4100,6 +4102,7 @@ export type LoadParametersByProjectIdWithEnvOptions =
     projectId: string;
     slug: string;
     environment: string;
+    version?: string;
   };
 
 export type LoadParametersOptions =
@@ -4127,7 +4130,7 @@ type LoadParametersImplementationOptions = LoadParametersBaseOptions & {
  * @param options.projectId The id of the project to load the prompt from. This takes precedence over `projectName` if specified.
  * @param options.slug The slug of the prompt to load.
  * @param options.version An optional version of the prompt (to read). If not specified, the latest version will be used.
- * @param options.environment Fetch the version of the prompt assigned to the specified environment (e.g. "production", "staging"). Cannot be specified at the same time as `version`.
+ * @param options.environment Fetch the version of the prompt assigned to the specified environment (e.g. "production", "staging"). If both `version` and `environment` are provided, `version` takes precedence.
  * @param options.id The id of a specific prompt to load. If specified, this takes precedence over all other parameters (project and slug).
  * @param options.defaults (Optional) A dictionary of default values to use when rendering the prompt. Prompt values will override these defaults.
  * @param options.noTrace If true, do not include logging metadata for this prompt when build() is called.
@@ -4163,11 +4166,11 @@ export async function loadPrompt({
   forceLogin,
   state: stateArg,
 }: LoadPromptOptions) {
-  if (version && environment) {
-    throw new Error(
-      "Cannot specify both 'version' and 'environment' parameters. Please use only one (remove the other).",
-    );
-  }
+  const versionOrEnvironment = version
+    ? { version }
+    : environment
+      ? { environment }
+      : {};
   if (id) {
     // When loading by ID, we don't need project or slug
   } else if (isEmpty(projectName) && isEmpty(projectId)) {
@@ -4188,10 +4191,9 @@ export async function loadPrompt({
     });
     if (id) {
       // Load prompt by ID using the /v1/prompt/{id} endpoint
-      response = await state.apiConn().get_json(`v1/prompt/${id}`, {
-        ...(version && { version }),
-        ...(environment && { environment }),
-      });
+      response = await state
+        .apiConn()
+        .get_json(`v1/prompt/${id}`, versionOrEnvironment);
       // Wrap single prompt response in objects array to match list API format
       if (response) {
         response = { objects: [response] };
@@ -4201,13 +4203,12 @@ export async function loadPrompt({
         project_name: projectName,
         project_id: projectId,
         slug,
-        version,
-        ...(environment && { environment }),
+        ...versionOrEnvironment,
       });
     }
   } catch (e) {
     // If environment or version was specified, don't fall back to cache
-    if (environment || version) {
+    if (version || environment) {
       throw new Error(`Prompt not found with specified parameters: ${e}`);
     }
 
@@ -4287,7 +4288,7 @@ export async function loadPrompt({
  * @param options.projectId The id of the project to load the parameters from. This takes precedence over `projectName` if specified.
  * @param options.slug The slug of the parameters to load.
  * @param options.version An optional version of the parameters (to read). If not specified, the latest version will be used.
- * @param options.environment Fetch the version of the parameters assigned to the specified environment (e.g. "production", "staging"). Cannot be specified at the same time as `version`.
+ * @param options.environment Fetch the version of the parameters assigned to the specified environment (e.g. "production", "staging"). If both `version` and `environment` are provided, `version` takes precedence.
  * @param options.id The id of specific parameters to load. If specified, this takes precedence over all other parameters (project and slug).
  * @param options.appUrl The URL of the Braintrust App. Defaults to https://www.braintrust.dev.
  * @param options.apiKey The API key to use. If the parameter is not specified, will try to use the `BRAINTRUST_API_KEY` environment variable.
@@ -4340,11 +4341,11 @@ export async function loadParameters<
 }: LoadParametersImplementationOptions): Promise<
   RemoteEvalParameters<true, true, InferParameters<S>>
 > {
-  if (version && environment) {
-    throw new Error(
-      "Cannot specify both 'version' and 'environment' parameters. Please use only one (remove the other).",
-    );
-  }
+  const versionOrEnvironment = version
+    ? { version }
+    : environment
+      ? { environment }
+      : {};
   if (id) {
     // When loading by ID, we don't need project or slug
   } else if (isEmpty(projectName) && isEmpty(projectId)) {
@@ -4365,8 +4366,7 @@ export async function loadParameters<
     });
     if (id) {
       response = await state.apiConn().get_json(`v1/function/${id}`, {
-        ...(version && { version }),
-        ...(environment && { environment }),
+        ...versionOrEnvironment,
       });
       if (response) {
         response = { objects: [response] };
@@ -4376,13 +4376,12 @@ export async function loadParameters<
         project_name: projectName,
         project_id: projectId,
         slug,
-        version,
         function_type: "parameters",
-        ...(environment && { environment }),
+        ...versionOrEnvironment,
       });
     }
   } catch (e) {
-    if (environment || version) {
+    if (version || environment) {
       throw new Error(`Parameters not found with specified parameters: ${e}`);
     }
 

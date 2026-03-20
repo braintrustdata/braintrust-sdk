@@ -39,6 +39,7 @@ const DYNAMIC_HEADER_KEYS = new Set([
   "openai-project",
   "server-timing",
   "set-cookie",
+  "x-gemini-service-tier",
   "x-ratelimit-remaining-requests",
   "x-ratelimit-remaining-tokens",
   "x-ratelimit-reset-requests",
@@ -58,6 +59,11 @@ const TEMP_SCENARIO_PATH_REGEX =
 const TEMP_HELPER_PATH_REGEX = /\/e2e\/\.bt-tmp\/[^/\s)]+\/helpers\/?/g;
 const WRAP_AI_SDK_GENERATION_TRACES_SCENARIO_PATH =
   "/e2e/scenarios/wrap-ai-sdk-generation-traces/";
+const PROVIDER_HELPER_CALLER_REGEX = /^<repo>\/e2e\/helpers\/.+-scenario\.mjs$/;
+const ANTHROPIC_MESSAGE_STREAM_PATH_REGEX =
+  /([/\\]node_modules[/\\]\.pnpm[/\\]@anthropic-ai\+sdk@[^/\\\s)]+[/\\]node_modules[/\\]@anthropic-ai[/\\]sdk[/\\])(?:src[/\\]lib[/\\]MessageStream\.ts|lib[/\\]MessageStream\.js)/g;
+const ANTHROPIC_PNPM_VERSION_REGEX =
+  /([/\\]\.pnpm[/\\]@anthropic-ai\+sdk@)[^/\\\s)]+/g;
 
 function isRecord(value: Json | undefined): value is { [key: string]: Json } {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -121,10 +127,12 @@ function normalizeCallerFilename(value: string): string {
   );
   const e2eIndex = helperNormalizedValue.lastIndexOf("/e2e/");
   if (e2eIndex >= 0) {
-    return `<repo>${helperNormalizedValue.slice(e2eIndex)}`;
+    return normalizeModuleSourcePath(
+      `<repo>${helperNormalizedValue.slice(e2eIndex)}`,
+    );
   }
 
-  return helperNormalizedValue;
+  return normalizeModuleSourcePath(helperNormalizedValue);
 }
 
 function normalizeMockServerUrl(value: string): string | undefined {
@@ -166,7 +174,29 @@ function normalizeStackLikeString(value: string): string {
     "node:<internal>:0:0",
   );
 
-  return normalized;
+  return normalizeModuleSourcePath(normalized);
+}
+
+function normalizeModuleSourcePath(value: string): string {
+  return value
+    .replace(ANTHROPIC_PNPM_VERSION_REGEX, "$1<version>")
+    .replace(ANTHROPIC_MESSAGE_STREAM_PATH_REGEX, "$1lib/MessageStream.js");
+}
+
+function shouldNormalizeNodeInternalStyleCaller(
+  callerFilename: string | undefined,
+): boolean {
+  if (typeof callerFilename !== "string") {
+    return false;
+  }
+
+  if (callerFilename.startsWith("node:")) {
+    return true;
+  }
+
+  return PROVIDER_HELPER_CALLER_REGEX.test(
+    normalizeCallerFilename(callerFilename),
+  );
 }
 
 function normalizeObject(
@@ -179,7 +209,8 @@ function normalizeObject(
     typeof value.caller_filename === "string"
       ? value.caller_filename
       : undefined;
-  const isNodeInternalCaller = callerFilename?.startsWith("node:");
+  const isNodeInternalCaller =
+    shouldNormalizeNodeInternalStyleCaller(callerFilename);
   const shouldNormalizeScenarioCaller =
     currentKey === "context"
       ? shouldNormalizeWrapAISDKGenerationTracesCaller(
