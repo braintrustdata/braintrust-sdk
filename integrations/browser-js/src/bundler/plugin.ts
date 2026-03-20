@@ -20,11 +20,13 @@ import { extname, join, sep } from "path";
 import { readFileSync } from "fs";
 import { fileURLToPath } from "url";
 import moduleDetailsFromPath from "module-details-from-path";
-import { openaiConfigs } from "../configs/openai";
-import { anthropicConfigs } from "../configs/anthropic";
-import { aiSDKConfigs } from "../configs/ai-sdk";
-import { claudeAgentSDKConfigs } from "../configs/claude-agent-sdk";
-import { googleGenAIConfigs } from "../configs/google-genai";
+import {
+  openaiConfigs,
+  anthropicConfigs,
+  aiSDKConfigs,
+  claudeAgentSDKConfigs,
+  googleGenAIConfigs,
+} from "braintrust/auto-instrumentation-configs";
 
 export interface BundlerPluginOptions {
   /**

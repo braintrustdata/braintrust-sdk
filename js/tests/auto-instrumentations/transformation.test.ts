@@ -39,8 +39,7 @@ describe("Orchestrion Transformation Tests", () => {
 
   describe("esbuild", () => {
     it("should transform OpenAI SDK code with tracingChannel", async () => {
-      const { esbuildPlugin } =
-        await import("../../src/auto-instrumentations/bundler/esbuild.js");
+      const { esbuildPlugin } = await import("@braintrust/browser/esbuild");
 
       const entryPoint = path.join(fixturesDir, "test-app.js");
       const outfile = path.join(outputDir, "esbuild-bundle.js");
@@ -72,8 +71,7 @@ describe("Orchestrion Transformation Tests", () => {
     });
 
     it("should bundle dc-browser module when browser: true", async () => {
-      const { esbuildPlugin } =
-        await import("../../src/auto-instrumentations/bundler/esbuild.js");
+      const { esbuildPlugin } = await import("@braintrust/browser/esbuild");
 
       const entryPoint = path.join(fixturesDir, "test-app.js");
       const outfile = path.join(outputDir, "esbuild-browser-bundle.js");
@@ -111,8 +109,7 @@ describe("Orchestrion Transformation Tests", () => {
 
   describe("vite", () => {
     it("should transform OpenAI SDK code with tracingChannel", async () => {
-      const { vitePlugin } =
-        await import("../../src/auto-instrumentations/bundler/vite.js");
+      const { vitePlugin } = await import("@braintrust/browser/vite");
 
       const entryPoint = path.join(fixturesDir, "test-app.js");
       const outDir = path.join(outputDir, "vite-dist");
@@ -153,8 +150,7 @@ describe("Orchestrion Transformation Tests", () => {
     });
 
     it("should bundle dc-browser module when browser: true", async () => {
-      const { vitePlugin } =
-        await import("../../src/auto-instrumentations/bundler/vite.js");
+      const { vitePlugin } = await import("@braintrust/browser/vite");
 
       const entryPoint = path.join(fixturesDir, "test-app.js");
       const outDir = path.join(outputDir, "vite-browser-dist");
@@ -199,8 +195,7 @@ describe("Orchestrion Transformation Tests", () => {
   describe("rollup", () => {
     it("should transform OpenAI SDK code with tracingChannel", async () => {
       const { rollup } = await import("rollup");
-      const { rollupPlugin } =
-        await import("../../src/auto-instrumentations/bundler/rollup.js");
+      const { rollupPlugin } = await import("@braintrust/browser/rollup");
 
       const entryPoint = path.join(fixturesDir, "test-app.js");
       const outfile = path.join(outputDir, "rollup-bundle.js");
@@ -248,8 +243,7 @@ describe("Orchestrion Transformation Tests", () => {
 
     it("should bundle dc-browser module when browser: true", async () => {
       const { rollup } = await import("rollup");
-      const { rollupPlugin } =
-        await import("../../src/auto-instrumentations/bundler/rollup.js");
+      const { rollupPlugin } = await import("@braintrust/browser/rollup");
 
       const entryPoint = path.join(fixturesDir, "test-app.js");
       const outfile = path.join(outputDir, "rollup-browser-bundle.js");
