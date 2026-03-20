@@ -98,10 +98,10 @@ describe("Error Handling", () => {
       // Give events time to emit
       await new Promise((resolve) => setImmediate(resolve));
 
-      // Verify error event was emitted
-      expect(collector.error.length).toBeGreaterThan(0);
-      expect(collector.error[0].error).toBeDefined();
-      expect(collector.error[0].error.message).toBe("Test error");
+      // traceSync publishes the returned promise on end; the rejection happens later.
+      expect(collector.end.length).toBeGreaterThan(0);
+      await expect(collector.end[0].result).rejects.toThrow("Test error");
+      expect(collector.error).toHaveLength(0);
     });
 
     it("should emit error event with correct error details", async () => {
@@ -157,12 +157,13 @@ describe("Error Handling", () => {
 
       await new Promise((resolve) => setImmediate(resolve));
 
-      // Verify error details are captured
-      expect(collector.error.length).toBeGreaterThan(0);
-      const errorEvent = collector.error[0];
-      expect(errorEvent.error.message).toBe("API failure");
-      expect(errorEvent.error.name).toBe("CustomError");
-      expect(errorEvent.error.code).toBe("ERR_API_FAILURE");
+      expect(collector.end.length).toBeGreaterThan(0);
+      await expect(collector.end[0].result).rejects.toMatchObject({
+        code: "ERR_API_FAILURE",
+        message: "API failure",
+        name: "CustomError",
+      });
+      expect(collector.error).toHaveLength(0);
     });
   });
 
@@ -208,9 +209,11 @@ describe("Error Handling", () => {
       // Verify error is still thrown
       await expect(bundled.run()).rejects.toThrow("Propagated error");
 
-      // Also verify error event was emitted
+      // The rejection is still propagated to the caller and also remains on the end event promise.
       await new Promise((resolve) => setImmediate(resolve));
-      expect(collector.error.length).toBeGreaterThan(0);
+      expect(collector.end.length).toBeGreaterThan(0);
+      await expect(collector.end[0].result).rejects.toThrow("Propagated error");
+      expect(collector.error).toHaveLength(0);
     });
 
     it("should handle errors in promise rejections", async () => {
@@ -252,10 +255,13 @@ describe("Error Handling", () => {
       // Verify promise rejection is propagated
       await expect(bundled.run()).rejects.toThrow("Promise rejection");
 
-      // Verify error event was emitted
+      // The rejection is carried by the returned promise rather than a channel error event.
       await new Promise((resolve) => setImmediate(resolve));
-      expect(collector.error.length).toBeGreaterThan(0);
-      expect(collector.error[0].error.message).toBe("Promise rejection");
+      expect(collector.end.length).toBeGreaterThan(0);
+      await expect(collector.end[0].result).rejects.toThrow(
+        "Promise rejection",
+      );
+      expect(collector.error).toHaveLength(0);
     });
   });
 
@@ -305,13 +311,14 @@ describe("Error Handling", () => {
 
       await new Promise((resolve) => setImmediate(resolve));
 
-      // Verify both start and error events were emitted
+      // traceSync emits start/end immediately for the returned promise.
       expect(collector.start.length).toBeGreaterThan(0);
-      expect(collector.error.length).toBeGreaterThan(0);
+      expect(collector.end.length).toBeGreaterThan(0);
+      expect(collector.error).toHaveLength(0);
 
-      // Verify start event came before error event
+      // Verify start event came before end event
       expect(collector.start[0].timestamp).toBeLessThanOrEqual(
-        collector.error[0].timestamp,
+        collector.end[0].timestamp,
       );
     });
 
@@ -360,17 +367,9 @@ describe("Error Handling", () => {
 
       await new Promise((resolve) => setImmediate(resolve));
 
-      // Verify error event was emitted
-      expect(collector.error.length).toBeGreaterThan(0);
-
-      // Verify end event was NOT emitted (or if emitted, came before or at the same time as error due to asyncEnd)
-      // Note: For async functions, asyncEnd might still fire, but end should not
-      if (collector.end.length > 0) {
-        // If end event exists, it should be before or at the same time as the error
-        expect(collector.end[0].timestamp).toBeLessThanOrEqual(
-          collector.error[0].timestamp,
-        );
-      }
+      expect(collector.end.length).toBeGreaterThan(0);
+      await expect(collector.end[0].result).rejects.toThrow("Test error");
+      expect(collector.error).toHaveLength(0);
     });
   });
 

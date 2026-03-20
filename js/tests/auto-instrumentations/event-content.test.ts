@@ -239,21 +239,14 @@ describe("Event Content Validation", () => {
 
       await new Promise((resolve) => setImmediate(resolve));
 
-      // Verify end event was emitted with result
-      // Note: For async functions, result appears in asyncEnd event
-      const hasAsyncEnd = collector.asyncEnd.length > 0;
-      const hasEnd = collector.end.length > 0;
+      // OpenAI methods are transformed with traceSync, so end carries the returned promise.
+      expect(collector.end.length).toBeGreaterThan(0);
 
-      expect(hasAsyncEnd || hasEnd).toBe(true);
-
-      // Check the appropriate event type
-      const resultEvent = hasAsyncEnd
-        ? collector.asyncEnd[0]
-        : collector.end[0];
-      expect(resultEvent.result).toBeDefined();
-      expect(resultEvent.result.id).toBe("chatcmpl-123");
-      expect(resultEvent.result.model).toBe("gpt-4");
-      expect(resultEvent.result.choices[0].message.content).toBe("Hello!");
+      const result = await collector.end[0].result;
+      expect(result).toBeDefined();
+      expect(result.id).toBe("chatcmpl-123");
+      expect(result.model).toBe("gpt-4");
+      expect(result.choices[0].message.content).toBe("Hello!");
     });
 
     it("should capture complex nested results", async () => {
@@ -319,21 +312,15 @@ describe("Event Content Validation", () => {
 
       await new Promise((resolve) => setImmediate(resolve));
 
-      // Verify complex result structure is captured
-      const hasAsyncEnd = collector.asyncEnd.length > 0;
-      const hasEnd = collector.end.length > 0;
+      expect(collector.end.length).toBeGreaterThan(0);
 
-      expect(hasAsyncEnd || hasEnd).toBe(true);
-
-      const resultEvent = hasAsyncEnd
-        ? collector.asyncEnd[0]
-        : collector.end[0];
-      expect(resultEvent.result).toBeDefined();
-      expect(resultEvent.result.usage.total_tokens).toBe(75);
-      expect(resultEvent.result.choices[0].message.tool_calls).toHaveLength(1);
-      expect(
-        resultEvent.result.choices[0].message.tool_calls[0].function.name,
-      ).toBe("get_weather");
+      const result = await collector.end[0].result;
+      expect(result).toBeDefined();
+      expect(result.usage.total_tokens).toBe(75);
+      expect(result.choices[0].message.tool_calls).toHaveLength(1);
+      expect(result.choices[0].message.tool_calls[0].function.name).toBe(
+        "get_weather",
+      );
     });
   });
 

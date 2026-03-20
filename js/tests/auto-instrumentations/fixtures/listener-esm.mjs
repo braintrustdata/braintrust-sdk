@@ -9,6 +9,14 @@ const expectedChannel = "orchestrion:openai:chat.completions.create";
 // Get the kStoreKey symbol to access the store
 const kStoreKey = dc.kStoreKey || Symbol.for("diagnostics_channel.store");
 
+function serializeResult(ctx) {
+  try {
+    return ctx.result ? JSON.parse(JSON.stringify(ctx.result)) : null;
+  } catch {
+    return { hasResult: ctx.result !== undefined };
+  }
+}
+
 // Subscribe to the channel and accumulate events
 const channel = tracingChannel(expectedChannel);
 channel.subscribe({
@@ -20,10 +28,14 @@ channel.subscribe({
       self: !!store?.self,
     });
   },
-  asyncEnd: (ctx) => {
-    // Only send serializable result data
+  end: (ctx) => {
     events.end.push({
-      result: ctx.result ? JSON.parse(JSON.stringify(ctx.result)) : null,
+      result: serializeResult(ctx),
+    });
+  },
+  asyncEnd: (ctx) => {
+    events.end.push({
+      result: serializeResult(ctx),
     });
   },
   error: (ctx) => {

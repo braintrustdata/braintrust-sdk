@@ -27,7 +27,7 @@ describe("OpenAI Instrumentation Configs", () => {
           functionQuery: expect.objectContaining({
             className: "Completions",
             methodName: "create",
-            kind: "Async",
+            kind: "Sync",
           }),
         }),
         expect.objectContaining({
@@ -39,7 +39,7 @@ describe("OpenAI Instrumentation Configs", () => {
           functionQuery: expect.objectContaining({
             className: "Completions",
             methodName: "create",
-            kind: "Async",
+            kind: "Sync",
           }),
         }),
         expect.objectContaining({
@@ -51,7 +51,7 @@ describe("OpenAI Instrumentation Configs", () => {
           functionQuery: expect.objectContaining({
             className: "Completions",
             methodName: "create",
-            kind: "Async",
+            kind: "Sync",
           }),
         }),
       ]),
@@ -67,7 +67,7 @@ describe("OpenAI Instrumentation Configs", () => {
     expect(config?.module.name).toBe("openai");
     expect((config?.functionQuery as any).className).toBe("Embeddings");
     expect((config?.functionQuery as any).methodName).toBe("create");
-    expect((config?.functionQuery as any).kind).toBe("Async");
+    expect((config?.functionQuery as any).kind).toBe("Sync");
   });
 
   it("should have moderations.create config", () => {
@@ -79,7 +79,7 @@ describe("OpenAI Instrumentation Configs", () => {
     expect(config?.module.name).toBe("openai");
     expect((config?.functionQuery as any).className).toBe("Moderations");
     expect((config?.functionQuery as any).methodName).toBe("create");
-    expect((config?.functionQuery as any).kind).toBe("Async");
+    expect((config?.functionQuery as any).kind).toBe("Sync");
   });
 
   it("should have beta.chat.completions.parse config", () => {
@@ -97,7 +97,7 @@ describe("OpenAI Instrumentation Configs", () => {
           functionQuery: expect.objectContaining({
             className: "Completions",
             methodName: "parse",
-            kind: "Async",
+            kind: "Sync",
           }),
         }),
         expect.objectContaining({
@@ -109,7 +109,7 @@ describe("OpenAI Instrumentation Configs", () => {
           functionQuery: expect.objectContaining({
             className: "Completions",
             methodName: "parse",
-            kind: "Async",
+            kind: "Sync",
           }),
         }),
       ]),
@@ -189,7 +189,7 @@ describe("OpenAI Instrumentation Configs", () => {
     expect(config?.module.filePath).toBe("resources/responses/responses.mjs");
     expect((config?.functionQuery as any).className).toBe("Responses");
     expect((config?.functionQuery as any).methodName).toBe("create");
-    expect((config?.functionQuery as any).kind).toBe("Async");
+    expect((config?.functionQuery as any).kind).toBe("Sync");
   });
 
   it("should have responses.stream config with Sync kind and version >=4.87.0", () => {
@@ -217,6 +217,6 @@ describe("OpenAI Instrumentation Configs", () => {
     expect(config?.module.filePath).toBe("resources/responses/responses.mjs");
     expect((config?.functionQuery as any).className).toBe("Responses");
     expect((config?.functionQuery as any).methodName).toBe("parse");
-    expect((config?.functionQuery as any).kind).toBe("Async");
+    expect((config?.functionQuery as any).kind).toBe("Sync");
   });
 });

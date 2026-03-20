@@ -1,8 +1,9 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import {
   parseMetricsFromUsage,
   processImagesInOutput,
   aggregateChatCompletionChunks,
+  patchOpenAIAPIPromiseResult,
 } from "./openai-plugin";
 import { Attachment } from "../../logger";
 
@@ -1256,5 +1257,111 @@ describe("processImagesInOutput", () => {
       const attachment = result.result as Attachment;
       expect(attachment.reference.filename).toBe("generated_image.png");
     });
+  });
+});
+
+describe("patchOpenAIAPIPromiseResult", () => {
+  it("preserves helper methods while tracing resolved withResponse results", async () => {
+    const thenUnwrap = vi.fn();
+    const withResponse = vi.fn().mockResolvedValue({
+      data: {
+        choices: [{ message: { content: "ok", role: "assistant" } }],
+        usage: {
+          prompt_tokens: 1,
+          completion_tokens: 1,
+          total_tokens: 2,
+        },
+      },
+      request_id: "req_123",
+      response: new Response(null, {
+        headers: { "x-request-id": "req_123" },
+      }),
+    });
+
+    const apiPromise = {
+      _thenUnwrap: thenUnwrap,
+      catch(onRejected?: (reason: unknown) => unknown) {
+        return Promise.resolve(this).catch(onRejected);
+      },
+      finally(onFinally?: () => void) {
+        return Promise.resolve(this).finally(onFinally);
+      },
+      then(
+        onFulfilled?: (value: unknown) => unknown,
+        onRejected?: (reason: unknown) => unknown,
+      ) {
+        return Promise.resolve(this).then(onFulfilled, onRejected);
+      },
+      withResponse,
+    };
+
+    const span = {
+      end: vi.fn(),
+      log: vi.fn(),
+    };
+
+    expect(
+      patchOpenAIAPIPromiseResult({
+        config: {
+          extractMetadata: () => ({ provider: "openai" }),
+          extractMetrics: () => ({ tokens: 2 }),
+          extractOutput: (result: any) => result.choices,
+        },
+        result: apiPromise,
+        span: span as any,
+        startTime: 0,
+      }),
+    ).toBe(true);
+
+    const enhanced = await apiPromise.withResponse();
+    const data = await apiPromise;
+
+    expect(apiPromise._thenUnwrap).toBe(thenUnwrap);
+    expect(withResponse).toHaveBeenCalledTimes(1);
+    expect(enhanced.request_id).toBe("req_123");
+    expect(data).toEqual(enhanced.data);
+    expect(span.log).toHaveBeenCalledWith({
+      metadata: { provider: "openai" },
+      metrics: { tokens: 2 },
+      output: enhanced.data.choices,
+    });
+    expect(span.end).toHaveBeenCalledTimes(1);
+  });
+
+  it("traces plain promise results when withResponse is unavailable", async () => {
+    const result = Promise.resolve({
+      choices: [{ message: { content: "ok", role: "assistant" } }],
+      usage: {
+        prompt_tokens: 1,
+        completion_tokens: 1,
+        total_tokens: 2,
+      },
+    });
+
+    const span = {
+      end: vi.fn(),
+      log: vi.fn(),
+    };
+
+    expect(
+      patchOpenAIAPIPromiseResult({
+        config: {
+          extractMetrics: () => ({ tokens: 2 }),
+          extractOutput: (resolvedResult: any) => resolvedResult.choices,
+        },
+        result,
+        span: span as any,
+        startTime: 0,
+      }),
+    ).toBe(true);
+
+    const data = await result;
+
+    expect(data.choices).toHaveLength(1);
+    expect(span.log).toHaveBeenCalledWith({
+      metrics: { tokens: 2 },
+      output: data.choices,
+    });
+    expect(span.end).toHaveBeenCalledTimes(1);
   });
 });

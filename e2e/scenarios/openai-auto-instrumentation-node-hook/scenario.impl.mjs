@@ -18,9 +18,6 @@ export async function runOpenAIAutoInstrumentationNodeHook(
     projectNameBase: "e2e-openai-auto-instrumentation-hook",
     rootName: "openai-auto-hook-root",
     scenarioName: "openai-auto-instrumentation-node-hook",
-    useChatParseHelper: false,
-    useResponsesParseHelper: false,
-    useSyncStreamHelper: false,
   });
 }
 
