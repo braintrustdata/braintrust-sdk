@@ -1,4 +1,4 @@
-name: provider-gap-audit
+name: agent-automation
 
 on:
   schedule:
@@ -14,7 +14,7 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  audit:
+  audit-sdk-coverage:
     runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:
