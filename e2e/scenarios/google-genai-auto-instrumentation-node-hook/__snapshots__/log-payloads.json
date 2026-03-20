@@ -79,11 +79,7 @@
     ]
   },
   {
-    "context": {
-      "caller_filename": "<node-internal>",
-      "caller_functionname": "<node-internal>",
-      "caller_lineno": 0
-    },
+    "context": {},
     "created": "<timestamp>",
     "id": "<span:5>",
     "input": {
@@ -254,11 +250,7 @@
     ]
   },
   {
-    "context": {
-      "caller_filename": "<node-internal>",
-      "caller_functionname": "<node-internal>",
-      "caller_lineno": 0
-    },
+    "context": {},
     "created": "<timestamp>",
     "id": "<span:10>",
     "input": {
@@ -450,11 +442,7 @@
     ]
   },
   {
-    "context": {
-      "caller_filename": "<node-internal>",
-      "caller_functionname": "<node-internal>",
-      "caller_lineno": 0
-    },
+    "context": {},
     "created": "<timestamp>",
     "id": "<span:15>",
     "input": {
@@ -608,11 +596,7 @@
     ]
   },
   {
-    "context": {
-      "caller_filename": "<node-internal>",
-      "caller_functionname": "<node-internal>",
-      "caller_lineno": 0
-    },
+    "context": {},
     "created": "<timestamp>",
     "id": "<span:19>",
     "input": {
@@ -757,11 +741,7 @@
     ]
   },
   {
-    "context": {
-      "caller_filename": "<node-internal>",
-      "caller_functionname": "<node-internal>",
-      "caller_lineno": 0
-    },
+    "context": {},
     "created": "<timestamp>",
     "id": "<span:23>",
     "input": {
