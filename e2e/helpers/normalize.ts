@@ -39,6 +39,7 @@ const DYNAMIC_HEADER_KEYS = new Set([
   "openai-project",
   "server-timing",
   "set-cookie",
+  "x-gemini-service-tier",
   "x-ratelimit-remaining-requests",
   "x-ratelimit-remaining-tokens",
   "x-ratelimit-reset-requests",
