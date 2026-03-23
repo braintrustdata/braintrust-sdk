@@ -83,6 +83,11 @@ jobs:
             - Create at most 5 issues in this run.
             - Create one issue per distinct gap.
             - Keep each issue concise, concrete, and source-backed.
+            - When creating an issue, always apply the `bot-automation` label.
+            - When creating an issue, always set the GitHub issue type to exactly one of `Bug`, `Feature`, or `Task`.
+            - Choose `Bug` when this repo appears to support the surface already but the instrumentation is incorrect, incomplete, or materially lower fidelity than expected.
+            - Choose `Feature` when the gap is a missing net-new instrumentation surface for an official upstream capability.
+            - Choose `Task` when the gap is concrete follow-up work that is neither a user-facing instrumentation bug nor a net-new instrumentation feature.
             - Include a hidden marker comment near the top of the issue body in this exact form:
 
             ```html
