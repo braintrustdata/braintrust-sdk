@@ -120,6 +120,7 @@
         "temperature": 0
       },
       "metadata": {
+        "ls_integration": "langchain_chat_model",
         "ls_max_tokens": 16,
         "ls_model_name": "gpt-4o-mini",
         "ls_model_type": "chat",
@@ -130,8 +131,8 @@
         "stream": false,
         "temperature": 0,
         "versions": {
-          "@langchain/core": "1.1.34",
-          "@langchain/openai": "1.3.0"
+          "@langchain/core": "<langchain-version>",
+          "@langchain/openai": "<langchain-version>"
         }
       },
       "options": {},
@@ -697,6 +698,7 @@
         "temperature": 0
       },
       "metadata": {
+        "ls_integration": "langchain_chat_model",
         "ls_max_tokens": 32,
         "ls_model_name": "gpt-4o-mini",
         "ls_model_type": "chat",
@@ -707,8 +709,8 @@
         "stream": false,
         "temperature": 0,
         "versions": {
-          "@langchain/core": "1.1.34",
-          "@langchain/openai": "1.3.0"
+          "@langchain/core": "<langchain-version>",
+          "@langchain/openai": "<langchain-version>"
         }
       },
       "options": {},
@@ -965,6 +967,7 @@
         "temperature": 0
       },
       "metadata": {
+        "ls_integration": "langchain_chat_model",
         "ls_max_tokens": 32,
         "ls_model_name": "gpt-4o-mini",
         "ls_model_type": "chat",
@@ -978,8 +981,8 @@
         },
         "temperature": 0,
         "versions": {
-          "@langchain/core": "1.1.34",
-          "@langchain/openai": "1.3.0"
+          "@langchain/core": "<langchain-version>",
+          "@langchain/openai": "<langchain-version>"
         }
       },
       "options": {},
@@ -1256,6 +1259,7 @@
         ]
       },
       "metadata": {
+        "ls_integration": "langchain_chat_model",
         "ls_max_tokens": 128,
         "ls_model_name": "gpt-4o-mini",
         "ls_model_type": "chat",
@@ -1266,8 +1270,8 @@
         "stream": false,
         "temperature": 0,
         "versions": {
-          "@langchain/core": "1.1.34",
-          "@langchain/openai": "1.3.0"
+          "@langchain/core": "<langchain-version>",
+          "@langchain/openai": "<langchain-version>"
         }
       },
       "options": {
@@ -1596,6 +1600,7 @@
         ]
       },
       "metadata": {
+        "ls_integration": "langchain_chat_model",
         "ls_max_tokens": 128,
         "ls_model_name": "gpt-4o-mini",
         "ls_model_type": "chat",
@@ -1606,8 +1611,8 @@
         "stream": false,
         "temperature": 0,
         "versions": {
-          "@langchain/core": "1.1.34",
-          "@langchain/openai": "1.3.0"
+          "@langchain/core": "<langchain-version>",
+          "@langchain/openai": "<langchain-version>"
         }
       },
       "options": {
@@ -1951,6 +1956,7 @@
         ]
       },
       "metadata": {
+        "ls_integration": "langchain_chat_model",
         "ls_max_tokens": 128,
         "ls_model_name": "gpt-4o-mini",
         "ls_model_type": "chat",
@@ -1961,8 +1967,8 @@
         "stream": false,
         "temperature": 0,
         "versions": {
-          "@langchain/core": "1.1.34",
-          "@langchain/openai": "1.3.0"
+          "@langchain/core": "<langchain-version>",
+          "@langchain/openai": "<langchain-version>"
         }
       },
       "options": {

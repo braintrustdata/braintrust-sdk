@@ -215,7 +215,7 @@ export function assertGoogleGenAITraceContract(options: {
   ]) {
     expect(wrapperSpan).toBeDefined();
     expect(wrapperSpan?.row.metadata).toMatchObject({
-      model: "gemini-2.0-flash-001",
+      model: "gemini-2.5-flash-lite",
     });
   }
 

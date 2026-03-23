@@ -44,6 +44,9 @@ function normalizeLangchainPayloads(payloadRows: unknown[]): unknown[] {
     // Normalize non-deterministic tool call IDs throughout the row.
     normalizeToolCallIds(row);
 
+    // Normalize volatile LangChain dependency versions throughout the row.
+    normalizeLangchainVersions(row);
+
     return row;
   });
 }
@@ -137,6 +140,42 @@ function normalizeToolCallIds(obj: unknown): void {
       record[key] = "<tool_call_id>";
     } else if (typeof value === "object" && value !== null) {
       normalizeToolCallIds(value);
+    }
+  }
+}
+
+/**
+ * Recursively finds `versions` objects containing `@langchain/*` keys and
+ * replaces version values with a stable placeholder so that snapshots survive
+ * minor dependency bumps.
+ */
+function normalizeLangchainVersions(obj: unknown): void {
+  if (!obj || typeof obj !== "object") return;
+
+  if (Array.isArray(obj)) {
+    for (const item of obj) {
+      normalizeLangchainVersions(item);
+    }
+    return;
+  }
+
+  const record = obj as Record<string, unknown>;
+  if (
+    record.versions &&
+    typeof record.versions === "object" &&
+    !Array.isArray(record.versions)
+  ) {
+    const versions = record.versions as Record<string, unknown>;
+    for (const key of Object.keys(versions)) {
+      if (key.startsWith("@langchain/") && typeof versions[key] === "string") {
+        versions[key] = "<langchain-version>";
+      }
+    }
+  }
+
+  for (const value of Object.values(record)) {
+    if (typeof value === "object" && value !== null) {
+      normalizeLangchainVersions(value);
     }
   }
 }
