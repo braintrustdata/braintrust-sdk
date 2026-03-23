@@ -3,6 +3,9 @@ import {
   runOperation,
   runTracedScenario,
 } from "./provider-runtime.mjs";
+import { z } from "zod";
+
+const CLAUDE_AGENT_MODEL = "claude-haiku-4-5-20251001";
 
 function makePromptMessage(content) {
   return {
@@ -18,7 +21,53 @@ export async function runClaudeAgentSDKScenario(options) {
   const sdk = options.decorateSDK
     ? options.decorateSDK(options.sdk)
     : options.sdk;
-  const { query } = sdk;
+  const { createSdkMcpServer, query, tool } = sdk;
+  const calculator = tool(
+    "calculator",
+    "Performs basic arithmetic operations",
+    {
+      operation: z.enum(["add", "divide", "multiply", "subtract"]),
+      a: z.number(),
+      b: z.number(),
+    },
+    async (args) => {
+      let result;
+
+      switch (args.operation) {
+        case "add":
+          result = args.a + args.b;
+          break;
+        case "subtract":
+          result = args.a - args.b;
+          break;
+        case "multiply":
+          result = args.a * args.b;
+          break;
+        case "divide":
+          if (args.b === 0) {
+            throw new Error("division by zero");
+          }
+          result = args.a / args.b;
+          break;
+        default:
+          throw new Error(`unsupported operation: ${args.operation}`);
+      }
+
+      return {
+        content: [
+          {
+            text: `${args.operation}(${args.a}, ${args.b}) = ${result}`,
+            type: "text",
+          },
+        ],
+      };
+    },
+  );
+  const calculatorServer = createSdkMcpServer({
+    name: "calculator",
+    tools: [calculator],
+    version: "1.0.0",
+  });
 
   await runTracedScenario({
     callback: async () => {
@@ -26,9 +75,13 @@ export async function runClaudeAgentSDKScenario(options) {
         await collectAsync(
           query({
             prompt:
-              "Use the calculator tool to multiply 15 by 7, then subtract 5.",
+              "Use the calculator tool to multiply 15 by 7. Do not answer from memory.",
             options: {
-              model: "claude-e2e-mock",
+              mcpServers: {
+                calculator: calculatorServer,
+              },
+              model: CLAUDE_AGENT_MODEL,
+              permissionMode: "bypassPermissions",
             },
           }),
         );
@@ -45,7 +98,9 @@ export async function runClaudeAgentSDKScenario(options) {
                 yield makePromptMessage("Part 2");
               })(),
               options: {
-                model: "claude-e2e-mock",
+                maxTurns: 1,
+                model: CLAUDE_AGENT_MODEL,
+                permissionMode: "bypassPermissions",
               },
             }),
           );
@@ -58,14 +113,23 @@ export async function runClaudeAgentSDKScenario(options) {
         async () => {
           await collectAsync(
             query({
-              prompt: "Spawn a math-expert subagent and report the result.",
+              prompt:
+                "Spawn a math-expert subagent to add 15 and 27 using the calculator tool. Report the result. Do not solve it yourself.",
               options: {
                 agents: {
                   "math-expert": {
                     description: "Math specialist",
+                    model: "haiku",
+                    prompt:
+                      "You are a math expert. Use the calculator tool for calculations. Be concise.",
                   },
                 },
-                model: "claude-e2e-mock",
+                allowedTools: ["Task"],
+                mcpServers: {
+                  calculator: calculatorServer,
+                },
+                model: CLAUDE_AGENT_MODEL,
+                permissionMode: "bypassPermissions",
               },
             }),
           );
@@ -78,9 +142,14 @@ export async function runClaudeAgentSDKScenario(options) {
         async () => {
           await collectAsync(
             query({
-              prompt: "FAIL the calculator tool call.",
+              prompt:
+                "Use the calculator tool to divide 2 by 0. Do not recover from the error.",
               options: {
-                model: "claude-e2e-mock",
+                mcpServers: {
+                  calculator: calculatorServer,
+                },
+                model: CLAUDE_AGENT_MODEL,
+                permissionMode: "bypassPermissions",
               },
             }),
           );
