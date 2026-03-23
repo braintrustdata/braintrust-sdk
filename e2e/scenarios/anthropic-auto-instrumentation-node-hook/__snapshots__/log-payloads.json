@@ -79,11 +79,7 @@
     ]
   },
   {
-    "context": {
-      "caller_filename": "<node-internal>",
-      "caller_functionname": "<node-internal>",
-      "caller_lineno": 0
-    },
+    "context": {},
     "created": "<timestamp>",
     "id": "<span:5>",
     "input": [
@@ -214,11 +210,7 @@
     ]
   },
   {
-    "context": {
-      "caller_filename": "<node-internal>",
-      "caller_functionname": "<node-internal>",
-      "caller_lineno": 0
-    },
+    "context": {},
     "created": "<timestamp>",
     "id": "<span:9>",
     "input": [
@@ -367,11 +359,7 @@
     ]
   },
   {
-    "context": {
-      "caller_filename": "<node-internal>",
-      "caller_functionname": "<node-internal>",
-      "caller_lineno": 0
-    },
+    "context": {},
     "created": "<timestamp>",
     "id": "<span:13>",
     "input": [
@@ -495,11 +483,7 @@
     ]
   },
   {
-    "context": {
-      "caller_filename": "<node-internal>",
-      "caller_functionname": "<node-internal>",
-      "caller_lineno": 0
-    },
+    "context": {},
     "created": "<timestamp>",
     "id": "<span:17>",
     "input": [
@@ -623,11 +607,7 @@
     ]
   },
   {
-    "context": {
-      "caller_filename": "<node-internal>",
-      "caller_functionname": "<node-internal>",
-      "caller_lineno": 0
-    },
+    "context": {},
     "created": "<timestamp>",
     "id": "<span:21>",
     "input": [
@@ -783,11 +763,7 @@
     ]
   },
   {
-    "context": {
-      "caller_filename": "<node-internal>",
-      "caller_functionname": "<node-internal>",
-      "caller_lineno": 0
-    },
+    "context": {},
     "created": "<timestamp>",
     "id": "<span:26>",
     "input": [
@@ -918,11 +894,7 @@
     ]
   },
   {
-    "context": {
-      "caller_filename": "<node-internal>",
-      "caller_functionname": "<node-internal>",
-      "caller_lineno": 0
-    },
+    "context": {},
     "created": "<timestamp>",
     "id": "<span:30>",
     "input": [
