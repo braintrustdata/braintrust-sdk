@@ -129,7 +129,8 @@ if (TracingChannel && TracingChannel.prototype.tracePromise) {
       publishResolved(result);
       return result;
     } catch (err) {
-      publishRejected(err);
+      context.error = err;
+      error?.publish(context);
       throw err;
     } finally {
       end?.publish(context);
