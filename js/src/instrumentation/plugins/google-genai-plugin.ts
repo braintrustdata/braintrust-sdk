@@ -15,6 +15,7 @@ import {
   Attachment,
   BRAINTRUST_CURRENT_SPAN_STORE,
   startSpan,
+  type StartSpanArgs,
   type Span,
 } from "../../logger";
 import { SpanTypeAttribute } from "../../../util/index";
@@ -47,6 +48,17 @@ const GOOGLE_GENAI_INTERNAL_CONTEXT = {
   caller_functionname: "<node-internal>",
   caller_lineno: 0,
 };
+
+function createWrapperParityEvent(args: {
+  input: Record<string, unknown>;
+  metadata: Record<string, unknown>;
+}): StartSpanArgs["event"] {
+  return {
+    context: GOOGLE_GENAI_INTERNAL_CONTEXT,
+    input: args.input,
+    metadata: args.metadata,
+  } as StartSpanArgs["event"];
+}
 
 /**
  * Auto-instrumentation plugin for the Google GenAI SDK.
@@ -94,11 +106,7 @@ export class GoogleGenAIPlugin extends BasePlugin {
           spanAttributes: {
             type: SpanTypeAttribute.LLM,
           },
-          event: {
-            context: GOOGLE_GENAI_INTERNAL_CONTEXT,
-            input,
-            metadata,
-          },
+          event: createWrapperParityEvent({ input, metadata }),
         });
 
         return {
@@ -120,11 +128,7 @@ export class GoogleGenAIPlugin extends BasePlugin {
               spanAttributes: {
                 type: SpanTypeAttribute.LLM,
               },
-              event: {
-                context: GOOGLE_GENAI_INTERNAL_CONTEXT,
-                input,
-                metadata,
-              },
+              event: createWrapperParityEvent({ input, metadata }),
             });
 
             return {
@@ -363,19 +367,34 @@ function patchGoogleGenAIStreamingResult(args: {
         Record<string | symbol, unknown>;
     const originalNext =
       typeof iteratorRecord.next === "function"
-        ? iteratorRecord.next.bind(iterator)
+        ? (
+            iteratorRecord.next as (
+              ...args: [] | [undefined]
+            ) => Promise<IteratorResult<GoogleGenAIGenerateContentResponse>>
+          ).bind(iterator)
         : undefined;
     const originalReturn =
       typeof iteratorRecord.return === "function"
-        ? iteratorRecord.return.bind(iterator)
+        ? (
+            iteratorRecord.return as (
+              ...args: [] | [unknown]
+            ) => Promise<IteratorResult<GoogleGenAIGenerateContentResponse>>
+          ).bind(iterator)
         : undefined;
     const originalThrow =
       typeof iteratorRecord.throw === "function"
-        ? iteratorRecord.throw.bind(iterator)
+        ? (
+            iteratorRecord.throw as (
+              ...args: [] | [unknown]
+            ) => Promise<IteratorResult<GoogleGenAIGenerateContentResponse>>
+          ).bind(iterator)
         : undefined;
+    const asyncIteratorMethod = iteratorRecord[Symbol.asyncIterator];
     const originalAsyncIterator =
-      typeof iteratorRecord[Symbol.asyncIterator] === "function"
-        ? iteratorRecord[Symbol.asyncIterator].bind(iterator)
+      typeof asyncIteratorMethod === "function"
+        ? (
+            asyncIteratorMethod as () => AsyncIterator<GoogleGenAIGenerateContentResponse>
+          ).bind(iterator)
         : undefined;
 
     Object.defineProperty(iteratorRecord, "__braintrustGoogleGenAIPatched", {
@@ -386,7 +405,7 @@ function patchGoogleGenAIStreamingResult(args: {
     });
 
     if (originalNext) {
-      iteratorRecord.next = async (...nextArgs: [] | [unknown]) => {
+      iteratorRecord.next = async (...nextArgs: [] | [undefined]) => {
         ensureSpan();
 
         try {
