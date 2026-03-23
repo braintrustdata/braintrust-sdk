@@ -710,8 +710,7 @@ export class ClaudeAgentSDKPlugin extends BasePlugin {
         const params = (event.arguments[0] ?? {}) as ClaudeAgentSDKQueryParams;
         const originalPrompt = params.prompt;
         const options = params.options ?? {};
-        const promptIsAsyncIterable =
-          isAsyncIterable<ClaudeAgentSDKMessage>(originalPrompt);
+        const promptIsAsyncIterable = isAsyncIterable(originalPrompt);
         let promptStarted = false;
         let capturedPromptMessages: ClaudeAgentSDKMessage[] | undefined;
         let resolvePromptDone: (() => void) | undefined;
@@ -721,7 +720,8 @@ export class ClaudeAgentSDKPlugin extends BasePlugin {
 
         if (promptIsAsyncIterable) {
           capturedPromptMessages = [];
-          const promptStream = originalPrompt;
+          const promptStream =
+            originalPrompt as AsyncIterable<ClaudeAgentSDKMessage>;
           params.prompt = (async function* () {
             promptStarted = true;
             try {
