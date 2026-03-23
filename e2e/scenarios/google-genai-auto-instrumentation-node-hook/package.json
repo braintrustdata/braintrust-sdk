@@ -3,6 +3,7 @@
   "private": true,
   "braintrustScenario": {
     "canary": {
+      "testFile": "../wrap-google-genai-content-traces/scenario.test.ts",
       "dependencies": {
         "@google/genai": "latest"
       }
