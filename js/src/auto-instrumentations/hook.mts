@@ -19,124 +19,16 @@ import { anthropicConfigs } from "./configs/anthropic.js";
 import { aiSDKConfigs } from "./configs/ai-sdk.js";
 import { claudeAgentSDKConfigs } from "./configs/claude-agent-sdk.js";
 import { googleGenAIConfigs } from "./configs/google-genai.js";
+import { openRouterConfigs } from "./configs/openrouter.js";
 import { ModulePatch } from "./loader/cjs-patch.js";
+import { patchTracingChannel } from "./patch-tracing-channel.js";
 
-// Patch diagnostics_channel.tracePromise to handle APIPromise correctly
-// MUST be done here (before any SDK code runs) to fix Anthropic APIPromise incompatibility
-// Construct the module path dynamically to prevent build from stripping "node:" prefix
+// Patch diagnostics_channel.tracePromise to handle APIPromise correctly.
+// MUST be done here (before any SDK code runs) to fix Anthropic APIPromise incompatibility.
+// Construct the module path dynamically to prevent build from stripping "node:" prefix.
 const dcPath = ["node", "diagnostics_channel"].join(":");
 const dc: any = await import(/* @vite-ignore */ dcPath as any);
-
-// Get TracingChannel class by creating a dummy instance
-const dummyChannel = dc.tracingChannel("dummy");
-const TracingChannel = dummyChannel.constructor;
-
-if (
-  TracingChannel &&
-  !Object.getOwnPropertyDescriptor(TracingChannel.prototype, "hasSubscribers")
-) {
-  Object.defineProperty(TracingChannel.prototype, "hasSubscribers", {
-    configurable: true,
-    enumerable: false,
-    get(this: {
-      start?: { hasSubscribers?: boolean };
-      end?: { hasSubscribers?: boolean };
-      asyncStart?: { hasSubscribers?: boolean };
-      asyncEnd?: { hasSubscribers?: boolean };
-      error?: { hasSubscribers?: boolean };
-    }) {
-      return Boolean(
-        this.start?.hasSubscribers ||
-        this.end?.hasSubscribers ||
-        this.asyncStart?.hasSubscribers ||
-        this.asyncEnd?.hasSubscribers ||
-        this.error?.hasSubscribers,
-      );
-    },
-  });
-}
-
-if (TracingChannel && TracingChannel.prototype.tracePromise) {
-  TracingChannel.prototype.tracePromise = function (
-    fn: any,
-    context: any = {},
-    thisArg: any,
-    ...args: any[]
-  ) {
-    const { start, end, asyncStart, asyncEnd, error } = this;
-
-    function publishRejected(err: any) {
-      context.error = err;
-      error?.publish(context);
-      asyncStart?.publish(context);
-      asyncEnd?.publish(context);
-    }
-
-    function publishResolved(result: any) {
-      context.result = result;
-      asyncStart?.publish(context);
-      asyncEnd?.publish(context);
-    }
-
-    start?.publish(context);
-
-    try {
-      // PATCHED: Removed instanceof Promise check and Promise.resolve() wrapper
-      // This allows APIPromise and other Promise subclasses to work correctly
-
-      const result = Reflect.apply(fn, thisArg, args);
-
-      if (
-        result &&
-        (typeof result === "object" || typeof result === "function") &&
-        typeof (result as any).then === "function"
-      ) {
-        if (result.constructor === Promise) {
-          return (result as any).then(
-            (result: unknown) => {
-              publishResolved(result);
-              return result;
-            },
-            (err: any) => {
-              publishRejected(err);
-              return Promise.reject(err);
-            },
-          );
-        }
-
-        // Preserve the original promise-like object so SDK helper methods
-        // like Anthropic APIPromise.withResponse() remain available.
-        void (result as any).then(
-          (resolved: any) => {
-            try {
-              publishResolved(resolved);
-            } catch {
-              // Preserve wrapped promise semantics even if instrumentation fails.
-            }
-          },
-          (err: any) => {
-            try {
-              publishRejected(err);
-            } catch {
-              // Preserve wrapped promise semantics even if instrumentation fails.
-            }
-          },
-        );
-
-        return result;
-      }
-
-      publishResolved(result);
-      return result;
-    } catch (err) {
-      context.error = err;
-      error?.publish(context);
-      throw err;
-    } finally {
-      end?.publish(context);
-    }
-  };
-}
+patchTracingChannel(dc.tracingChannel);
 
 // Combine all instrumentation configs
 const allConfigs = [
@@ -145,6 +37,7 @@ const allConfigs = [
   ...aiSDKConfigs,
   ...claudeAgentSDKConfigs,
   ...googleGenAIConfigs,
+  ...openRouterConfigs,
 ];
 
 // 1. Register ESM loader for ESM modules

@@ -25,6 +25,7 @@ const INSTALL_SECRET_ENV_VARS = [
   "GITHUB_TOKEN",
   "GH_TOKEN",
   "OPENAI_API_KEY",
+  "OPENROUTER_API_KEY",
 ] as const;
 
 const cleanupDirs = new Set<string>();
