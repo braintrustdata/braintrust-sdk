@@ -135,6 +135,13 @@ class MockAPIPromise<T> extends Promise<T> {
     return this.#innerPromise.then(onfulfilled, onrejected);
   }
 
+  async withResponse() {
+    return {
+      data: await this.#innerPromise,
+      response: { ok: true },
+    };
+  }
+
   // Symbol.species returns a class that throws, reproducing the exact error seen
   // when Node.js's PromisePrototypeThen tries to construct the result promise.
   static override get [Symbol.species](): PromiseConstructor {
@@ -178,6 +185,20 @@ describe("patchTracingChannel", () => {
 
     expect(result).toBe("hello");
     expect(context.result).toBe("hello");
+  });
+
+  it("patched tracePromise preserves helper methods on promise subclasses", async () => {
+    const FakeTCClass = makeUnpatchedTracingChannel();
+    const channel = new FakeTCClass();
+    patchTracingChannel(() => channel);
+
+    const apiPromise = new MockAPIPromise(Promise.resolve("hello"));
+    const traced = channel.tracePromise(() => apiPromise, {}, null);
+    const withResponse = await traced.withResponse();
+
+    expect(traced).toBe(apiPromise);
+    expect(withResponse.data).toBe("hello");
+    expect(withResponse.response.ok).toBe(true);
   });
 
   it("patched tracePromise correctly handles plain async functions", async () => {
