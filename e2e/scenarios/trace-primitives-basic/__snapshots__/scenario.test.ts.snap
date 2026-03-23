@@ -14,14 +14,14 @@ exports[`trace-primitives-basic collects a minimal manual trace tree > request-f
     "headers": null,
     "jsonBody": {
       "org_id": "mock-org-id",
-      "project_name": "e2e-trace-primitives-basic-e2e-<uuid:1>",
+      "project_name": "<project_name>",
     },
     "method": "POST",
     "path": "/api/project/register",
     "query": null,
     "rawBody": {
       "org_id": "mock-org-id",
-      "project_name": "e2e-trace-primitives-basic-e2e-<uuid:1>",
+      "project_name": "<project_name>",
     },
   },
   {
@@ -58,7 +58,7 @@ exports[`trace-primitives-basic collects a minimal manual trace tree > request-f
           "metrics": {
             "start": 0,
           },
-          "project_id": "<uuid:4>",
+          "project_id": "<project_id>",
           "root_span_id": "<span:3>",
           "span_attributes": {
             "exec_counter": 0,
@@ -96,7 +96,7 @@ exports[`trace-primitives-basic collects a minimal manual trace tree > request-f
           "metrics": {
             "start": 0,
           },
-          "project_id": "<uuid:4>",
+          "project_id": "<project_id>",
           "root_span_id": "<span:3>",
           "span_attributes": {
             "exec_counter": 0,
@@ -137,7 +137,7 @@ exports[`trace-primitives-basic collects a minimal manual trace tree > request-f
           "output": {
             "ok": true,
           },
-          "project_id": "<uuid:4>",
+          "project_id": "<project_id>",
           "root_span_id": "<span:3>",
           "span_attributes": {
             "exec_counter": 1,
@@ -178,7 +178,7 @@ Error: basic boom
             "end": 0,
             "start": 0,
           },
-          "project_id": "<uuid:4>",
+          "project_id": "<project_id>",
           "root_span_id": "<span:3>",
           "span_attributes": {
             "exec_counter": 2,
@@ -199,7 +199,7 @@ Error: basic boom
           "output": {
             "status": "ok",
           },
-          "project_id": "<uuid:4>",
+          "project_id": "<project_id>",
           "root_span_id": "<span:3>",
           "span_id": "<span:3>",
         },
@@ -235,7 +235,7 @@ Error: basic boom
           "output": {
             "ok": true,
           },
-          "project_id": "<uuid:4>",
+          "project_id": "<project_id>",
           "root_span_id": "<span:3>",
           "span_attributes": {
             "exec_counter": 1,
@@ -276,7 +276,7 @@ Error: basic boom
             "end": 0,
             "start": 0,
           },
-          "project_id": "<uuid:4>",
+          "project_id": "<project_id>",
           "root_span_id": "<span:3>",
           "span_attributes": {
             "exec_counter": 2,
@@ -297,7 +297,7 @@ Error: basic boom
           "output": {
             "status": "ok",
           },
-          "project_id": "<uuid:4>",
+          "project_id": "<project_id>",
           "root_span_id": "<span:3>",
           "span_id": "<span:3>",
         },

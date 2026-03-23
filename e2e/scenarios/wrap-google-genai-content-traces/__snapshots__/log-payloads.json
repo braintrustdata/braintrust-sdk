@@ -16,7 +16,7 @@
     "metrics": {
       "start": 0
     },
-    "project_id": "<uuid:3>",
+    "project_id": "<project_id>",
     "root_span_id": "<span:2>",
     "span_attributes": {
       "exec_counter": 0,
@@ -32,7 +32,7 @@
     "metrics": {
       "end": 0
     },
-    "project_id": "<uuid:3>",
+    "project_id": "<project_id>",
     "root_span_id": "<span:2>",
     "span_id": "<span:2>"
   },
@@ -53,7 +53,7 @@
     "metrics": {
       "start": 0
     },
-    "project_id": "<uuid:3>",
+    "project_id": "<project_id>",
     "root_span_id": "<span:2>",
     "span_attributes": {
       "exec_counter": 1,
@@ -71,7 +71,7 @@
     "metrics": {
       "end": 0
     },
-    "project_id": "<uuid:3>",
+    "project_id": "<project_id>",
     "root_span_id": "<span:2>",
     "span_id": "<span:4>",
     "span_parents": [
@@ -106,7 +106,7 @@
     "metrics": {
       "start": 0
     },
-    "project_id": "<uuid:3>",
+    "project_id": "<project_id>",
     "root_span_id": "<span:2>",
     "span_attributes": {
       "exec_counter": 2,
@@ -129,7 +129,7 @@
       "start": 0,
       "tokens": 8
     },
-    "project_id": "<uuid:3>",
+    "project_id": "<project_id>",
     "root_span_id": "<span:2>",
     "span_id": "<span:6>",
     "span_parents": [
@@ -191,7 +191,7 @@
         "totalTokenCount": 8
       }
     },
-    "project_id": "<uuid:3>",
+    "project_id": "<project_id>",
     "root_span_id": "<span:2>",
     "span_id": "<span:6>",
     "span_parents": [
@@ -205,7 +205,7 @@
     "metrics": {
       "end": 0
     },
-    "project_id": "<uuid:3>",
+    "project_id": "<project_id>",
     "root_span_id": "<span:2>",
     "span_id": "<span:6>",
     "span_parents": [
@@ -216,7 +216,7 @@
     "_is_merge": true,
     "id": "<span:5>",
     "log_id": "g",
-    "project_id": "<uuid:3>",
+    "project_id": "<project_id>",
     "root_span_id": "<span:2>",
     "span_id": "<span:6>",
     "span_parents": [
@@ -240,7 +240,7 @@
     "metrics": {
       "start": 0
     },
-    "project_id": "<uuid:3>",
+    "project_id": "<project_id>",
     "root_span_id": "<span:2>",
     "span_attributes": {
       "exec_counter": 3,
@@ -258,7 +258,7 @@
     "metrics": {
       "end": 0
     },
-    "project_id": "<uuid:3>",
+    "project_id": "<project_id>",
     "root_span_id": "<span:2>",
     "span_id": "<span:9>",
     "span_parents": [
@@ -310,7 +310,7 @@
     "metrics": {
       "start": 0
     },
-    "project_id": "<uuid:3>",
+    "project_id": "<project_id>",
     "root_span_id": "<span:2>",
     "span_attributes": {
       "exec_counter": 4,
@@ -333,7 +333,7 @@
       "start": 0,
       "tokens": 1315
     },
-    "project_id": "<uuid:3>",
+    "project_id": "<project_id>",
     "root_span_id": "<span:2>",
     "span_id": "<span:11>",
     "span_parents": [
@@ -399,7 +399,7 @@
         "totalTokenCount": 1315
       }
     },
-    "project_id": "<uuid:3>",
+    "project_id": "<project_id>",
     "root_span_id": "<span:2>",
     "span_id": "<span:11>",
     "span_parents": [
@@ -413,7 +413,7 @@
     "metrics": {
       "end": 0
     },
-    "project_id": "<uuid:3>",
+    "project_id": "<project_id>",
     "root_span_id": "<span:2>",
     "span_id": "<span:11>",
     "span_parents": [
@@ -424,7 +424,7 @@
     "_is_merge": true,
     "id": "<span:10>",
     "log_id": "g",
-    "project_id": "<uuid:3>",
+    "project_id": "<project_id>",
     "root_span_id": "<span:2>",
     "span_id": "<span:11>",
     "span_parents": [
@@ -448,7 +448,7 @@
     "metrics": {
       "start": 0
     },
-    "project_id": "<uuid:3>",
+    "project_id": "<project_id>",
     "root_span_id": "<span:2>",
     "span_attributes": {
       "exec_counter": 5,
@@ -466,7 +466,7 @@
     "metrics": {
       "end": 0
     },
-    "project_id": "<uuid:3>",
+    "project_id": "<project_id>",
     "root_span_id": "<span:2>",
     "span_id": "<span:14>",
     "span_parents": [
@@ -501,7 +501,7 @@
     "metrics": {
       "start": 0
     },
-    "project_id": "<uuid:3>",
+    "project_id": "<project_id>",
     "root_span_id": "<span:2>",
     "span_attributes": {
       "exec_counter": 6,
@@ -525,7 +525,7 @@
       "time_to_first_token": 0,
       "tokens": 22
     },
-    "project_id": "<uuid:3>",
+    "project_id": "<project_id>",
     "root_span_id": "<span:2>",
     "span_id": "<span:16>",
     "span_parents": [
@@ -569,7 +569,7 @@
         "totalTokenCount": 22
       }
     },
-    "project_id": "<uuid:3>",
+    "project_id": "<project_id>",
     "root_span_id": "<span:2>",
     "span_id": "<span:16>",
     "span_parents": [
@@ -583,7 +583,7 @@
     "metrics": {
       "end": 0
     },
-    "project_id": "<uuid:3>",
+    "project_id": "<project_id>",
     "root_span_id": "<span:2>",
     "span_id": "<span:16>",
     "span_parents": [
@@ -607,7 +607,7 @@
     "metrics": {
       "start": 0
     },
-    "project_id": "<uuid:3>",
+    "project_id": "<project_id>",
     "root_span_id": "<span:2>",
     "span_attributes": {
       "exec_counter": 7,
@@ -625,7 +625,7 @@
     "metrics": {
       "end": 0
     },
-    "project_id": "<uuid:3>",
+    "project_id": "<project_id>",
     "root_span_id": "<span:2>",
     "span_id": "<span:18>",
     "span_parents": [
@@ -660,7 +660,7 @@
     "metrics": {
       "start": 0
     },
-    "project_id": "<uuid:3>",
+    "project_id": "<project_id>",
     "root_span_id": "<span:2>",
     "span_attributes": {
       "exec_counter": 8,
@@ -683,7 +683,7 @@
       "time_to_first_token": 0,
       "tokens": 8
     },
-    "project_id": "<uuid:3>",
+    "project_id": "<project_id>",
     "root_span_id": "<span:2>",
     "span_id": "<span:20>",
     "span_parents": [
@@ -719,7 +719,7 @@
         "totalTokenCount": 8
       }
     },
-    "project_id": "<uuid:3>",
+    "project_id": "<project_id>",
     "root_span_id": "<span:2>",
     "span_id": "<span:20>",
     "span_parents": [
@@ -733,7 +733,7 @@
     "metrics": {
       "end": 0
     },
-    "project_id": "<uuid:3>",
+    "project_id": "<project_id>",
     "root_span_id": "<span:2>",
     "span_id": "<span:20>",
     "span_parents": [
@@ -757,7 +757,7 @@
     "metrics": {
       "start": 0
     },
-    "project_id": "<uuid:3>",
+    "project_id": "<project_id>",
     "root_span_id": "<span:2>",
     "span_attributes": {
       "exec_counter": 9,
@@ -775,7 +775,7 @@
     "metrics": {
       "end": 0
     },
-    "project_id": "<uuid:3>",
+    "project_id": "<project_id>",
     "root_span_id": "<span:2>",
     "span_id": "<span:22>",
     "span_parents": [
@@ -848,7 +848,7 @@
     "metrics": {
       "start": 0
     },
-    "project_id": "<uuid:3>",
+    "project_id": "<project_id>",
     "root_span_id": "<span:2>",
     "span_attributes": {
       "exec_counter": 10,
@@ -871,7 +871,7 @@
       "start": 0,
       "tokens": 35
     },
-    "project_id": "<uuid:3>",
+    "project_id": "<project_id>",
     "root_span_id": "<span:2>",
     "span_id": "<span:24>",
     "span_parents": [
@@ -938,7 +938,7 @@
         "totalTokenCount": 35
       }
     },
-    "project_id": "<uuid:3>",
+    "project_id": "<project_id>",
     "root_span_id": "<span:2>",
     "span_id": "<span:24>",
     "span_parents": [
@@ -952,7 +952,7 @@
     "metrics": {
       "end": 0
     },
-    "project_id": "<uuid:3>",
+    "project_id": "<project_id>",
     "root_span_id": "<span:2>",
     "span_id": "<span:24>",
     "span_parents": [
@@ -963,7 +963,7 @@
     "_is_merge": true,
     "id": "<span:23>",
     "log_id": "g",
-    "project_id": "<uuid:3>",
+    "project_id": "<project_id>",
     "root_span_id": "<span:2>",
     "span_id": "<span:24>",
     "span_parents": [

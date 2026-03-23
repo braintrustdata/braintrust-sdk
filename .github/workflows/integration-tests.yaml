@@ -51,6 +51,7 @@ jobs:
     timeout-minutes: 45
     env:
       BRAINTRUST_API_KEY: ${{ secrets.BRAINTRUST_API_KEY }}
+      BRAINTRUST_E2E_PROJECT_NAME: ${{ secrets.BRAINTRUST_E2E_PROJECT_NAME }}
       ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
       GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
       OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
@@ -72,6 +73,7 @@ jobs:
     timeout-minutes: 45
     env:
       BRAINTRUST_API_KEY: ${{ secrets.BRAINTRUST_API_KEY }}
+      BRAINTRUST_E2E_PROJECT_NAME: ${{ secrets.BRAINTRUST_E2E_PROJECT_NAME }}
       ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
       GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
       OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}

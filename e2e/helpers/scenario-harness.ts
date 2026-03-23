@@ -64,15 +64,18 @@ function createTestRunId(): string {
 function getTestServerEnv(
   testRunId: string,
   server: { apiKey: string; url: string },
+  prodForwardingProjectName: string,
 ): Record<string, string> {
   return {
     BRAINTRUST_API_KEY: server.apiKey,
     BRAINTRUST_API_URL: server.url,
     BRAINTRUST_APP_URL: server.url,
     BRAINTRUST_APP_PUBLIC_URL: server.url,
+    BRAINTRUST_E2E_PROJECT_NAME: prodForwardingProjectName,
     BRAINTRUST_PROXY_URL: server.url,
     BRAINTRUST_E2E_RUN_ID: testRunId,
     BRAINTRUST_E2E_REPO_ROOT: REPO_ROOT,
+    BRAINTRUST_ORG_NAME: "mock-org",
   };
 }
 
@@ -220,9 +223,18 @@ interface ScenarioHarness {
 export async function withScenarioHarness(
   body: (harness: ScenarioHarness) => Promise<void>,
 ): Promise<void> {
-  const server = await startMockBraintrustServer();
+  const { getProdForwarding } = await import("./prod-forwarding");
+  const prodForwarding = getProdForwarding();
   const testRunId = createTestRunId();
-  const testEnv = getTestServerEnv(testRunId, server);
+  const server = await startMockBraintrustServer({
+    prodForwarding,
+    testRunId,
+  });
+  const testEnv = getTestServerEnv(
+    testRunId,
+    server,
+    prodForwarding?.projectName ?? "",
+  );
 
   try {
     await body({
