@@ -90,12 +90,12 @@
       "contents": {
         "text": "Reply with exactly PARIS."
       },
-      "model": "gemini-2.0-flash-001"
+      "model": "gemini-2.5-flash-lite"
     },
     "log_id": "g",
     "metadata": {
       "maxOutputTokens": 16,
-      "model": "gemini-2.0-flash-001",
+      "model": "gemini-2.5-flash-lite",
       "provider": "google-genai",
       "temperature": 0
     },
@@ -119,9 +119,9 @@
     "id": "<span:5>",
     "log_id": "g",
     "metrics": {
-      "completion_tokens": 3,
+      "completion_tokens": 2,
       "duration": 0,
-      "prompt_tokens": 5,
+      "prompt_tokens": 6,
       "tokens": 8
     },
     "project_id": "<uuid:3>",
@@ -138,19 +138,19 @@
     "output": {
       "candidates": [
         {
-          "avgLogprobs": 0,
           "content": {
             "parts": [
               {
-                "text": "PARIS\n"
+                "text": "PARIS"
               }
             ],
             "role": "model"
           },
-          "finishReason": "STOP"
+          "finishReason": "STOP",
+          "index": 0
         }
       ],
-      "modelVersion": "gemini-2.0-flash-001",
+      "modelVersion": "gemini-2.5-flash-lite",
       "responseId": "<responseId:7>",
       "sdkHttpResponse": {
         "headers": {
@@ -169,18 +169,12 @@
         }
       },
       "usageMetadata": {
-        "candidatesTokenCount": 3,
-        "candidatesTokensDetails": [
-          {
-            "modality": "TEXT",
-            "tokenCount": 3
-          }
-        ],
-        "promptTokenCount": 5,
+        "candidatesTokenCount": 2,
+        "promptTokenCount": 6,
         "promptTokensDetails": [
           {
             "modality": "TEXT",
-            "tokenCount": 5
+            "tokenCount": 6
           }
         ],
         "totalTokenCount": 8
@@ -278,12 +272,12 @@
           "role": "user"
         }
       ],
-      "model": "gemini-2.0-flash-001"
+      "model": "gemini-2.5-flash-lite"
     },
     "log_id": "g",
     "metadata": {
       "maxOutputTokens": 24,
-      "model": "gemini-2.0-flash-001",
+      "model": "gemini-2.5-flash-lite",
       "provider": "google-genai",
       "temperature": 0
     },
@@ -307,10 +301,10 @@
     "id": "<span:10>",
     "log_id": "g",
     "metrics": {
-      "completion_tokens": 16,
+      "completion_tokens": 14,
       "duration": 0,
-      "prompt_tokens": 1299,
-      "tokens": 1315
+      "prompt_tokens": 268,
+      "tokens": 282
     },
     "project_id": "<uuid:3>",
     "root_span_id": "<span:2>",
@@ -326,19 +320,19 @@
     "output": {
       "candidates": [
         {
-          "avgLogprobs": 0,
           "content": {
             "parts": [
               {
-                "text": "A tall ship braves a stormy sea with lightning flashing in the background.\n"
+                "text": "A majestic sailing ship battles a fierce storm with towering waves and lightning."
               }
             ],
             "role": "model"
           },
-          "finishReason": "STOP"
+          "finishReason": "STOP",
+          "index": 0
         }
       ],
-      "modelVersion": "gemini-2.0-flash-001",
+      "modelVersion": "gemini-2.5-flash-lite",
       "responseId": "<responseId:12>",
       "sdkHttpResponse": {
         "headers": {
@@ -357,25 +351,19 @@
         }
       },
       "usageMetadata": {
-        "candidatesTokenCount": 16,
-        "candidatesTokensDetails": [
-          {
-            "modality": "TEXT",
-            "tokenCount": 16
-          }
-        ],
-        "promptTokenCount": 1299,
+        "candidatesTokenCount": 14,
+        "promptTokenCount": 268,
         "promptTokensDetails": [
           {
             "modality": "IMAGE",
-            "tokenCount": 1290
+            "tokenCount": 258
           },
           {
             "modality": "TEXT",
-            "tokenCount": 9
+            "tokenCount": 10
           }
         ],
-        "totalTokenCount": 1315
+        "totalTokenCount": 282
       }
     },
     "project_id": "<uuid:3>",
@@ -453,12 +441,12 @@
       "contents": {
         "text": "Count from 1 to 3 and include the words one two three."
       },
-      "model": "gemini-2.0-flash-001"
+      "model": "gemini-2.5-flash-lite"
     },
     "log_id": "g",
     "metadata": {
       "maxOutputTokens": 32,
-      "model": "gemini-2.0-flash-001",
+      "model": "gemini-2.5-flash-lite",
       "provider": "google-genai",
       "temperature": 0
     },
@@ -482,11 +470,11 @@
     "id": "<span:15>",
     "log_id": "g",
     "metrics": {
-      "completion_tokens": 7,
+      "completion_tokens": 28,
       "duration": 0,
-      "prompt_tokens": 15,
+      "prompt_tokens": 16,
       "time_to_first_token": 0,
-      "tokens": 22
+      "tokens": 44
     },
     "project_id": "<uuid:3>",
     "root_span_id": "<span:2>",
@@ -505,7 +493,7 @@
           "content": {
             "parts": [
               {
-                "text": "One, two, three.\n"
+                "text": "Here's the count from 1 to 3, including the words:\n\n1. One\n2. Two\n3. Three"
               }
             ],
             "role": "model"
@@ -513,23 +501,17 @@
           "finishReason": "STOP"
         }
       ],
-      "text": "One, two, three.\n",
+      "text": "Here's the count from 1 to 3, including the words:\n\n1. One\n2. Two\n3. Three",
       "usageMetadata": {
-        "candidatesTokenCount": 7,
-        "candidatesTokensDetails": [
-          {
-            "modality": "TEXT",
-            "tokenCount": 7
-          }
-        ],
-        "promptTokenCount": 15,
+        "candidatesTokenCount": 28,
+        "promptTokenCount": 16,
         "promptTokensDetails": [
           {
             "modality": "TEXT",
-            "tokenCount": 15
+            "tokenCount": 16
           }
         ],
-        "totalTokenCount": 22
+        "totalTokenCount": 44
       }
     },
     "project_id": "<uuid:3>",
@@ -607,12 +589,12 @@
       "contents": {
         "text": "Write a short poem about Paris."
       },
-      "model": "gemini-2.0-flash-001"
+      "model": "gemini-2.5-flash-lite"
     },
     "log_id": "g",
     "metadata": {
       "maxOutputTokens": 48,
-      "model": "gemini-2.0-flash-001",
+      "model": "gemini-2.5-flash-lite",
       "provider": "google-genai",
       "temperature": 0
     },
@@ -636,10 +618,11 @@
     "id": "<span:19>",
     "log_id": "g",
     "metrics": {
+      "completion_tokens": 1,
       "duration": 0,
       "prompt_tokens": 8,
       "time_to_first_token": 0,
-      "tokens": 8
+      "tokens": 9
     },
     "project_id": "<uuid:3>",
     "root_span_id": "<span:2>",
@@ -667,6 +650,7 @@
       ],
       "text": "City",
       "usageMetadata": {
+        "candidatesTokenCount": 1,
         "promptTokenCount": 8,
         "promptTokensDetails": [
           {
@@ -674,7 +658,7 @@
             "tokenCount": 8
           }
         ],
-        "totalTokenCount": 8
+        "totalTokenCount": 9
       }
     },
     "project_id": "<uuid:3>",
@@ -782,12 +766,12 @@
       "contents": {
         "text": "Use the get_weather function for Paris, France. Do not answer from memory."
       },
-      "model": "gemini-2.0-flash-001"
+      "model": "gemini-2.5-flash-lite"
     },
     "log_id": "g",
     "metadata": {
       "maxOutputTokens": 128,
-      "model": "gemini-2.0-flash-001",
+      "model": "gemini-2.5-flash-lite",
       "provider": "google-genai",
       "temperature": 0,
       "toolConfig": {
@@ -819,10 +803,10 @@
     "id": "<span:23>",
     "log_id": "g",
     "metrics": {
-      "completion_tokens": 7,
+      "completion_tokens": 17,
       "duration": 0,
-      "prompt_tokens": 28,
-      "tokens": 35
+      "prompt_tokens": 65,
+      "tokens": 82
     },
     "project_id": "<uuid:3>",
     "root_span_id": "<span:2>",
@@ -838,7 +822,6 @@
     "output": {
       "candidates": [
         {
-          "avgLogprobs": 0,
           "content": {
             "parts": [
               {
@@ -852,10 +835,11 @@
             ],
             "role": "model"
           },
-          "finishReason": "STOP"
+          "finishReason": "STOP",
+          "index": 0
         }
       ],
-      "modelVersion": "gemini-2.0-flash-001",
+      "modelVersion": "gemini-2.5-flash-lite",
       "responseId": "<responseId:25>",
       "sdkHttpResponse": {
         "headers": {
@@ -874,21 +858,15 @@
         }
       },
       "usageMetadata": {
-        "candidatesTokenCount": 7,
-        "candidatesTokensDetails": [
-          {
-            "modality": "TEXT",
-            "tokenCount": 7
-          }
-        ],
-        "promptTokenCount": 28,
+        "candidatesTokenCount": 17,
+        "promptTokenCount": 65,
         "promptTokensDetails": [
           {
             "modality": "TEXT",
-            "tokenCount": 28
+            "tokenCount": 65
           }
         ],
-        "totalTokenCount": 35
+        "totalTokenCount": 82
       }
     },
     "project_id": "<uuid:3>",

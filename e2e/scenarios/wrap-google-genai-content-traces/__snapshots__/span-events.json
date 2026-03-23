@@ -31,7 +31,7 @@
     "has_input": true,
     "has_output": true,
     "metadata": {
-      "model": "gemini-2.0-flash-001"
+      "model": "gemini-2.5-flash-lite"
     },
     "metric_keys": [
       "completion_tokens",
@@ -66,7 +66,7 @@
     "has_input": true,
     "has_output": true,
     "metadata": {
-      "model": "gemini-2.0-flash-001"
+      "model": "gemini-2.5-flash-lite"
     },
     "metric_keys": [
       "completion_tokens",
@@ -101,7 +101,7 @@
     "has_input": true,
     "has_output": true,
     "metadata": {
-      "model": "gemini-2.0-flash-001"
+      "model": "gemini-2.5-flash-lite"
     },
     "metric_keys": [
       "completion_tokens",
@@ -137,9 +137,10 @@
     "has_input": true,
     "has_output": true,
     "metadata": {
-      "model": "gemini-2.0-flash-001"
+      "model": "gemini-2.5-flash-lite"
     },
     "metric_keys": [
+      "completion_tokens",
       "duration",
       "prompt_tokens",
       "time_to_first_token",
@@ -172,7 +173,7 @@
     "has_input": true,
     "has_output": true,
     "metadata": {
-      "model": "gemini-2.0-flash-001"
+      "model": "gemini-2.5-flash-lite"
     },
     "metric_keys": [
       "completion_tokens",
