@@ -9,5 +9,6 @@ runMain(async () =>
     rootName: "anthropic-auto-hook-root",
     scenarioName: "anthropic-auto-instrumentation-node-hook",
     testImageUrl: new URL("./test-image.png", import.meta.url),
+    useMessagesStreamHelper: false,
   }),
 );
