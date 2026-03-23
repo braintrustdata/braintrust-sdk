@@ -67,22 +67,10 @@ export function patchTracingChannel(
       }
 
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      function reject(err: any) {
-        publishRejected(err);
-        return Promise.reject(err);
-      }
-
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       function publishResolved(result: any) {
         context.result = result;
         asyncStart?.publish(context);
         asyncEnd?.publish(context);
-      }
-
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      function resolve(result: any) {
-        publishResolved(result);
-        return result;
       }
 
       // Use runStores (not just publish) so fn runs inside the ALS context
@@ -102,7 +90,16 @@ export function patchTracingChannel(
             typeof result.then === "function"
           ) {
             if (result.constructor === Promise) {
-              return result.then(resolve, reject);
+              return result.then(
+                (res) => {
+                  publishResolved(res);
+                  return res;
+                },
+                (err) => {
+                  publishRejected(err);
+                  return Promise.reject(err);
+                },
+              );
             }
 
             // Preserve the original promise-like object so SDK helper methods
@@ -130,6 +127,8 @@ export function patchTracingChannel(
           }
 
           context.result = result;
+          asyncStart?.publish(context);
+          asyncEnd?.publish(context);
           return result;
         } catch (err) {
           context.error = err;
