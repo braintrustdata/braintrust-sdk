@@ -7,6 +7,7 @@ import {
   resolveScenarioDir,
   withScenarioHarness,
 } from "../../helpers/scenario-harness";
+import { E2E_TAGS } from "../../helpers/tags";
 
 const scenarioDir = await prepareScenarioDir({
   scenarioDir: resolveScenarioDir(import.meta.url),
@@ -86,6 +87,9 @@ function getAutoContract(): Promise<OpenRouterContract> {
 
 test(
   "wrap-openrouter-traces captures wrapper instrumentation",
+  {
+    tags: [E2E_TAGS.externalApi],
+  },
   async () => {
     const contract = await getWrapperContract();
 
@@ -98,6 +102,9 @@ test(
 
 test(
   "openrouter auto-instrumentation via node hook collects traces without manual wrapping",
+  {
+    tags: [E2E_TAGS.externalApi],
+  },
   async () => {
     const [wrapperContract, autoContract] = await Promise.all([
       getWrapperContract(),
