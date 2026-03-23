@@ -89,11 +89,24 @@ if (TracingChannel && TracingChannel.prototype.tracePromise) {
       if (
         result &&
         (typeof result === "object" || typeof result === "function") &&
-        typeof result.then === "function"
+        typeof (result as any).then === "function"
       ) {
+        if (result.constructor === Promise) {
+          return (result as any).then(
+            (result: unknown) => {
+              publishResolved(result);
+              return result;
+            },
+            (err: any) => {
+              publishRejected(err);
+              return Promise.reject(err);
+            },
+          );
+        }
+
         // Preserve the original promise-like object so SDK helper methods
         // like Anthropic APIPromise.withResponse() remain available.
-        void result.then(
+        void (result as any).then(
           (resolved: any) => {
             try {
               publishResolved(resolved);
@@ -109,6 +122,7 @@ if (TracingChannel && TracingChannel.prototype.tracePromise) {
             }
           },
         );
+
         return result;
       }
 
