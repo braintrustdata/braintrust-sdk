@@ -60,6 +60,7 @@ The main utilities you'll use in test files:
 - `resolveScenarioDir(import.meta.url)` - Resolves the folder that contains the current test.
 - `installScenarioDependencies({ scenarioDir })` - Installs optional scenario-local dependencies.
 - `runScenarioDir({ scenarioDir, entry?, timeoutMs? })` - Runs a TypeScript scenario with `tsx`.
+- `runDenoScenarioDir({ scenarioDir, entry?, args?, timeoutMs? })` - Runs nested Deno scenarios with `deno test`.
 - `runNodeScenarioDir({ scenarioDir, entry?, nodeArgs?, timeoutMs? })` - Runs plain Node scenarios, used for `--import braintrust/hook.mjs`.
 - `testRunEvents()` - Returns parsed events tagged with the current test run id.
 - `events()`, `payloads()`, `requestCursor()`, `requestsAfter()` - Lower-level access for ingestion payloads and HTTP request flow assertions.
@@ -107,6 +108,8 @@ Some wrappers execute inside a nested test runner rather than a single SDK call.
 - Do not name nested runner files `*.test.ts`, because the outer `e2e/vitest.config.mts` includes `scenarios/**/*.test.ts` and will try to execute them directly.
 - Tag every traced test/eval with `metadata.testRunId` so the outer assertions can isolate rows across multiple trace roots with `payloadRowsForTestRunId(...)`.
 - If a nested runner needs its own test discovery rules, keep that config local to the scenario folder so the shared e2e config stays unchanged.
+
+The Deno scenarios follow the same pattern, except the harness invokes `deno test` via `runDenoScenarioDir(...)` and the nested runner entrypoint lives in `runner.case.ts`.
 
 ### Environment variables
 

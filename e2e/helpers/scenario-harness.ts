@@ -29,6 +29,7 @@ interface ScenarioResult {
 }
 
 const tsxCliPath = createRequire(import.meta.url).resolve("tsx/cli");
+const DENO_COMMAND = process.platform === "win32" ? "deno.exe" : "deno";
 const DEFAULT_SCENARIO_TIMEOUT_MS = 15_000;
 const HELPERS_DIR = path.dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = path.resolve(HELPERS_DIR, "../..");
@@ -77,13 +78,14 @@ function getTestServerEnv(
 }
 
 async function runProcess(
+  command: string,
   args: string[],
   cwd: string,
   env: Record<string, string>,
   timeoutMs: number,
 ): Promise<ScenarioResult> {
   return await new Promise<ScenarioResult>((resolve, reject) => {
-    const child = spawn(process.execPath, args, {
+    const child = spawn(command, args, {
       cwd,
       env: {
         ...process.env,
@@ -94,7 +96,9 @@ async function runProcess(
     const timeout = setTimeout(() => {
       child.kill("SIGTERM");
       reject(
-        new Error(`Process ${args.join(" ")} timed out after ${timeoutMs}ms`),
+        new Error(
+          `Process ${command} ${args.join(" ")} timed out after ${timeoutMs}ms`,
+        ),
       );
     }, timeoutMs);
 
@@ -146,6 +150,7 @@ async function runScenarioDirOrThrow(
       ? [...(options.nodeArgs ?? []), scenarioPath]
       : [tsxCliPath, scenarioPath];
   const result = await runProcess(
+    process.execPath,
     args,
     scenarioDir,
     env,
@@ -192,6 +197,39 @@ export async function runNodeScenarioDir(options: {
   });
 }
 
+export async function runDenoScenarioDir(options: {
+  args?: string[];
+  entry?: string;
+  env?: Record<string, string>;
+  scenarioDir: string;
+  timeoutMs?: number;
+}): Promise<ScenarioResult> {
+  const entry = options.entry ?? "runner.case.ts";
+  const result = await runProcess(
+    DENO_COMMAND,
+    [
+      "test",
+      "--no-check",
+      "--allow-env",
+      "--allow-net",
+      "--allow-read",
+      ...(options.args ?? []),
+      resolveEntryPath(options.scenarioDir, entry),
+    ],
+    options.scenarioDir,
+    options.env ?? {},
+    options.timeoutMs ?? DEFAULT_SCENARIO_TIMEOUT_MS,
+  );
+
+  if (result.exitCode !== 0) {
+    throw new Error(
+      `Scenario ${path.join(options.scenarioDir, entry)} failed with exit code ${result.exitCode}\nSTDOUT:\n${result.stdout}\nSTDERR:\n${result.stderr}`,
+    );
+  }
+
+  return result;
+}
+
 interface ScenarioHarness {
   events: (predicate?: EventPredicate) => CapturedLogEvent[];
   payloads: (predicate?: PayloadPredicate) => CapturedLogPayload[];
@@ -200,6 +238,13 @@ interface ScenarioHarness {
     after: number,
     predicate?: RequestPredicate,
   ) => CapturedRequest[];
+  runDenoScenarioDir: (options: {
+    args?: string[];
+    entry?: string;
+    env?: Record<string, string>;
+    scenarioDir: string;
+    timeoutMs?: number;
+  }) => Promise<ScenarioResult>;
   runNodeScenarioDir: (options: {
     entry?: string;
     env?: Record<string, string>;
@@ -231,6 +276,14 @@ export async function withScenarioHarness(
       requestCursor: () => server.requests.length,
       requestsAfter: (after, predicate) =>
         filterItems(server.requests.slice(after), predicate),
+      runDenoScenarioDir: (options) =>
+        runDenoScenarioDir({
+          ...options,
+          env: {
+            ...testEnv,
+            ...(options.env ?? {}),
+          },
+        }),
       runNodeScenarioDir: (options) =>
         runNodeScenarioDir({
           ...options,
