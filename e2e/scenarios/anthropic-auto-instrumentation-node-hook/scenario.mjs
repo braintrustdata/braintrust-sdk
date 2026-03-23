@@ -6,8 +6,8 @@ runMain(async () =>
   runAnthropicScenario({
     Anthropic,
     projectNameBase: "e2e-anthropic-auto-instrumentation-hook",
-    rootName: "anthropic-auto-hook-root",
-    scenarioName: "anthropic-auto-instrumentation-node-hook",
+    rootName: "anthropic-wrapper-root",
+    scenarioName: "wrap-anthropic-message-traces",
     testImageUrl: new URL("./test-image.png", import.meta.url),
     useMessagesStreamHelper: false,
   }),

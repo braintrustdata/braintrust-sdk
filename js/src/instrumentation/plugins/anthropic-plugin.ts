@@ -227,10 +227,8 @@ export function aggregateAnthropicStreamChunks(
 
   let output: unknown = fallbackTextDeltas.join("");
   if (orderedContent.length > 0) {
-    if (orderedContent.every((block) => block.type === "text")) {
-      output = orderedContent
-        .map((block) => (block.type === "text" ? block.text : ""))
-        .join("");
+    if (orderedContent.every(isTextContentBlock)) {
+      output = orderedContent.map((block) => block.text).join("");
     } else {
       output = {
         ...(role ? { role } : {}),
@@ -267,7 +265,7 @@ function finalizeContentBlock(
 
   const text = contentBlockDeltas[index]?.join("") ?? "";
 
-  if (contentBlock.type === "tool_use") {
+  if (isToolUseContentBlock(contentBlock)) {
     if (!text) {
       return;
     }
@@ -284,7 +282,7 @@ function finalizeContentBlock(
     return;
   }
 
-  if (contentBlock.type === "text") {
+  if (isTextContentBlock(contentBlock)) {
     if (!text) {
       delete contentBlocks[index];
       return;
@@ -301,6 +299,18 @@ function finalizeContentBlock(
     fallbackTextDeltas.push(text);
   }
   delete contentBlocks[index];
+}
+
+function isTextContentBlock(
+  contentBlock: AnthropicOutputContentBlock,
+): contentBlock is Extract<AnthropicOutputContentBlock, { type: "text" }> {
+  return contentBlock.type === "text";
+}
+
+function isToolUseContentBlock(
+  contentBlock: AnthropicOutputContentBlock,
+): contentBlock is Extract<AnthropicOutputContentBlock, { type: "tool_use" }> {
+  return contentBlock.type === "tool_use";
 }
 
 function isAnthropicBase64ContentBlock(
