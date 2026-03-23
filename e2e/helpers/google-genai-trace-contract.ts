@@ -33,12 +33,20 @@ function normalizeGooglePayloads(payloadRows: unknown[]): unknown[] {
     }
 
     const row = structuredClone(payload) as {
+      metrics?: Record<string, unknown>;
       output?: {
         usageMetadata?: {
+          cachedContentTokenCount?: number;
           promptTokensDetails?: Array<{ modality?: string }>;
         };
       };
     };
+    if (row.metrics) {
+      delete row.metrics.prompt_cached_tokens;
+    }
+    if (row.output?.usageMetadata) {
+      delete row.output.usageMetadata.cachedContentTokenCount;
+    }
     const promptTokensDetails = row.output?.usageMetadata?.promptTokensDetails;
     if (promptTokensDetails) {
       promptTokensDetails.sort((left, right) =>
@@ -91,6 +99,24 @@ function normalizeGoogleSnapshotSummary(options: {
   }
 
   return summary as Json;
+}
+
+function normalizeGoogleSummaryMetrics(summary: Json): Json {
+  if (
+    !summary ||
+    typeof summary !== "object" ||
+    Array.isArray(summary) ||
+    !Array.isArray(summary.metric_keys)
+  ) {
+    return summary;
+  }
+
+  return {
+    ...summary,
+    metric_keys: summary.metric_keys.filter(
+      (metric): metric is string => metric !== "prompt_cached_tokens",
+    ),
+  } satisfies Json;
 }
 
 function normalizeGoogleSnapshotPayloadRows(options: {
@@ -294,14 +320,16 @@ export function assertGoogleGenAITraceContract(options: {
         toolOperation,
         toolSpan,
       ].map((event) =>
-        normalizeGoogleSnapshotSummary({
-          event: event!,
-          metadataKeys: ["model", "operation", "scenario"],
-          rootName: options.rootName,
-          rootSpanId: root?.span.id,
-          snapshotRootName: options.snapshotRootName,
-          snapshotScenarioName: options.snapshotScenarioName,
-        }),
+        normalizeGoogleSummaryMetrics(
+          normalizeGoogleSnapshotSummary({
+            event: event!,
+            metadataKeys: ["model", "operation", "scenario"],
+            rootName: options.rootName,
+            rootSpanId: root?.span.id,
+            snapshotRootName: options.snapshotRootName,
+            snapshotScenarioName: options.snapshotScenarioName,
+          }),
+        ),
       ) as Json,
     ),
     payloadSummary: normalizeForSnapshot(
