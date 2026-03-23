@@ -1,6 +1,5 @@
 [
   {
-    "_is_merge": false,
     "context": {
       "caller_filename": "<repo>/js/src/wrappers/shared/traced-eval.ts",
       "caller_functionname": "Module.runTracedEval",
@@ -15,9 +14,16 @@
       "testRunId": "<run:1>"
     },
     "metrics": {
+      "end": 0,
       "start": 0
     },
+    "output": {
+      "phase": "simple-pass"
+    },
     "root_span_id": "<span:2>",
+    "scores": {
+      "pass": 1
+    },
     "span_attributes": {
       "exec_counter": 0,
       "name": "vitest simple pass",

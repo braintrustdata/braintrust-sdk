@@ -57,6 +57,116 @@ function filterItems<T>(items: T[], predicate?: (item: T) => boolean): T[] {
   return predicate ? items.filter(predicate) : [...items];
 }
 
+function requestRowIdentity(row: Record<string, unknown>): string {
+  return JSON.stringify(
+    [
+      "org_id",
+      "project_id",
+      "experiment_id",
+      "dataset_id",
+      "prompt_session_id",
+      "log_id",
+      "id",
+    ].map((key) => row[key]),
+  );
+}
+
+function mergeValue(base: unknown, incoming: unknown): unknown {
+  if (isRecord(base) && isRecord(incoming)) {
+    const merged: Record<string, unknown> = { ...base };
+    for (const [key, value] of Object.entries(incoming)) {
+      merged[key] = key in merged ? mergeValue(merged[key], value) : value;
+    }
+    return merged;
+  }
+
+  return incoming;
+}
+
+function mergeRequestRow(
+  existing: Record<string, unknown> | undefined,
+  incoming: Record<string, unknown>,
+): Record<string, unknown> {
+  if (!existing || incoming._is_merge !== true) {
+    return structuredClone(incoming);
+  }
+
+  const preserveNoMerge = existing._is_merge !== true;
+  const merged = mergeValue(existing, incoming) as Record<string, unknown>;
+  if (preserveNoMerge) {
+    delete merged._is_merge;
+  }
+  return structuredClone(merged);
+}
+
+function mergeLogs3RequestBody(
+  left: JsonValue | null,
+  right: JsonValue | null,
+): JsonValue | null {
+  if (
+    !isRecord(left) ||
+    !Array.isArray(left.rows) ||
+    !isRecord(right) ||
+    !Array.isArray(right.rows)
+  ) {
+    return right ?? left;
+  }
+
+  const mergedRows = new Map<string, Record<string, unknown>>();
+  const rowOrder: string[] = [];
+  for (const row of [...left.rows, ...right.rows]) {
+    if (!isRecord(row)) {
+      continue;
+    }
+    const key = requestRowIdentity(row);
+    if (!mergedRows.has(key)) {
+      rowOrder.push(key);
+    }
+    mergedRows.set(key, mergeRequestRow(mergedRows.get(key), row));
+  }
+
+  return {
+    ...left,
+    ...right,
+    rows: rowOrder
+      .map((key) => mergedRows.get(key))
+      .filter((row): row is Record<string, unknown> => row !== undefined),
+  };
+}
+
+function normalizeCapturedRequests(
+  requests: CapturedRequest[],
+): CapturedRequest[] {
+  const normalized: CapturedRequest[] = [];
+
+  for (const request of requests) {
+    const previous = normalized.at(-1);
+    if (
+      previous &&
+      previous.method === "POST" &&
+      previous.path === "/logs3" &&
+      request.method === "POST" &&
+      request.path === "/logs3"
+    ) {
+      const mergedBody = mergeLogs3RequestBody(
+        previous.jsonBody,
+        request.jsonBody,
+      );
+      normalized[normalized.length - 1] = {
+        ...previous,
+        jsonBody: mergedBody,
+        rawBody:
+          mergedBody === null ? previous.rawBody : JSON.stringify(mergedBody),
+      };
+      continue;
+    }
+
+    normalized.push(structuredClone(request));
+  }
+
+  return normalized;
+}
+
 function createTestRunId(): string {
   return `e2e-${randomUUID()}`;
 }
@@ -242,7 +352,9 @@ export async function withScenarioHarness(
       payloads: (predicate) => filterItems(server.payloads, predicate),
       requestCursor: () => server.requests.length,
       requestsAfter: (after, predicate) =>
-        filterItems(server.requests.slice(after), predicate),
+        normalizeCapturedRequests(
+          filterItems(server.requests.slice(after), predicate),
+        ),
       runNodeScenarioDir: (options) =>
         runNodeScenarioDir({
           ...options,
