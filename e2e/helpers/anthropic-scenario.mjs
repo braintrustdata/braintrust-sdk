@@ -6,6 +6,20 @@ import {
 } from "./provider-runtime.mjs";
 
 const ANTHROPIC_MODEL = "claude-3-haiku-20240307";
+const WEATHER_TOOL = {
+  name: "get_weather",
+  description: "Get the current weather in a given location",
+  input_schema: {
+    type: "object",
+    properties: {
+      location: {
+        type: "string",
+        description: "The city and state or city and country",
+      },
+    },
+    required: ["location"],
+  },
+};
 
 export async function runAnthropicScenario(options) {
   const imageBase64 = (await readFile(options.testImageUrl)).toString("base64");
@@ -109,27 +123,39 @@ export async function runAnthropicScenario(options) {
         },
       );
 
+      await runOperation(
+        "anthropic-stream-tool-operation",
+        "stream-tool",
+        async () => {
+          const stream = await client.messages.create({
+            model: ANTHROPIC_MODEL,
+            max_tokens: 128,
+            temperature: 0,
+            stream: true,
+            tool_choice: {
+              type: "tool",
+              name: WEATHER_TOOL.name,
+              disable_parallel_tool_use: true,
+            },
+            tools: [WEATHER_TOOL],
+            messages: [
+              {
+                role: "user",
+                content:
+                  "Use the get_weather tool for Paris, France. Do not answer from memory.",
+              },
+            ],
+          });
+          await collectAsync(stream);
+        },
+      );
+
       await runOperation("anthropic-tool-operation", "tool", async () => {
         await client.messages.create({
           model: ANTHROPIC_MODEL,
           max_tokens: 128,
           temperature: 0,
-          tools: [
-            {
-              name: "get_weather",
-              description: "Get the current weather in a given location",
-              input_schema: {
-                type: "object",
-                properties: {
-                  location: {
-                    type: "string",
-                    description: "The city and state or city and country",
-                  },
-                },
-                required: ["location"],
-              },
-            },
-          ],
+          tools: [WEATHER_TOOL],
           messages: [
             {
               role: "user",

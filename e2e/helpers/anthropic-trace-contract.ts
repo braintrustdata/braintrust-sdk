@@ -1,14 +1,8 @@
 import { expect } from "vitest";
 import { normalizeForSnapshot, type Json } from "./normalize";
-import type {
-  CapturedLogEvent,
-  CapturedLogPayload,
-} from "./mock-braintrust-server";
+import type { CapturedLogEvent } from "./mock-braintrust-server";
 import { findChildSpans, findLatestSpan } from "./trace-selectors";
-import {
-  payloadRowsForRootSpan,
-  summarizeWrapperContract,
-} from "./wrapper-contract";
+import { summarizeWrapperContract } from "./wrapper-contract";
 
 function findNamedChildSpan(
   capturedEvents: CapturedLogEvent[],
@@ -25,31 +19,65 @@ function findNamedChildSpan(
   return undefined;
 }
 
-function normalizeAnthropicPayloads(payloadRows: unknown[]): unknown[] {
-  const attachmentRowKeys = new Set<string>();
+function pickMetadata(
+  metadata: Record<string, unknown> | undefined,
+  keys: string[],
+): Json {
+  if (!metadata) {
+    return null;
+  }
 
-  for (const payload of payloadRows) {
-    if (!payload || typeof payload !== "object") {
-      continue;
-    }
+  const picked = Object.fromEntries(
+    keys.flatMap((key) =>
+      key in metadata ? [[key, metadata[key] as Json]] : [],
+    ),
+  );
 
-    const row = payload as {
-      id?: string;
-      input?: Array<{
-        content?:
-          | string
-          | Array<{
-              source?: {
-                data?: {
-                  type?: string;
+  return Object.keys(picked).length > 0 ? (picked as Json) : null;
+}
+
+function summarizeAnthropicPayloadEvent(
+  event: CapturedLogEvent,
+  metadataKeys: string[],
+): Json {
+  const summary = {
+    input: event.input as Json,
+    metadata: pickMetadata(
+      event.row.metadata as Record<string, unknown> | undefined,
+      metadataKeys,
+    ),
+    metrics: event.metrics as Json,
+    name: event.span.name ?? null,
+    output: event.output as Json,
+    type: event.span.type ?? null,
+  } satisfies Json;
+
+  if (
+    event.span.name === "anthropic.messages.create" &&
+    Array.isArray((summary.output as { content?: unknown[] } | null)?.content)
+  ) {
+    const output = structuredClone(
+      summary.output as {
+        content: Array<{ text?: string; type?: string }>;
+      },
+    );
+    const textBlock = output.content.find(
+      (block) => block.type === "text" && typeof block.text === "string",
+    );
+    const input = event.input as
+      | Array<{
+          content?:
+            | string
+            | Array<{
+                source?: {
+                  data?: {
+                    type?: string;
+                  };
                 };
-              };
-            }>;
-      }>;
-      span_id?: string;
-    };
-
-    const hasAttachmentInput = row.input?.some(
+              }>;
+        }>
+      | undefined;
+    const hasAttachmentInput = input?.some(
       (message) =>
         Array.isArray(message.content) &&
         message.content.some(
@@ -57,52 +85,17 @@ function normalizeAnthropicPayloads(payloadRows: unknown[]): unknown[] {
         ),
     );
 
-    if (!hasAttachmentInput) {
-      continue;
-    }
-
-    if (typeof row.id === "string") {
-      attachmentRowKeys.add(row.id);
-    }
-    if (typeof row.span_id === "string") {
-      attachmentRowKeys.add(row.span_id);
+    if (hasAttachmentInput && textBlock) {
+      textBlock.text = "<anthropic-attachment-description>";
+      summary.output = output as Json;
     }
   }
 
-  return payloadRows.map((payload) => {
-    if (!payload || typeof payload !== "object") {
-      return payload;
-    }
-
-    const row = structuredClone(payload) as {
-      id?: string;
-      metadata?: { operation?: string };
-      output?: {
-        content?: Array<{ text?: string; type?: string }>;
-      };
-      span_id?: string;
-    };
-    const isAttachmentRow =
-      row.metadata?.operation === "attachment" ||
-      (typeof row.id === "string" && attachmentRowKeys.has(row.id)) ||
-      (typeof row.span_id === "string" && attachmentRowKeys.has(row.span_id));
-
-    if (isAttachmentRow) {
-      const textBlock = row.output?.content?.find(
-        (block) => block.type === "text" && typeof block.text === "string",
-      );
-      if (textBlock) {
-        textBlock.text = "<anthropic-attachment-description>";
-      }
-    }
-
-    return row;
-  });
+  return summary;
 }
 
 export function assertAnthropicTraceContract(options: {
   capturedEvents: CapturedLogEvent[];
-  payloads: CapturedLogPayload[];
   rootName: string;
   scenarioName: string;
 }): { payloadSummary: Json; spanSummary: Json } {
@@ -118,6 +111,10 @@ export function assertAnthropicTraceContract(options: {
   const withResponseOperation = findLatestSpan(
     options.capturedEvents,
     "anthropic-stream-with-response-operation",
+  );
+  const toolStreamOperation = findLatestSpan(
+    options.capturedEvents,
+    "anthropic-stream-tool-operation",
   );
   const toolOperation = findLatestSpan(
     options.capturedEvents,
@@ -140,6 +137,7 @@ export function assertAnthropicTraceContract(options: {
   expect(createOperation).toBeDefined();
   expect(streamOperation).toBeDefined();
   expect(withResponseOperation).toBeDefined();
+  expect(toolStreamOperation).toBeDefined();
   expect(toolOperation).toBeDefined();
   expect(attachmentOperation).toBeDefined();
   expect(betaCreateOperation).toBeDefined();
@@ -151,6 +149,7 @@ export function assertAnthropicTraceContract(options: {
   expect(createOperation?.span.parentIds).toEqual([root?.span.id ?? ""]);
   expect(streamOperation?.span.parentIds).toEqual([root?.span.id ?? ""]);
   expect(withResponseOperation?.span.parentIds).toEqual([root?.span.id ?? ""]);
+  expect(toolStreamOperation?.span.parentIds).toEqual([root?.span.id ?? ""]);
   expect(toolOperation?.span.parentIds).toEqual([root?.span.id ?? ""]);
   expect(attachmentOperation?.span.parentIds).toEqual([root?.span.id ?? ""]);
   expect(betaCreateOperation?.span.parentIds).toEqual([root?.span.id ?? ""]);
@@ -176,6 +175,11 @@ export function assertAnthropicTraceContract(options: {
     ["anthropic.messages.create"],
     toolOperation?.span.id,
   );
+  const toolStreamSpan = findNamedChildSpan(
+    options.capturedEvents,
+    ["anthropic.messages.create"],
+    toolStreamOperation?.span.id,
+  );
   const attachmentSpan = findNamedChildSpan(
     options.capturedEvents,
     ["anthropic.messages.create"],
@@ -196,6 +200,7 @@ export function assertAnthropicTraceContract(options: {
     createSpan,
     streamSpan,
     withResponseSpan,
+    toolStreamSpan,
     toolSpan,
     attachmentSpan,
     betaCreateSpan,
@@ -211,7 +216,12 @@ export function assertAnthropicTraceContract(options: {
     ).toBe("string");
   }
 
-  for (const streamingSpan of [streamSpan, withResponseSpan, betaStreamSpan]) {
+  for (const streamingSpan of [
+    streamSpan,
+    withResponseSpan,
+    toolStreamSpan,
+    betaStreamSpan,
+  ]) {
     expect(streamingSpan?.metrics).toMatchObject({
       time_to_first_token: expect.any(Number),
       prompt_tokens: expect.any(Number),
@@ -226,6 +236,16 @@ export function assertAnthropicTraceContract(options: {
     | undefined;
   expect(
     toolOutput?.content?.some(
+      (block) => block.type === "tool_use" && block.name === "get_weather",
+    ),
+  ).toBe(true);
+  const toolStreamOutput = toolStreamSpan?.output as
+    | {
+        content?: Array<{ name?: string; type?: string }>;
+      }
+    | undefined;
+  expect(
+    toolStreamOutput?.content?.some(
       (block) => block.type === "tool_use" && block.name === "get_weather",
     ),
   ).toBe(true);
@@ -245,6 +265,8 @@ export function assertAnthropicTraceContract(options: {
         streamSpan,
         withResponseOperation,
         withResponseSpan,
+        toolStreamOperation,
+        toolStreamSpan,
         toolOperation,
         toolSpan,
         betaCreateOperation,
@@ -261,8 +283,33 @@ export function assertAnthropicTraceContract(options: {
       ) as Json,
     ),
     payloadSummary: normalizeForSnapshot(
-      normalizeAnthropicPayloads(
-        payloadRowsForRootSpan(options.payloads, root?.span.id),
+      [
+        root,
+        createOperation,
+        createSpan,
+        attachmentOperation,
+        attachmentSpan,
+        streamOperation,
+        streamSpan,
+        withResponseOperation,
+        withResponseSpan,
+        toolStreamOperation,
+        toolStreamSpan,
+        toolOperation,
+        toolSpan,
+        betaCreateOperation,
+        betaCreateSpan,
+        betaStreamOperation,
+        betaStreamSpan,
+      ].map((event) =>
+        summarizeAnthropicPayloadEvent(event!, [
+          "provider",
+          "model",
+          "operation",
+          "scenario",
+          "stop_reason",
+          "stop_sequence",
+        ]),
       ) as Json,
     ),
   };
