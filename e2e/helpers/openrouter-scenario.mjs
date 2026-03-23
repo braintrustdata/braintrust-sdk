@@ -4,7 +4,7 @@ import {
   runTracedScenario,
 } from "./provider-runtime.mjs";
 
-const CHAT_MODEL = "openai/gpt-4.1-mini";
+const CHAT_MODEL = "openai/gpt-4o-mini";
 const EMBEDDING_MODEL = "openai/text-embedding-3-small";
 
 export async function runOpenRouterScenario(options) {

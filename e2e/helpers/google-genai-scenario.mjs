@@ -5,7 +5,7 @@ import {
   runTracedScenario,
 } from "./provider-runtime.mjs";
 
-const GOOGLE_MODEL = "gemini-2.0-flash-001";
+const GOOGLE_MODEL = "gemini-2.5-flash-lite";
 
 export async function runGoogleGenAIScenario(options) {
   const imageBase64 = (await readFile(options.testImageUrl)).toString("base64");

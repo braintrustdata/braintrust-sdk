@@ -4,7 +4,7 @@ import type { CapturedLogEvent } from "./mock-braintrust-server";
 import { findChildSpans, findLatestSpan } from "./trace-selectors";
 import { summarizeWrapperContract } from "./wrapper-contract";
 
-const CHAT_MODEL = "gpt-4.1-mini";
+const CHAT_MODEL = "gpt-4o-mini";
 const EMBEDDING_MODEL = "text-embedding-3-small";
 
 const OPERATIONS = [
