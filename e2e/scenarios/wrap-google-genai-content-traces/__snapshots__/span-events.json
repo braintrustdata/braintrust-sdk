@@ -3,10 +3,10 @@
     "has_input": false,
     "has_output": false,
     "metadata": {
-      "scenario": "wrap-google-genai-content-traces"
+      "scenario": "google-genai-traces"
     },
     "metric_keys": [],
-    "name": "google-genai-wrapper-root",
+    "name": "google-genai-root",
     "root_span_id": "<span:1>",
     "span_id": "<span:1>",
     "span_parents": [],

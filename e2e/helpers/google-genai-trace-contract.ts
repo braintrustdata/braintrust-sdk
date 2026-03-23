@@ -3,6 +3,7 @@ import { normalizeForSnapshot, type Json } from "./normalize";
 import type {
   CapturedLogEvent,
   CapturedLogPayload,
+  CapturedLogRow,
 } from "./mock-braintrust-server";
 import { findChildSpans, findLatestSpan } from "./trace-selectors";
 import {
@@ -48,11 +49,98 @@ function normalizeGooglePayloads(payloadRows: unknown[]): unknown[] {
   });
 }
 
+function normalizeGoogleSnapshotSummary(options: {
+  event: CapturedLogEvent;
+  metadataKeys: string[];
+  rootSpanId: string | undefined;
+  rootName: string;
+  snapshotRootName?: string;
+  snapshotScenarioName?: string;
+}): Json {
+  const summary = summarizeWrapperContract(
+    options.event,
+    options.metadataKeys,
+  ) as
+    | {
+        metadata?: Record<string, unknown> | null;
+        name?: string | null;
+      }
+    | Json;
+
+  if (
+    options.event.span.id === options.rootSpanId &&
+    summary &&
+    typeof summary === "object" &&
+    !Array.isArray(summary)
+  ) {
+    if (options.snapshotRootName && summary.name === options.rootName) {
+      summary.name = options.snapshotRootName;
+    }
+
+    if (
+      options.snapshotScenarioName &&
+      summary.metadata &&
+      typeof summary.metadata === "object" &&
+      !Array.isArray(summary.metadata)
+    ) {
+      summary.metadata = {
+        ...summary.metadata,
+        scenario: options.snapshotScenarioName,
+      };
+    }
+  }
+
+  return summary as Json;
+}
+
+function normalizeGoogleSnapshotPayloadRows(options: {
+  payloadRows: CapturedLogRow[];
+  rootSpanId: string | undefined;
+  snapshotRootName?: string;
+  snapshotScenarioName?: string;
+}): CapturedLogRow[] {
+  return options.payloadRows.map((row) => {
+    if (row.span_id !== options.rootSpanId) {
+      return row;
+    }
+
+    const normalizedRow = structuredClone(row);
+
+    if (
+      options.snapshotScenarioName &&
+      normalizedRow.metadata &&
+      typeof normalizedRow.metadata === "object" &&
+      !Array.isArray(normalizedRow.metadata)
+    ) {
+      normalizedRow.metadata = {
+        ...normalizedRow.metadata,
+        scenario: options.snapshotScenarioName,
+      };
+    }
+
+    if (
+      options.snapshotRootName &&
+      normalizedRow.span_attributes &&
+      typeof normalizedRow.span_attributes === "object" &&
+      !Array.isArray(normalizedRow.span_attributes)
+    ) {
+      normalizedRow.span_attributes = {
+        ...normalizedRow.span_attributes,
+        name: options.snapshotRootName,
+      };
+    }
+
+    return normalizedRow;
+  });
+}
+
 export function assertGoogleGenAITraceContract(options: {
   capturedEvents: CapturedLogEvent[];
   payloads: CapturedLogPayload[];
   rootName: string;
   scenarioName: string;
+  snapshotRootName?: string;
+  snapshotScenarioName?: string;
 }): { payloadSummary: Json; spanSummary: Json } {
   const root = findLatestSpan(options.capturedEvents, options.rootName);
   const generateOperation = findLatestSpan(
@@ -206,12 +294,24 @@ export function assertGoogleGenAITraceContract(options: {
         toolOperation,
         toolSpan,
       ].map((event) =>
-        summarizeWrapperContract(event!, ["model", "operation", "scenario"]),
+        normalizeGoogleSnapshotSummary({
+          event: event!,
+          metadataKeys: ["model", "operation", "scenario"],
+          rootName: options.rootName,
+          rootSpanId: root?.span.id,
+          snapshotRootName: options.snapshotRootName,
+          snapshotScenarioName: options.snapshotScenarioName,
+        }),
       ) as Json,
     ),
     payloadSummary: normalizeForSnapshot(
       normalizeGooglePayloads(
-        payloadRowsForRootSpan(options.payloads, root?.span.id),
+        normalizeGoogleSnapshotPayloadRows({
+          payloadRows: payloadRowsForRootSpan(options.payloads, root?.span.id),
+          rootSpanId: root?.span.id,
+          snapshotRootName: options.snapshotRootName,
+          snapshotScenarioName: options.snapshotScenarioName,
+        }),
       ) as Json,
     ),
   };
