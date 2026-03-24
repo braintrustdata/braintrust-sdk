@@ -3,10 +3,10 @@
     "has_input": false,
     "has_output": false,
     "metadata": {
-      "scenario": "wrap-anthropic-message-traces"
+      "scenario": "anthropic-instrumentation"
     },
     "metric_keys": [],
-    "name": "anthropic-wrapper-root",
+    "name": "anthropic-instrumentation-root",
     "root_span_id": "<span:1>",
     "span_id": "<span:1>",
     "span_parents": [],

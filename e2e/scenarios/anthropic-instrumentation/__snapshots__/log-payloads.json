@@ -1,13 +1,13 @@
 [
   {
     "metadata": {
-      "scenario": "wrap-anthropic-message-traces"
+      "scenario": "anthropic-instrumentation"
     },
     "metrics": {
       "end": 0,
       "start": 0
     },
-    "name": "anthropic-wrapper-root",
+    "name": "anthropic-instrumentation-root",
     "type": "task"
   },
   {

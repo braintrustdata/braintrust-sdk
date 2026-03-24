@@ -1,11 +1,14 @@
 import { readFile } from "node:fs/promises";
+import { wrapAnthropic } from "braintrust";
 import {
   collectAsync,
   runOperation,
   runTracedScenario,
-} from "./provider-runtime.mjs";
+} from "../../helpers/provider-runtime.mjs";
 
 const ANTHROPIC_MODEL = "claude-3-haiku-20240307";
+const ROOT_NAME = "anthropic-instrumentation-root";
+const SCENARIO_NAME = "anthropic-instrumentation";
 const WEATHER_TOOL = {
   name: "get_weather",
   description: "Get the current weather in a given location",
@@ -21,14 +24,17 @@ const WEATHER_TOOL = {
   },
 };
 
-export async function runAnthropicScenario(options) {
-  const imageBase64 = (await readFile(options.testImageUrl)).toString("base64");
-  const baseClient = new options.Anthropic({
+async function runAnthropicInstrumentationScenario(
+  Anthropic,
+  { decorateClient, useMessagesStreamHelper = true } = {},
+) {
+  const imageBase64 = (
+    await readFile(new URL("./test-image.png", import.meta.url))
+  ).toString("base64");
+  const baseClient = new Anthropic({
     apiKey: process.env.ANTHROPIC_API_KEY,
   });
-  const client = options.decorateClient
-    ? options.decorateClient(baseClient)
-    : baseClient;
+  const client = decorateClient ? decorateClient(baseClient) : baseClient;
 
   await runTracedScenario({
     callback: async () => {
@@ -93,7 +99,7 @@ export async function runAnthropicScenario(options) {
         "stream-with-response",
         async () => {
           const stream =
-            options.useMessagesStreamHelper === false
+            useMessagesStreamHelper === false
               ? await client.messages.create({
                   model: ANTHROPIC_MODEL,
                   max_tokens: 32,
@@ -201,9 +207,23 @@ export async function runAnthropicScenario(options) {
       );
     },
     metadata: {
-      scenario: options.scenarioName,
+      scenario: SCENARIO_NAME,
     },
-    projectNameBase: options.projectNameBase,
-    rootName: options.rootName,
+    projectNameBase: "e2e-anthropic-instrumentation",
+    rootName: ROOT_NAME,
   });
 }
+
+export async function runWrappedAnthropicInstrumentation(Anthropic) {
+  await runAnthropicInstrumentationScenario(Anthropic, {
+    decorateClient: wrapAnthropic,
+  });
+}
+
+export async function runAutoAnthropicInstrumentation(Anthropic) {
+  await runAnthropicInstrumentationScenario(Anthropic, {
+    useMessagesStreamHelper: false,
+  });
+}
+
+export { ROOT_NAME, SCENARIO_NAME };
