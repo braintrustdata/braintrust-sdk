@@ -59,20 +59,18 @@ export function patchTracingChannel(
       const { start, end, asyncStart, asyncEnd, error } = this;
 
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      function reject(err: any) {
+      function publishRejected(err: any) {
         context.error = err;
         error?.publish(context);
         asyncStart?.publish(context);
         asyncEnd?.publish(context);
-        return Promise.reject(err);
       }
 
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      function resolve(result: any) {
+      function publishResolved(result: any) {
         context.result = result;
         asyncStart?.publish(context);
         asyncEnd?.publish(context);
-        return result;
       }
 
       // Use runStores (not just publish) so fn runs inside the ALS context
@@ -91,7 +89,41 @@ export function patchTracingChannel(
             (typeof result === "object" || typeof result === "function") &&
             typeof result.then === "function"
           ) {
-            return result.then(resolve, reject);
+            if (result.constructor === Promise) {
+              return result.then(
+                (res) => {
+                  publishResolved(res);
+                  return res;
+                },
+                (err) => {
+                  publishRejected(err);
+                  return Promise.reject(err);
+                },
+              );
+            }
+
+            // Preserve the original promise-like object so SDK helper methods
+            // like Anthropic APIPromise.withResponse() remain available.
+            void result.then(
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              (resolved: any) => {
+                try {
+                  publishResolved(resolved);
+                } catch {
+                  // Preserve wrapped promise semantics even if instrumentation fails.
+                }
+              },
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              (err: any) => {
+                try {
+                  publishRejected(err);
+                } catch {
+                  // Preserve wrapped promise semantics even if instrumentation fails.
+                }
+              },
+            );
+
+            return result;
           }
 
           context.result = result;
