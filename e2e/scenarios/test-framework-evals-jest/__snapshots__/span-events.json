@@ -4,7 +4,7 @@
     "input": "What is the capital of France?",
     "metadata": {
       "case": "basic-span",
-      "scenario": "jest-node",
+      "scenario": "test-framework-evals-jest",
       "testRunId": "<run:1>",
       "transport": "http"
     },
@@ -32,7 +32,7 @@
     },
     "metadata": {
       "case": "json-attachment",
-      "scenario": "jest-node",
+      "scenario": "test-framework-evals-jest",
       "testRunId": "<run:1>"
     },
     "name": "root",
@@ -56,7 +56,7 @@
     },
     "metadata": {
       "case": "parent-span",
-      "scenario": "jest-node",
+      "scenario": "test-framework-evals-jest",
       "testRunId": "<run:1>"
     },
     "name": "jest parent span",
@@ -81,7 +81,7 @@
     },
     "metadata": {
       "case": "child-span",
-      "scenario": "jest-node",
+      "scenario": "test-framework-evals-jest",
       "testRunId": "<run:1>"
     },
     "name": "jest child span",
@@ -104,7 +104,7 @@
     "input": null,
     "metadata": {
       "case": "nested-parent",
-      "scenario": "jest-node",
+      "scenario": "test-framework-evals-jest",
       "testRunId": "<run:1>"
     },
     "name": "jest nested parent span",
@@ -123,7 +123,7 @@
     "input": null,
     "metadata": {
       "case": "nested-child",
-      "scenario": "jest-node",
+      "scenario": "test-framework-evals-jest",
       "testRunId": "<run:1>"
     },
     "name": "jest nested child span",
@@ -143,7 +143,7 @@
     "input": null,
     "metadata": {
       "case": "nested-grandchild",
-      "scenario": "jest-node",
+      "scenario": "test-framework-evals-jest",
       "testRunId": "<run:1>"
     },
     "name": "jest nested grandchild span",
@@ -165,7 +165,7 @@
     "input": null,
     "metadata": {
       "case": "current-span",
-      "scenario": "jest-node",
+      "scenario": "test-framework-evals-jest",
       "testRunId": "<run:1>"
     },
     "name": "jest current span",

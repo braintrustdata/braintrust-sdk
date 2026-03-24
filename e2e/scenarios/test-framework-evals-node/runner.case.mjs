@@ -2,7 +2,7 @@ import { after, describe, test } from "node:test";
 import { currentSpan, initNodeTestSuite, login } from "braintrust/node";
 
 const testRunId = process.env.BRAINTRUST_E2E_RUN_ID;
-const scenario = "init-node-test-suite-traces";
+const scenario = "test-framework-evals-node";
 const scopedName = (base) =>
   `${base}-${testRunId.toLowerCase().replace(/[^a-z0-9-]/g, "-")}`;
 
@@ -11,11 +11,11 @@ await login({
   appUrl: process.env.BRAINTRUST_APP_URL,
 });
 
-describe("init-node-test-suite-traces", () => {
+describe("test-framework-evals-node", () => {
   const suite = initNodeTestSuite({
     after,
     displaySummary: false,
-    projectName: scopedName("e2e-init-node-test-suite"),
+    projectName: scopedName("e2e-test-framework-evals-node"),
   });
 
   test(

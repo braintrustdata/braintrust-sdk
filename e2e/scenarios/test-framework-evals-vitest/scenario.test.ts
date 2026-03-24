@@ -35,7 +35,7 @@ const scenarios: VitestScenario[] = [
 
 for (const scenario of scenarios) {
   test(
-    `wrap-vitest-suite-traces captures wrapped Vitest task spans (${scenario.label})`,
+    `test-framework-evals-vitest captures wrapped Vitest task spans (${scenario.label})`,
     {
       tags: [E2E_TAGS.hermetic],
       timeout: TIMEOUT_MS,
@@ -86,7 +86,7 @@ for (const scenario of scenarios) {
           expect(configured?.expected).toBe(10);
           expect(configured?.row.metadata).toMatchObject({
             case: "configured-span",
-            scenario: "wrap-vitest-suite-traces",
+            scenario: "test-framework-evals-vitest",
             testRunId,
           });
           expect(configured?.row.tags).toEqual(["math", "configured"]);

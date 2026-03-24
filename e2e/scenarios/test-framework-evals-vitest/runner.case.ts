@@ -24,8 +24,8 @@ const { wrapVitest } = await import(
 configureNode();
 
 const testRunId = getTestRunId();
-const scenario = "wrap-vitest-suite-traces";
-const projectName = scopedName("e2e-wrap-vitest", testRunId);
+const scenario = "test-framework-evals-vitest";
+const projectName = scopedName("e2e-test-framework-evals-vitest", testRunId);
 
 const bt = wrapVitest(
   {
@@ -50,7 +50,7 @@ beforeAll(async () => {
   });
 });
 
-describe("wrap-vitest-suite-traces", () => {
+describe("test-framework-evals-vitest", () => {
   test(
     "vitest simple pass",
     {

@@ -18,7 +18,7 @@ const scenarioDir = await prepareScenarioDir({
 const TIMEOUT_MS = 90_000;
 
 test(
-  "init-node-test-suite-traces captures node:test task spans",
+  "test-framework-evals-node captures node:test task spans",
   {
     tags: [E2E_TAGS.hermetic],
     timeout: TIMEOUT_MS,
@@ -60,7 +60,7 @@ test(
         expect(configuredEval?.expected).toBe(10);
         expect(configuredEval?.row.metadata).toMatchObject({
           case: "configured-eval",
-          scenario: "init-node-test-suite-traces",
+          scenario: "test-framework-evals-node",
           testRunId,
         });
         expect(configuredEval?.row.tags).toEqual(["math", "configured"]);

@@ -11,14 +11,14 @@
     "headers": null,
     "jsonBody": {
       "org_id": "mock-org-id",
-      "project_name": "e2e-jest-node-e2e-<uuid:1>"
+      "project_name": "e2e-test-framework-evals-jest-e2e-<uuid:1>"
     },
     "method": "POST",
     "path": "/api/project/register",
     "query": null,
     "rawBody": {
       "org_id": "mock-org-id",
-      "project_name": "e2e-jest-node-e2e-<uuid:1>"
+      "project_name": "e2e-test-framework-evals-jest-e2e-<uuid:1>"
     }
   },
   {
@@ -29,7 +29,7 @@
         {
           "_is_merge": false,
           "context": {
-            "caller_filename": "<repo>/e2e/scenarios/jest-node/runner.case.cjs",
+            "caller_filename": "<repo>/e2e/scenarios/test-framework-evals-jest/runner.case.cjs",
             "caller_functionname": "Object.<anonymous>",
             "caller_lineno": 0
           },
@@ -38,7 +38,7 @@
           "log_id": "g",
           "metadata": {
             "case": "basic-span",
-            "scenario": "jest-node",
+            "scenario": "test-framework-evals-jest",
             "testRunId": "<run:1>"
           },
           "metrics": {
@@ -64,7 +64,7 @@
         {
           "_is_merge": false,
           "context": {
-            "caller_filename": "<repo>/e2e/scenarios/jest-node/runner.case.cjs",
+            "caller_filename": "<repo>/e2e/scenarios/test-framework-evals-jest/runner.case.cjs",
             "caller_functionname": "Object.<anonymous>",
             "caller_lineno": 0
           },
@@ -73,7 +73,7 @@
           "log_id": "g",
           "metadata": {
             "case": "basic-span",
-            "scenario": "jest-node",
+            "scenario": "test-framework-evals-jest",
             "testRunId": "<run:1>"
           },
           "metrics": {
@@ -104,7 +104,7 @@
           "log_id": "g",
           "metadata": {
             "case": "basic-span",
-            "scenario": "jest-node",
+            "scenario": "test-framework-evals-jest",
             "testRunId": "<run:1>",
             "transport": "http"
           },
@@ -132,7 +132,7 @@
           "log_id": "g",
           "metadata": {
             "case": "basic-span",
-            "scenario": "jest-node",
+            "scenario": "test-framework-evals-jest",
             "testRunId": "<run:1>",
             "transport": "http"
           },
@@ -151,14 +151,14 @@
     "headers": null,
     "jsonBody": {
       "org_id": "mock-org-id",
-      "project_name": "e2e-jest-node-e2e-<uuid:1>"
+      "project_name": "e2e-test-framework-evals-jest-e2e-<uuid:1>"
     },
     "method": "POST",
     "path": "/api/project/register",
     "query": null,
     "rawBody": {
       "org_id": "mock-org-id",
-      "project_name": "e2e-jest-node-e2e-<uuid:1>"
+      "project_name": "e2e-test-framework-evals-jest-e2e-<uuid:1>"
     }
   },
   {
@@ -169,7 +169,7 @@
         {
           "_is_merge": false,
           "context": {
-            "caller_filename": "<repo>/e2e/scenarios/jest-node/runner.case.cjs",
+            "caller_filename": "<repo>/e2e/scenarios/test-framework-evals-jest/runner.case.cjs",
             "caller_functionname": "Object.<anonymous>",
             "caller_lineno": 0
           },
@@ -187,7 +187,7 @@
           "log_id": "g",
           "metadata": {
             "case": "json-attachment",
-            "scenario": "jest-node",
+            "scenario": "test-framework-evals-jest",
             "testRunId": "<run:1>"
           },
           "metrics": {
@@ -216,7 +216,7 @@
         {
           "_is_merge": false,
           "context": {
-            "caller_filename": "<repo>/e2e/scenarios/jest-node/runner.case.cjs",
+            "caller_filename": "<repo>/e2e/scenarios/test-framework-evals-jest/runner.case.cjs",
             "caller_functionname": "Object.<anonymous>",
             "caller_lineno": 0
           },
@@ -234,7 +234,7 @@
           "log_id": "g",
           "metadata": {
             "case": "json-attachment",
-            "scenario": "jest-node",
+            "scenario": "test-framework-evals-jest",
             "testRunId": "<run:1>"
           },
           "metrics": {
@@ -259,14 +259,14 @@
     "headers": null,
     "jsonBody": {
       "org_id": "mock-org-id",
-      "project_name": "e2e-jest-node-e2e-<uuid:1>"
+      "project_name": "e2e-test-framework-evals-jest-e2e-<uuid:1>"
     },
     "method": "POST",
     "path": "/api/project/register",
     "query": null,
     "rawBody": {
       "org_id": "mock-org-id",
-      "project_name": "e2e-jest-node-e2e-<uuid:1>"
+      "project_name": "e2e-test-framework-evals-jest-e2e-<uuid:1>"
     }
   },
   {
@@ -288,7 +288,7 @@
         {
           "_is_merge": false,
           "context": {
-            "caller_filename": "<repo>/e2e/scenarios/jest-node/runner.case.cjs",
+            "caller_filename": "<repo>/e2e/scenarios/test-framework-evals-jest/runner.case.cjs",
             "caller_functionname": "Object.<anonymous>",
             "caller_lineno": 0
           },
@@ -301,7 +301,7 @@
           "log_id": "g",
           "metadata": {
             "case": "parent-span",
-            "scenario": "jest-node",
+            "scenario": "test-framework-evals-jest",
             "testRunId": "<run:1>"
           },
           "metrics": {
@@ -338,7 +338,7 @@
         {
           "_is_merge": false,
           "context": {
-            "caller_filename": "<repo>/e2e/scenarios/jest-node/runner.case.cjs",
+            "caller_filename": "<repo>/e2e/scenarios/test-framework-evals-jest/runner.case.cjs",
             "caller_functionname": "Object.<anonymous>",
             "caller_lineno": 0
           },
@@ -351,7 +351,7 @@
           "log_id": "g",
           "metadata": {
             "case": "parent-span",
-            "scenario": "jest-node",
+            "scenario": "test-framework-evals-jest",
             "testRunId": "<run:1>"
           },
           "metrics": {
@@ -377,7 +377,7 @@
         {
           "_is_merge": false,
           "context": {
-            "caller_filename": "<repo>/e2e/scenarios/jest-node/runner.case.cjs",
+            "caller_filename": "<repo>/e2e/scenarios/test-framework-evals-jest/runner.case.cjs",
             "caller_functionname": "traced.name",
             "caller_lineno": 0
           },
@@ -390,7 +390,7 @@
           "log_id": "g",
           "metadata": {
             "case": "child-span",
-            "scenario": "jest-node",
+            "scenario": "test-framework-evals-jest",
             "testRunId": "<run:1>"
           },
           "metrics": {
@@ -418,7 +418,7 @@
         {
           "_is_merge": false,
           "context": {
-            "caller_filename": "<repo>/e2e/scenarios/jest-node/runner.case.cjs",
+            "caller_filename": "<repo>/e2e/scenarios/test-framework-evals-jest/runner.case.cjs",
             "caller_functionname": "traced.name",
             "caller_lineno": 0
           },
@@ -431,7 +431,7 @@
           "log_id": "g",
           "metadata": {
             "case": "child-span",
-            "scenario": "jest-node",
+            "scenario": "test-framework-evals-jest",
             "testRunId": "<run:1>"
           },
           "metrics": {
@@ -537,14 +537,14 @@
     "headers": null,
     "jsonBody": {
       "org_id": "mock-org-id",
-      "project_name": "e2e-jest-node-e2e-<uuid:1>"
+      "project_name": "e2e-test-framework-evals-jest-e2e-<uuid:1>"
     },
     "method": "POST",
     "path": "/api/project/register",
     "query": null,
     "rawBody": {
       "org_id": "mock-org-id",
-      "project_name": "e2e-jest-node-e2e-<uuid:1>"
+      "project_name": "e2e-test-framework-evals-jest-e2e-<uuid:1>"
     }
   },
   {
@@ -555,7 +555,7 @@
         {
           "_is_merge": false,
           "context": {
-            "caller_filename": "<repo>/e2e/scenarios/jest-node/runner.case.cjs",
+            "caller_filename": "<repo>/e2e/scenarios/test-framework-evals-jest/runner.case.cjs",
             "caller_functionname": "Object.<anonymous>",
             "caller_lineno": 0
           },
@@ -564,7 +564,7 @@
           "log_id": "g",
           "metadata": {
             "case": "nested-parent",
-            "scenario": "jest-node",
+            "scenario": "test-framework-evals-jest",
             "testRunId": "<run:1>"
           },
           "metrics": {
@@ -590,7 +590,7 @@
         {
           "_is_merge": false,
           "context": {
-            "caller_filename": "<repo>/e2e/scenarios/jest-node/runner.case.cjs",
+            "caller_filename": "<repo>/e2e/scenarios/test-framework-evals-jest/runner.case.cjs",
             "caller_functionname": "Object.<anonymous>",
             "caller_lineno": 0
           },
@@ -599,7 +599,7 @@
           "log_id": "g",
           "metadata": {
             "case": "nested-parent",
-            "scenario": "jest-node",
+            "scenario": "test-framework-evals-jest",
             "testRunId": "<run:1>"
           },
           "metrics": {
@@ -624,7 +624,7 @@
       "rows": [
         {
           "context": {
-            "caller_filename": "<repo>/e2e/scenarios/jest-node/runner.case.cjs",
+            "caller_filename": "<repo>/e2e/scenarios/test-framework-evals-jest/runner.case.cjs",
             "caller_functionname": "traced.name",
             "caller_lineno": 0
           },
@@ -633,7 +633,7 @@
           "log_id": "g",
           "metadata": {
             "case": "nested-child",
-            "scenario": "jest-node",
+            "scenario": "test-framework-evals-jest",
             "testRunId": "<run:1>"
           },
           "metrics": {
@@ -653,7 +653,7 @@
         },
         {
           "context": {
-            "caller_filename": "<repo>/e2e/scenarios/jest-node/runner.case.cjs",
+            "caller_filename": "<repo>/e2e/scenarios/test-framework-evals-jest/runner.case.cjs",
             "caller_functionname": "traced.name",
             "caller_lineno": 0
           },
@@ -662,7 +662,7 @@
           "log_id": "g",
           "metadata": {
             "case": "nested-grandchild",
-            "scenario": "jest-node",
+            "scenario": "test-framework-evals-jest",
             "testRunId": "<run:1>"
           },
           "metrics": {
@@ -704,7 +704,7 @@
       "rows": [
         {
           "context": {
-            "caller_filename": "<repo>/e2e/scenarios/jest-node/runner.case.cjs",
+            "caller_filename": "<repo>/e2e/scenarios/test-framework-evals-jest/runner.case.cjs",
             "caller_functionname": "traced.name",
             "caller_lineno": 0
           },
@@ -713,7 +713,7 @@
           "log_id": "g",
           "metadata": {
             "case": "nested-child",
-            "scenario": "jest-node",
+            "scenario": "test-framework-evals-jest",
             "testRunId": "<run:1>"
           },
           "metrics": {
@@ -733,7 +733,7 @@
         },
         {
           "context": {
-            "caller_filename": "<repo>/e2e/scenarios/jest-node/runner.case.cjs",
+            "caller_filename": "<repo>/e2e/scenarios/test-framework-evals-jest/runner.case.cjs",
             "caller_functionname": "traced.name",
             "caller_lineno": 0
           },
@@ -742,7 +742,7 @@
           "log_id": "g",
           "metadata": {
             "case": "nested-grandchild",
-            "scenario": "jest-node",
+            "scenario": "test-framework-evals-jest",
             "testRunId": "<run:1>"
           },
           "metrics": {
@@ -781,14 +781,14 @@
     "headers": null,
     "jsonBody": {
       "org_id": "mock-org-id",
-      "project_name": "e2e-jest-node-e2e-<uuid:1>"
+      "project_name": "e2e-test-framework-evals-jest-e2e-<uuid:1>"
     },
     "method": "POST",
     "path": "/api/project/register",
     "query": null,
     "rawBody": {
       "org_id": "mock-org-id",
-      "project_name": "e2e-jest-node-e2e-<uuid:1>"
+      "project_name": "e2e-test-framework-evals-jest-e2e-<uuid:1>"
     }
   },
   {
@@ -799,7 +799,7 @@
         {
           "_is_merge": false,
           "context": {
-            "caller_filename": "<repo>/e2e/scenarios/jest-node/runner.case.cjs",
+            "caller_filename": "<repo>/e2e/scenarios/test-framework-evals-jest/runner.case.cjs",
             "caller_functionname": "Object.<anonymous>",
             "caller_lineno": 0
           },
@@ -808,7 +808,7 @@
           "log_id": "g",
           "metadata": {
             "case": "current-span",
-            "scenario": "jest-node",
+            "scenario": "test-framework-evals-jest",
             "testRunId": "<run:1>"
           },
           "metrics": {
@@ -834,7 +834,7 @@
         {
           "_is_merge": false,
           "context": {
-            "caller_filename": "<repo>/e2e/scenarios/jest-node/runner.case.cjs",
+            "caller_filename": "<repo>/e2e/scenarios/test-framework-evals-jest/runner.case.cjs",
             "caller_functionname": "Object.<anonymous>",
             "caller_lineno": 0
           },
@@ -843,7 +843,7 @@
           "log_id": "g",
           "metadata": {
             "case": "current-span",
-            "scenario": "jest-node",
+            "scenario": "test-framework-evals-jest",
             "testRunId": "<run:1>"
           },
           "metrics": {
@@ -872,7 +872,7 @@
           "log_id": "g",
           "metadata": {
             "case": "current-span",
-            "scenario": "jest-node",
+            "scenario": "test-framework-evals-jest",
             "testRunId": "<run:1>"
           },
           "metrics": {
@@ -899,7 +899,7 @@
           "log_id": "g",
           "metadata": {
             "case": "current-span",
-            "scenario": "jest-node",
+            "scenario": "test-framework-evals-jest",
             "testRunId": "<run:1>"
           },
           "metrics": {
