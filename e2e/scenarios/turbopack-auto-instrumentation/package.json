@@ -1,0 +1,13 @@
+{
+  "name": "@braintrust/e2e-turbopack-auto-instrumentation",
+  "private": true,
+  "dependencies": {
+    "next": "15.3.0",
+    "openai": "4.104.0",
+    "react": "19.1.0",
+    "react-dom": "19.1.0"
+  },
+  "devDependencies": {
+    "@types/react": "19.2.14"
+  }
+}
