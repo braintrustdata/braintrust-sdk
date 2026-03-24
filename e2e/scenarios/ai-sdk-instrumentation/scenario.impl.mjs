@@ -1,19 +1,78 @@
-import { runTracedScenario, runOperation } from "./provider-runtime.mjs";
+import { wrapAISDK } from "braintrust";
+import { z } from "zod";
+import {
+  runMain,
+  runOperation,
+  runTracedScenario,
+} from "../../helpers/provider-runtime.mjs";
+
+export const ROOT_NAME = "ai-sdk-instrumentation-root";
+export const SCENARIO_NAME = "ai-sdk-instrumentation";
+export const AI_SDK_SCENARIO_TIMEOUT_MS = 120_000;
+export const AI_SDK_SCENARIO_SPECS = [
+  {
+    autoEntry: "scenario.ai-sdk-v3.mjs",
+    dependencyName: "ai-sdk-v3",
+    maxTokensKey: "maxTokens",
+    openaiModuleName: "ai-sdk-openai-v3",
+    packageName: "ai-sdk-v3",
+    snapshotName: "ai-sdk-v3",
+    supportsGenerateObject: true,
+    supportsStreamObject: true,
+    supportsToolExecution: false,
+    toolSchemaKey: "parameters",
+    wrapperEntry: "scenario.ai-sdk-v3.ts",
+  },
+  {
+    autoEntry: "scenario.ai-sdk-v4.mjs",
+    dependencyName: "ai-sdk-v4",
+    maxTokensKey: "maxTokens",
+    openaiModuleName: "ai-sdk-openai-v4",
+    packageName: "ai-sdk-v4",
+    snapshotName: "ai-sdk-v4",
+    supportsGenerateObject: true,
+    supportsStreamObject: true,
+    supportsToolExecution: false,
+    toolSchemaKey: "parameters",
+    wrapperEntry: "scenario.ai-sdk-v4.ts",
+  },
+  {
+    agentClassExport: "Experimental_Agent",
+    agentSpanName: "Agent",
+    autoEntry: "scenario.ai-sdk-v5.mjs",
+    dependencyName: "ai-sdk-v5",
+    maxTokensKey: "maxOutputTokens",
+    openaiModuleName: "ai-sdk-openai-v5",
+    packageName: "ai-sdk-v5",
+    snapshotName: "ai-sdk-v5",
+    supportsGenerateObject: true,
+    supportsStreamObject: true,
+    supportsToolExecution: true,
+    toolSchemaKey: "inputSchema",
+    wrapperEntry: "scenario.ai-sdk-v5.ts",
+  },
+  {
+    agentClassExport: "ToolLoopAgent",
+    agentSpanName: "ToolLoopAgent",
+    autoEntry: "scenario.mjs",
+    dependencyName: "ai-sdk-v6",
+    maxTokensKey: "maxOutputTokens",
+    openaiModuleName: "ai-sdk-openai-v6",
+    packageName: "ai-sdk-v6",
+    snapshotName: "ai-sdk-v6",
+    supportsGenerateObject: true,
+    supportsStreamObject: true,
+    supportsToolExecution: true,
+    toolSchemaKey: "inputSchema",
+    wrapperEntry: "scenario.ts",
+  },
+];
 
 function tokenLimit(key, value) {
   return { [key]: value };
 }
 
-function requireZod(zod) {
-  if (!zod) {
-    throw new Error("runAISDKScenario requires a zod instance");
-  }
-
-  return zod;
-}
-
-function createWeatherTool(ai, schemaKey, zod) {
-  const z = requireZod(zod);
+function createWeatherTool(ai, schemaKey) {
   const zodSchema = z.object({
     location: z.string().describe("The city and country"),
   });
@@ -30,11 +89,11 @@ function createWeatherTool(ai, schemaKey, zod) {
   });
 }
 
-export async function runAISDKScenario(options) {
-  const z = requireZod(options.zod);
-  const instrumentedAI = options.decorateAI
-    ? options.decorateAI(options.ai)
-    : options.ai;
+async function runAISDKInstrumentationScenario(
+  options,
+  { decorateAI, flushCount, flushDelayMs } = {},
+) {
+  const instrumentedAI = decorateAI ? decorateAI(options.ai) : options.ai;
   const openaiModel = options.openai("gpt-4o-mini");
 
   await runTracedScenario({
@@ -68,11 +127,7 @@ export async function runAISDKScenario(options) {
             "You must inspect live weather via the provided get_weather tool before responding.",
           temperature: 0,
           tools: {
-            get_weather: createWeatherTool(
-              options.ai,
-              options.toolSchemaKey,
-              z,
-            ),
+            get_weather: createWeatherTool(options.ai, options.toolSchemaKey),
           },
           ...tokenLimit(options.maxTokensKey, 128),
         };
@@ -171,13 +226,30 @@ export async function runAISDKScenario(options) {
         );
       }
     },
-    flushCount: options.flushCount,
-    flushDelayMs: options.flushDelayMs,
+    flushCount,
+    flushDelayMs,
     metadata: {
       aiSdkVersion: options.sdkVersion,
-      scenario: options.scenarioName,
+      scenario: SCENARIO_NAME,
     },
-    projectNameBase: options.projectNameBase,
-    rootName: options.rootName,
+    projectNameBase: "e2e-ai-sdk-instrumentation",
+    rootName: ROOT_NAME,
   });
+}
+
+export async function runWrappedAISDKInstrumentation(options) {
+  await runAISDKInstrumentationScenario(options, {
+    decorateAI: wrapAISDK,
+  });
+}
+
+export async function runAutoAISDKInstrumentation(options) {
+  await runAISDKInstrumentationScenario(options, {
+    flushCount: 2,
+    flushDelayMs: 100,
+  });
+}
+
+export function runAutoAISDKInstrumentationOrExit(options) {
+  runMain(async () => runAutoAISDKInstrumentation(options));
 }

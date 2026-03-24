@@ -1,5 +1,5 @@
 {
-  "name": "@braintrust/e2e-wrap-ai-sdk-generation-traces",
+  "name": "@braintrust/e2e-ai-sdk-instrumentation",
   "private": true,
   "braintrustScenario": {
     "canary": {
