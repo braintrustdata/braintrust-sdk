@@ -2,11 +2,13 @@ import {
   collectAsync,
   runOperation,
   runTracedScenario,
-} from "./provider-runtime.mjs";
+} from "../../helpers/provider-runtime.mjs";
 
 const OPENAI_MODEL = "gpt-4o-mini";
 const EMBEDDING_MODEL = "text-embedding-3-small";
 const MODERATION_MODEL = "omni-moderation-latest";
+const ROOT_NAME = "openai-instrumentation-root";
+const SCENARIO_NAME = "openai-instrumentation";
 
 const CHAT_PARSE_SCHEMA = {
   type: "object",
@@ -42,7 +44,7 @@ async function awaitMaybeWithResponse(request) {
   };
 }
 
-export async function runOpenAIScenario(options) {
+export async function runOpenAIInstrumentationScenario(options) {
   const baseClient = new options.OpenAI({
     apiKey: process.env.OPENAI_API_KEY,
     baseURL: process.env.OPENAI_BASE_URL,
@@ -287,9 +289,25 @@ export async function runOpenAIScenario(options) {
     },
     metadata: {
       openaiSdkVersion: options.openaiSdkVersion,
-      scenario: options.scenarioName,
+      scenario: SCENARIO_NAME,
     },
-    projectNameBase: options.projectNameBase,
-    rootName: options.rootName,
+    projectNameBase: "e2e-openai-instrumentation",
+    rootName: ROOT_NAME,
   });
 }
+
+export async function runAutoOpenAIInstrumentation(
+  OpenAI,
+  { chatHelperNamespace, openaiSdkVersion },
+) {
+  await runOpenAIInstrumentationScenario({
+    OpenAI,
+    chatHelperNamespace,
+    openaiSdkVersion,
+    useChatParseHelper: false,
+    useResponsesParseHelper: false,
+    useSyncStreamHelper: false,
+  });
+}
+
+export { ROOT_NAME, SCENARIO_NAME };
