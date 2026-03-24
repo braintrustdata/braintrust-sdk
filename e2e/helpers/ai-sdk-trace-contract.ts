@@ -88,7 +88,7 @@ function normalizeAISDKAgentGeneratePayload(value: unknown): unknown {
         key === "totalTokens") &&
       typeof entry === "number"
     ) {
-      normalized[key] = "<agent-generate-count>";
+      normalized[key] = "<number>";
       continue;
     }
 

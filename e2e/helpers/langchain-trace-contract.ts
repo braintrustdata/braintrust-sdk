@@ -28,7 +28,7 @@ function normalizeLangchainPayloads(payloadRows: unknown[]): unknown[] {
       const metrics = row.metrics as Record<string, unknown>;
       for (const key of Object.keys(metrics)) {
         if (key.includes("token") && typeof metrics[key] === "number") {
-          metrics[key] = 0;
+          metrics[key] = "<number>";
         }
         if (key === "time_to_first_token") {
           metrics[key] = 0;
@@ -58,7 +58,7 @@ function normalizeOutputObject(obj: Record<string, unknown>): void {
     if (llmOutput.tokenUsage && typeof llmOutput.tokenUsage === "object") {
       const tokenUsage = llmOutput.tokenUsage as Record<string, unknown>;
       for (const key of Object.keys(tokenUsage)) {
-        tokenUsage[key] = 0;
+        tokenUsage[key] = "<number>";
       }
     }
   }
@@ -109,7 +109,7 @@ function normalizeTokenCounts(obj: unknown): void {
   const record = obj as Record<string, unknown>;
   for (const [key, value] of Object.entries(record)) {
     if (typeof value === "number") {
-      record[key] = 0;
+      record[key] = "<number>";
     } else if (typeof value === "object" && value !== null) {
       normalizeTokenCounts(value);
     }
