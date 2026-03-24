@@ -1,11 +1,15 @@
+import { wrapClaudeAgentSDK } from "braintrust";
 import {
   collectAsync,
   runOperation,
   runTracedScenario,
-} from "./provider-runtime.mjs";
+} from "../../helpers/provider-runtime.mjs";
 import { z } from "zod";
 
 const CLAUDE_AGENT_MODEL = "claude-haiku-4-5-20251001";
+
+export const ROOT_NAME = "claude-agent-sdk-root";
+export const SCENARIO_NAME = "claude-agent-sdk-traces";
 
 function makePromptMessage(content) {
   return {
@@ -17,11 +21,9 @@ function makePromptMessage(content) {
   };
 }
 
-export async function runClaudeAgentSDKScenario(options) {
-  const sdk = options.decorateSDK
-    ? options.decorateSDK(options.sdk)
-    : options.sdk;
-  const { createSdkMcpServer, query, tool } = sdk;
+async function runClaudeAgentSDKScenario({ decorateSDK, sdk }) {
+  const instrumentedSDK = decorateSDK ? decorateSDK(sdk) : sdk;
+  const { createSdkMcpServer, query, tool } = instrumentedSDK;
   const calculator = tool(
     "calculator",
     "Performs basic arithmetic operations",
@@ -157,9 +159,22 @@ export async function runClaudeAgentSDKScenario(options) {
       );
     },
     metadata: {
-      scenario: options.scenarioName,
+      scenario: SCENARIO_NAME,
     },
-    projectNameBase: options.projectNameBase,
-    rootName: options.rootName,
+    projectNameBase: "e2e-claude-agent-sdk-instrumentation",
+    rootName: ROOT_NAME,
+  });
+}
+
+export async function runWrappedClaudeAgentSDKInstrumentation(sdk) {
+  await runClaudeAgentSDKScenario({
+    decorateSDK: wrapClaudeAgentSDK,
+    sdk,
+  });
+}
+
+export async function runAutoClaudeAgentSDKInstrumentation(sdk) {
+  await runClaudeAgentSDKScenario({
+    sdk,
   });
 }
