@@ -1,19 +1,42 @@
+import { tool } from "@openrouter/sdk";
+import { wrapOpenRouter } from "braintrust";
+import { z } from "zod";
 import {
   collectAsync,
   runOperation,
   runTracedScenario,
-} from "./provider-runtime.mjs";
+} from "../../helpers/provider-runtime.mjs";
+import {
+  CHAT_MODEL,
+  EMBEDDING_MODEL,
+  ROOT_NAME,
+  SCENARIO_NAME,
+} from "./constants.mjs";
 
-const CHAT_MODEL = "openai/gpt-4o-mini";
-const EMBEDDING_MODEL = "openai/text-embedding-3-small";
+function createWeatherTool() {
+  return tool({
+    name: "lookup_weather",
+    description: "Look up the weather forecast for a city.",
+    inputSchema: z.object({
+      city: z.string(),
+    }),
+    outputSchema: z.object({
+      forecast: z.string(),
+    }),
+    execute: async ({ city }) => ({
+      forecast: `Sunny in ${city}`,
+    }),
+  });
+}
 
-export async function runOpenRouterScenario(options) {
-  const baseClient = new options.OpenRouter({
+async function runOpenRouterInstrumentationScenario(
+  OpenRouter,
+  { decorateClient } = {},
+) {
+  const baseClient = new OpenRouter({
     apiKey: process.env.OPENROUTER_API_KEY,
   });
-  const client = options.decorateClient
-    ? options.decorateClient(baseClient)
-    : baseClient;
+  const client = decorateClient ? decorateClient(baseClient) : baseClient;
 
   await runTracedScenario({
     callback: async () => {
@@ -108,7 +131,7 @@ export async function runOpenRouterScenario(options) {
             model: CHAT_MODEL,
             temperature: 0,
             toolChoice: "required",
-            tools: [options.createWeatherTool()],
+            tools: [createWeatherTool()],
           });
 
           await result.getText();
@@ -116,10 +139,19 @@ export async function runOpenRouterScenario(options) {
       );
     },
     metadata: {
-      openrouterSdkVersion: options.openrouterSdkVersion,
-      scenario: options.scenarioName,
+      scenario: SCENARIO_NAME,
     },
-    projectNameBase: options.projectNameBase,
-    rootName: options.rootName,
+    projectNameBase: "e2e-openrouter-instrumentation",
+    rootName: ROOT_NAME,
   });
+}
+
+export async function runWrappedOpenRouterInstrumentation(OpenRouter) {
+  await runOpenRouterInstrumentationScenario(OpenRouter, {
+    decorateClient: wrapOpenRouter,
+  });
+}
+
+export async function runAutoOpenRouterInstrumentation(OpenRouter) {
+  await runOpenRouterInstrumentationScenario(OpenRouter);
 }
