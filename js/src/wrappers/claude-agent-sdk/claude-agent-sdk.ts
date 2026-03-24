@@ -1,4 +1,5 @@
-import { startSpan, traced, withCurrent } from "../../logger";
+import { startSpan, withCurrent } from "../../logger";
+import type { Span } from "../../logger";
 import { getCurrentUnixTimestamp } from "../../util";
 import { SpanTypeAttribute } from "../../../util/index";
 import {
@@ -104,6 +105,8 @@ function parseToolName(rawToolName: string): ParsedToolName {
 type ParentSpanResolver = (
   toolUseID: string,
 ) => Promise<Awaited<ReturnType<ReturnType<typeof startSpan>["export"]>>>;
+
+type ExportedSpan = Awaited<ReturnType<ReturnType<typeof startSpan>["export"]>>;
 
 /**
  * Creates PreToolUse, PostToolUse, and PostToolUseFailure hooks for tracing all tool calls (including remote MCPs).
@@ -414,33 +417,53 @@ function wrapClaudeAgentQuery(
       let currentMessageId: string | undefined;
       let currentMessageStartTime = getCurrentUnixTimestamp();
       const currentMessages: ClaudeAgentSDKMessage[] = [];
+      let currentLLMSpan: Span | undefined;
 
-      // Create an LLM span for accumulated messages with the same message ID.
-      // LLM spans can contain multiple streaming message updates. We create the span
-      // when we proceed to a new message ID or when the query completes.
-      const createLLMSpan = async () => {
-        // Resolve the parent span based on the messages' parent_tool_use_id
-        const parentToolUseId = currentMessages[0]?.parent_tool_use_id ?? null;
-        let parentSpanExport: Awaited<
-          ReturnType<ReturnType<typeof startSpan>["export"]>
-        >;
+      const resolveLLMParentSpan = async (
+        parentToolUseId: string | null,
+      ): Promise<ExportedSpan> => {
         if (parentToolUseId) {
           const subAgentSpan = subAgentSpans.get(parentToolUseId);
-          parentSpanExport = subAgentSpan
-            ? await subAgentSpan.export()
-            : await span.export();
-        } else {
-          parentSpanExport = await span.export();
+          if (subAgentSpan) {
+            return await subAgentSpan.export();
+          }
+        }
+        return await span.export();
+      };
+
+      const startLLMSpan = async (
+        message: ClaudeAgentSDKMessage,
+        startTime: number,
+      ): Promise<Span | undefined> => {
+        if (message.type !== "assistant" || !message.message?.usage) {
+          return undefined;
         }
 
-        const finalMessageContent = await _createLLMSpanForMessages(
+        const parentSpanExport = await resolveLLMParentSpan(
+          message.parent_tool_use_id ?? null,
+        );
+
+        return startSpan({
+          name: "anthropic.messages.create",
+          spanAttributes: {
+            type: SpanTypeAttribute.LLM,
+          },
+          startTime,
+          parent: parentSpanExport,
+        });
+      };
+
+      // Finalize the active LLM span for accumulated messages with the same message ID.
+      const finalizeLLMSpan = async () => {
+        const llmSpan = currentLLMSpan;
+
+        const finalMessageContent = await _finalizeLLMSpanForMessages(
           currentMessages,
           prompt,
           finalResults,
           options,
-          currentMessageStartTime,
+          llmSpan,
           capturedPromptMessages,
-          parentSpanExport,
         );
 
         if (finalMessageContent) {
@@ -456,6 +479,7 @@ function wrapClaudeAgentQuery(
         }
 
         currentMessages.length = 0;
+        currentLLMSpan = undefined;
       };
 
       // Eagerly create the original generator so methods like interrupt() work immediately
@@ -483,18 +507,26 @@ function wrapClaudeAgentQuery(
       // Populated when we see a Task tool_use block; consumed when the sub-agent span is created.
       const pendingSubAgentNames = new Map<string, string>();
 
+      // Tracks the eager LLM span that owns each tool_use block.
+      const toolUseToLLMSpan = new Map<string, Span>();
+
       // Dynamic parent resolver: looks up which agent context a tool belongs to
       const resolveParentSpan: ParentSpanResolver = async (
         toolUseID: string,
       ) => {
+        const llmSpan = toolUseToLLMSpan.get(toolUseID);
+        if (llmSpan) {
+          return await llmSpan.export();
+        }
+
         const parentToolUseId = toolUseToParent.get(toolUseID);
         if (parentToolUseId) {
           const subAgentSpan = subAgentSpans.get(parentToolUseId);
           if (subAgentSpan) {
-            return subAgentSpan.export();
+            return await subAgentSpan.export();
           }
         }
-        return span.export();
+        return await span.export();
       };
 
       // Inject tracing hooks into options to trace ALL tool calls (including remote MCPs)
@@ -530,28 +562,6 @@ function wrapClaudeAgentQuery(
           for await (const message of originalGenerator) {
             const currentTime = getCurrentUnixTimestamp();
 
-            // Track tool_use_ids from assistant messages to map them to their agent context.
-            // This must happen before hooks fire (which it does, since assistant messages
-            // arrive in the stream before the corresponding PreToolUse hook).
-            if (
-              message.type === "assistant" &&
-              Array.isArray(message.message?.content)
-            ) {
-              const parentToolUseId = message.parent_tool_use_id ?? null;
-              for (const block of message.message.content) {
-                if (block.type === "tool_use" && block.id) {
-                  toolUseToParent.set(block.id, parentToolUseId);
-                  // Extract agent name from Task tool_use blocks for span naming
-                  if (block.name === "Task" && block.input?.subagent_type) {
-                    pendingSubAgentNames.set(
-                      block.id,
-                      block.input.subagent_type,
-                    );
-                  }
-                }
-              }
-            }
-
             // Detect sub-agent boundaries: when a message has a non-null parent_tool_use_id
             // that we haven't seen before, create a nested TASK span for the sub-agent.
             if ("parent_tool_use_id" in message) {
@@ -581,13 +591,39 @@ function wrapClaudeAgentQuery(
 
             const messageId = message.message?.id;
             if (messageId && messageId !== currentMessageId) {
-              await createLLMSpan();
+              await finalizeLLMSpan();
 
               currentMessageId = messageId;
               currentMessageStartTime = currentTime;
+              currentLLMSpan = await startLLMSpan(message, currentTime);
             }
             if (message.type === "assistant" && message.message?.usage) {
+              currentLLMSpan ??= await startLLMSpan(
+                message,
+                currentMessageStartTime,
+              );
               currentMessages.push(message);
+
+              // Track tool_use_ids from assistant messages to map them to their agent context.
+              // This must happen before hooks fire, and after the owning LLM span exists.
+              if (Array.isArray(message.message.content)) {
+                const parentToolUseId = message.parent_tool_use_id ?? null;
+                for (const block of message.message.content) {
+                  if (block.type === "tool_use" && block.id) {
+                    toolUseToParent.set(block.id, parentToolUseId);
+                    if (currentLLMSpan) {
+                      toolUseToLLMSpan.set(block.id, currentLLMSpan);
+                    }
+                    // Extract agent name from Task tool_use blocks for span naming
+                    if (block.name === "Task" && block.input?.subagent_type) {
+                      pendingSubAgentNames.set(
+                        block.id,
+                        block.input.subagent_type,
+                      );
+                    }
+                  }
+                }
+              }
             }
 
             // Capture final usage metrics from result message
@@ -632,7 +668,7 @@ function wrapClaudeAgentQuery(
           }
 
           // Create span for final message group
-          await createLLMSpan();
+          await finalizeLLMSpan();
 
           // Log final output to top-level span - just the last message content
           span.log({
@@ -790,21 +826,16 @@ function _extractUsageFromMessage(
 }
 
 /**
- * Creates an LLM span for a group of messages with the same message ID.
+ * Finalizes an active LLM span for a group of messages with the same message ID.
  * Returns the final message content to add to conversation history.
  */
-async function _createLLMSpanForMessages(
+async function _finalizeLLMSpanForMessages(
   messages: ClaudeAgentSDKMessage[],
   prompt: string | AsyncIterable<ClaudeAgentSDKMessage> | undefined,
   conversationHistory: Array<{ content: unknown; role: string }>,
   options: ClaudeAgentSDKQueryOptions,
-  startTime: number,
+  llmSpan: Span | undefined,
   capturedPromptMessages: ClaudeAgentSDKMessage[] | undefined,
-  parentSpan: Awaited<ReturnType<typeof startSpan>>["export"] extends (
-    ...args: infer _
-  ) => Promise<infer R>
-    ? R
-    : never,
 ): Promise<{ content: unknown; role: string } | undefined> {
   if (messages.length === 0) return undefined;
 
@@ -831,24 +862,13 @@ async function _createLLMSpanForMessages(
         c !== undefined,
     );
 
-  await traced(
-    (llmSpan) => {
-      llmSpan.log({
-        input,
-        output: outputs,
-        metadata: model ? { model } : undefined,
-        metrics: usage,
-      });
-    },
-    {
-      name: "anthropic.messages.create",
-      spanAttributes: {
-        type: SpanTypeAttribute.LLM,
-      },
-      startTime,
-      parent: parentSpan,
-    },
-  );
+  llmSpan?.log({
+    input,
+    output: outputs,
+    metadata: model ? { model } : undefined,
+    metrics: usage,
+  });
+  llmSpan?.end();
 
   return lastMessage.message?.content && lastMessage.message?.role
     ? { content: lastMessage.message.content, role: lastMessage.message.role }
