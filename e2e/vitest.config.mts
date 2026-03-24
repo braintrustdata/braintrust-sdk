@@ -1,13 +1,8 @@
 import { defineConfig } from "vitest/config";
 import { E2E_TAGS } from "./helpers/tags";
 
-const hasGoogleGenAICredentials = Boolean(
-  process.env.GOOGLE_API_KEY || process.env.GEMINI_API_KEY,
-);
-
 export default defineConfig({
   test: {
-    fileParallelism: !hasGoogleGenAICredentials,
     hookTimeout: 20_000,
     include: ["scenarios/**/*.test.ts"],
     setupFiles: ["./vitest.setup.ts"],
