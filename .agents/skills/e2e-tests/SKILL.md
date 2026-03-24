@@ -133,7 +133,7 @@ Set up `BraintrustExporter`/`BraintrustSpanProcessor` pointed at the mock server
 
 ## Snapshot Stability
 
-`normalizeForSnapshot()` handles IDs, timestamps, paths, and `system_fingerprint`. You must handle these yourself in a scenario-specific normalizer (see `e2e/helpers/langchain-trace-contract.ts` for an example):
+`normalizeForSnapshot()` handles IDs, timestamps, paths, and `system_fingerprint`. You must handle these yourself in a scenario-specific normalizer (see `e2e/scenarios/wrap-langchain-js-traces/assertions.ts` for an example):
 
 | Non-deterministic value    | Replacement        |
 | -------------------------- | ------------------ |
