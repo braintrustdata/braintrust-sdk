@@ -1,5 +1,5 @@
 {
-  "name": "@braintrust/e2e-openrouter-traces",
+  "name": "@braintrust/e2e-openrouter-instrumentation",
   "private": true,
   "braintrustScenario": {
     "canary": {
