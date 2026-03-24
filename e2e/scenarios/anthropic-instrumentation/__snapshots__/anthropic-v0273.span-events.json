@@ -1,243 +1,276 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`wrap-claude-agent-sdk-traces captures tool, async prompt, and subagent traces 1`] = `
 [
   {
     "has_input": false,
     "has_output": false,
     "metadata": {
-      "scenario": "anthropic-instrumentation"
+      "scenario": "wrap-claude-agent-sdk-traces",
     },
     "metric_keys": [],
-    "name": "anthropic-instrumentation-root",
+    "name": "claude-agent-sdk-wrapper-root",
     "root_span_id": "<span:1>",
     "span_id": "<span:1>",
     "span_parents": [],
-    "type": "task"
+    "type": "task",
   },
   {
     "has_input": false,
     "has_output": false,
     "metadata": {
-      "operation": "create"
+      "operation": "basic",
     },
     "metric_keys": [],
-    "name": "anthropic-create-operation",
+    "name": "claude-agent-basic-operation",
     "root_span_id": "<span:1>",
     "span_id": "<span:2>",
     "span_parents": [
-      "<span:1>"
+      "<span:1>",
     ],
-    "type": null
+    "type": null,
   },
   {
     "has_input": true,
     "has_output": true,
     "metadata": {
-      "model": "claude-3-haiku-20240307",
-      "provider": "anthropic"
+      "model": "claude-e2e-mock",
     },
-    "metric_keys": [
-      "completion_tokens",
-      "prompt_cache_creation_tokens",
-      "prompt_cached_tokens",
-      "prompt_tokens",
-      "time_to_first_token",
-      "tokens"
-    ],
-    "name": "anthropic.messages.create",
+    "metric_keys": [],
+    "name": "Claude Agent",
     "root_span_id": "<span:1>",
     "span_id": "<span:3>",
     "span_parents": [
-      "<span:2>"
+      "<span:2>",
     ],
-    "type": "llm"
+    "type": "task",
   },
   {
-    "has_input": false,
-    "has_output": false,
+    "has_input": true,
+    "has_output": true,
     "metadata": {
-      "operation": "attachment"
+      "model": "claude-e2e-mock",
     },
-    "metric_keys": [],
-    "name": "anthropic-attachment-operation",
+    "metric_keys": [
+      "completion_tokens",
+      "prompt_tokens",
+      "tokens",
+    ],
+    "name": "anthropic.messages.create",
     "root_span_id": "<span:1>",
     "span_id": "<span:4>",
     "span_parents": [
-      "<span:1>"
+      "<span:3>",
     ],
-    "type": null
+    "type": "llm",
   },
   {
     "has_input": true,
     "has_output": true,
     "metadata": {
-      "model": "claude-3-haiku-20240307",
-      "provider": "anthropic"
+      "gen_ai.tool.name": "calculator",
+      "mcp.server": "calculator",
     },
-    "metric_keys": [
-      "completion_tokens",
-      "prompt_cache_creation_tokens",
-      "prompt_cached_tokens",
-      "prompt_tokens",
-      "time_to_first_token",
-      "tokens"
-    ],
-    "name": "anthropic.messages.create",
+    "metric_keys": [],
+    "name": "tool: calculator/calculator",
     "root_span_id": "<span:1>",
     "span_id": "<span:5>",
     "span_parents": [
-      "<span:4>"
+      "<span:4>",
     ],
-    "type": "llm"
+    "type": "tool",
   },
   {
     "has_input": false,
     "has_output": false,
     "metadata": {
-      "operation": "stream"
+      "operation": "async-prompt",
     },
     "metric_keys": [],
-    "name": "anthropic-stream-operation",
+    "name": "claude-agent-async-prompt-operation",
     "root_span_id": "<span:1>",
     "span_id": "<span:6>",
     "span_parents": [
-      "<span:1>"
+      "<span:1>",
     ],
-    "type": null
+    "type": null,
   },
   {
     "has_input": true,
     "has_output": true,
     "metadata": {
-      "model": "claude-3-haiku-20240307",
-      "provider": "anthropic"
+      "model": "claude-e2e-mock",
     },
-    "metric_keys": [
-      "completion_tokens",
-      "prompt_cache_creation_tokens",
-      "prompt_cached_tokens",
-      "prompt_tokens",
-      "time_to_first_token",
-      "tokens"
-    ],
-    "name": "anthropic.messages.create",
+    "metric_keys": [],
+    "name": "Claude Agent",
     "root_span_id": "<span:1>",
     "span_id": "<span:7>",
     "span_parents": [
-      "<span:6>"
+      "<span:6>",
     ],
-    "type": "llm"
+    "type": "task",
   },
   {
-    "has_input": false,
-    "has_output": false,
+    "has_input": true,
+    "has_output": true,
     "metadata": {
-      "operation": "stream-with-response"
+      "model": "claude-e2e-mock",
     },
-    "metric_keys": [],
-    "name": "anthropic-stream-with-response-operation",
+    "metric_keys": [
+      "completion_tokens",
+      "prompt_tokens",
+      "tokens",
+    ],
+    "name": "anthropic.messages.create",
     "root_span_id": "<span:1>",
     "span_id": "<span:8>",
     "span_parents": [
-      "<span:1>"
+      "<span:7>",
     ],
-    "type": null
+    "type": "llm",
   },
   {
-    "has_input": true,
-    "has_output": true,
+    "has_input": false,
+    "has_output": false,
     "metadata": {
-      "model": "claude-3-haiku-20240307",
-      "provider": "anthropic"
+      "operation": "subagent",
     },
-    "metric_keys": [
-      "completion_tokens",
-      "prompt_cache_creation_tokens",
-      "prompt_cached_tokens",
-      "prompt_tokens",
-      "time_to_first_token",
-      "tokens"
-    ],
-    "name": "anthropic.messages.create",
+    "metric_keys": [],
+    "name": "claude-agent-subagent-operation",
     "root_span_id": "<span:1>",
     "span_id": "<span:9>",
     "span_parents": [
-      "<span:8>"
+      "<span:1>",
     ],
-    "type": "llm"
+    "type": null,
   },
   {
-    "has_input": false,
-    "has_output": false,
+    "has_input": true,
+    "has_output": true,
     "metadata": {
-      "operation": "stream-tool"
+      "model": "claude-e2e-mock",
     },
     "metric_keys": [],
-    "name": "anthropic-stream-tool-operation",
+    "name": "Claude Agent",
     "root_span_id": "<span:1>",
     "span_id": "<span:10>",
     "span_parents": [
-      "<span:1>"
+      "<span:9>",
     ],
-    "type": null
+    "type": "task",
+  },
+  {
+    "has_input": false,
+    "has_output": true,
+    "metadata": null,
+    "metric_keys": [],
+    "name": "Agent: math-expert",
+    "root_span_id": "<span:1>",
+    "span_id": "<span:11>",
+    "span_parents": [
+      "<span:10>",
+    ],
+    "type": "task",
   },
   {
     "has_input": true,
     "has_output": true,
     "metadata": {
-      "model": "claude-3-haiku-20240307",
-      "provider": "anthropic"
+      "model": "claude-e2e-mock",
     },
     "metric_keys": [
       "completion_tokens",
-      "prompt_cache_creation_tokens",
-      "prompt_cached_tokens",
       "prompt_tokens",
-      "time_to_first_token",
-      "tokens"
+      "tokens",
     ],
     "name": "anthropic.messages.create",
     "root_span_id": "<span:1>",
-    "span_id": "<span:11>",
+    "span_id": "<span:12>",
     "span_parents": [
-      "<span:10>"
+      "<span:11>",
     ],
-    "type": "llm"
+    "type": "llm",
+  },
+  {
+    "has_input": true,
+    "has_output": true,
+    "metadata": {
+      "gen_ai.tool.name": "calculator",
+      "mcp.server": "calculator",
+    },
+    "metric_keys": [],
+    "name": "tool: calculator/calculator",
+    "root_span_id": "<span:1>",
+    "span_id": "<span:13>",
+    "span_parents": [
+      "<span:12>",
+    ],
+    "type": "tool",
   },
   {
     "has_input": false,
     "has_output": false,
     "metadata": {
-      "operation": "tool"
+      "operation": "failure",
     },
     "metric_keys": [],
-    "name": "anthropic-tool-operation",
+    "name": "claude-agent-failure-operation",
     "root_span_id": "<span:1>",
-    "span_id": "<span:12>",
+    "span_id": "<span:14>",
     "span_parents": [
-      "<span:1>"
+      "<span:1>",
     ],
-    "type": null
+    "type": null,
   },
   {
     "has_input": true,
     "has_output": true,
     "metadata": {
-      "model": "claude-3-haiku-20240307",
-      "provider": "anthropic"
+      "model": "claude-e2e-mock",
+    },
+    "metric_keys": [],
+    "name": "Claude Agent",
+    "root_span_id": "<span:1>",
+    "span_id": "<span:15>",
+    "span_parents": [
+      "<span:14>",
+    ],
+    "type": "task",
+  },
+  {
+    "has_input": true,
+    "has_output": true,
+    "metadata": {
+      "model": "claude-e2e-mock",
     },
     "metric_keys": [
       "completion_tokens",
-      "prompt_cache_creation_tokens",
-      "prompt_cached_tokens",
       "prompt_tokens",
-      "time_to_first_token",
-      "tokens"
+      "tokens",
     ],
     "name": "anthropic.messages.create",
     "root_span_id": "<span:1>",
-    "span_id": "<span:13>",
+    "span_id": "<span:16>",
     "span_parents": [
-      "<span:12>"
+      "<span:15>",
     ],
-    "type": "llm"
-  }
+    "type": "llm",
+  },
+  {
+    "has_input": true,
+    "has_output": false,
+    "metadata": {
+      "gen_ai.tool.name": "calculator",
+      "mcp.server": "calculator",
+    },
+    "metric_keys": [],
+    "name": "tool: calculator/calculator",
+    "root_span_id": "<span:1>",
+    "span_id": "<span:17>",
+    "span_parents": [
+      "<span:16>",
+    ],
+    "type": "tool",
+  },
 ]
+`;
