@@ -1,18 +1,39 @@
 import { readFile } from "node:fs/promises";
+import { wrapGoogleGenAI } from "braintrust";
 import {
   collectAsync,
   runOperation,
   runTracedScenario,
-} from "./provider-runtime.mjs";
+} from "../../helpers/provider-runtime.mjs";
 
 const GOOGLE_MODEL = "gemini-2.5-flash-lite";
+const ROOT_NAME = "google-genai-instrumentation-root";
+const SCENARIO_NAME = "google-genai-instrumentation";
+const WEATHER_TOOL = {
+  functionDeclarations: [
+    {
+      name: "get_weather",
+      description: "Get the current weather in a given location",
+      parametersJsonSchema: {
+        type: "object",
+        properties: {
+          location: {
+            type: "string",
+            description: "The city and state or city and country",
+          },
+        },
+        required: ["location"],
+      },
+    },
+  ],
+};
 
-export async function runGoogleGenAIScenario(options) {
-  const imageBase64 = (await readFile(options.testImageUrl)).toString("base64");
-  const sdk = options.decorateSDK
-    ? options.decorateSDK(options.sdk)
-    : options.sdk;
-  const { GoogleGenAI } = sdk;
+async function runGoogleGenAIInstrumentationScenario(sdk, options = {}) {
+  const imageBase64 = (
+    await readFile(new URL("./test-image.png", import.meta.url))
+  ).toString("base64");
+  const decoratedSDK = options.decorateSDK ? options.decorateSDK(sdk) : sdk;
+  const { GoogleGenAI } = decoratedSDK;
   const client = new GoogleGenAI({
     apiKey: process.env.GOOGLE_API_KEY || process.env.GEMINI_API_KEY,
   });
@@ -78,9 +99,9 @@ export async function runGoogleGenAIScenario(options) {
         async () => {
           const stream = await client.models.generateContentStream({
             model: GOOGLE_MODEL,
-            contents: "Write a short poem about Paris.",
+            contents: "Reply with exactly BONJOUR.",
             config: {
-              maxOutputTokens: 48,
+              maxOutputTokens: 16,
               temperature: 0,
             },
           });
@@ -99,30 +120,11 @@ export async function runGoogleGenAIScenario(options) {
           config: {
             maxOutputTokens: 128,
             temperature: 0,
-            tools: [
-              {
-                functionDeclarations: [
-                  {
-                    name: "get_weather",
-                    description: "Get the current weather in a given location",
-                    parametersJsonSchema: {
-                      type: "object",
-                      properties: {
-                        location: {
-                          type: "string",
-                          description: "The city and state or city and country",
-                        },
-                      },
-                      required: ["location"],
-                    },
-                  },
-                ],
-              },
-            ],
+            tools: [WEATHER_TOOL],
             toolConfig: {
               functionCallingConfig: {
                 allowedFunctionNames: ["get_weather"],
-                mode: options.sdk.FunctionCallingConfigMode.ANY,
+                mode: sdk.FunctionCallingConfigMode.ANY,
               },
             },
           },
@@ -130,9 +132,21 @@ export async function runGoogleGenAIScenario(options) {
       });
     },
     metadata: {
-      scenario: options.scenarioName,
+      scenario: SCENARIO_NAME,
     },
-    projectNameBase: options.projectNameBase,
-    rootName: options.rootName,
+    projectNameBase: "e2e-google-genai-instrumentation",
+    rootName: ROOT_NAME,
   });
 }
+
+export async function runWrappedGoogleGenAIInstrumentation(sdk) {
+  await runGoogleGenAIInstrumentationScenario(sdk, {
+    decorateSDK: wrapGoogleGenAI,
+  });
+}
+
+export async function runAutoGoogleGenAIInstrumentation(sdk) {
+  await runGoogleGenAIInstrumentationScenario(sdk);
+}
+
+export { ROOT_NAME, SCENARIO_NAME };
