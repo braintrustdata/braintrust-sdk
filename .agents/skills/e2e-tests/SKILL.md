@@ -14,6 +14,7 @@ pnpm run build                        # Build SDK (required if source changed)
 cd e2e && npx vitest run scenarios/<name>/scenario.test.ts          # Run one scenario
 cd e2e && npx vitest run --reporter=verbose scenarios/<name>/scenario.test.ts  # Verbose
 cd e2e && npx vitest run --update scenarios/<name>/scenario.test.ts # Update snapshots
+cd e2e && npx vitest run -t "<exact test name>"                     # Isolate one test when file args over-match
 pnpm run test:e2e                     # Run all (from repo root)
 pnpm run test:e2e:hermetic            # Run hermetic-only e2e tests
 pnpm run test:e2e:external            # Run external-api-only e2e tests
@@ -67,7 +68,7 @@ test(
 );
 ```
 
-Key harness methods: `runScenarioDir()`, `runNodeScenarioDir()`, `testRunEvents()`, `events()`, `payloads()`, `requestsAfter(cursor)`, `testRunId`.
+Key harness methods: `runScenarioDir()`, `runNodeScenarioDir()`, `runDenoScenarioDir()`, `testRunEvents()`, `events()`, `payloads()`, `requestsAfter(cursor)`, `testRunId`.
 
 For wrapper scenarios use `events()` (not `testRunEvents()`) and scope payloads via `payloadRowsForRootSpan()`.
 
@@ -123,9 +124,17 @@ import { runMyImpl } from "./scenario.impl";
 
 Test loops over versions with `for (const s of scenarios) { test(...) }`. See `wrap-ai-sdk-generation-traces` or `ai-sdk-otel-export`.
 
-### Runner-wrapper (vitest/node:test)
+### Runner-wrapper (vitest/node:test/deno)
 
 When the wrapper runs inside a nested test runner, `scenario.ts` spawns a second process via `runNodeSubprocess`. The nested runner file must NOT be named `*.test.ts`. Tag all data with `metadata.testRunId` and use `payloadRowsForTestRunId()`. See `wrap-vitest-suite-traces`.
+
+Use:
+
+- `runNodeScenarioDir()` for plain Node nested runners
+- `runDenoScenarioDir()` for Deno nested runners
+- `runner.case.ts` for nested Deno entrypoints
+
+Deno scenarios can have intentionally different runtime contracts from Node. Assert the actual Deno/browser behavior rather than copying Node parent-child expectations blindly. See `e2e/scenarios/deno-browser/`.
 
 ### OTEL export
 
@@ -144,6 +153,8 @@ Set up `BraintrustExporter`/`BraintrustSpanProcessor` pointed at the mock server
 ## Module Resolution
 
 Scenarios run from `e2e/.bt-tmp/run-<id>/scenarios/<name>/`. Node walks up to `e2e/node_modules/` for workspace deps (`braintrust`, `@braintrust/otel`, etc.). Scenario-local deps are in the scenario's own `node_modules/`. Helper imports (`../../helpers/...`) work because `prepareScenarioDir` copies `e2e/helpers/` into the temp dir.
+
+Deno nested runners use `runDenoScenarioDir()`, which invokes `deno test --no-check` with the harness env vars and the prepared temp scenario path.
 
 ## Debugging
 
