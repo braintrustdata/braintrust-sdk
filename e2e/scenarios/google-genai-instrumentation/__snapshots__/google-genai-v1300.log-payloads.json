@@ -36,12 +36,12 @@
       "model": "gemini-2.5-flash-lite"
     },
     "metrics": {
-      "completion_tokens": 2,
+      "completion_tokens": "<number>",
       "duration": 0,
       "end": 0,
-      "prompt_tokens": 6,
+      "prompt_tokens": "<number>",
       "start": 0,
-      "tokens": 8
+      "tokens": "<number>"
     },
     "name": "generate_content",
     "output": {
@@ -78,15 +78,15 @@
         }
       },
       "usageMetadata": {
-        "candidatesTokenCount": 2,
-        "promptTokenCount": 6,
+        "candidatesTokenCount": "<number>",
+        "promptTokenCount": "<number>",
         "promptTokensDetails": [
           {
             "modality": "TEXT",
-            "tokenCount": 6
+            "tokenCount": "<number>"
           }
         ],
-        "totalTokenCount": 8
+        "totalTokenCount": "<number>"
       }
     },
     "type": "llm"
@@ -134,12 +134,12 @@
       "model": "gemini-2.5-flash-lite"
     },
     "metrics": {
-      "completion_tokens": 14,
+      "completion_tokens": "<number>",
       "duration": 0,
       "end": 0,
-      "prompt_tokens": 268,
+      "prompt_tokens": "<number>",
       "start": 0,
-      "tokens": 282
+      "tokens": "<number>"
     },
     "name": "generate_content",
     "output": {
@@ -176,19 +176,19 @@
         }
       },
       "usageMetadata": {
-        "candidatesTokenCount": 14,
-        "promptTokenCount": 268,
+        "candidatesTokenCount": "<number>",
+        "promptTokenCount": "<number>",
         "promptTokensDetails": [
           {
             "modality": "IMAGE",
-            "tokenCount": 258
+            "tokenCount": "<number>"
           },
           {
             "modality": "TEXT",
-            "tokenCount": 10
+            "tokenCount": "<number>"
           }
         ],
-        "totalTokenCount": 282
+        "totalTokenCount": "<number>"
       }
     },
     "type": "llm"
@@ -219,13 +219,13 @@
       "model": "gemini-2.5-flash-lite"
     },
     "metrics": {
-      "completion_tokens": 28,
+      "completion_tokens": "<number>",
       "duration": 0,
       "end": 0,
-      "prompt_tokens": 16,
+      "prompt_tokens": "<number>",
       "start": 0,
       "time_to_first_token": 0,
-      "tokens": 44
+      "tokens": "<number>"
     },
     "name": "generate_content_stream",
     "output": {
@@ -244,15 +244,15 @@
       ],
       "text": "Here's the count from 1 to 3, including the words:\n\n1. One\n2. Two\n3. Three",
       "usageMetadata": {
-        "candidatesTokenCount": 28,
-        "promptTokenCount": 16,
+        "candidatesTokenCount": "<number>",
+        "promptTokenCount": "<number>",
         "promptTokensDetails": [
           {
             "modality": "TEXT",
-            "tokenCount": 16
+            "tokenCount": "<number>"
           }
         ],
-        "totalTokenCount": 44
+        "totalTokenCount": "<number>"
       }
     },
     "type": "llm"
@@ -283,13 +283,13 @@
       "model": "gemini-2.5-flash-lite"
     },
     "metrics": {
-      "completion_tokens": 2,
+      "completion_tokens": "<number>",
       "duration": 0,
       "end": 0,
-      "prompt_tokens": 7,
+      "prompt_tokens": "<number>",
       "start": 0,
       "time_to_first_token": 0,
-      "tokens": 9
+      "tokens": "<number>"
     },
     "name": "generate_content_stream",
     "output": {
@@ -308,15 +308,15 @@
       ],
       "text": "BONJOUR",
       "usageMetadata": {
-        "candidatesTokenCount": 2,
-        "promptTokenCount": 7,
+        "candidatesTokenCount": "<number>",
+        "promptTokenCount": "<number>",
         "promptTokensDetails": [
           {
             "modality": "TEXT",
-            "tokenCount": 7
+            "tokenCount": "<number>"
           }
         ],
-        "totalTokenCount": 9
+        "totalTokenCount": "<number>"
       }
     },
     "type": "llm"
@@ -355,12 +355,12 @@
       "model": "gemini-2.5-flash-lite"
     },
     "metrics": {
-      "completion_tokens": 17,
+      "completion_tokens": "<number>",
       "duration": 0,
       "end": 0,
-      "prompt_tokens": 65,
+      "prompt_tokens": "<number>",
       "start": 0,
-      "tokens": 82
+      "tokens": "<number>"
     },
     "name": "generate_content",
     "output": {
@@ -402,15 +402,15 @@
         }
       },
       "usageMetadata": {
-        "candidatesTokenCount": 17,
-        "promptTokenCount": 65,
+        "candidatesTokenCount": "<number>",
+        "promptTokenCount": "<number>",
         "promptTokensDetails": [
           {
             "modality": "TEXT",
-            "tokenCount": 65
+            "tokenCount": "<number>"
           }
         ],
-        "totalTokenCount": 82
+        "totalTokenCount": "<number>"
       }
     },
     "type": "llm"

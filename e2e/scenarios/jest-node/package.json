@@ -1,8 +1,0 @@
-{
-  "name": "@braintrust/e2e-jest-node",
-  "private": true,
-  "type": "commonjs",
-  "dependencies": {
-    "jest": "29.7.0"
-  }
-}
