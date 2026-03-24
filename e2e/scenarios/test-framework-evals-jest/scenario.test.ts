@@ -28,7 +28,7 @@ function findEventByCase(events: CapturedLogEvent[], testCase: string) {
 }
 
 test(
-  "jest-node captures real HTTP traces from a nested Jest runner",
+  "test-framework-evals-jest captures real HTTP traces from a nested Jest runner",
   {
     tags: [E2E_TAGS.hermetic],
     timeout: TIMEOUT_MS,
@@ -90,7 +90,7 @@ test(
         expect(basicSpan?.expected).toBe("Paris");
         expect(basicSpan?.row.metadata).toMatchObject({
           case: "basic-span",
-          scenario: "jest-node",
+          scenario: "test-framework-evals-jest",
           testRunId,
           transport: "http",
         });
@@ -100,7 +100,7 @@ test(
         });
         expect(jsonAttachment?.row.metadata).toMatchObject({
           case: "json-attachment",
-          scenario: "jest-node",
+          scenario: "test-framework-evals-jest",
           testRunId,
         });
         expect(jsonAttachment?.output).toMatchObject({

@@ -1,5 +1,5 @@
 {
-  "name": "@braintrust/e2e-jest-node",
+  "name": "@braintrust/e2e-test-framework-evals-jest",
   "private": true,
   "type": "commonjs",
   "dependencies": {

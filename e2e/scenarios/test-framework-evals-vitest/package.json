@@ -1,5 +1,5 @@
 {
-  "name": "@braintrust/e2e-wrap-vitest-suite-traces",
+  "name": "@braintrust/e2e-test-framework-evals-vitest",
   "private": true,
   "braintrustScenario": {
     "canary": {

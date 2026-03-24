@@ -4,7 +4,7 @@
     "has_output": true,
     "metadata": {
       "case": "simple-pass",
-      "scenario": "wrap-vitest-suite-traces",
+      "scenario": "test-framework-evals-vitest",
       "testRunId": "<run:1>"
     },
     "metric_keys": [],
@@ -19,7 +19,7 @@
     "has_output": true,
     "metadata": {
       "case": "configured-span",
-      "scenario": "wrap-vitest-suite-traces",
+      "scenario": "test-framework-evals-vitest",
       "testRunId": "<run:1>"
     },
     "metric_keys": [],
@@ -34,7 +34,7 @@
     "has_output": true,
     "metadata": {
       "case": "concurrent-alpha",
-      "scenario": "wrap-vitest-suite-traces",
+      "scenario": "test-framework-evals-vitest",
       "testRunId": "<run:1>"
     },
     "metric_keys": [],
@@ -49,7 +49,7 @@
     "has_output": true,
     "metadata": {
       "case": "concurrent-beta",
-      "scenario": "wrap-vitest-suite-traces",
+      "scenario": "test-framework-evals-vitest",
       "testRunId": "<run:1>"
     },
     "metric_keys": [],
@@ -64,7 +64,7 @@
     "has_output": true,
     "metadata": {
       "case": "expected-failure",
-      "scenario": "wrap-vitest-suite-traces",
+      "scenario": "test-framework-evals-vitest",
       "testRunId": "<run:1>"
     },
     "metric_keys": [],

@@ -1,6 +1,6 @@
 // Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
 
-exports[`init-node-test-suite-traces captures node:test task spans > log-payloads 1`] = `
+exports[`test-framework-evals-node captures node:test task spans > log-payloads 1`] = `
 [
   {
     "_is_merge": false,
@@ -15,7 +15,7 @@ exports[`init-node-test-suite-traces captures node:test task spans > log-payload
     "input": "hello",
     "metadata": {
       "case": "basic-eval",
-      "scenario": "init-node-test-suite-traces",
+      "scenario": "test-framework-evals-node",
       "testRunId": "<run:1>",
     },
     "metrics": {
@@ -44,7 +44,7 @@ exports[`init-node-test-suite-traces captures node:test task spans > log-payload
     },
     "metadata": {
       "case": "configured-eval",
-      "scenario": "init-node-test-suite-traces",
+      "scenario": "test-framework-evals-node",
       "testRunId": "<run:1>",
     },
     "metrics": {
@@ -82,7 +82,7 @@ exports[`init-node-test-suite-traces captures node:test task spans > log-payload
     },
     "metadata": {
       "case": "extra-output",
-      "scenario": "init-node-test-suite-traces",
+      "scenario": "test-framework-evals-node",
       "testRunId": "<run:1>",
     },
     "metrics": {
@@ -117,7 +117,7 @@ exports[`init-node-test-suite-traces captures node:test task spans > log-payload
     "input": "override",
     "metadata": {
       "case": "name-override",
-      "scenario": "init-node-test-suite-traces",
+      "scenario": "test-framework-evals-node",
       "testRunId": "<run:1>",
     },
     "metrics": {
@@ -139,14 +139,14 @@ exports[`init-node-test-suite-traces captures node:test task spans > log-payload
 ]
 `;
 
-exports[`init-node-test-suite-traces captures node:test task spans > span-events 1`] = `
+exports[`test-framework-evals-node captures node:test task spans > span-events 1`] = `
 [
   {
     "has_input": true,
     "has_output": true,
     "metadata": {
       "case": "basic-eval",
-      "scenario": "init-node-test-suite-traces",
+      "scenario": "test-framework-evals-node",
       "testRunId": "<run:1>",
     },
     "metric_keys": [],
@@ -161,7 +161,7 @@ exports[`init-node-test-suite-traces captures node:test task spans > span-events
     "has_output": true,
     "metadata": {
       "case": "configured-eval",
-      "scenario": "init-node-test-suite-traces",
+      "scenario": "test-framework-evals-node",
       "testRunId": "<run:1>",
     },
     "metric_keys": [],
@@ -176,7 +176,7 @@ exports[`init-node-test-suite-traces captures node:test task spans > span-events
     "has_output": true,
     "metadata": {
       "case": "extra-output",
-      "scenario": "init-node-test-suite-traces",
+      "scenario": "test-framework-evals-node",
       "testRunId": "<run:1>",
     },
     "metric_keys": [],
@@ -191,7 +191,7 @@ exports[`init-node-test-suite-traces captures node:test task spans > span-events
     "has_output": true,
     "metadata": {
       "case": "name-override",
-      "scenario": "init-node-test-suite-traces",
+      "scenario": "test-framework-evals-node",
       "testRunId": "<run:1>",
     },
     "metric_keys": [],

@@ -10,7 +10,7 @@ const {
 } = require("braintrust");
 
 const testRunId = process.env.BRAINTRUST_E2E_RUN_ID;
-const scenario = "jest-node";
+const scenario = "test-framework-evals-jest";
 
 function scopedName(base) {
   return `${base}-${testRunId.toLowerCase().replace(/[^a-z0-9-]/g, "-")}`;
@@ -18,7 +18,7 @@ function scopedName(base) {
 
 function createLogger() {
   return initLogger({
-    projectName: scopedName("e2e-jest-node"),
+    projectName: scopedName("e2e-test-framework-evals-jest"),
   });
 }
 
