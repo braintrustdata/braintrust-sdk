@@ -26,7 +26,11 @@ const WEATHER_TOOL = {
 
 async function runAnthropicInstrumentationScenario(
   Anthropic,
-  { decorateClient, useMessagesStreamHelper = true } = {},
+  {
+    decorateClient,
+    useBetaMessages = true,
+    useMessagesStreamHelper = true,
+  } = {},
 ) {
   const imageBase64 = (
     await readFile(new URL("./test-image.png", import.meta.url))
@@ -172,39 +176,41 @@ async function runAnthropicInstrumentationScenario(
         });
       });
 
-      await runOperation(
-        "anthropic-beta-create-operation",
-        "beta-create",
-        async () => {
-          await client.beta.messages.create({
-            model: ANTHROPIC_MODEL,
-            max_tokens: 16,
-            temperature: 0,
-            messages: [{ role: "user", content: "Reply with exactly BETA." }],
-          });
-        },
-      );
+      if (useBetaMessages) {
+        await runOperation(
+          "anthropic-beta-create-operation",
+          "beta-create",
+          async () => {
+            await client.beta.messages.create({
+              model: ANTHROPIC_MODEL,
+              max_tokens: 16,
+              temperature: 0,
+              messages: [{ role: "user", content: "Reply with exactly BETA." }],
+            });
+          },
+        );
 
-      await runOperation(
-        "anthropic-beta-stream-operation",
-        "beta-stream",
-        async () => {
-          const stream = await client.beta.messages.create({
-            model: ANTHROPIC_MODEL,
-            max_tokens: 32,
-            temperature: 0,
-            stream: true,
-            messages: [
-              {
-                role: "user",
-                content:
-                  "Count from 1 to 3 and include the words one two three.",
-              },
-            ],
-          });
-          await collectAsync(stream);
-        },
-      );
+        await runOperation(
+          "anthropic-beta-stream-operation",
+          "beta-stream",
+          async () => {
+            const stream = await client.beta.messages.create({
+              model: ANTHROPIC_MODEL,
+              max_tokens: 32,
+              temperature: 0,
+              stream: true,
+              messages: [
+                {
+                  role: "user",
+                  content:
+                    "Count from 1 to 3 and include the words one two three.",
+                },
+              ],
+            });
+            await collectAsync(stream);
+          },
+        );
+      }
     },
     metadata: {
       scenario: SCENARIO_NAME,
@@ -214,14 +220,16 @@ async function runAnthropicInstrumentationScenario(
   });
 }
 
-export async function runWrappedAnthropicInstrumentation(Anthropic) {
+export async function runWrappedAnthropicInstrumentation(Anthropic, options) {
   await runAnthropicInstrumentationScenario(Anthropic, {
     decorateClient: wrapAnthropic,
+    ...options,
   });
 }
 
-export async function runAutoAnthropicInstrumentation(Anthropic) {
+export async function runAutoAnthropicInstrumentation(Anthropic, options) {
   await runAnthropicInstrumentationScenario(Anthropic, {
+    ...options,
     useMessagesStreamHelper: false,
   });
 }
