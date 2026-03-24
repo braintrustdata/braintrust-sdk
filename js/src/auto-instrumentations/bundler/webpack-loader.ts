@@ -68,7 +68,7 @@ function getMatcher(options: BundlerPluginOptions): InstrumentationMatcher {
     ...openRouterConfigs,
     ...(options.instrumentations ?? []),
   ];
-  const dcModule = options.browser === false ? undefined : "dc-browser";
+  const dcModule = options.browser ? "dc-browser" : undefined;
   const configHash = JSON.stringify({ allInstrumentations, dcModule });
 
   if (matcherCache.has(configHash)) {

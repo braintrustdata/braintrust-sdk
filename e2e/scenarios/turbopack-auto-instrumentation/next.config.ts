@@ -4,13 +4,15 @@ import { createRequire } from "module";
 const require = createRequire(import.meta.url);
 
 const nextConfig: NextConfig = {
-  webpack(config) {
-    // Use only the webpack-loader (not the plugin) to verify
-    // compatibility with Turbopack, which only supports loaders.
-    config.module.rules.unshift({
-      use: [{ loader: require.resolve("braintrust/webpack-loader") }],
-    });
-    return config;
+  turbopack: {
+    rules: {
+      // Apply the loader to all JS/MJS/CJS files from node_modules.
+      // condition: "foreign" restricts the rule to third-party packages only.
+      "*.{js,mjs,cjs}": {
+        condition: "foreign",
+        loaders: [{ loader: require.resolve("braintrust/webpack-loader") }],
+      },
+    },
   },
 };
 
