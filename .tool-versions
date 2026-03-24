@@ -2,4 +2,4 @@ nodejs 22.15.0
 npm 11.6.2
 pnpm 10.26.2
 deno 2.7.6
-npm:@sentry/dotagents 1.4.0
+npm:@sentry/dotagents 1.5.0
