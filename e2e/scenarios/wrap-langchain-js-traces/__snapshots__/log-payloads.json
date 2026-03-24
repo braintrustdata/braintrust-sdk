@@ -181,10 +181,10 @@
     "id": "<span:5>",
     "log_id": "g",
     "metrics": {
-      "completion_tokens": 0,
-      "prompt_cached_tokens": 0,
-      "prompt_tokens": 0,
-      "total_tokens": 0
+      "completion_tokens": "<number>",
+      "prompt_cached_tokens": "<number>",
+      "prompt_tokens": "<number>",
+      "total_tokens": "<number>"
     },
     "project_id": "<project_id>",
     "root_span_id": "<span:2>",
@@ -225,40 +225,40 @@
                   "model_provider": "openai",
                   "system_fingerprint": "<system_fingerprint>",
                   "tokenUsage": {
-                    "completionTokens": 0,
-                    "promptTokens": 0,
-                    "totalTokens": 0
+                    "completionTokens": "<number>",
+                    "promptTokens": "<number>",
+                    "totalTokens": "<number>"
                   },
                   "usage": {
-                    "completion_tokens": 0,
+                    "completion_tokens": "<number>",
                     "completion_tokens_details": {
-                      "accepted_prediction_tokens": 0,
-                      "audio_tokens": 0,
-                      "reasoning_tokens": 0,
-                      "rejected_prediction_tokens": 0
+                      "accepted_prediction_tokens": "<number>",
+                      "audio_tokens": "<number>",
+                      "reasoning_tokens": "<number>",
+                      "rejected_prediction_tokens": "<number>"
                     },
-                    "prompt_tokens": 0,
+                    "prompt_tokens": "<number>",
                     "prompt_tokens_details": {
-                      "audio_tokens": 0,
-                      "cached_tokens": 0
+                      "audio_tokens": "<number>",
+                      "cached_tokens": "<number>"
                     },
-                    "total_tokens": 0
+                    "total_tokens": "<number>"
                   }
                 },
                 "tool_calls": [],
                 "type": "ai",
                 "usage_metadata": {
                   "input_token_details": {
-                    "audio": 0,
-                    "cache_read": 0
+                    "audio": "<number>",
+                    "cache_read": "<number>"
                   },
-                  "input_tokens": 0,
+                  "input_tokens": "<number>",
                   "output_token_details": {
-                    "audio": 0,
-                    "reasoning": 0
+                    "audio": "<number>",
+                    "reasoning": "<number>"
                   },
-                  "output_tokens": 0,
-                  "total_tokens": 0
+                  "output_tokens": "<number>",
+                  "total_tokens": "<number>"
                 }
               },
               "lc": 1,
@@ -270,9 +270,9 @@
       ],
       "llmOutput": {
         "tokenUsage": {
-          "completionTokens": 0,
-          "promptTokens": 0,
-          "totalTokens": 0
+          "completionTokens": "<number>",
+          "promptTokens": "<number>",
+          "totalTokens": "<number>"
         }
       }
     },
@@ -762,10 +762,10 @@
     "id": "<span:15>",
     "log_id": "g",
     "metrics": {
-      "completion_tokens": 0,
-      "prompt_cached_tokens": 0,
-      "prompt_tokens": 0,
-      "total_tokens": 0
+      "completion_tokens": "<number>",
+      "prompt_cached_tokens": "<number>",
+      "prompt_tokens": "<number>",
+      "total_tokens": "<number>"
     },
     "project_id": "<project_id>",
     "root_span_id": "<span:2>",
@@ -808,40 +808,40 @@
                   "model_provider": "openai",
                   "system_fingerprint": "<system_fingerprint>",
                   "tokenUsage": {
-                    "completionTokens": 0,
-                    "promptTokens": 0,
-                    "totalTokens": 0
+                    "completionTokens": "<number>",
+                    "promptTokens": "<number>",
+                    "totalTokens": "<number>"
                   },
                   "usage": {
-                    "completion_tokens": 0,
+                    "completion_tokens": "<number>",
                     "completion_tokens_details": {
-                      "accepted_prediction_tokens": 0,
-                      "audio_tokens": 0,
-                      "reasoning_tokens": 0,
-                      "rejected_prediction_tokens": 0
+                      "accepted_prediction_tokens": "<number>",
+                      "audio_tokens": "<number>",
+                      "reasoning_tokens": "<number>",
+                      "rejected_prediction_tokens": "<number>"
                     },
-                    "prompt_tokens": 0,
+                    "prompt_tokens": "<number>",
                     "prompt_tokens_details": {
-                      "audio_tokens": 0,
-                      "cached_tokens": 0
+                      "audio_tokens": "<number>",
+                      "cached_tokens": "<number>"
                     },
-                    "total_tokens": 0
+                    "total_tokens": "<number>"
                   }
                 },
                 "tool_calls": [],
                 "type": "ai",
                 "usage_metadata": {
                   "input_token_details": {
-                    "audio": 0,
-                    "cache_read": 0
+                    "audio": "<number>",
+                    "cache_read": "<number>"
                   },
-                  "input_tokens": 0,
+                  "input_tokens": "<number>",
                   "output_token_details": {
-                    "audio": 0,
-                    "reasoning": 0
+                    "audio": "<number>",
+                    "reasoning": "<number>"
                   },
-                  "output_tokens": 0,
-                  "total_tokens": 0
+                  "output_tokens": "<number>",
+                  "total_tokens": "<number>"
                 }
               },
               "lc": 1,
@@ -853,9 +853,9 @@
       ],
       "llmOutput": {
         "tokenUsage": {
-          "completionTokens": 0,
-          "promptTokens": 0,
-          "totalTokens": 0
+          "completionTokens": "<number>",
+          "promptTokens": "<number>",
+          "totalTokens": "<number>"
         }
       }
     },
@@ -1032,11 +1032,11 @@
     "id": "<span:19>",
     "log_id": "g",
     "metrics": {
-      "completion_tokens": 0,
-      "prompt_cached_tokens": 0,
-      "prompt_tokens": 0,
+      "completion_tokens": "<number>",
+      "prompt_cached_tokens": "<number>",
+      "prompt_tokens": "<number>",
       "time_to_first_token": 0,
-      "total_tokens": 0
+      "total_tokens": "<number>"
     },
     "project_id": "<project_id>",
     "root_span_id": "<span:2>",
@@ -1085,35 +1085,35 @@
                   "service_tier": "default",
                   "system_fingerprint": "<system_fingerprint>",
                   "usage": {
-                    "completion_tokens": 0,
+                    "completion_tokens": "<number>",
                     "completion_tokens_details": {
-                      "accepted_prediction_tokens": 0,
-                      "audio_tokens": 0,
-                      "reasoning_tokens": 0,
-                      "rejected_prediction_tokens": 0
+                      "accepted_prediction_tokens": "<number>",
+                      "audio_tokens": "<number>",
+                      "reasoning_tokens": "<number>",
+                      "rejected_prediction_tokens": "<number>"
                     },
-                    "prompt_tokens": 0,
+                    "prompt_tokens": "<number>",
                     "prompt_tokens_details": {
-                      "audio_tokens": 0,
-                      "cached_tokens": 0
+                      "audio_tokens": "<number>",
+                      "cached_tokens": "<number>"
                     },
-                    "total_tokens": 0
+                    "total_tokens": "<number>"
                   }
                 },
                 "tool_call_chunks": [],
                 "tool_calls": [],
                 "usage_metadata": {
                   "input_token_details": {
-                    "audio": 0,
-                    "cache_read": 0
+                    "audio": "<number>",
+                    "cache_read": "<number>"
                   },
-                  "input_tokens": 0,
+                  "input_tokens": "<number>",
                   "output_token_details": {
-                    "audio": 0,
-                    "reasoning": 0
+                    "audio": "<number>",
+                    "reasoning": "<number>"
                   },
-                  "output_tokens": 0,
-                  "total_tokens": 0
+                  "output_tokens": "<number>",
+                  "total_tokens": "<number>"
                 }
               },
               "lc": 1,
@@ -1125,9 +1125,9 @@
       ],
       "llmOutput": {
         "tokenUsage": {
-          "completionTokens": 0,
-          "promptTokens": 0,
-          "totalTokens": 0
+          "completionTokens": "<number>",
+          "promptTokens": "<number>",
+          "totalTokens": "<number>"
         }
       }
     },
@@ -1344,10 +1344,10 @@
     "id": "<span:24>",
     "log_id": "g",
     "metrics": {
-      "completion_tokens": 0,
-      "prompt_cached_tokens": 0,
-      "prompt_tokens": 0,
-      "total_tokens": 0
+      "completion_tokens": "<number>",
+      "prompt_cached_tokens": "<number>",
+      "prompt_tokens": "<number>",
+      "total_tokens": "<number>"
     },
     "project_id": "<project_id>",
     "root_span_id": "<span:2>",
@@ -1399,24 +1399,24 @@
                   "model_provider": "openai",
                   "system_fingerprint": "<system_fingerprint>",
                   "tokenUsage": {
-                    "completionTokens": 0,
-                    "promptTokens": 0,
-                    "totalTokens": 0
+                    "completionTokens": "<number>",
+                    "promptTokens": "<number>",
+                    "totalTokens": "<number>"
                   },
                   "usage": {
-                    "completion_tokens": 0,
+                    "completion_tokens": "<number>",
                     "completion_tokens_details": {
-                      "accepted_prediction_tokens": 0,
-                      "audio_tokens": 0,
-                      "reasoning_tokens": 0,
-                      "rejected_prediction_tokens": 0
+                      "accepted_prediction_tokens": "<number>",
+                      "audio_tokens": "<number>",
+                      "reasoning_tokens": "<number>",
+                      "rejected_prediction_tokens": "<number>"
                     },
-                    "prompt_tokens": 0,
+                    "prompt_tokens": "<number>",
                     "prompt_tokens_details": {
-                      "audio_tokens": 0,
-                      "cached_tokens": 0
+                      "audio_tokens": "<number>",
+                      "cached_tokens": "<number>"
                     },
-                    "total_tokens": 0
+                    "total_tokens": "<number>"
                   }
                 },
                 "tool_calls": [
@@ -1432,16 +1432,16 @@
                 "type": "ai",
                 "usage_metadata": {
                   "input_token_details": {
-                    "audio": 0,
-                    "cache_read": 0
+                    "audio": "<number>",
+                    "cache_read": "<number>"
                   },
-                  "input_tokens": 0,
+                  "input_tokens": "<number>",
                   "output_token_details": {
-                    "audio": 0,
-                    "reasoning": 0
+                    "audio": "<number>",
+                    "reasoning": "<number>"
                   },
-                  "output_tokens": 0,
-                  "total_tokens": 0
+                  "output_tokens": "<number>",
+                  "total_tokens": "<number>"
                 }
               },
               "lc": 1,
@@ -1453,9 +1453,9 @@
       ],
       "llmOutput": {
         "tokenUsage": {
-          "completionTokens": 0,
-          "promptTokens": 0,
-          "totalTokens": 0
+          "completionTokens": "<number>",
+          "promptTokens": "<number>",
+          "totalTokens": "<number>"
         }
       }
     },
@@ -1698,10 +1698,10 @@
     "id": "<span:30>",
     "log_id": "g",
     "metrics": {
-      "completion_tokens": 0,
-      "prompt_cached_tokens": 0,
-      "prompt_tokens": 0,
-      "total_tokens": 0
+      "completion_tokens": "<number>",
+      "prompt_cached_tokens": "<number>",
+      "prompt_tokens": "<number>",
+      "total_tokens": "<number>"
     },
     "project_id": "<project_id>",
     "root_span_id": "<span:2>",
@@ -1753,24 +1753,24 @@
                   "model_provider": "openai",
                   "system_fingerprint": "<system_fingerprint>",
                   "tokenUsage": {
-                    "completionTokens": 0,
-                    "promptTokens": 0,
-                    "totalTokens": 0
+                    "completionTokens": "<number>",
+                    "promptTokens": "<number>",
+                    "totalTokens": "<number>"
                   },
                   "usage": {
-                    "completion_tokens": 0,
+                    "completion_tokens": "<number>",
                     "completion_tokens_details": {
-                      "accepted_prediction_tokens": 0,
-                      "audio_tokens": 0,
-                      "reasoning_tokens": 0,
-                      "rejected_prediction_tokens": 0
+                      "accepted_prediction_tokens": "<number>",
+                      "audio_tokens": "<number>",
+                      "reasoning_tokens": "<number>",
+                      "rejected_prediction_tokens": "<number>"
                     },
-                    "prompt_tokens": 0,
+                    "prompt_tokens": "<number>",
                     "prompt_tokens_details": {
-                      "audio_tokens": 0,
-                      "cached_tokens": 0
+                      "audio_tokens": "<number>",
+                      "cached_tokens": "<number>"
                     },
-                    "total_tokens": 0
+                    "total_tokens": "<number>"
                   }
                 },
                 "tool_calls": [
@@ -1788,16 +1788,16 @@
                 "type": "ai",
                 "usage_metadata": {
                   "input_token_details": {
-                    "audio": 0,
-                    "cache_read": 0
+                    "audio": "<number>",
+                    "cache_read": "<number>"
                   },
-                  "input_tokens": 0,
+                  "input_tokens": "<number>",
                   "output_token_details": {
-                    "audio": 0,
-                    "reasoning": 0
+                    "audio": "<number>",
+                    "reasoning": "<number>"
                   },
-                  "output_tokens": 0,
-                  "total_tokens": 0
+                  "output_tokens": "<number>",
+                  "total_tokens": "<number>"
                 }
               },
               "lc": 1,
@@ -1809,9 +1809,9 @@
       ],
       "llmOutput": {
         "tokenUsage": {
-          "completionTokens": 0,
-          "promptTokens": 0,
-          "totalTokens": 0
+          "completionTokens": "<number>",
+          "promptTokens": "<number>",
+          "totalTokens": "<number>"
         }
       }
     },
@@ -2054,10 +2054,10 @@
     "id": "<span:33>",
     "log_id": "g",
     "metrics": {
-      "completion_tokens": 0,
-      "prompt_cached_tokens": 0,
-      "prompt_tokens": 0,
-      "total_tokens": 0
+      "completion_tokens": "<number>",
+      "prompt_cached_tokens": "<number>",
+      "prompt_tokens": "<number>",
+      "total_tokens": "<number>"
     },
     "project_id": "<project_id>",
     "root_span_id": "<span:2>",
@@ -2098,40 +2098,40 @@
                   "model_provider": "openai",
                   "system_fingerprint": "<system_fingerprint>",
                   "tokenUsage": {
-                    "completionTokens": 0,
-                    "promptTokens": 0,
-                    "totalTokens": 0
+                    "completionTokens": "<number>",
+                    "promptTokens": "<number>",
+                    "totalTokens": "<number>"
                   },
                   "usage": {
-                    "completion_tokens": 0,
+                    "completion_tokens": "<number>",
                     "completion_tokens_details": {
-                      "accepted_prediction_tokens": 0,
-                      "audio_tokens": 0,
-                      "reasoning_tokens": 0,
-                      "rejected_prediction_tokens": 0
+                      "accepted_prediction_tokens": "<number>",
+                      "audio_tokens": "<number>",
+                      "reasoning_tokens": "<number>",
+                      "rejected_prediction_tokens": "<number>"
                     },
-                    "prompt_tokens": 0,
+                    "prompt_tokens": "<number>",
                     "prompt_tokens_details": {
-                      "audio_tokens": 0,
-                      "cached_tokens": 0
+                      "audio_tokens": "<number>",
+                      "cached_tokens": "<number>"
                     },
-                    "total_tokens": 0
+                    "total_tokens": "<number>"
                   }
                 },
                 "tool_calls": [],
                 "type": "ai",
                 "usage_metadata": {
                   "input_token_details": {
-                    "audio": 0,
-                    "cache_read": 0
+                    "audio": "<number>",
+                    "cache_read": "<number>"
                   },
-                  "input_tokens": 0,
+                  "input_tokens": "<number>",
                   "output_token_details": {
-                    "audio": 0,
-                    "reasoning": 0
+                    "audio": "<number>",
+                    "reasoning": "<number>"
                   },
-                  "output_tokens": 0,
-                  "total_tokens": 0
+                  "output_tokens": "<number>",
+                  "total_tokens": "<number>"
                 }
               },
               "lc": 1,
@@ -2143,9 +2143,9 @@
       ],
       "llmOutput": {
         "tokenUsage": {
-          "completionTokens": 0,
-          "promptTokens": 0,
-          "totalTokens": 0
+          "completionTokens": "<number>",
+          "promptTokens": "<number>",
+          "totalTokens": "<number>"
         }
       }
     },

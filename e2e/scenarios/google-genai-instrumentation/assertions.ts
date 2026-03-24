@@ -61,6 +61,67 @@ function isRecord(value: Json | undefined): value is Record<string, Json> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
+function normalizeGoogleVariableTokenCounts(value: Json): Json {
+  if (Array.isArray(value)) {
+    return value.map((entry) =>
+      normalizeGoogleVariableTokenCounts(entry as Json),
+    );
+  }
+
+  if (!isRecord(value)) {
+    return value;
+  }
+
+  const normalized = structuredClone(value);
+
+  for (const [key, entry] of Object.entries(normalized)) {
+    if (
+      typeof entry === "number" &&
+      [
+        "candidatesTokenCount",
+        "completion_tokens",
+        "tokens",
+        "totalTokenCount",
+      ].includes(key)
+    ) {
+      normalized[key] = "<number>";
+      continue;
+    }
+
+    normalized[key] = normalizeGoogleVariableTokenCounts(entry as Json);
+  }
+
+  return normalized;
+}
+
+function normalizeGooglePromptTokenCounts(value: Json): Json {
+  if (Array.isArray(value)) {
+    return value.map((entry) =>
+      normalizeGooglePromptTokenCounts(entry as Json),
+    );
+  }
+
+  if (!isRecord(value)) {
+    return value;
+  }
+
+  const normalized = structuredClone(value);
+
+  for (const [key, entry] of Object.entries(normalized)) {
+    if (
+      typeof entry === "number" &&
+      ["prompt_tokens", "promptTokenCount", "tokenCount"].includes(key)
+    ) {
+      normalized[key] = "<number>";
+      continue;
+    }
+
+    normalized[key] = normalizeGooglePromptTokenCounts(entry as Json);
+  }
+
+  return normalized;
+}
+
 function normalizeGoogleMetrics(metrics: Json): Json {
   if (!isRecord(metrics)) {
     return metrics;
@@ -68,7 +129,9 @@ function normalizeGoogleMetrics(metrics: Json): Json {
 
   const normalized = structuredClone(metrics);
   delete normalized.prompt_cached_tokens;
-  return normalized;
+  return normalizeGooglePromptTokenCounts(
+    normalizeGoogleVariableTokenCounts(normalized),
+  );
 }
 
 function normalizeGoogleOutput(event: CapturedLogEvent): Json {
@@ -111,7 +174,9 @@ function normalizeGoogleOutput(event: CapturedLogEvent): Json {
     );
 
   if (!hasAttachmentInput) {
-    return normalized;
+    return normalizeGooglePromptTokenCounts(
+      normalizeGoogleVariableTokenCounts(normalized),
+    );
   }
 
   const candidates = normalized.candidates;
@@ -138,7 +203,9 @@ function normalizeGoogleOutput(event: CapturedLogEvent): Json {
     normalized.text = "<google-attachment-description>";
   }
 
-  return normalized;
+  return normalizeGooglePromptTokenCounts(
+    normalizeGoogleVariableTokenCounts(normalized),
+  );
 }
 
 function normalizeGoogleSummary(summary: Json): Json {
