@@ -1,3 +1,4 @@
+import "braintrust"; // Triggers configureNode(), which applies patchTracingChannel
 import OpenAI from "openai";
 import { tracingChannel } from "node:diagnostics_channel";
 import { createServer } from "node:http";
@@ -8,9 +9,6 @@ export const dynamic = "force-dynamic";
 
 export async function GET() {
   // Spin up a minimal mock OpenAI server so no real API calls are made.
-  // The tracing channel `start` event fires synchronously before any HTTP
-  // request, so this also handles the APIPromise.then() compatibility issue
-  // by giving the promise a real response to resolve with.
   const mockServer = createServer((_req, res) => {
     res.writeHead(200, { "Content-Type": "application/json" });
     res.end(
@@ -59,9 +57,6 @@ export async function GET() {
       model: "gpt-4o-mini",
       messages: [{ role: "user", content: "hi" }],
     });
-  } catch {
-    // The start event fires before any network I/O so channelFired is already
-    // set even if tracePromise throws due to APIPromise compatibility.
   } finally {
     channel.unsubscribe(subscriber);
     mockServer.close();
