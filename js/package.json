@@ -87,6 +87,10 @@
       "module": "./dist/auto-instrumentations/bundler/webpack.mjs",
       "require": "./dist/auto-instrumentations/bundler/webpack.js"
     },
+    "./webpack-loader": {
+      "types": "./dist/auto-instrumentations/bundler/webpack-loader.d.ts",
+      "require": "./dist/auto-instrumentations/bundler/webpack-loader.cjs"
+    },
     "./esbuild": {
       "types": "./dist/auto-instrumentations/bundler/esbuild.d.ts",
       "import": "./dist/auto-instrumentations/bundler/esbuild.mjs",
