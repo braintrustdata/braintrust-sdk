@@ -66,6 +66,7 @@ test("waitForLogs3XactIngestion polls btql until the xact is queryable", async (
     "btql",
     expect.objectContaining({
       query: expect.objectContaining({
+        select: [{ op: "literal", value: 1 }],
         filter: {
           op: "and",
           children: [

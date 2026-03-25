@@ -41,6 +41,12 @@ test("extractLastXactIdFromLogs3Response returns the last xact id", () => {
   ).toBe("xact-2");
 });
 
+test("maxXactId keeps the numerically largest xact id", () => {
+  expect(_exportsForTestingOnly.maxXactId("10", "9")).toBe("10");
+  expect(_exportsForTestingOnly.maxXactId("10", "11")).toBe("11");
+  expect(_exportsForTestingOnly.maxXactId(null, "11")).toBe("11");
+});
+
 test("renderMessage with file content parts", () => {
   const message = {
     role: "user" as const,

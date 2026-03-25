@@ -2557,6 +2557,26 @@ function extractLastXactIdFromLogs3Response(response: unknown): string | null {
   return null;
 }
 
+function maxXactId(
+  currentXactId: string | null,
+  candidateXactId: string | null,
+): string | null {
+  if (!candidateXactId) {
+    return currentXactId;
+  }
+  if (!currentXactId) {
+    return candidateXactId;
+  }
+
+  try {
+    return BigInt(candidateXactId) > BigInt(currentXactId)
+      ? candidateXactId
+      : currentXactId;
+  } catch {
+    return currentXactId;
+  }
+}
+
 export function constructLogs3OverflowRequest(key: string) {
   return {
     rows: {
@@ -3249,7 +3269,10 @@ class HTTPBackgroundLogger implements BackgroundLogger {
         }
         const lastXactId = extractLastXactIdFromLogs3Response(response);
         if (lastXactId) {
-          this._lastFlushedXactId = lastXactId;
+          this._lastFlushedXactId = maxXactId(
+            this._lastFlushedXactId,
+            lastXactId,
+          );
         }
       } catch (e) {
         error = e;
@@ -8115,6 +8138,7 @@ function resetIdGenStateForTests() {
 export const _exportsForTestingOnly = {
   extractAttachments,
   extractLastXactIdFromLogs3Response,
+  maxXactId,
   deepCopyEvent,
   useTestBackgroundLogger,
   clearTestBackgroundLogger,
