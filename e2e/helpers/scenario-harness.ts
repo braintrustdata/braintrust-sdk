@@ -8,6 +8,7 @@ import {
   type CapturedLogEvent,
   type CapturedLogPayload,
   type CapturedRequest,
+  type JsonValue,
 } from "./mock-braintrust-server";
 import {
   installScenarioDependencies,
@@ -126,13 +127,15 @@ function mergeLogs3RequestBody(
     mergedRows.set(key, mergeRequestRow(mergedRows.get(key), row));
   }
 
+  const rows = rowOrder
+    .map((key) => mergedRows.get(key))
+    .filter((row): row is Record<string, unknown> => row !== undefined);
+
   return {
     ...left,
     ...right,
-    rows: rowOrder
-      .map((key) => mergedRows.get(key))
-      .filter((row): row is Record<string, unknown> => row !== undefined),
-  };
+    rows: rows as JsonValue[],
+  } as JsonValue;
 }
 
 function normalizeCapturedRequests(
