@@ -1,14 +1,14 @@
 import { expect } from "vitest";
-import { normalizeForSnapshot, type Json } from "./normalize";
+import { normalizeForSnapshot, type Json } from "../../helpers/normalize";
 import type {
   CapturedLogEvent,
   CapturedLogPayload,
-} from "./mock-braintrust-server";
-import { findChildSpans, findLatestSpan } from "./trace-selectors";
+} from "../../helpers/mock-braintrust-server";
+import { findChildSpans, findLatestSpan } from "../../helpers/trace-selectors";
 import {
   payloadRowsForRootSpan,
   summarizeWrapperContract,
-} from "./wrapper-contract";
+} from "../../helpers/wrapper-contract";
 
 /**
  * Normalizes LangChain payload rows to make snapshots deterministic by
@@ -23,7 +23,6 @@ function normalizeLangchainPayloads(payloadRows: unknown[]): unknown[] {
 
     const row = structuredClone(payload) as Record<string, unknown>;
 
-    // Normalize token-count metrics (they vary between runs).
     if (row.metrics && typeof row.metrics === "object") {
       const metrics = row.metrics as Record<string, unknown>;
       for (const key of Object.keys(metrics)) {
@@ -36,15 +35,11 @@ function normalizeLangchainPayloads(payloadRows: unknown[]): unknown[] {
       }
     }
 
-    // Normalize LLM output content (response text, token counts in nested structures).
     if (row.output && typeof row.output === "object") {
       normalizeOutputObject(row.output as Record<string, unknown>);
     }
 
-    // Normalize non-deterministic tool call IDs throughout the row.
     normalizeToolCallIds(row);
-
-    // Normalize volatile LangChain dependency versions throughout the row.
     normalizeLangchainVersions(row);
 
     return row;
@@ -52,7 +47,6 @@ function normalizeLangchainPayloads(payloadRows: unknown[]): unknown[] {
 }
 
 function normalizeOutputObject(obj: Record<string, unknown>): void {
-  // Normalize tokenUsage in llmOutput
   if (obj.llmOutput && typeof obj.llmOutput === "object") {
     const llmOutput = obj.llmOutput as Record<string, unknown>;
     if (llmOutput.tokenUsage && typeof llmOutput.tokenUsage === "object") {
@@ -63,44 +57,47 @@ function normalizeOutputObject(obj: Record<string, unknown>): void {
     }
   }
 
-  // Walk generations to normalize response text, token counts, and usage
   if (Array.isArray(obj.generations)) {
     for (const batch of obj.generations) {
       if (!Array.isArray(batch)) continue;
-      for (const gen of batch) {
-        if (!gen || typeof gen !== "object") continue;
-        const g = gen as Record<string, unknown>;
-        // Normalize plain text output
-        if (typeof g.text === "string") {
-          g.text = "<llm-response>";
+      for (const generation of batch) {
+        if (!generation || typeof generation !== "object") continue;
+        const normalizedGeneration = generation as Record<string, unknown>;
+        if (typeof normalizedGeneration.text === "string") {
+          normalizedGeneration.text = "<llm-response>";
         }
-        // Normalize message content
-        if (g.message && typeof g.message === "object") {
-          normalizeMessageObject(g.message as Record<string, unknown>);
+        if (
+          normalizedGeneration.message &&
+          typeof normalizedGeneration.message === "object"
+        ) {
+          normalizeMessageObject(
+            normalizedGeneration.message as Record<string, unknown>,
+          );
         }
       }
     }
   }
 }
 
-function normalizeMessageObject(msg: Record<string, unknown>): void {
-  const kwargs = msg.kwargs as Record<string, unknown> | undefined;
+function normalizeMessageObject(message: Record<string, unknown>): void {
+  const kwargs = message.kwargs as Record<string, unknown> | undefined;
   if (!kwargs) return;
 
-  // Normalize content text (but keep empty strings for tool-call responses)
   if (typeof kwargs.content === "string" && kwargs.content !== "") {
     kwargs.content = "<llm-response>";
   }
 
-  // Normalize usage_metadata and response_metadata token counts
   normalizeTokenCounts(kwargs.usage_metadata);
   if (
     kwargs.response_metadata &&
     typeof kwargs.response_metadata === "object"
   ) {
-    const rm = kwargs.response_metadata as Record<string, unknown>;
-    normalizeTokenCounts(rm.tokenUsage);
-    normalizeTokenCounts(rm.usage);
+    const responseMetadata = kwargs.response_metadata as Record<
+      string,
+      unknown
+    >;
+    normalizeTokenCounts(responseMetadata.tokenUsage);
+    normalizeTokenCounts(responseMetadata.usage);
   }
 }
 
@@ -116,10 +113,6 @@ function normalizeTokenCounts(obj: unknown): void {
   }
 }
 
-/**
- * Recursively replaces tool_call_id values (OpenAI-generated, non-deterministic)
- * with a stable placeholder.
- */
 function normalizeToolCallIds(obj: unknown): void {
   if (!obj || typeof obj !== "object") return;
 
@@ -144,11 +137,6 @@ function normalizeToolCallIds(obj: unknown): void {
   }
 }
 
-/**
- * Recursively finds `versions` objects containing `@langchain/*` keys and
- * replaces version values with a stable placeholder so that snapshots survive
- * minor dependency bumps.
- */
 function normalizeLangchainVersions(obj: unknown): void {
   if (!obj || typeof obj !== "object") return;
 
@@ -195,7 +183,7 @@ function findNamedChildSpan(
   return undefined;
 }
 
-export function assertLangchainTraceContract(options: {
+export function assertLangchainTraces(options: {
   capturedEvents: CapturedLogEvent[];
   payloads: CapturedLogPayload[];
   rootName: string;
@@ -234,7 +222,6 @@ export function assertLangchainTraceContract(options: {
     scenario: options.scenarioName,
   });
 
-  // All operations should be children of the root span.
   for (const operation of [
     invokeOperation,
     chainOperation,
@@ -245,7 +232,6 @@ export function assertLangchainTraceContract(options: {
     expect(operation?.span.parentIds).toEqual([root?.span.id ?? ""]);
   }
 
-  // The invoke operation should have a ChatOpenAI child span (the LLM call).
   const invokeSpan = findNamedChildSpan(
     options.capturedEvents,
     ["ChatOpenAI"],
@@ -254,8 +240,6 @@ export function assertLangchainTraceContract(options: {
   expect(invokeSpan).toBeDefined();
   expect(invokeSpan?.span.type).toBe("llm");
 
-  // The chain operation should have chain and LLM child spans.
-  // The chain span wraps the prompt-pipe-model chain.
   const chainChildren = options.capturedEvents.filter(
     (event) =>
       event.span.parentIds.includes(chainOperation?.span.id ?? "") &&
@@ -263,7 +247,6 @@ export function assertLangchainTraceContract(options: {
   );
   expect(chainChildren.length).toBeGreaterThanOrEqual(1);
 
-  // The stream operation should produce a ChatOpenAI span with time_to_first_token.
   const streamSpan = findNamedChildSpan(
     options.capturedEvents,
     ["ChatOpenAI"],
@@ -275,7 +258,6 @@ export function assertLangchainTraceContract(options: {
     time_to_first_token: expect.any(Number),
   });
 
-  // The tool operation should have a ChatOpenAI span whose output contains tool calls.
   const toolSpan = findNamedChildSpan(
     options.capturedEvents,
     ["ChatOpenAI"],
@@ -283,13 +265,9 @@ export function assertLangchainTraceContract(options: {
   );
   expect(toolSpan).toBeDefined();
 
-  // The LangChain callback handler logs the LLMResult as output, which contains
-  // tool_calls on the message object. The exact structure depends on the
-  // @langchain/core version and the provider.
   const toolOutputStr = JSON.stringify(toolSpan?.output ?? {});
   expect(toolOutputStr).toContain("get_weather");
 
-  // The tool-result operation should have multiple ChatOpenAI spans (two turns).
   const toolResultSpans = options.capturedEvents.filter(
     (event) =>
       event.span.name === "ChatOpenAI" &&
