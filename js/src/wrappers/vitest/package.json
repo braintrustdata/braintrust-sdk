@@ -7,7 +7,7 @@
     "test": "vitest run"
   },
   "devDependencies": {
-    "@ai-sdk/openai": "2.0.53",
+    "@ai-sdk/openai": "3.0.48",
     "@types/node": "^20.10.5",
     "ai": "5.0.76",
     "typescript": "5.4.4",
