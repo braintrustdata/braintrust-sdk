@@ -1,33 +1,11 @@
 [
   {
-    "_is_merge": false,
     "context": {
       "caller_filename": "ext:cli/40_test.js",
       "caller_functionname": "innerWrapped",
       "caller_lineno": 0
     },
     "created": "<timestamp>",
-    "id": "<span:1>",
-    "log_id": "g",
-    "metadata": {
-      "case": "basic-span",
-      "scenario": "deno-node",
-      "testRunId": "<run:1>"
-    },
-    "metrics": {
-      "start": 0
-    },
-    "project_id": "<uuid:3>",
-    "root_span_id": "<span:2>",
-    "span_attributes": {
-      "exec_counter": 0,
-      "name": "deno node basic span",
-      "type": "task"
-    },
-    "span_id": "<span:2>"
-  },
-  {
-    "_is_merge": true,
     "expected": "Paris",
     "id": "<span:1>",
     "input": "What is the capital of France?",
@@ -38,20 +16,18 @@
       "testRunId": "<run:1>",
       "transport": "http"
     },
-    "output": "Paris",
-    "project_id": "<uuid:3>",
-    "root_span_id": "<span:2>",
-    "span_id": "<span:2>"
-  },
-  {
-    "_is_merge": true,
-    "id": "<span:1>",
-    "log_id": "g",
     "metrics": {
-      "end": 0
+      "end": 0,
+      "start": 0
     },
-    "project_id": "<uuid:3>",
+    "output": "Paris",
+    "project_id": "<project_id>",
     "root_span_id": "<span:2>",
+    "span_attributes": {
+      "exec_counter": 0,
+      "name": "deno node basic span",
+      "type": "task"
+    },
     "span_id": "<span:2>"
   },
   {
@@ -84,7 +60,7 @@
     "output": {
       "attachment": true
     },
-    "project_id": "<uuid:3>",
+    "project_id": "<project_id>",
     "root_span_id": "<span:6>",
     "span_attributes": {
       "exec_counter": 1,
@@ -119,7 +95,7 @@
       "ok": true,
       "phase": "parent"
     },
-    "project_id": "<uuid:3>",
+    "project_id": "<project_id>",
     "root_span_id": "<span:8>",
     "span_attributes": {
       "exec_counter": 2,
@@ -154,7 +130,7 @@
       "ok": true,
       "phase": "child"
     },
-    "project_id": "<uuid:3>",
+    "project_id": "<project_id>",
     "root_span_id": "<span:8>",
     "span_attributes": {
       "exec_counter": 3,
@@ -183,7 +159,7 @@
       "end": 0,
       "start": 0
     },
-    "project_id": "<uuid:3>",
+    "project_id": "<project_id>",
     "root_span_id": "<span:12>",
     "span_attributes": {
       "exec_counter": 4,
@@ -210,7 +186,7 @@
       "end": 0,
       "start": 0
     },
-    "project_id": "<uuid:3>",
+    "project_id": "<project_id>",
     "root_span_id": "<span:12>",
     "span_attributes": {
       "exec_counter": 5,
@@ -242,7 +218,7 @@
     "output": {
       "depth": 3
     },
-    "project_id": "<uuid:3>",
+    "project_id": "<project_id>",
     "root_span_id": "<span:12>",
     "span_attributes": {
       "exec_counter": 6,
@@ -274,7 +250,7 @@
     "output": {
       "observedSpanId": "<uuid:18>"
     },
-    "project_id": "<uuid:3>",
+    "project_id": "<project_id>",
     "root_span_id": "<uuid:18>",
     "span_attributes": {
       "exec_counter": 7,

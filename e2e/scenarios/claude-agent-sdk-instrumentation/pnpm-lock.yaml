@@ -20,6 +20,9 @@ importers:
       claude-agent-sdk-v0.2.81:
         specifier: npm:@anthropic-ai/claude-agent-sdk@0.2.81
         version: '@anthropic-ai/claude-agent-sdk@0.2.81(zod@4.3.6)'
+      zod:
+        specifier: 4.3.6
+        version: 4.3.6
 
 packages:
 
