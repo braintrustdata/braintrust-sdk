@@ -175,6 +175,89 @@ describe("google genai client unit tests", TEST_SUITE_OPTIONS, () => {
     expect(metrics.completion_tokens).toBeGreaterThan(0);
   });
 
+  test("google genai non-streaming completion logs through channel/plugin flow", async () => {
+    class FakeGoogleGenAI {
+      public models = {
+        generateContent: async () => ({
+          candidates: [
+            {
+              content: {
+                parts: [{ text: "Paris" }],
+                role: "model",
+              },
+              finishReason: "STOP",
+            },
+          ],
+          text: "Paris",
+          usageMetadata: {
+            promptTokenCount: 4,
+            candidatesTokenCount: 1,
+            totalTokenCount: 5,
+          },
+        }),
+      };
+
+      public constructor(_config: { apiKey?: string }) {}
+    }
+
+    initLogger({
+      projectName: "google-genai.test.ts",
+      projectId: "test-project-id",
+    });
+
+    const { GoogleGenAI } = wrapGoogleGenAI({
+      GoogleGenAI: FakeGoogleGenAI,
+    });
+    const fakeClient = new GoogleGenAI({ apiKey: "test-key" });
+
+    const result = await fakeClient.models.generateContent({
+      model: TEST_MODEL,
+      contents: "Reply with exactly Paris.",
+      config: {
+        maxOutputTokens: 8,
+        temperature: 0,
+      },
+    });
+
+    expect(result).toMatchObject({
+      text: "Paris",
+    });
+
+    const spans = await backgroundLogger.drain();
+    expect(spans).toHaveLength(1);
+    const span = spans[0] as any;
+    expect(span).toMatchObject({
+      span_attributes: {
+        name: "generate_content",
+        type: "llm",
+      },
+      input: {
+        model: TEST_MODEL,
+        contents: { text: "Reply with exactly Paris." },
+        config: {
+          maxOutputTokens: 8,
+          temperature: 0,
+        },
+      },
+      metadata: {
+        model: TEST_MODEL,
+        maxOutputTokens: 8,
+        temperature: 0,
+      },
+      output: {
+        text: "Paris",
+      },
+      metrics: {
+        prompt_tokens: 4,
+        completion_tokens: 1,
+        tokens: 5,
+      },
+    });
+    expect(span.metrics.start).toEqual(expect.any(Number));
+    expect(span.metrics.end).toEqual(expect.any(Number));
+    expect(span.metrics.duration).toEqual(expect.any(Number));
+  });
+
   test("google genai streaming completion logs a single terminal end row", async () => {
     class FakeGoogleGenAI {
       public models = {
