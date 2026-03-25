@@ -56,7 +56,7 @@ describe("wrapped instrumentation", () => {
           timeoutMs: TIMEOUT_MS,
         });
       },
-      snapshotName: scenario.snapshotName,
+      snapshotName: `${scenario.snapshotName}.wrapper`,
       testFileUrl: import.meta.url,
       timeoutMs: TIMEOUT_MS,
     });
@@ -75,7 +75,7 @@ describe("auto-hook instrumentation", () => {
           timeoutMs: TIMEOUT_MS,
         });
       },
-      snapshotName: scenario.snapshotName,
+      snapshotName: `${scenario.snapshotName}.auto-hook`,
       testFileUrl: import.meta.url,
       timeoutMs: TIMEOUT_MS,
     });
