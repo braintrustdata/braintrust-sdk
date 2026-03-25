@@ -17,7 +17,7 @@
     "metrics": {
       "start": 0
     },
-    "project_id": "<uuid:3>",
+    "project_id": "<project_id>",
     "root_span_id": "<span:2>",
     "span_attributes": {
       "exec_counter": 0,
@@ -33,7 +33,7 @@
     "metrics": {
       "end": 0
     },
-    "project_id": "<uuid:3>",
+    "project_id": "<project_id>",
     "root_span_id": "<span:2>",
     "span_id": "<span:2>"
   },
@@ -54,7 +54,7 @@
     "metrics": {
       "start": 0
     },
-    "project_id": "<uuid:3>",
+    "project_id": "<project_id>",
     "root_span_id": "<span:2>",
     "span_attributes": {
       "exec_counter": 1,
@@ -72,7 +72,7 @@
     "metrics": {
       "end": 0
     },
-    "project_id": "<uuid:3>",
+    "project_id": "<project_id>",
     "root_span_id": "<span:2>",
     "span_id": "<span:4>",
     "span_parents": [
@@ -123,7 +123,7 @@
     "metrics": {
       "start": 0
     },
-    "project_id": "<uuid:3>",
+    "project_id": "<project_id>",
     "root_span_id": "<span:2>",
     "span_attributes": {
       "exec_counter": 2,
@@ -281,7 +281,7 @@
       },
       "warnings": []
     },
-    "project_id": "<uuid:3>",
+    "project_id": "<project_id>",
     "root_span_id": "<span:2>",
     "span_id": "<span:6>",
     "span_parents": [
@@ -295,7 +295,7 @@
     "metrics": {
       "end": 0
     },
-    "project_id": "<uuid:3>",
+    "project_id": "<project_id>",
     "root_span_id": "<span:2>",
     "span_id": "<span:6>",
     "span_parents": [
@@ -341,7 +341,7 @@
     "metrics": {
       "start": 0
     },
-    "project_id": "<uuid:3>",
+    "project_id": "<project_id>",
     "root_span_id": "<span:2>",
     "span_attributes": {
       "exec_counter": 3,
@@ -364,7 +364,7 @@
       "prompt_tokens": 18,
       "reasoning_tokens": 0
     },
-    "project_id": "<uuid:3>",
+    "project_id": "<project_id>",
     "root_span_id": "<span:2>",
     "span_id": "<span:10>",
     "span_parents": [
@@ -432,7 +432,7 @@
       },
       "warnings": []
     },
-    "project_id": "<uuid:3>",
+    "project_id": "<project_id>",
     "root_span_id": "<span:2>",
     "span_id": "<span:10>",
     "span_parents": [
@@ -446,7 +446,7 @@
     "metrics": {
       "end": 0
     },
-    "project_id": "<uuid:3>",
+    "project_id": "<project_id>",
     "root_span_id": "<span:2>",
     "span_id": "<span:10>",
     "span_parents": [
@@ -470,7 +470,7 @@
     "metrics": {
       "start": 0
     },
-    "project_id": "<uuid:3>",
+    "project_id": "<project_id>",
     "root_span_id": "<span:2>",
     "span_attributes": {
       "exec_counter": 4,
@@ -488,7 +488,7 @@
     "metrics": {
       "end": 0
     },
-    "project_id": "<uuid:3>",
+    "project_id": "<project_id>",
     "root_span_id": "<span:2>",
     "span_id": "<span:12>",
     "span_parents": [
@@ -539,7 +539,7 @@
       "start": 0,
       "time_to_first_token": 0
     },
-    "project_id": "<uuid:3>",
+    "project_id": "<project_id>",
     "root_span_id": "<span:2>",
     "span_attributes": {
       "exec_counter": 5,
@@ -718,7 +718,7 @@
       },
       "warnings": []
     },
-    "project_id": "<uuid:3>",
+    "project_id": "<project_id>",
     "root_span_id": "<span:2>",
     "span_id": "<span:14>",
     "span_parents": [
@@ -732,7 +732,7 @@
     "metrics": {
       "end": 0
     },
-    "project_id": "<uuid:3>",
+    "project_id": "<project_id>",
     "root_span_id": "<span:2>",
     "span_id": "<span:14>",
     "span_parents": [
@@ -776,7 +776,7 @@
     "metrics": {
       "start": 0
     },
-    "project_id": "<uuid:3>",
+    "project_id": "<project_id>",
     "root_span_id": "<span:2>",
     "span_attributes": {
       "exec_counter": 6,
@@ -795,7 +795,7 @@
     "metrics": {
       "time_to_first_token": 0
     },
-    "project_id": "<uuid:3>",
+    "project_id": "<project_id>",
     "root_span_id": "<span:2>",
     "span_id": "<span:18>",
     "span_parents": [
@@ -813,7 +813,7 @@
       "prompt_tokens": 22,
       "reasoning_tokens": 0
     },
-    "project_id": "<uuid:3>",
+    "project_id": "<project_id>",
     "root_span_id": "<span:2>",
     "span_id": "<span:18>",
     "span_parents": [
@@ -859,7 +859,7 @@
         }
       }
     },
-    "project_id": "<uuid:3>",
+    "project_id": "<project_id>",
     "root_span_id": "<span:2>",
     "span_id": "<span:18>",
     "span_parents": [
@@ -873,7 +873,7 @@
     "metrics": {
       "end": 0
     },
-    "project_id": "<uuid:3>",
+    "project_id": "<project_id>",
     "root_span_id": "<span:2>",
     "span_id": "<span:18>",
     "span_parents": [
@@ -897,7 +897,7 @@
     "metrics": {
       "start": 0
     },
-    "project_id": "<uuid:3>",
+    "project_id": "<project_id>",
     "root_span_id": "<span:2>",
     "span_attributes": {
       "exec_counter": 7,
@@ -915,7 +915,7 @@
     "metrics": {
       "end": 0
     },
-    "project_id": "<uuid:3>",
+    "project_id": "<project_id>",
     "root_span_id": "<span:2>",
     "span_id": "<span:20>",
     "span_parents": [
@@ -1006,7 +1006,7 @@
     "metrics": {
       "start": 0
     },
-    "project_id": "<uuid:3>",
+    "project_id": "<project_id>",
     "root_span_id": "<span:2>",
     "span_attributes": {
       "exec_counter": 8,
@@ -1924,7 +1924,7 @@
       },
       "warnings": []
     },
-    "project_id": "<uuid:3>",
+    "project_id": "<project_id>",
     "root_span_id": "<span:2>",
     "span_id": "<span:22>",
     "span_parents": [
@@ -1938,7 +1938,7 @@
     "metrics": {
       "end": 0
     },
-    "project_id": "<uuid:3>",
+    "project_id": "<project_id>",
     "root_span_id": "<span:2>",
     "span_id": "<span:22>",
     "span_parents": [
@@ -2033,7 +2033,7 @@
     "metrics": {
       "start": 0
     },
-    "project_id": "<uuid:3>",
+    "project_id": "<project_id>",
     "root_span_id": "<span:2>",
     "span_attributes": {
       "exec_counter": 9,
@@ -2056,7 +2056,7 @@
       "prompt_tokens": 94,
       "reasoning_tokens": 0
     },
-    "project_id": "<uuid:3>",
+    "project_id": "<project_id>",
     "root_span_id": "<span:2>",
     "span_id": "<span:36>",
     "span_parents": [
@@ -2126,7 +2126,7 @@
       },
       "warnings": []
     },
-    "project_id": "<uuid:3>",
+    "project_id": "<project_id>",
     "root_span_id": "<span:2>",
     "span_id": "<span:36>",
     "span_parents": [
@@ -2140,7 +2140,7 @@
     "metrics": {
       "end": 0
     },
-    "project_id": "<uuid:3>",
+    "project_id": "<project_id>",
     "root_span_id": "<span:2>",
     "span_id": "<span:36>",
     "span_parents": [
@@ -2175,7 +2175,7 @@
       "start": 0
     },
     "output": "{\"condition\":\"sunny\",\"location\":\"Paris, France\",\"temperatureC\":22}",
-    "project_id": "<uuid:3>",
+    "project_id": "<project_id>",
     "root_span_id": "<span:2>",
     "span_attributes": {
       "exec_counter": 10,
@@ -2312,7 +2312,7 @@
     "metrics": {
       "start": 0
     },
-    "project_id": "<uuid:3>",
+    "project_id": "<project_id>",
     "root_span_id": "<span:2>",
     "span_attributes": {
       "exec_counter": 11,
@@ -2335,7 +2335,7 @@
       "prompt_tokens": 133,
       "reasoning_tokens": 0
     },
-    "project_id": "<uuid:3>",
+    "project_id": "<project_id>",
     "root_span_id": "<span:2>",
     "span_id": "<span:40>",
     "span_parents": [
@@ -2405,7 +2405,7 @@
       },
       "warnings": []
     },
-    "project_id": "<uuid:3>",
+    "project_id": "<project_id>",
     "root_span_id": "<span:2>",
     "span_id": "<span:40>",
     "span_parents": [
@@ -2419,7 +2419,7 @@
     "metrics": {
       "end": 0
     },
-    "project_id": "<uuid:3>",
+    "project_id": "<project_id>",
     "root_span_id": "<span:2>",
     "span_id": "<span:40>",
     "span_parents": [
@@ -2491,7 +2491,7 @@
       "start": 0
     },
     "output": "{\"condition\":\"sunny\",\"location\":\"Paris, France\",\"temperatureC\":22}",
-    "project_id": "<uuid:3>",
+    "project_id": "<project_id>",
     "root_span_id": "<span:2>",
     "span_attributes": {
       "exec_counter": 12,
@@ -2665,7 +2665,7 @@
     "metrics": {
       "start": 0
     },
-    "project_id": "<uuid:3>",
+    "project_id": "<project_id>",
     "root_span_id": "<span:2>",
     "span_attributes": {
       "exec_counter": 13,
@@ -2688,7 +2688,7 @@
       "prompt_tokens": 172,
       "reasoning_tokens": 0
     },
-    "project_id": "<uuid:3>",
+    "project_id": "<project_id>",
     "root_span_id": "<span:2>",
     "span_id": "<span:44>",
     "span_parents": [
@@ -2758,7 +2758,7 @@
       },
       "warnings": []
     },
-    "project_id": "<uuid:3>",
+    "project_id": "<project_id>",
     "root_span_id": "<span:2>",
     "span_id": "<span:44>",
     "span_parents": [
@@ -2772,7 +2772,7 @@
     "metrics": {
       "end": 0
     },
-    "project_id": "<uuid:3>",
+    "project_id": "<project_id>",
     "root_span_id": "<span:2>",
     "span_id": "<span:44>",
     "span_parents": [
@@ -2881,7 +2881,7 @@
       "start": 0
     },
     "output": "{\"condition\":\"sunny\",\"location\":\"Paris, France\",\"temperatureC\":22}",
-    "project_id": "<uuid:3>",
+    "project_id": "<project_id>",
     "root_span_id": "<span:2>",
     "span_attributes": {
       "exec_counter": 14,
@@ -3092,7 +3092,7 @@
     "metrics": {
       "start": 0
     },
-    "project_id": "<uuid:3>",
+    "project_id": "<project_id>",
     "root_span_id": "<span:2>",
     "span_attributes": {
       "exec_counter": 15,
@@ -3115,7 +3115,7 @@
       "prompt_tokens": 211,
       "reasoning_tokens": 0
     },
-    "project_id": "<uuid:3>",
+    "project_id": "<project_id>",
     "root_span_id": "<span:2>",
     "span_id": "<span:48>",
     "span_parents": [
@@ -3185,7 +3185,7 @@
       },
       "warnings": []
     },
-    "project_id": "<uuid:3>",
+    "project_id": "<project_id>",
     "root_span_id": "<span:2>",
     "span_id": "<span:48>",
     "span_parents": [
@@ -3199,7 +3199,7 @@
     "metrics": {
       "end": 0
     },
-    "project_id": "<uuid:3>",
+    "project_id": "<project_id>",
     "root_span_id": "<span:2>",
     "span_id": "<span:48>",
     "span_parents": [
@@ -3345,7 +3345,7 @@
       "start": 0
     },
     "output": "{\"condition\":\"sunny\",\"location\":\"Paris, France\",\"temperatureC\":22}",
-    "project_id": "<uuid:3>",
+    "project_id": "<project_id>",
     "root_span_id": "<span:2>",
     "span_attributes": {
       "exec_counter": 16,
@@ -3374,7 +3374,7 @@
     "metrics": {
       "start": 0
     },
-    "project_id": "<uuid:3>",
+    "project_id": "<project_id>",
     "root_span_id": "<span:2>",
     "span_attributes": {
       "exec_counter": 17,
@@ -3392,7 +3392,7 @@
     "metrics": {
       "end": 0
     },
-    "project_id": "<uuid:3>",
+    "project_id": "<project_id>",
     "root_span_id": "<span:2>",
     "span_id": "<span:52>",
     "span_parents": [
@@ -3456,7 +3456,7 @@
     "metrics": {
       "start": 0
     },
-    "project_id": "<uuid:3>",
+    "project_id": "<project_id>",
     "root_span_id": "<span:2>",
     "span_attributes": {
       "exec_counter": 18,
@@ -3517,7 +3517,7 @@
       },
       "warnings": []
     },
-    "project_id": "<uuid:3>",
+    "project_id": "<project_id>",
     "root_span_id": "<span:2>",
     "span_id": "<span:54>",
     "span_parents": [
@@ -3531,7 +3531,7 @@
     "metrics": {
       "end": 0
     },
-    "project_id": "<uuid:3>",
+    "project_id": "<project_id>",
     "root_span_id": "<span:2>",
     "span_id": "<span:54>",
     "span_parents": [
@@ -3593,7 +3593,7 @@
     "metrics": {
       "start": 0
     },
-    "project_id": "<uuid:3>",
+    "project_id": "<project_id>",
     "root_span_id": "<span:2>",
     "span_attributes": {
       "exec_counter": 19,
@@ -3616,7 +3616,7 @@
       "prompt_tokens": 38,
       "reasoning_tokens": 0
     },
-    "project_id": "<uuid:3>",
+    "project_id": "<project_id>",
     "root_span_id": "<span:2>",
     "span_id": "<span:57>",
     "span_parents": [
@@ -3684,7 +3684,7 @@
       },
       "warnings": []
     },
-    "project_id": "<uuid:3>",
+    "project_id": "<project_id>",
     "root_span_id": "<span:2>",
     "span_id": "<span:57>",
     "span_parents": [
@@ -3698,7 +3698,7 @@
     "metrics": {
       "end": 0
     },
-    "project_id": "<uuid:3>",
+    "project_id": "<project_id>",
     "root_span_id": "<span:2>",
     "span_id": "<span:57>",
     "span_parents": [
@@ -3722,7 +3722,7 @@
     "metrics": {
       "start": 0
     },
-    "project_id": "<uuid:3>",
+    "project_id": "<project_id>",
     "root_span_id": "<span:2>",
     "span_attributes": {
       "exec_counter": 20,
@@ -3740,7 +3740,7 @@
     "metrics": {
       "end": 0
     },
-    "project_id": "<uuid:3>",
+    "project_id": "<project_id>",
     "root_span_id": "<span:2>",
     "span_id": "<span:60>",
     "span_parents": [
@@ -3804,7 +3804,7 @@
     "metrics": {
       "start": 0
     },
-    "project_id": "<uuid:3>",
+    "project_id": "<project_id>",
     "root_span_id": "<span:2>",
     "span_attributes": {
       "exec_counter": 21,
@@ -3823,7 +3823,7 @@
     "metrics": {
       "time_to_first_token": 0
     },
-    "project_id": "<uuid:3>",
+    "project_id": "<project_id>",
     "root_span_id": "<span:2>",
     "span_id": "<span:62>",
     "span_parents": [
@@ -3877,7 +3877,7 @@
       },
       "warnings": []
     },
-    "project_id": "<uuid:3>",
+    "project_id": "<project_id>",
     "root_span_id": "<span:2>",
     "span_id": "<span:62>",
     "span_parents": [
@@ -3891,7 +3891,7 @@
     "metrics": {
       "end": 0
     },
-    "project_id": "<uuid:3>",
+    "project_id": "<project_id>",
     "root_span_id": "<span:2>",
     "span_id": "<span:62>",
     "span_parents": [
@@ -3951,7 +3951,7 @@
     "metrics": {
       "start": 0
     },
-    "project_id": "<uuid:3>",
+    "project_id": "<project_id>",
     "root_span_id": "<span:2>",
     "span_attributes": {
       "exec_counter": 22,
@@ -3970,7 +3970,7 @@
     "metrics": {
       "time_to_first_token": 0
     },
-    "project_id": "<uuid:3>",
+    "project_id": "<project_id>",
     "root_span_id": "<span:2>",
     "span_id": "<span:65>",
     "span_parents": [
@@ -3988,7 +3988,7 @@
       "prompt_tokens": 38,
       "reasoning_tokens": 0
     },
-    "project_id": "<uuid:3>",
+    "project_id": "<project_id>",
     "root_span_id": "<span:2>",
     "span_id": "<span:65>",
     "span_parents": [
@@ -4034,7 +4034,7 @@
         }
       }
     },
-    "project_id": "<uuid:3>",
+    "project_id": "<project_id>",
     "root_span_id": "<span:2>",
     "span_id": "<span:65>",
     "span_parents": [
@@ -4048,7 +4048,7 @@
     "metrics": {
       "end": 0
     },
-    "project_id": "<uuid:3>",
+    "project_id": "<project_id>",
     "root_span_id": "<span:2>",
     "span_id": "<span:65>",
     "span_parents": [
@@ -4072,7 +4072,7 @@
     "metrics": {
       "start": 0
     },
-    "project_id": "<uuid:3>",
+    "project_id": "<project_id>",
     "root_span_id": "<span:2>",
     "span_attributes": {
       "exec_counter": 23,
@@ -4090,7 +4090,7 @@
     "metrics": {
       "end": 0
     },
-    "project_id": "<uuid:3>",
+    "project_id": "<project_id>",
     "root_span_id": "<span:2>",
     "span_id": "<span:67>",
     "span_parents": [
@@ -4146,7 +4146,7 @@
     "metrics": {
       "start": 0
     },
-    "project_id": "<uuid:3>",
+    "project_id": "<project_id>",
     "root_span_id": "<span:2>",
     "span_attributes": {
       "exec_counter": 24,
@@ -4304,7 +4304,7 @@
       },
       "warnings": []
     },
-    "project_id": "<uuid:3>",
+    "project_id": "<project_id>",
     "root_span_id": "<span:2>",
     "span_id": "<span:69>",
     "span_parents": [
@@ -4318,7 +4318,7 @@
     "metrics": {
       "end": 0
     },
-    "project_id": "<uuid:3>",
+    "project_id": "<project_id>",
     "root_span_id": "<span:2>",
     "span_id": "<span:69>",
     "span_parents": [
@@ -4363,7 +4363,7 @@
     "metrics": {
       "start": 0
     },
-    "project_id": "<uuid:3>",
+    "project_id": "<project_id>",
     "root_span_id": "<span:2>",
     "span_attributes": {
       "exec_counter": 25,
@@ -4386,7 +4386,7 @@
       "prompt_tokens": 16,
       "reasoning_tokens": 0
     },
-    "project_id": "<uuid:3>",
+    "project_id": "<project_id>",
     "root_span_id": "<span:2>",
     "span_id": "<span:73>",
     "span_parents": [
@@ -4454,7 +4454,7 @@
       },
       "warnings": []
     },
-    "project_id": "<uuid:3>",
+    "project_id": "<project_id>",
     "root_span_id": "<span:2>",
     "span_id": "<span:73>",
     "span_parents": [
@@ -4468,7 +4468,7 @@
     "metrics": {
       "end": 0
     },
-    "project_id": "<uuid:3>",
+    "project_id": "<project_id>",
     "root_span_id": "<span:2>",
     "span_id": "<span:73>",
     "span_parents": [
@@ -4492,7 +4492,7 @@
     "metrics": {
       "start": 0
     },
-    "project_id": "<uuid:3>",
+    "project_id": "<project_id>",
     "root_span_id": "<span:2>",
     "span_attributes": {
       "exec_counter": 26,
@@ -4510,7 +4510,7 @@
     "metrics": {
       "end": 0
     },
-    "project_id": "<uuid:3>",
+    "project_id": "<project_id>",
     "root_span_id": "<span:2>",
     "span_id": "<span:75>",
     "span_parents": [
@@ -4566,7 +4566,7 @@
     "metrics": {
       "start": 0
     },
-    "project_id": "<uuid:3>",
+    "project_id": "<project_id>",
     "root_span_id": "<span:2>",
     "span_attributes": {
       "exec_counter": 27,
@@ -4585,7 +4585,7 @@
     "metrics": {
       "time_to_first_token": 0
     },
-    "project_id": "<uuid:3>",
+    "project_id": "<project_id>",
     "root_span_id": "<span:2>",
     "span_id": "<span:77>",
     "span_parents": [
@@ -4759,7 +4759,7 @@
       },
       "warnings": []
     },
-    "project_id": "<uuid:3>",
+    "project_id": "<project_id>",
     "root_span_id": "<span:2>",
     "span_id": "<span:77>",
     "span_parents": [
@@ -4773,7 +4773,7 @@
     "metrics": {
       "end": 0
     },
-    "project_id": "<uuid:3>",
+    "project_id": "<project_id>",
     "root_span_id": "<span:2>",
     "span_id": "<span:77>",
     "span_parents": [
@@ -4816,7 +4816,7 @@
     "metrics": {
       "start": 0
     },
-    "project_id": "<uuid:3>",
+    "project_id": "<project_id>",
     "root_span_id": "<span:2>",
     "span_attributes": {
       "exec_counter": 28,
@@ -4835,7 +4835,7 @@
     "metrics": {
       "time_to_first_token": 0
     },
-    "project_id": "<uuid:3>",
+    "project_id": "<project_id>",
     "root_span_id": "<span:2>",
     "span_id": "<span:81>",
     "span_parents": [
@@ -4853,7 +4853,7 @@
       "prompt_tokens": 17,
       "reasoning_tokens": 0
     },
-    "project_id": "<uuid:3>",
+    "project_id": "<project_id>",
     "root_span_id": "<span:2>",
     "span_id": "<span:81>",
     "span_parents": [
@@ -4899,7 +4899,7 @@
         }
       }
     },
-    "project_id": "<uuid:3>",
+    "project_id": "<project_id>",
     "root_span_id": "<span:2>",
     "span_id": "<span:81>",
     "span_parents": [
@@ -4913,7 +4913,7 @@
     "metrics": {
       "end": 0
     },
-    "project_id": "<uuid:3>",
+    "project_id": "<project_id>",
     "root_span_id": "<span:2>",
     "span_id": "<span:81>",
     "span_parents": [

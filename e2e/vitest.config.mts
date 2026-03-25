@@ -5,6 +5,7 @@ export default defineConfig({
   test: {
     hookTimeout: 20_000,
     include: ["scenarios/**/*.test.ts"],
+    setupFiles: ["./vitest.setup.ts"],
     tags: [
       {
         name: E2E_TAGS.externalApi,

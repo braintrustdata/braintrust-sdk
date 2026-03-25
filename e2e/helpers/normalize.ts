@@ -47,6 +47,8 @@ const DYNAMIC_HEADER_KEYS = new Set([
   "x-request-id",
 ]);
 const PROVIDER_ID_KEYS = new Set(["itemId", "responseId", "toolCallId"]);
+const PROJECT_ID_KEYS = new Set(["project_id", "projectId"]);
+const PROJECT_NAME_KEYS = new Set(["project_name", "projectName"]);
 const HELPERS_DIR = path.dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = path.resolve(HELPERS_DIR, "../..").replace(/\\/g, "/");
 const STACK_FRAME_REPO_PATH_REGEX =
@@ -304,6 +306,26 @@ function normalizeValue(
       return tokenFor(tokenMaps.xacts, value, "xact");
     }
 
+    if (currentKey && PROJECT_ID_KEYS.has(currentKey)) {
+      if (UUID_REGEX.test(value)) {
+        tokenFor(tokenMaps.ids, value, "uuid");
+      }
+      return "<project_id>";
+    }
+
+    if (currentKey && PROJECT_NAME_KEYS.has(currentKey)) {
+      let consumedProjectNameToken = false;
+      value.replace(UUID_SUBSTRING_REGEX, (match) => {
+        tokenFor(tokenMaps.ids, match, "uuid");
+        consumedProjectNameToken = true;
+        return match;
+      });
+      if (!consumedProjectNameToken) {
+        tokenFor(tokenMaps.ids, `project_name:${value}`, "uuid");
+      }
+      return "<project_name>";
+    }
+
     if (currentKey && DYNAMIC_HEADER_KEYS.has(currentKey)) {
       return `<${currentKey}>`;
     }
@@ -334,6 +356,27 @@ function normalizeValue(
 
     if (ISO_DATE_REGEX.test(value)) {
       return "<timestamp>";
+    }
+
+    if (value.startsWith("project_id:")) {
+      const projectIdValue = value.slice("project_id:".length);
+      if (UUID_REGEX.test(projectIdValue)) {
+        tokenFor(tokenMaps.ids, projectIdValue, "uuid");
+      }
+      return "project_id:<project_id>";
+    }
+
+    if (value.startsWith("project_name:")) {
+      let consumedProjectNameToken = false;
+      value.replace(UUID_SUBSTRING_REGEX, (match) => {
+        tokenFor(tokenMaps.ids, match, "uuid");
+        consumedProjectNameToken = true;
+        return match;
+      });
+      if (!consumedProjectNameToken) {
+        tokenFor(tokenMaps.ids, value, "uuid");
+      }
+      return "project_name:<project_name>";
     }
 
     const withNormalizedUuids = value.replace(UUID_SUBSTRING_REGEX, (match) =>
