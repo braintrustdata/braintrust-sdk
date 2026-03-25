@@ -1,5 +1,5 @@
 {
-  "name": "@braintrust/e2e-openai-auto-instrumentation-node-hook",
+  "name": "@braintrust/e2e-openai-instrumentation",
   "private": true,
   "braintrustScenario": {
     "canary": {
