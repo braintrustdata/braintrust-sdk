@@ -130,7 +130,7 @@ async function waitForLogs3XactIngestion(args: {
         },
         use_columnstore: false,
         brainstore_realtime: true,
-        query_source: `js_sdk_ensure_spans_flushed_${objectType}`,
+        query_source: `sdk_ensure_spans_flushed_de15bf`,
       },
       { headers: { "Accept-Encoding": "gzip" } },
     );
