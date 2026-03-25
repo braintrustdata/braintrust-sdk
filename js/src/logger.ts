@@ -5857,7 +5857,7 @@ export class ObjectFetcher<RecordType> implements AsyncIterable<
       let maxVersion: string | undefined = undefined;
       for await (const record of this.fetch(options)) {
         const xactId = String(record[TRANSACTION_ID_FIELD] ?? "0");
-        maxVersion = maxXactId(maxVersion, xactId) ?? undefined;
+        maxVersion = maxXactId(maxVersion ?? null, xactId) ?? undefined;
       }
       return maxVersion;
     }
