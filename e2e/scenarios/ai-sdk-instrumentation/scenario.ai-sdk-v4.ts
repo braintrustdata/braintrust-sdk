@@ -4,10 +4,10 @@ import {
   getInstalledPackageVersion,
   runMain,
 } from "../../helpers/scenario-runtime";
-import { runWrapAISDKGenerationTraces } from "./scenario.impl";
+import { runWrappedAISDKInstrumentation } from "./scenario.impl.mjs";
 
 runMain(async () =>
-  runWrapAISDKGenerationTraces({
+  runWrappedAISDKInstrumentation({
     ai,
     maxTokensKey: "maxTokens",
     openai,
