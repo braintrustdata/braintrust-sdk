@@ -3,7 +3,7 @@
     "has_input": false,
     "has_output": false,
     "metadata": {
-      "aiSdkVersion": "6.0.1",
+      "aiSdkVersion": "<ai-sdk-version>",
       "scenario": "ai-sdk-instrumentation"
     },
     "name": "ai-sdk-instrumentation-root",

@@ -48,7 +48,16 @@ function pickMetadata(
 
   const picked = Object.fromEntries(
     keys.flatMap((key) =>
-      key in metadata ? [[key, metadata[key] as Json]] : [],
+      key in metadata
+        ? [
+            [
+              key,
+              key === "aiSdkVersion"
+                ? "<ai-sdk-version>"
+                : (metadata[key] as Json),
+            ],
+          ]
+        : [],
     ),
   );
 
