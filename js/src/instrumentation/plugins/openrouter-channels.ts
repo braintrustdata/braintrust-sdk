@@ -53,6 +53,18 @@ export const openRouterChannels = defineChannels("@openrouter/sdk", {
     kind: "sync-stream",
   }),
 
+  callModelTurn: channel<
+    [OpenRouterCallModelRequest | undefined],
+    unknown,
+    {
+      step: number;
+      stepType: "initial" | "continue";
+    }
+  >({
+    channelName: "callModel.turn",
+    kind: "async",
+  }),
+
   toolExecute: channel<
     [unknown],
     unknown | AsyncIterable<unknown>,

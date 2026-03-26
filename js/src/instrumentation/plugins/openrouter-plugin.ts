@@ -7,10 +7,7 @@ import {
 } from "../core/channel-tracing";
 import { SpanTypeAttribute, isObject } from "../../../util/index";
 import { getCurrentUnixTimestamp } from "../../util";
-import {
-  patchOpenRouterCallModelRequestTools,
-  patchOpenRouterCallModelResult,
-} from "../../openrouter-tool-wrapping";
+import { patchOpenRouterCallModelRequestTools } from "../../openrouter-tool-wrapping";
 import {
   buildOpenRouterEmbeddingMetadata,
   buildOpenRouterMetadata,
@@ -21,6 +18,7 @@ import {
 } from "../../openrouter-logging";
 import { parseOpenRouterMetricsFromUsage } from "../../openrouter-utils";
 import { openRouterChannels } from "./openrouter-channels";
+import { patchOpenRouterCallModelResult } from "./openrouter-call-model";
 import type {
   OpenRouterChatChoice,
   OpenRouterChatCompletionChunk,
@@ -163,12 +161,58 @@ export class OpenRouterPlugin extends BasePlugin {
           };
         },
         patchResult: ({ endEvent, result, span }) => {
-          return patchOpenRouterCallModelResult(
-            span,
+          return patchOpenRouterCallModelResult({
+            request: getOpenRouterCallModelRequestArg(endEvent.arguments),
             result,
-            getOpenRouterCallModelRequestArg(endEvent.arguments),
-          );
+            span,
+          });
         },
+      }),
+    );
+
+    this.unsubscribers.push(
+      traceAsyncChannel(openRouterChannels.callModelTurn, {
+        name: "openrouter.beta.responses.send",
+        type: SpanTypeAttribute.LLM,
+        extractInput: (args, event) => {
+          const request = getOpenRouterCallModelRequestArg(args);
+          const metadata = request
+            ? extractOpenRouterCallModelMetadata(request)
+            : { provider: "openrouter" };
+
+          if (isObject(metadata) && "tools" in metadata) {
+            delete (metadata as Record<string, unknown>).tools;
+          }
+
+          return {
+            input: request
+              ? extractOpenRouterCallModelInput(request)
+              : undefined,
+            metadata: {
+              ...metadata,
+              step: event.step,
+              step_type: event.stepType,
+            },
+          };
+        },
+        extractOutput: (result) =>
+          extractOpenRouterResponseOutput(result as Record<string, unknown>),
+        extractMetadata: (result, event) => {
+          if (!isObject(result)) {
+            return {
+              step: event?.step,
+              step_type: event?.stepType,
+            };
+          }
+
+          return {
+            ...(extractOpenRouterResponseMetadata(result) || {}),
+            ...(event?.step !== undefined ? { step: event.step } : {}),
+            ...(event?.stepType ? { step_type: event.stepType } : {}),
+          };
+        },
+        extractMetrics: (result) =>
+          isObject(result) ? parseOpenRouterMetricsFromUsage(result.usage) : {},
       }),
     );
 
