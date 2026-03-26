@@ -102,7 +102,12 @@ async function waitForLogs3XactIngestion(args: {
       "btql",
       {
         query: {
-          select: [{ op: "literal", value: 1 }],
+          select: [
+            {
+              alias: "id",
+              expr: { op: "ident", name: ["id"] },
+            },
+          ],
           from: {
             op: "function",
             name: {
