@@ -38,7 +38,7 @@ type SpanState = {
 export type AsyncChannelSpanConfig<TChannel extends AnyAsyncChannel> =
   ChannelConfig & {
     extractInput: (
-      args: [...ArgsOf<TChannel>],
+      args: [...ArgsOf<TChannel>, ...any[]],
       event: StartOf<TChannel>,
       span: Span,
     ) => {
@@ -68,7 +68,7 @@ type StreamingResult<TChannel extends AnyAsyncChannel> = Exclude<
 export type StreamingChannelSpanConfig<TChannel extends AnyAsyncChannel> =
   ChannelConfig & {
     extractInput: (
-      args: [...ArgsOf<TChannel>],
+      args: [...ArgsOf<TChannel>, ...any[]],
       event: StartOf<TChannel>,
       span: Span,
     ) => {
@@ -110,7 +110,7 @@ export type StreamingChannelSpanConfig<TChannel extends AnyAsyncChannel> =
 export type SyncStreamChannelSpanConfig<TChannel extends AnySyncStreamChannel> =
   ChannelConfig & {
     extractInput: (
-      args: [...ArgsOf<TChannel>],
+      args: [...ArgsOf<TChannel>, ...any[]],
       event: StartOf<TChannel>,
       span: Span,
     ) => {
@@ -167,7 +167,7 @@ function startSpanForEvent<
 >(
   config: ChannelConfig & {
     extractInput: (
-      args: [...ArgsOf<TChannel>],
+      args: [...ArgsOf<TChannel>, ...any[]],
       event: StartOf<TChannel>,
       span: Span,
     ) => {
@@ -211,7 +211,7 @@ function ensureSpanStateForEvent<
   states: WeakMap<object, SpanState>,
   config: ChannelConfig & {
     extractInput: (
-      args: [...ArgsOf<TChannel>],
+      args: [...ArgsOf<TChannel>, ...any[]],
       event: StartOf<TChannel>,
       span: Span,
     ) => {
@@ -240,7 +240,7 @@ function bindCurrentSpanStoreToStart<
   states: WeakMap<object, SpanState>,
   config: ChannelConfig & {
     extractInput: (
-      args: [...ArgsOf<TChannel>],
+      args: [...ArgsOf<TChannel>, ...any[]],
       event: StartOf<TChannel>,
       span: Span,
     ) => {

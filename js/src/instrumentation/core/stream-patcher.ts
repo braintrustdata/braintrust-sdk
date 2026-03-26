@@ -30,19 +30,19 @@ export interface StreamPatchOptions<TChunk = unknown, TFinal = unknown> {
    * Called for each chunk as it's yielded.
    * Optional - if not provided, chunks are just collected.
    */
-  onChunk?: (chunk: TChunk) => void;
+  onChunk?: (chunk: TChunk) => void | Promise<void>;
 
   /**
    * Called when the stream completes successfully.
    * Receives all collected chunks.
    */
-  onComplete: (chunks: TChunk[]) => TFinal | void;
+  onComplete: (chunks: TChunk[]) => TFinal | void | Promise<TFinal | void>;
 
   /**
    * Called if the stream errors.
    * If not provided, errors are re-thrown after collection stops.
    */
-  onError?: (error: Error, chunks: TChunk[]) => void;
+  onError?: (error: Error, chunks: TChunk[]) => void | Promise<void>;
 
   /**
    * Filter to decide whether to collect a chunk.
@@ -137,7 +137,7 @@ export function patchStreamIfNeeded<TChunk = unknown, TFinal = unknown>(
             if (!completed) {
               completed = true;
               try {
-                options.onComplete(chunks);
+                await options.onComplete(chunks);
               } catch (error) {
                 debugLogger.error("Error in stream onComplete handler:", error);
               }
@@ -157,7 +157,7 @@ export function patchStreamIfNeeded<TChunk = unknown, TFinal = unknown>(
               // Call onChunk handler if provided
               if (options.onChunk) {
                 try {
-                  options.onChunk(chunk);
+                  await options.onChunk(chunk);
                 } catch (error) {
                   debugLogger.error("Error in stream onChunk handler:", error);
                 }
@@ -172,7 +172,7 @@ export function patchStreamIfNeeded<TChunk = unknown, TFinal = unknown>(
             completed = true;
             if (options.onError) {
               try {
-                options.onError(
+                await options.onError(
                   error instanceof Error ? error : new Error(String(error)),
                   chunks,
                 );
@@ -196,7 +196,7 @@ export function patchStreamIfNeeded<TChunk = unknown, TFinal = unknown>(
             completed = true;
             // Stream was cancelled/returned early
             try {
-              options.onComplete(chunks);
+              await options.onComplete(chunks);
             } catch (error) {
               debugLogger.error("Error in stream onComplete handler:", error);
             }
@@ -218,7 +218,7 @@ export function patchStreamIfNeeded<TChunk = unknown, TFinal = unknown>(
                 : new Error(String(rawError));
             if (options.onError) {
               try {
-                options.onError(error, chunks);
+                await options.onError(error, chunks);
               } catch (handlerError) {
                 debugLogger.error(
                   "Error in stream onError handler:",
