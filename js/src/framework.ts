@@ -85,6 +85,7 @@ async function waitForLogs3XactIngestion(args: {
     state,
     objectType,
     objectId,
+    rootSpanId,
     xactId,
     initialBackoffMs = ENSURE_SPANS_FLUSH_INITIAL_BACKOFF_MS,
     maxBackoffMs = ENSURE_SPANS_FLUSH_MAX_BACKOFF_MS,
@@ -95,21 +96,51 @@ async function waitForLogs3XactIngestion(args: {
 
   const startedAt = Date.now();
   let backoffMs = initialBackoffMs;
-  const targetXactId = BigInt(xactId);
-  const brainstoreObjectId = `${objectType}:${objectId}`;
 
   while (true) {
-    const result = await state.apiConn().get_json(
-      `brainstore/backfill/status/object/${brainstoreObjectId}`,
+    const response = await state.apiConn().post(
+      "btql",
+      {
+        query: {
+          select: [
+            {
+              alias: "id",
+              expr: { op: "ident", name: ["id"] },
+            },
+          ],
+          from: {
+            op: "function",
+            name: {
+              op: "ident",
+              name: [objectType],
+            },
+            args: [{ op: "literal", value: objectId }],
+          },
+          filter: {
+            op: "and",
+            children: [
+              {
+                op: "eq",
+                left: { op: "ident", name: ["root_span_id"] },
+                right: { op: "literal", value: rootSpanId },
+              },
+              {
+                op: "eq",
+                left: { op: "ident", name: ["_xact_id"] },
+                right: { op: "literal", value: xactId },
+              },
+            ],
+          },
+          limit: 1,
+        },
+        use_columnstore: false,
+        brainstore_realtime: true,
+        query_source: `sdk_ensure_spans_flushed_de15bf`,
+      },
+      { headers: { "Accept-Encoding": "gzip" } },
     );
-
-    if (
-      result &&
-      typeof result === "object" &&
-      "last_processed_xact_id" in result &&
-      typeof result.last_processed_xact_id === "string" &&
-      BigInt(result.last_processed_xact_id) >= targetXactId
-    ) {
+    const result = await response.json();
+    if (Array.isArray(result.data) && result.data.length > 0) {
       return;
     }
 
