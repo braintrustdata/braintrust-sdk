@@ -34,16 +34,6 @@ async function collectOneAndReturn(stream) {
   }
 }
 
-async function awaitMaybeWithResponse(request) {
-  if (typeof request?.withResponse === "function") {
-    return await request.withResponse();
-  }
-
-  return {
-    data: await request,
-  };
-}
-
 export async function runOpenAIInstrumentationScenario(options) {
   const baseClient = new options.OpenAI({
     apiKey: process.env.OPENAI_API_KEY,
@@ -68,14 +58,14 @@ export async function runOpenAIInstrumentationScenario(options) {
         "openai-chat-with-response-operation",
         "chat-with-response",
         async () => {
-          await awaitMaybeWithResponse(
-            client.chat.completions.create({
+          await client.chat.completions
+            .create({
               model: OPENAI_MODEL,
               messages: [{ role: "user", content: "Reply with exactly FOUR." }],
               max_tokens: 8,
               temperature: 0,
-            }),
-          );
+            })
+            .withResponse();
         },
       );
 
@@ -97,8 +87,8 @@ export async function runOpenAIInstrumentationScenario(options) {
         "openai-stream-with-response-operation",
         "stream-with-response",
         async () => {
-          const { data: chatStream } = await awaitMaybeWithResponse(
-            client.chat.completions.create({
+          const { data: chatStream } = await client.chat.completions
+            .create({
               model: OPENAI_MODEL,
               messages: [
                 {
@@ -112,8 +102,8 @@ export async function runOpenAIInstrumentationScenario(options) {
               stream_options: {
                 include_usage: true,
               },
-            }),
-          );
+            })
+            .withResponse();
           await collectAsync(chatStream);
         },
       );
@@ -210,13 +200,13 @@ export async function runOpenAIInstrumentationScenario(options) {
         "openai-responses-with-response-operation",
         "responses-with-response",
         async () => {
-          await awaitMaybeWithResponse(
-            client.responses.create({
+          await client.responses
+            .create({
               model: OPENAI_MODEL,
               input: "What is 2 + 2? Reply with just the number.",
               max_output_tokens: 16,
-            }),
-          );
+            })
+            .withResponse();
         },
       );
 
@@ -224,14 +214,14 @@ export async function runOpenAIInstrumentationScenario(options) {
         "openai-responses-create-stream-operation",
         "responses-create-stream",
         async () => {
-          const { data: responseStream } = await awaitMaybeWithResponse(
-            client.responses.create({
+          const { data: responseStream } = await client.responses
+            .create({
               model: OPENAI_MODEL,
               input: "Reply with exactly RESPONSE STREAM.",
               max_output_tokens: 16,
               stream: true,
-            }),
-          );
+            })
+            .withResponse();
           await collectAsync(responseStream);
         },
       );

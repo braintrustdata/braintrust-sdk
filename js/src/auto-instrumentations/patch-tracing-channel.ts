@@ -77,7 +77,7 @@ export function patchTracingChannel(
       // established by bindStore — required for span context to propagate across awaits.
       // PATCHED: inside the callback, use duck-type thenable check instead of
       // PromisePrototypeThen, which triggers Symbol.species and breaks Promise subclasses
-      // like Anthropic's APIPromise that have non-standard constructors.
+      // like Anthropic's and Openai's APIPromise that have non-standard constructors.
       return start.runStores(context, () => {
         try {
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -89,7 +89,13 @@ export function patchTracingChannel(
             (typeof result === "object" || typeof result === "function") &&
             typeof result.then === "function"
           ) {
-            if (result.constructor === Promise) {
+            if (
+              // We only want to return the Promise chain when it's an actual
+              // promise and also doesn't have any additional fields
+              result.constructor === Promise &&
+              Object.getOwnPropertyNames(result).length === 0 &&
+              Object.getOwnPropertySymbols(result).length === 0
+            ) {
               return result.then(
                 (res) => {
                   publishResolved(res);
