@@ -1,4 +1,5 @@
 import { Span, traced, Attachment, startSpan } from "../logger";
+import { debugLogger } from "../debug-logger";
 import { SpanTypeAttribute } from "../../util/index";
 import { getCurrentUnixTimestamp } from "../util";
 import type {
@@ -33,12 +34,12 @@ export function wrapGoogleGenAI<T extends Record<string, any>>(
   googleGenAI: T,
 ): T {
   if (!googleGenAI || typeof googleGenAI !== "object") {
-    console.warn("Invalid Google GenAI module. Not wrapping.");
+    debugLogger.warn("Invalid Google GenAI module. Not wrapping.");
     return googleGenAI;
   }
 
   if (!("GoogleGenAI" in googleGenAI)) {
-    console.warn(
+    debugLogger.warn(
       "GoogleGenAI class not found in module. Not wrapping. Make sure you're passing the module itself (import * as googleGenAI from '@google/genai').",
     );
     return googleGenAI;

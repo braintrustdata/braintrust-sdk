@@ -21,6 +21,7 @@ export function normalizeDebugLoggingArgs<
 
   if (!hasWarnedAboutVerboseFlag) {
     hasWarnedAboutVerboseFlag = true;
+    // eslint-disable-next-line no-restricted-properties -- CLI deprecation warnings are intentionally user-facing.
     console.warn(warning(VERBOSE_DEPRECATION_MESSAGE));
   }
 

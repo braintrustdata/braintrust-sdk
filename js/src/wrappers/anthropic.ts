@@ -1,4 +1,5 @@
 import { Attachment, Span, startSpan } from "../logger";
+import { debugLogger } from "../debug-logger";
 import { isObject, SpanTypeAttribute } from "../../util/index";
 import { filterFrom, getCurrentUnixTimestamp } from "../util";
 import { finalizeAnthropicTokens } from "./anthropic-tokens-util";
@@ -40,7 +41,7 @@ export function wrapAnthropic<T extends object>(anthropic: T): T {
     // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
     return anthropicProxy(au as AnthropicClient) as unknown as T;
   } else {
-    console.warn("Unsupported Anthropic library. Not wrapping.");
+    debugLogger.warn("Unsupported Anthropic library. Not wrapping.");
     return anthropic;
   }
 }

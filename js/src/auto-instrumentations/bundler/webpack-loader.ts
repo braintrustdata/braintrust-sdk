@@ -160,6 +160,7 @@ function codeTransformerLoader(
     const result = transformer.transform(code, moduleType);
     callback(null, result.code, result.map ?? undefined);
   } catch (error) {
+    // eslint-disable-next-line no-restricted-properties -- bundler warnings are intentionally user-facing.
     console.warn(
       `[code-transformer-loader] Error transforming ${resourcePath}:`,
       error,

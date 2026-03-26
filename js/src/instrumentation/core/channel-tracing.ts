@@ -3,6 +3,7 @@ import type {
   IsoChannelHandlers,
   IsoTracingChannel,
 } from "../../isomorph";
+import { debugLogger } from "../../debug-logger";
 import {
   _internalGetGlobalState,
   BRAINTRUST_CURRENT_SPAN_STORE,
@@ -198,7 +199,7 @@ function startSpanForEvent<
       metadata: mergeInputMetadata(metadata, spanInfoMetadata),
     });
   } catch (error) {
-    console.error(`Error extracting input for ${channelName}:`, error);
+    debugLogger.error(`Error extracting input for ${channelName}:`, error);
   }
 
   return { span, startTime };
@@ -351,7 +352,7 @@ export function traceAsyncChannel<TChannel extends AnyAsyncChannel>(
           metrics,
         });
       } catch (error) {
-        console.error(`Error extracting output for ${channelName}:`, error);
+        debugLogger.error(`Error extracting output for ${channelName}:`, error);
       } finally {
         span.end();
         states.delete(event as object);
@@ -460,7 +461,7 @@ export function traceStreamingChannel<TChannel extends AnyAsyncChannel>(
                 metrics,
               });
             } catch (error) {
-              console.error(
+              debugLogger.error(
                 `Error extracting output for ${channelName}:`,
                 error,
               );
@@ -516,7 +517,7 @@ export function traceStreamingChannel<TChannel extends AnyAsyncChannel>(
           metrics,
         });
       } catch (error) {
-        console.error(`Error extracting output for ${channelName}:`, error);
+        debugLogger.error(`Error extracting output for ${channelName}:`, error);
       } finally {
         span.end();
         states.delete(event as object);
@@ -610,7 +611,7 @@ export function traceSyncStreamChannel<TChannel extends AnySyncStreamChannel>(
             });
           }
         } catch (error) {
-          console.error(
+          debugLogger.error(
             `Error extracting chatCompletion for ${channelName}:`,
             error,
           );
@@ -637,7 +638,10 @@ export function traceSyncStreamChannel<TChannel extends AnySyncStreamChannel>(
             span.log(extracted);
           }
         } catch (error) {
-          console.error(`Error extracting event for ${channelName}:`, error);
+          debugLogger.error(
+            `Error extracting event for ${channelName}:`,
+            error,
+          );
         }
       });
 

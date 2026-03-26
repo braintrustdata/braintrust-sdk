@@ -1,6 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 import { startSpan, traced, withCurrent, Attachment } from "../../logger";
+import { debugLogger } from "../../debug-logger";
 import { SpanTypeAttribute } from "../../../util";
 import {
   convertDataToBlob,
@@ -1725,7 +1726,7 @@ const processContentPart = (part: any): any => {
       }
     }
   } catch (error) {
-    console.warn("Error processing content part:", error);
+    debugLogger.warn("Error processing content part:", error);
   }
 
   return part;
@@ -1787,7 +1788,7 @@ const convertImageToAttachment = (
       return image;
     }
   } catch (error) {
-    console.warn("Error converting image to attachment:", error);
+    debugLogger.warn("Error converting image to attachment:", error);
   }
 
   return null;
@@ -1835,7 +1836,7 @@ const convertDataToAttachment = (
       });
     }
   } catch (error) {
-    console.warn("Error converting data to attachment:", error);
+    debugLogger.warn("Error converting data to attachment:", error);
   }
 
   return null;
@@ -1898,7 +1899,7 @@ const processOutputAttachments = async (output: AISDKResult) => {
   try {
     return await doProcessOutputAttachments(output);
   } catch (error) {
-    console.error("Error processing output attachments:", error);
+    debugLogger.error("Error processing output attachments:", error);
     return output;
   }
 };
@@ -1955,7 +1956,7 @@ const convertFileToAttachment = (
     }
 
     if (!blob) {
-      console.warn(`Failed to convert file at index ${index} to Blob`);
+      debugLogger.warn(`Failed to convert file at index ${index} to Blob`);
       return file; // Return original if conversion fails
     }
 
@@ -1965,7 +1966,7 @@ const convertFileToAttachment = (
       contentType: mediaType,
     });
   } catch (error) {
-    console.warn(`Error processing file at index ${index}:`, error);
+    debugLogger.warn(`Error processing file at index ${index}:`, error);
     return file; // Return original on error
   }
 };

@@ -1,6 +1,7 @@
 import { z } from "zod/v3";
 import Ajv from "ajv";
 import { Prompt, RemoteEvalParameters } from "./logger";
+import { debugLogger } from "./debug-logger";
 import {
   promptDefinitionWithToolsSchema,
   promptDefinitionToPromptData,
@@ -124,7 +125,7 @@ function validateParametersWithZod<
           return [name, schemaCasted.parse(value)];
         }
       } catch (e) {
-        console.error("Error validating parameter", name, e);
+        debugLogger.error("Error validating parameter", name, e);
         throw Error(
           `Invalid parameter '${name}': ${e instanceof Error ? e.message : String(e)}`,
         );

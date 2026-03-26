@@ -1,4 +1,5 @@
 import { startSpan, traced, withCurrent } from "../../logger";
+import { debugLogger } from "../../debug-logger";
 import { getCurrentUnixTimestamp } from "../../util";
 import { SpanTypeAttribute } from "../../../util/index";
 import {
@@ -893,7 +894,7 @@ export function wrapClaudeAgentSDK<T extends object>(sdk: T): T {
     // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
     return claudeAgentSDKProxy(s as ClaudeAgentSDKModule) as unknown as T;
   } else {
-    console.warn("Unsupported Claude Agent SDK. Not wrapping.");
+    debugLogger.warn("Unsupported Claude Agent SDK. Not wrapping.");
     return sdk;
   }
 }

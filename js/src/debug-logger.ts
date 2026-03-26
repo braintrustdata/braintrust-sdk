@@ -34,6 +34,7 @@ function warnInvalidEnvValue(value: string) {
     return;
   }
   hasWarnedAboutInvalidEnvValue = true;
+  // eslint-disable-next-line no-restricted-properties -- debugLogger intentionally wraps console primitives.
   console.warn(
     PREFIX,
     `Invalid BRAINTRUST_DEBUG_LOG_LEVEL value "${value}". Expected "error", "warn", "info", or "debug".`,
@@ -135,12 +136,16 @@ function emit(
   }
 
   if (method === "info") {
+    // eslint-disable-next-line no-restricted-properties -- debugLogger intentionally wraps console primitives.
     console.log(PREFIX, ...args);
   } else if (method === "debug") {
+    // eslint-disable-next-line no-restricted-properties -- debugLogger intentionally wraps console primitives.
     console.debug(PREFIX, ...args);
   } else if (method === "warn") {
+    // eslint-disable-next-line no-restricted-properties -- debugLogger intentionally wraps console primitives.
     console.warn(PREFIX, ...args);
   } else {
+    // eslint-disable-next-line no-restricted-properties -- debugLogger intentionally wraps console primitives.
     console.error(PREFIX, ...args);
   }
 }

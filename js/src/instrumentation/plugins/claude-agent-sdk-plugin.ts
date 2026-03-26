@@ -2,6 +2,7 @@ import { BasePlugin } from "../core";
 import type { ChannelMessage } from "../core/channel-definitions";
 import { isAsyncIterable, patchStreamIfNeeded } from "../core/stream-patcher";
 import type { IsoChannelHandlers } from "../../isomorph";
+import { debugLogger } from "../../debug-logger";
 import { startSpan } from "../../logger";
 import type { Span } from "../../logger";
 import { SpanTypeAttribute } from "../../../util/index";
@@ -756,7 +757,10 @@ export class ClaudeAgentSDKPlugin extends BasePlugin {
             metadata: filterSerializableOptions(options),
           });
         } catch (error) {
-          console.error("Error extracting input for Claude Agent SDK:", error);
+          debugLogger.error(
+            "Error extracting input for Claude Agent SDK:",
+            error,
+          );
         }
 
         const activeToolSpans = new Map<string, Span>();
@@ -828,7 +832,7 @@ export class ClaudeAgentSDKPlugin extends BasePlugin {
               state.processing = state.processing
                 .then(() => handleStreamMessage(state, message))
                 .catch((error) => {
-                  console.error(
+                  debugLogger.error(
                     "Error processing Claude Agent SDK stream chunk:",
                     error,
                   );
@@ -861,7 +865,10 @@ export class ClaudeAgentSDKPlugin extends BasePlugin {
         try {
           state.span.log({ output: eventResult });
         } catch (error) {
-          console.error("Error extracting output for Claude Agent SDK:", error);
+          debugLogger.error(
+            "Error extracting output for Claude Agent SDK:",
+            error,
+          );
         } finally {
           state.span.end();
           spans.delete(event);
