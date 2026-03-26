@@ -2,8 +2,6 @@
 
 Smoke test infrastructure verifying SDK installation across different runtimes and integrations.
 
-Deno coverage now lives in `e2e/scenarios/deno-node/` and `e2e/scenarios/deno-browser/`.
-
 ## Quick Reference
 
 ```bash
@@ -359,4 +357,3 @@ See `shared/README.md` for complete test suite documentation, individual test fu
 - **Node.js + OTEL:** `scenarios/otel-v1/`
 - **Cloudflare Workers:** `scenarios/cloudflare-worker-*/`
 - **Multi-test:** `scenarios/cloudflare-vite-hono/`
-- **Next.js:** `scenarios/nextjs-instrumentation/`
