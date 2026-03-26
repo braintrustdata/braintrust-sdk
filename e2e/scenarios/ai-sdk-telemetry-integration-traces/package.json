@@ -1,0 +1,9 @@
+{
+  "name": "@braintrust/e2e-ai-sdk-telemetry-integration-traces",
+  "private": true,
+  "dependencies": {
+    "ai": "npm:ai@7.0.0-beta.42",
+    "@ai-sdk/openai": "npm:@ai-sdk/openai@4.0.0-beta.16",
+    "zod": "3.25.76"
+  }
+}

@@ -166,9 +166,11 @@ export {
 export {
   wrapAISDK,
   wrapAgentClass,
+  BraintrustTelemetryIntegration,
   BraintrustMiddleware,
   wrapAISDKModel,
 } from "./wrappers/ai-sdk";
+export type { BraintrustTelemetryMetadata } from "./wrappers/ai-sdk";
 export { wrapAnthropic } from "./wrappers/anthropic";
 export { wrapMastraAgent } from "./wrappers/mastra";
 export { wrapClaudeAgentSDK } from "./wrappers/claude-agent-sdk/claude-agent-sdk";
