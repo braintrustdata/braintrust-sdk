@@ -834,15 +834,14 @@ export class ClaudeAgentSDKPlugin extends BasePlugin {
                   );
                 });
             },
-            onComplete: () => {
-              void state.processing
+            onComplete: () =>
+              state.processing
                 .then(() => finalizeQuerySpan(state))
                 .finally(() => {
                   spans.delete(event);
-                });
-            },
-            onError: (error: Error) => {
-              void state.processing
+                }),
+            onError: (error: Error) =>
+              state.processing
                 .then(() => {
                   state.span.log({
                     error: error.message,
@@ -851,8 +850,7 @@ export class ClaudeAgentSDKPlugin extends BasePlugin {
                 .then(() => finalizeQuerySpan(state))
                 .finally(() => {
                   spans.delete(event);
-                });
-            },
+                }),
           });
 
           return;
