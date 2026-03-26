@@ -135,9 +135,7 @@ function wrapEmbeddingsGenerate(
   return (request, options) =>
     openRouterChannels.embeddingsGenerate.tracePromise(
       () => generate(request, options),
-      { arguments: [request] } as Parameters<
-        typeof openRouterChannels.embeddingsGenerate.tracePromise
-      >[1],
+      { arguments: [request] },
     );
 }
 
@@ -150,9 +148,7 @@ function wrapResponsesSend(
   return (request, options) =>
     openRouterChannels.betaResponsesSend.tracePromise(
       () => send(request, options),
-      { arguments: [request] } as Parameters<
-        typeof openRouterChannels.betaResponsesSend.tracePromise
-      >[1],
+      { arguments: [request] },
     );
 }
 

@@ -1,21 +1,10 @@
 import { anthropicChannels } from "../instrumentation/plugins/anthropic-channels";
+import { TypedApplyProxy } from "../typed-instrumentation-helpers";
 import type {
-  AnthropicAPIPromise,
   AnthropicBeta,
   AnthropicClient,
-  AnthropicCreateParams,
-  AnthropicMessage,
   AnthropicMessages,
-  AnthropicStreamEvent,
 } from "../vendor-sdk-types/anthropic";
-
-type AnthropicResult = AnthropicMessage | AsyncIterable<AnthropicStreamEvent>;
-type AnthropicChannel =
-  | typeof anthropicChannels.messagesCreate
-  | typeof anthropicChannels.betaMessagesCreate;
-type AnthropicStartContext<TChannel extends AnthropicChannel> = Parameters<
-  TChannel["tracePromise"]
->[1];
 
 /**
  * Wrap an `Anthropic` object (created with `new Anthropic(...)`) so calls emit
@@ -78,7 +67,9 @@ function betaProxy(beta: AnthropicBeta): AnthropicBeta {
 
 function messagesProxy(
   messages: AnthropicMessages,
-  channel: AnthropicChannel,
+  channel:
+    | typeof anthropicChannels.messagesCreate
+    | typeof anthropicChannels.betaMessagesCreate,
 ): AnthropicMessages {
   return new Proxy(messages, {
     get(target, prop, receiver) {
@@ -95,74 +86,18 @@ function messagesProxy(
 
 function createProxy(
   create: AnthropicMessages["create"],
-  channel: AnthropicChannel,
+  channel:
+    | typeof anthropicChannels.messagesCreate
+    | typeof anthropicChannels.betaMessagesCreate,
 ) {
-  return new Proxy(create, {
+  return new TypedApplyProxy(create, {
     apply(target, thisArg, argArray) {
-      if (argArray.length === 0) {
-        return Reflect.apply(target, thisArg, argArray);
-      }
-
-      const params = argArray[0] as AnthropicCreateParams;
-      const context = {
-        arguments: [params],
-      } as AnthropicStartContext<typeof channel>;
-
-      return traceAnthropicPromise(
-        channel,
-        () =>
-          Reflect.apply(
-            target,
-            thisArg,
-            argArray,
-          ) as AnthropicAPIPromise<AnthropicResult>,
-        context,
+      return channel.tracePromise(
+        () => Reflect.apply(target, thisArg, argArray),
+        {
+          arguments: argArray,
+        },
       );
     },
-  });
-}
-
-function traceAnthropicPromise<TChannel extends AnthropicChannel>(
-  channel: TChannel,
-  createPromise: () => AnthropicAPIPromise<AnthropicResult>,
-  context: AnthropicStartContext<TChannel>,
-): AnthropicAPIPromise<AnthropicResult> {
-  const tracingChannel = channel.tracingChannel();
-  const start = tracingChannel.start;
-  const end = tracingChannel.end;
-  const asyncStart = tracingChannel.asyncStart;
-  const asyncEnd = tracingChannel.asyncEnd;
-  const error = tracingChannel.error;
-
-  if (!start || !end) {
-    return createPromise();
-  }
-
-  return start.runStores(context, () => {
-    start.publish(context);
-
-    try {
-      const result = createPromise();
-      end.publish(context);
-
-      void result.then(
-        (resolved) => {
-          (context as { result?: AnthropicResult }).result = resolved;
-          asyncStart?.publish(context);
-          asyncEnd?.publish(context);
-        },
-        (rejected) => {
-          (context as { error?: unknown }).error = rejected;
-          error?.publish(context);
-        },
-      );
-
-      return result;
-    } catch (rejected) {
-      (context as { error?: unknown }).error = rejected;
-      error?.publish(context);
-      end.publish(context);
-      throw rejected;
-    }
   });
 }
