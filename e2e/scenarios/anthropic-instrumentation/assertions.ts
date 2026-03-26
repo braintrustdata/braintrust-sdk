@@ -330,6 +330,31 @@ export function defineAnthropicInstrumentationAssertions(options: {
       ).toBe("string");
     });
 
+    test(
+      "captures trace for client.messages.create().withResponse()",
+      testConfig,
+      () => {
+        const root = findLatestSpan(events, ROOT_NAME);
+        const operation = findLatestSpan(
+          events,
+          "anthropic-create-with-response-operation",
+        );
+        const span = findAnthropicSpan(events, operation?.span.id, [
+          "anthropic.messages.create",
+        ]);
+
+        expect(operation).toBeDefined();
+        expect(span).toBeDefined();
+        expect(operation?.span.parentIds).toEqual([root?.span.id ?? ""]);
+        expect(span?.row.metadata).toMatchObject({
+          provider: "anthropic",
+        });
+        expect(
+          typeof (span?.row.metadata as { model?: unknown } | undefined)?.model,
+        ).toBe("string");
+      },
+    );
+
     test("captures trace for sending an attachment", testConfig, () => {
       const root = findLatestSpan(events, ROOT_NAME);
       const operation = findLatestSpan(
