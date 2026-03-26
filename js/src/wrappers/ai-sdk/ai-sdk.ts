@@ -227,6 +227,7 @@ const wrapAgentStream = (
   const defaultName = `${instance.constructor.name}.stream`;
   return (params: AISDKCallParams & SpanInfo) =>
     makeStreamWrapper(
+      aiSDKChannels.agentStream,
       aiSDKChannels.streamTextSync,
       defaultName,
       stream.bind(instance),
@@ -301,7 +302,12 @@ const wrapGenerateObject = (
 };
 
 const makeStreamWrapper = (
-  channel:
+  asyncChannel:
+    | typeof aiSDKChannels.streamText
+    | typeof aiSDKChannels.streamObject
+    | typeof aiSDKChannels.agentStream
+    | typeof aiSDKChannels.toolLoopAgentStream,
+  syncChannel:
     | typeof aiSDKChannels.streamTextSync
     | typeof aiSDKChannels.streamObjectSync,
   name: string,
@@ -313,22 +319,29 @@ const makeStreamWrapper = (
   } = {},
   options: WrapAISDKOptions = {},
 ) => {
+  const useAsyncChannel = isAsyncFunction(streamText);
+
   const wrapper = function (allParams: AISDKCallParams & SpanInfo) {
     const { span_info, ...params } = allParams;
     const tracedParams = { ...params };
-
-    return channel.traceSync(
-      () => streamText(tracedParams),
-      createAISDKChannelContext(tracedParams, {
-        aiSDK: contextOptions.aiSDK,
-        denyOutputPaths: options.denyOutputPaths,
-        self: contextOptions.self,
-        span_info: mergeSpanInfo(span_info, {
-          name,
-          spanType: contextOptions.spanType,
-        }),
+    const context = createAISDKChannelContext(tracedParams, {
+      aiSDK: contextOptions.aiSDK,
+      denyOutputPaths: options.denyOutputPaths,
+      self: contextOptions.self,
+      span_info: mergeSpanInfo(span_info, {
+        name,
+        spanType: contextOptions.spanType,
       }),
-    );
+    });
+
+    if (useAsyncChannel) {
+      return asyncChannel.tracePromise(
+        () => Promise.resolve(streamText(tracedParams)),
+        context,
+      );
+    }
+
+    return syncChannel.traceSync(() => streamText(tracedParams), context);
   };
   Object.defineProperty(wrapper, "name", { value: name, writable: false });
   return wrapper;
@@ -340,6 +353,7 @@ const wrapStreamText = (
   aiSDK?: AISDK,
 ) => {
   return makeStreamWrapper(
+    aiSDKChannels.streamText,
     aiSDKChannels.streamTextSync,
     "streamText",
     streamText,
@@ -354,6 +368,7 @@ const wrapStreamObject = (
   aiSDK?: AISDK,
 ) => {
   return makeStreamWrapper(
+    aiSDKChannels.streamObject,
     aiSDKChannels.streamObjectSync,
     "streamObject",
     streamObject,
@@ -391,6 +406,10 @@ function mergeSpanInfo(
         }
       : {}),
   };
+}
+
+function isAsyncFunction(fn: unknown): boolean {
+  return typeof fn === "function" && fn.constructor?.name === "AsyncFunction";
 }
 
 function createAISDKChannelContext(
@@ -440,7 +459,7 @@ function parseGatewayModelString(modelString: string): {
  *
  * @param model - Either a model object (with modelId and optional provider) or a model string
  */
-export function serializeModelWithProvider(model: AISDKModel | undefined): {
+function serializeModelWithProvider(model: AISDKModel | undefined): {
   model: string | undefined;
   provider?: string;
 } {
@@ -464,7 +483,7 @@ export function serializeModelWithProvider(model: AISDKModel | undefined): {
  * Extracts gateway routing info from the result's providerMetadata.
  * This provides the actual resolved provider and model used by the gateway.
  */
-export function extractGatewayRoutingInfo(result: AISDKResult): {
+function extractGatewayRoutingInfo(result: AISDKResult): {
   model?: string;
   provider?: string;
 } | null {
@@ -758,7 +777,7 @@ export const processInputAttachmentsSync = (
  * For v5: responseFormat is a plain object - captured fully
  * For v6: responseFormat is a Promise - awaited and captured fully
  */
-export const processInputAttachments = async (
+const processInputAttachments = async (
   input: AISDKCallParams,
 ): Promise<AISDKCallParams> => {
   if (!input) return input;
@@ -1072,7 +1091,7 @@ const extractGetterValues = (
   return getterValues;
 };
 
-export const processOutput = async (
+const processOutput = async (
   output: AISDKResult,
   denyOutputPaths?: string[],
 ) => {

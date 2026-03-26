@@ -463,7 +463,9 @@ function prepareAISDKChildTracing(
   const patchedTools = new WeakSet<object>();
   let modelWrapped = false;
 
-  const patchModel = (model: AISDKModel | undefined): void => {
+  const patchModel = (
+    model: AISDKModel | undefined,
+  ): AISDKModel | undefined => {
     const resolvedModel = resolveAISDKModel(model, aiSDK);
     if (
       !resolvedModel ||
@@ -472,7 +474,7 @@ function prepareAISDKChildTracing(
       patchedModels.has(resolvedModel) ||
       (resolvedModel as { [AUTO_PATCHED_MODEL]?: boolean })[AUTO_PATCHED_MODEL]
     ) {
-      return;
+      return resolvedModel;
     }
 
     patchedModels.add(resolvedModel);
@@ -534,6 +536,8 @@ function prepareAISDKChildTracing(
         const result = await withCurrent(span, () =>
           Reflect.apply(originalDoStream, resolvedModel, [options]),
         );
+        const streamStartTime = getCurrentUnixTimestamp();
+        let firstChunkTime: number | undefined;
         const output: Record<string, unknown> = {};
         let text = "";
         let reasoning = "";
@@ -542,6 +546,10 @@ function prepareAISDKChildTracing(
 
         const transformStream = new TransformStream({
           transform(chunk: AISDKModelStreamChunk, controller) {
+            if (firstChunkTime === undefined) {
+              firstChunkTime = getCurrentUnixTimestamp();
+            }
+
             switch (chunk.type) {
               case "text-delta":
                 text += extractTextDelta(chunk);
@@ -589,12 +597,20 @@ function prepareAISDKChildTracing(
                   output.object = object;
                 }
 
+                const metrics = extractTokenMetrics(output as AISDKResult);
+                if (firstChunkTime !== undefined) {
+                  metrics.time_to_first_token = Math.max(
+                    firstChunkTime - streamStartTime,
+                    1e-6,
+                  );
+                }
+
                 span.log({
                   output: processAISDKOutput(
                     output as AISDKResult,
                     denyOutputPaths,
                   ),
-                  metrics: extractTokenMetrics(output as AISDKResult),
+                  metrics,
                   ...buildResolvedMetadataPayload(output as AISDKResult),
                 });
                 span.end();
@@ -620,6 +636,8 @@ function prepareAISDKChildTracing(
         AUTO_PATCHED_MODEL
       ];
     });
+
+    return resolvedModel;
   };
 
   const patchTool = (tool: AISDKTool, name: string): void => {
@@ -711,7 +729,14 @@ function prepareAISDKChildTracing(
   };
 
   if (params && typeof params === "object") {
-    patchModel(params.model);
+    const patchedParamModel = patchModel(params.model);
+    if (
+      typeof params.model === "string" &&
+      patchedParamModel &&
+      typeof patchedParamModel === "object"
+    ) {
+      params.model = patchedParamModel;
+    }
     patchTools(params.tools);
   }
 
@@ -722,12 +747,26 @@ function prepareAISDKChildTracing(
     };
 
     if (selfRecord.model !== undefined) {
-      patchModel(selfRecord.model);
+      const patchedSelfModel = patchModel(selfRecord.model);
+      if (
+        typeof selfRecord.model === "string" &&
+        patchedSelfModel &&
+        typeof patchedSelfModel === "object"
+      ) {
+        selfRecord.model = patchedSelfModel;
+      }
     }
 
     if (selfRecord.settings && typeof selfRecord.settings === "object") {
       if (selfRecord.settings.model !== undefined) {
-        patchModel(selfRecord.settings.model);
+        const patchedSettingsModel = patchModel(selfRecord.settings.model);
+        if (
+          typeof selfRecord.settings.model === "string" &&
+          patchedSettingsModel &&
+          typeof patchedSettingsModel === "object"
+        ) {
+          selfRecord.settings.model = patchedSettingsModel;
+        }
       }
       if (selfRecord.settings.tools !== undefined) {
         patchTools(selfRecord.settings.tools);
@@ -770,51 +809,107 @@ function patchAISDKStreamingResult(args: {
   }
 
   const resultRecord = result as Record<string, unknown>;
-  if (!isReadableStreamLike(resultRecord.baseStream)) {
+  if (isReadableStreamLike(resultRecord.baseStream)) {
+    let firstChunkTime: number | undefined;
+
+    const wrappedBaseStream = resultRecord.baseStream.pipeThrough(
+      new TransformStream({
+        transform(chunk, controller) {
+          if (firstChunkTime === undefined) {
+            firstChunkTime = getCurrentUnixTimestamp();
+          }
+          controller.enqueue(chunk);
+        },
+        async flush() {
+          const metrics = extractTopLevelAISDKMetrics(result, endEvent);
+          if (
+            metrics.time_to_first_token === undefined &&
+            firstChunkTime !== undefined
+          ) {
+            metrics.time_to_first_token = firstChunkTime - startTime;
+          }
+
+          const output = await processAISDKStreamingOutput(
+            result,
+            resolveDenyOutputPaths(endEvent, defaultDenyOutputPaths),
+          );
+          const metadata = buildResolvedMetadataPayload(result).metadata;
+
+          span.log({
+            output,
+            ...(metadata ? { metadata } : {}),
+            metrics,
+          });
+
+          finalizeAISDKChildTracing(endEvent);
+          span.end();
+        },
+      }),
+    );
+
+    Object.defineProperty(resultRecord, "baseStream", {
+      configurable: true,
+      enumerable: true,
+      value: wrappedBaseStream,
+      writable: true,
+    });
+
+    return true;
+  }
+
+  const streamField = findAsyncIterableField(resultRecord, [
+    "partialObjectStream",
+    "textStream",
+    "fullStream",
+    "stream",
+  ]);
+  if (!streamField) {
     return false;
   }
 
   let firstChunkTime: number | undefined;
+  const wrappedStream = createPatchedAsyncIterable(streamField.stream, {
+    onChunk: () => {
+      if (firstChunkTime === undefined) {
+        firstChunkTime = getCurrentUnixTimestamp();
+      }
+    },
+    onComplete: async () => {
+      const metrics = extractTopLevelAISDKMetrics(result, endEvent);
+      if (
+        metrics.time_to_first_token === undefined &&
+        firstChunkTime !== undefined
+      ) {
+        metrics.time_to_first_token = firstChunkTime - startTime;
+      }
 
-  const wrappedBaseStream = resultRecord.baseStream.pipeThrough(
-    new TransformStream({
-      transform(chunk, controller) {
-        if (firstChunkTime === undefined) {
-          firstChunkTime = getCurrentUnixTimestamp();
-        }
-        controller.enqueue(chunk);
-      },
-      async flush() {
-        const metrics = extractTopLevelAISDKMetrics(result, endEvent);
-        if (
-          metrics.time_to_first_token === undefined &&
-          firstChunkTime !== undefined
-        ) {
-          metrics.time_to_first_token = firstChunkTime - startTime;
-        }
+      const output = await processAISDKStreamingOutput(
+        result,
+        resolveDenyOutputPaths(endEvent, defaultDenyOutputPaths),
+      );
+      const metadata = buildResolvedMetadataPayload(result).metadata;
 
-        const output = await processAISDKStreamingOutput(
-          result,
-          resolveDenyOutputPaths(endEvent, defaultDenyOutputPaths),
-        );
-        const metadata = buildResolvedMetadataPayload(result).metadata;
+      span.log({
+        output,
+        ...(metadata ? { metadata } : {}),
+        metrics,
+      });
+      finalizeAISDKChildTracing(endEvent);
+      span.end();
+    },
+    onError: (error) => {
+      span.log({
+        error: error.message,
+      });
+      finalizeAISDKChildTracing(endEvent);
+      span.end();
+    },
+  });
 
-        span.log({
-          output,
-          ...(metadata ? { metadata } : {}),
-          metrics,
-        });
-
-        finalizeAISDKChildTracing(endEvent);
-        span.end();
-      },
-    }),
-  );
-
-  Object.defineProperty(resultRecord, "baseStream", {
+  Object.defineProperty(resultRecord, streamField.field, {
     configurable: true,
     enumerable: true,
-    value: wrappedBaseStream,
+    value: wrappedStream,
     writable: true,
   });
 
@@ -831,6 +926,60 @@ function isReadableStreamLike(value: unknown): value is {
   );
 }
 
+function isAsyncIterableLike(value: unknown): value is AsyncIterable<unknown> {
+  return (
+    value != null &&
+    typeof value === "object" &&
+    typeof (value as { [Symbol.asyncIterator]?: unknown })[
+      Symbol.asyncIterator
+    ] === "function"
+  );
+}
+
+function findAsyncIterableField(
+  result: Record<string, unknown>,
+  candidateFields: string[],
+): { field: string; stream: AsyncIterable<unknown> } | null {
+  for (const field of candidateFields) {
+    try {
+      const stream = result[field];
+      if (isAsyncIterableLike(stream)) {
+        return { field, stream };
+      }
+    } catch {
+      // Ignore getter failures.
+    }
+  }
+
+  return null;
+}
+
+function createPatchedAsyncIterable(
+  stream: AsyncIterable<unknown>,
+  hooks: {
+    onChunk: (chunk: unknown) => void;
+    onComplete: () => Promise<void>;
+    onError: (error: Error) => void;
+  },
+): AsyncIterable<unknown> {
+  return {
+    async *[Symbol.asyncIterator]() {
+      try {
+        for await (const chunk of stream) {
+          hooks.onChunk(chunk);
+          yield chunk;
+        }
+        await hooks.onComplete();
+      } catch (error) {
+        hooks.onError(
+          error instanceof Error ? error : new Error(String(error)),
+        );
+        throw error;
+      }
+    },
+  };
+}
+
 async function processAISDKStreamingOutput(
   result: AISDKResult,
   denyOutputPaths: string[],
@@ -844,8 +993,11 @@ async function processAISDKStreamingOutput(
   const outputRecord = output as Record<string, unknown>;
 
   try {
-    if ("text" in result && typeof result.text === "string") {
-      outputRecord.text = result.text;
+    if ("text" in result) {
+      const resolvedText = await Promise.resolve(result.text);
+      if (typeof resolvedText === "string") {
+        outputRecord.text = resolvedText;
+      }
     }
   } catch {
     // Ignore getter failures
@@ -856,6 +1008,17 @@ async function processAISDKStreamingOutput(
       const resolvedObject = await Promise.resolve(result.object);
       if (resolvedObject !== undefined) {
         outputRecord.object = resolvedObject;
+      }
+    }
+  } catch {
+    // Ignore getter/promise failures
+  }
+
+  try {
+    if ("finishReason" in result) {
+      const resolvedFinishReason = await Promise.resolve(result.finishReason);
+      if (resolvedFinishReason !== undefined) {
+        outputRecord.finishReason = resolvedFinishReason;
       }
     }
   } catch {
@@ -892,7 +1055,14 @@ function buildResolvedMetadataPayload(result: AISDKResult): {
   if (gatewayInfo?.model) {
     metadata.model = gatewayInfo.model;
   }
-  if (result.finishReason !== undefined) {
+  if (
+    result.finishReason !== undefined &&
+    !(
+      result.finishReason &&
+      typeof result.finishReason === "object" &&
+      typeof (result.finishReason as { then?: unknown }).then === "function"
+    )
+  ) {
     metadata.finish_reason = result.finishReason;
   }
 
@@ -1080,6 +1250,7 @@ function extractGetterValues(
   const getterValues: Record<string, unknown> = {};
 
   const getterNames = [
+    "content",
     "text",
     "object",
     "finishReason",
