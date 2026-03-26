@@ -1,8 +1,8 @@
-import { spawn, spawnSync } from "node:child_process";
+import { spawn } from "node:child_process";
 import net from "node:net";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { runMain } from "../../helpers/scenario-runtime";
+import { runMain, runNodeSubprocess } from "../../helpers/scenario-runtime";
 
 const scenarioDir = path.dirname(fileURLToPath(import.meta.url));
 const nextBin = new URL("./node_modules/next/dist/bin/next", import.meta.url)
@@ -97,18 +97,12 @@ async function main() {
   const baseUrl = `http://127.0.0.1:${port}`;
   const env = withScenarioEnv(process.env);
 
-  const buildResult = spawnSync(process.execPath, [nextBin, "build"], {
+  await runNodeSubprocess({
+    args: [nextBin, "build"],
     cwd: scenarioDir,
-    stdio: "pipe",
     env,
-    encoding: "utf8",
+    timeoutMs: 180_000,
   });
-
-  if (buildResult.status !== 0) {
-    throw new Error(
-      `next build failed with exit code ${buildResult.status}\nSTDOUT:\n${buildResult.stdout}\nSTDERR:\n${buildResult.stderr}`,
-    );
-  }
 
   const server = spawn(
     process.execPath,

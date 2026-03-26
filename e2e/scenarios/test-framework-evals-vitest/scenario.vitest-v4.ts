@@ -1,5 +1,5 @@
 import { createRequire } from "node:module";
-import { existsSync } from "node:fs";
+import { promises as fs } from "node:fs";
 import * as path from "node:path";
 import { resolveScenarioDir } from "../../helpers/scenario-harness";
 import {
@@ -12,22 +12,24 @@ const require = createRequire(import.meta.url);
 const scenarioDir = resolveScenarioDir(import.meta.url);
 
 // Resolve the vitest.mjs bin by finding the package root via the main entry.
-function findVitestBin(packageName: string): string {
+async function findVitestBin(packageName: string): Promise<string> {
   const entryPath = require.resolve(packageName);
   let dir = path.dirname(entryPath);
   while (dir !== path.dirname(dir)) {
     const candidate = path.join(dir, "vitest.mjs");
-    if (existsSync(candidate)) {
+    try {
+      await fs.access(candidate);
       return candidate;
+    } catch {
+      // Keep walking upward.
     }
     dir = path.dirname(dir);
   }
   throw new Error(`Could not find vitest.mjs for ${packageName}`);
 }
 
-const vitestCliPath = findVitestBin("vitest-v4");
-
 async function main() {
+  const vitestCliPath = await findVitestBin("vitest-v4");
   const testRunId = getTestRunId();
 
   await runNodeSubprocess({
