@@ -8,7 +8,7 @@ import {
 import { withScenarioHarness } from "../../helpers/scenario-harness";
 import { findChildSpans, findLatestSpan } from "../../helpers/trace-selectors";
 import { summarizeWrapperContract } from "../../helpers/wrapper-contract";
-import { E2E_TAGS } from "../../helpers/tags";
+
 import {
   CHAT_MODEL,
   EMBEDDING_MODEL,
@@ -130,7 +130,6 @@ export function defineOpenRouterTraceAssertions(options: {
     "span-events.json",
   );
   const testConfig = {
-    tags: [E2E_TAGS.externalApi],
     timeout: options.timeoutMs,
   };
 

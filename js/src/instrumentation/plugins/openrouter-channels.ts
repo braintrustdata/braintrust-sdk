@@ -23,7 +23,7 @@ export const openRouterChannels = defineChannels("@openrouter/sdk", {
   chatSend: channel<
     [OpenRouterChatCreateParams],
     OpenRouterChatResult,
-    Record<string, never>,
+    Record<string, unknown>,
     OpenRouterChatCompletionChunk
   >({
     channelName: "chat.send",
@@ -41,7 +41,7 @@ export const openRouterChannels = defineChannels("@openrouter/sdk", {
   betaResponsesSend: channel<
     [OpenRouterResponsesCreateParams],
     OpenRouterResponsesResult,
-    Record<string, never>,
+    Record<string, unknown>,
     OpenRouterResponseStreamEvent
   >({
     channelName: "beta.responses.send",
@@ -51,6 +51,18 @@ export const openRouterChannels = defineChannels("@openrouter/sdk", {
   callModel: channel<[OpenRouterCallModelRequest], unknown>({
     channelName: "callModel",
     kind: "sync-stream",
+  }),
+
+  callModelTurn: channel<
+    [OpenRouterCallModelRequest | undefined],
+    unknown,
+    {
+      step: number;
+      stepType: "initial" | "continue";
+    }
+  >({
+    channelName: "callModel.turn",
+    kind: "async",
   }),
 
   toolExecute: channel<

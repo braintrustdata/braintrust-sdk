@@ -8,12 +8,6 @@ export default defineConfig({
     setupFiles: ["./vitest.setup.ts"],
     tags: [
       {
-        name: E2E_TAGS.externalApi,
-        description:
-          "Tests that call real external APIs and require provider credentials.",
-        retry: 1,
-      },
-      {
         name: E2E_TAGS.hermetic,
         description:
           "Tests that run entirely against local mocks and fixtures.",

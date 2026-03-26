@@ -2,7 +2,7 @@ import { BasePlugin } from "../core";
 import { traceStreamingChannel, unsubscribeAll } from "../core/channel-tracing";
 import { Attachment } from "../../logger";
 import { SpanTypeAttribute, isObject } from "../../../util/index";
-import { getCurrentUnixTimestamp } from "../../util";
+import { filterFrom, getCurrentUnixTimestamp } from "../../util";
 import { finalizeAnthropicTokens } from "../../wrappers/anthropic-tokens-util";
 import { anthropicChannels } from "./anthropic-channels";
 import type {
@@ -410,20 +410,4 @@ function coalesceInput(
     input.push({ role: "system", content: system });
   }
   return input;
-}
-
-/**
- * Filter out specified fields from an object.
- */
-function filterFrom(
-  obj: Record<string, unknown>,
-  fieldsToRemove: string[],
-): Record<string, unknown> {
-  const result: Record<string, unknown> = {};
-  for (const [key, value] of Object.entries(obj)) {
-    if (!fieldsToRemove.includes(key)) {
-      result[key] = value;
-    }
-  }
-  return result;
 }
