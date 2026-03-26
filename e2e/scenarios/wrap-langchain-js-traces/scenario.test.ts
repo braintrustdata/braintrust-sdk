@@ -8,7 +8,7 @@ import {
   resolveScenarioDir,
   withScenarioHarness,
 } from "../../helpers/scenario-harness";
-import { E2E_TAGS } from "../../helpers/tags";
+
 import { assertLangchainTraces } from "./assertions";
 
 const scenarioDir = await prepareScenarioDir({
@@ -19,7 +19,6 @@ const TIMEOUT_MS = 90_000;
 test(
   "wrap-langchain-js-traces captures invoke, chain, stream, and tool spans via BraintrustCallbackHandler",
   {
-    tags: [E2E_TAGS.externalApi],
     timeout: TIMEOUT_MS,
   },
   async () => {

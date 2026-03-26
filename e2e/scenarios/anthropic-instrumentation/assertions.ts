@@ -8,7 +8,7 @@ import {
 import { withScenarioHarness } from "../../helpers/scenario-harness";
 import { findChildSpans, findLatestSpan } from "../../helpers/trace-selectors";
 import { summarizeWrapperContract } from "../../helpers/wrapper-contract";
-import { E2E_TAGS } from "../../helpers/tags";
+
 import { ROOT_NAME, SCENARIO_NAME } from "./scenario.impl.mjs";
 
 type RunAnthropicScenario = (harness: {
@@ -289,7 +289,6 @@ export function defineAnthropicInstrumentationAssertions(options: {
     `${options.snapshotName}.log-payloads.json`,
   );
   const testConfig = {
-    tags: [E2E_TAGS.externalApi],
     timeout: options.timeoutMs,
   };
 
