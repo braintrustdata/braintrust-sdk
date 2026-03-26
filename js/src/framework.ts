@@ -83,6 +83,7 @@ async function waitForLogs3XactIngestion(args: {
 }): Promise<void> {
   const {
     state,
+    objectType,
     objectId,
     xactId,
     initialBackoffMs = ENSURE_SPANS_FLUSH_INITIAL_BACKOFF_MS,
@@ -95,10 +96,11 @@ async function waitForLogs3XactIngestion(args: {
   const startedAt = Date.now();
   let backoffMs = initialBackoffMs;
   const targetXactId = BigInt(xactId);
+  const brainstoreObjectId = `${objectType}:${objectId}`;
 
   while (true) {
     const result = await state.apiConn().get_json(
-      `brainstore/backfill/status/object/${objectId}`,
+      `brainstore/backfill/status/object/${brainstoreObjectId}`,
     );
 
     if (
