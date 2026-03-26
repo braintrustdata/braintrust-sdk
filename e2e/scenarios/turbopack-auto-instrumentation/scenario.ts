@@ -1,7 +1,8 @@
-import { spawn, spawnSync } from "node:child_process";
+import { spawn } from "node:child_process";
 import http from "node:http";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { runMain, runNodeSubprocess } from "../../helpers/scenario-runtime";
 
 const scenarioDir = path.dirname(fileURLToPath(import.meta.url));
 const PORT = 3999;
@@ -11,27 +12,14 @@ const PORT = 3999;
 const nextBin = new URL("./node_modules/next/dist/bin/next", import.meta.url)
   .pathname;
 
-// Run Next.js build (Turbopack is the default bundler in Next.js 16)
-const buildResult = spawnSync(process.execPath, [nextBin, "build"], {
-  cwd: scenarioDir,
-  stdio: "inherit",
-  env: { ...process.env, NEXT_TELEMETRY_DISABLED: "1" },
-});
-
-if (buildResult.status !== 0) {
-  throw new Error(`next build failed with exit code ${buildResult.status}`);
+function withScenarioEnv(
+  env: NodeJS.ProcessEnv = process.env,
+): NodeJS.ProcessEnv {
+  return {
+    ...env,
+    NEXT_TELEMETRY_DISABLED: "1",
+  };
 }
-
-// Start the Next.js server
-const server = spawn(
-  process.execPath,
-  [nextBin, "start", "--port", String(PORT)],
-  {
-    cwd: scenarioDir,
-    stdio: "inherit",
-    env: { ...process.env, NEXT_TELEMETRY_DISABLED: "1" },
-  },
-);
 
 function httpGet(url: string): Promise<{ status: number; body: string }> {
   return new Promise((resolve, reject) => {
@@ -60,8 +48,27 @@ async function waitForServer(timeoutMs = 30_000): Promise<void> {
 }
 
 // Top-level await is not supported in CJS output, so use an explicit async
-// function and propagate failures via process.exit.
+// function and run it through the shared scenario wrapper.
 async function main() {
+  const env = withScenarioEnv(process.env);
+  await runNodeSubprocess({
+    args: [nextBin, "build"],
+    cwd: scenarioDir,
+    env,
+    timeoutMs: 180_000,
+  });
+
+  // Start the Next.js server
+  const server = spawn(
+    process.execPath,
+    [nextBin, "start", "--port", String(PORT)],
+    {
+      cwd: scenarioDir,
+      stdio: "inherit",
+      env,
+    },
+  );
+
   try {
     await waitForServer();
 
@@ -82,7 +89,4 @@ async function main() {
   }
 }
 
-main().catch((err) => {
-  console.error(err);
-  process.exit(1);
-});
+runMain(main);
