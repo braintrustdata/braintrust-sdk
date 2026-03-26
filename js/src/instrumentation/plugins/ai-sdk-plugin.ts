@@ -7,11 +7,12 @@ import {
 import { SpanTypeAttribute } from "../../../util/index";
 import { getCurrentUnixTimestamp } from "../../util";
 import { type Span, withCurrent } from "../../logger";
-import { processInputAttachments } from "../../wrappers/attachment-utils";
+import { processInputAttachmentsSync } from "../../wrappers/ai-sdk/ai-sdk";
 import { normalizeAISDKLoggedOutput } from "../../wrappers/ai-sdk/normalize-logged-output";
 import { serializeAISDKToolsForLogging } from "../../wrappers/ai-sdk/tool-serialization";
 import { aiSDKChannels } from "./ai-sdk-channels";
 import type {
+  AISDK,
   AISDKCallParams,
   AISDKLanguageModel,
   AISDKModel,
@@ -101,7 +102,10 @@ export class AISDKPlugin extends BasePlugin {
           prepareAISDKInput(params, event, span, denyOutputPaths),
         extractOutput: (result, endEvent) => {
           finalizeAISDKChildTracing(endEvent as { [key: string]: unknown });
-          return processAISDKOutput(result, denyOutputPaths);
+          return processAISDKOutput(
+            result,
+            resolveDenyOutputPaths(endEvent, denyOutputPaths),
+          );
         },
         extractMetrics: (result, _startTime, endEvent) =>
           extractTopLevelAISDKMetrics(result, endEvent),
@@ -116,13 +120,17 @@ export class AISDKPlugin extends BasePlugin {
         type: SpanTypeAttribute.LLM,
         extractInput: ([params], event, span) =>
           prepareAISDKInput(params, event, span, denyOutputPaths),
-        extractOutput: (result) => processAISDKOutput(result, denyOutputPaths),
+        extractOutput: (result, endEvent) =>
+          processAISDKOutput(
+            result,
+            resolveDenyOutputPaths(endEvent, denyOutputPaths),
+          ),
         extractMetrics: (result, startTime, endEvent) =>
           extractTopLevelAISDKMetrics(result, endEvent, startTime),
         aggregateChunks: aggregateAISDKChunks,
         patchResult: ({ endEvent, result, span, startTime }) =>
           patchAISDKStreamingResult({
-            denyOutputPaths,
+            defaultDenyOutputPaths: denyOutputPaths,
             endEvent,
             result,
             span,
@@ -140,7 +148,7 @@ export class AISDKPlugin extends BasePlugin {
           prepareAISDKInput(params, event, span, denyOutputPaths),
         patchResult: ({ endEvent, result, span, startTime }) =>
           patchAISDKStreamingResult({
-            denyOutputPaths,
+            defaultDenyOutputPaths: denyOutputPaths,
             endEvent,
             result,
             span,
@@ -158,7 +166,10 @@ export class AISDKPlugin extends BasePlugin {
           prepareAISDKInput(params, event, span, denyOutputPaths),
         extractOutput: (result, endEvent) => {
           finalizeAISDKChildTracing(endEvent as { [key: string]: unknown });
-          return processAISDKOutput(result, denyOutputPaths);
+          return processAISDKOutput(
+            result,
+            resolveDenyOutputPaths(endEvent, denyOutputPaths),
+          );
         },
         extractMetrics: (result, _startTime, endEvent) =>
           extractTopLevelAISDKMetrics(result, endEvent),
@@ -173,13 +184,17 @@ export class AISDKPlugin extends BasePlugin {
         type: SpanTypeAttribute.LLM,
         extractInput: ([params], event, span) =>
           prepareAISDKInput(params, event, span, denyOutputPaths),
-        extractOutput: (result) => processAISDKOutput(result, denyOutputPaths),
+        extractOutput: (result, endEvent) =>
+          processAISDKOutput(
+            result,
+            resolveDenyOutputPaths(endEvent, denyOutputPaths),
+          ),
         extractMetrics: (result, startTime, endEvent) =>
           extractTopLevelAISDKMetrics(result, endEvent, startTime),
         aggregateChunks: aggregateAISDKChunks,
         patchResult: ({ endEvent, result, span, startTime }) =>
           patchAISDKStreamingResult({
-            denyOutputPaths,
+            defaultDenyOutputPaths: denyOutputPaths,
             endEvent,
             result,
             span,
@@ -197,7 +212,7 @@ export class AISDKPlugin extends BasePlugin {
           prepareAISDKInput(params, event, span, denyOutputPaths),
         patchResult: ({ endEvent, result, span, startTime }) =>
           patchAISDKStreamingResult({
-            denyOutputPaths,
+            defaultDenyOutputPaths: denyOutputPaths,
             endEvent,
             result,
             span,
@@ -215,7 +230,10 @@ export class AISDKPlugin extends BasePlugin {
           prepareAISDKInput(params, event, span, denyOutputPaths),
         extractOutput: (result, endEvent) => {
           finalizeAISDKChildTracing(endEvent as { [key: string]: unknown });
-          return processAISDKOutput(result, denyOutputPaths);
+          return processAISDKOutput(
+            result,
+            resolveDenyOutputPaths(endEvent, denyOutputPaths),
+          );
         },
         extractMetrics: (result, _startTime, endEvent) =>
           extractTopLevelAISDKMetrics(result, endEvent),
@@ -230,13 +248,17 @@ export class AISDKPlugin extends BasePlugin {
         type: SpanTypeAttribute.LLM,
         extractInput: ([params], event, span) =>
           prepareAISDKInput(params, event, span, denyOutputPaths),
-        extractOutput: (result) => processAISDKOutput(result, denyOutputPaths),
+        extractOutput: (result, endEvent) =>
+          processAISDKOutput(
+            result,
+            resolveDenyOutputPaths(endEvent, denyOutputPaths),
+          ),
         extractMetrics: (result, startTime, endEvent) =>
           extractTopLevelAISDKMetrics(result, endEvent, startTime),
         aggregateChunks: aggregateAISDKChunks,
         patchResult: ({ endEvent, result, span, startTime }) =>
           patchAISDKStreamingResult({
-            denyOutputPaths,
+            defaultDenyOutputPaths: denyOutputPaths,
             endEvent,
             result,
             span,
@@ -254,7 +276,10 @@ export class AISDKPlugin extends BasePlugin {
           prepareAISDKInput(params, event, span, denyOutputPaths),
         extractOutput: (result, endEvent) => {
           finalizeAISDKChildTracing(endEvent as { [key: string]: unknown });
-          return processAISDKOutput(result, denyOutputPaths);
+          return processAISDKOutput(
+            result,
+            resolveDenyOutputPaths(endEvent, denyOutputPaths),
+          );
         },
         extractMetrics: (result, _startTime, endEvent) =>
           extractTopLevelAISDKMetrics(result, endEvent),
@@ -269,13 +294,17 @@ export class AISDKPlugin extends BasePlugin {
         type: SpanTypeAttribute.LLM,
         extractInput: ([params], event, span) =>
           prepareAISDKInput(params, event, span, denyOutputPaths),
-        extractOutput: (result) => processAISDKOutput(result, denyOutputPaths),
+        extractOutput: (result, endEvent) =>
+          processAISDKOutput(
+            result,
+            resolveDenyOutputPaths(endEvent, denyOutputPaths),
+          ),
         extractMetrics: (result, startTime, endEvent) =>
           extractTopLevelAISDKMetrics(result, endEvent, startTime),
         aggregateChunks: aggregateAISDKChunks,
         patchResult: ({ endEvent, result, span, startTime }) =>
           patchAISDKStreamingResult({
-            denyOutputPaths,
+            defaultDenyOutputPaths: denyOutputPaths,
             endEvent,
             result,
             span,
@@ -286,41 +315,61 @@ export class AISDKPlugin extends BasePlugin {
   }
 }
 
+function resolveDenyOutputPaths(
+  event: { denyOutputPaths?: string[] } | undefined,
+  defaultDenyOutputPaths: string[],
+): string[] {
+  return event?.denyOutputPaths ?? defaultDenyOutputPaths;
+}
+
 /**
  * Process AI SDK input parameters, converting attachments as needed.
  */
-function processAISDKInput(params: AISDKCallParams): unknown {
-  if (!params) return params;
-
-  // Use the attachment processing from the manual wrapper, but keep tool
-  // definitions in metadata to match the OpenAI wrapper convention.
-  const input = processInputAttachments(params);
-  if (!input || typeof input !== "object" || Array.isArray(input)) {
-    return input;
-  }
-
-  const { tools: _tools, ...rest } = input as Record<string, unknown>;
-  return rest;
+function processAISDKInput(
+  params: AISDKCallParams,
+): ReturnType<typeof processInputAttachmentsSync> {
+  return processInputAttachmentsSync(params);
 }
 
 function prepareAISDKInput(
   params: AISDKCallParams,
-  event: { self?: unknown; [key: string]: unknown },
+  event: {
+    aiSDK?: AISDK;
+    denyOutputPaths?: string[];
+    self?: unknown;
+    [key: string]: unknown;
+  },
   span: Span,
-  denyOutputPaths: string[],
+  defaultDenyOutputPaths: string[],
 ): {
   input: unknown;
   metadata: Record<string, unknown>;
 } {
-  const input = processAISDKInput(params);
+  const { input, outputPromise } = processAISDKInput(params);
+  if (outputPromise && input && typeof input === "object") {
+    outputPromise
+      .then((resolvedData) => {
+        span.log({
+          input: {
+            ...(input as Record<string, unknown>),
+            ...resolvedData,
+          },
+        });
+      })
+      .catch(() => {
+        // Use the placeholder response_format if async resolution fails.
+      });
+  }
+
   const metadata = extractMetadataFromParams(params, event.self);
   const childTracing = prepareAISDKChildTracing(
     params,
     event.self,
     span,
-    denyOutputPaths,
+    defaultDenyOutputPaths,
+    event.aiSDK,
   );
-  event.__braintrust_ai_sdk_model_wrapped = childTracing.modelWrapped;
+  event.modelWrapped = childTracing.modelWrapped;
   if (childTracing.cleanup) {
     event.__braintrust_ai_sdk_cleanup = childTracing.cleanup;
   }
@@ -348,7 +397,10 @@ function extractTopLevelAISDKMetrics(
 }
 
 function hasModelChildTracing(event?: { [key: string]: unknown }): boolean {
-  return event?.__braintrust_ai_sdk_model_wrapped === true;
+  return (
+    event?.modelWrapped === true ||
+    event?.__braintrust_ai_sdk_model_wrapped === true
+  );
 }
 
 /**
@@ -401,6 +453,7 @@ function prepareAISDKChildTracing(
   self: unknown,
   parentSpan: Span,
   denyOutputPaths: string[],
+  aiSDK?: AISDK,
 ): {
   cleanup?: () => void;
   modelWrapped: boolean;
@@ -411,7 +464,7 @@ function prepareAISDKChildTracing(
   let modelWrapped = false;
 
   const patchModel = (model: AISDKModel | undefined): void => {
-    const resolvedModel = resolveAISDKModel(model);
+    const resolvedModel = resolveAISDKModel(model, aiSDK);
     if (
       !resolvedModel ||
       typeof resolvedModel !== "object" ||
@@ -456,7 +509,7 @@ function prepareAISDKChildTracing(
             type: SpanTypeAttribute.LLM,
           },
           event: {
-            input: processAISDKInput(options),
+            input: processAISDKInput(options).input,
             metadata: baseMetadata,
           },
         },
@@ -473,7 +526,7 @@ function prepareAISDKChildTracing(
             type: SpanTypeAttribute.LLM,
           },
           event: {
-            input: processAISDKInput(options),
+            input: processAISDKInput(options).input,
             metadata: baseMetadata,
           },
         });
@@ -704,13 +757,13 @@ function finalizeAISDKChildTracing(event?: { [key: string]: unknown }): void {
 }
 
 function patchAISDKStreamingResult(args: {
-  denyOutputPaths: string[];
-  endEvent: { [key: string]: unknown };
+  defaultDenyOutputPaths: string[];
+  endEvent: { denyOutputPaths?: string[]; [key: string]: unknown };
   result: AISDKResult;
   span: Span;
   startTime: number;
 }): boolean {
-  const { denyOutputPaths, endEvent, result, span, startTime } = args;
+  const { defaultDenyOutputPaths, endEvent, result, span, startTime } = args;
 
   if (!result || typeof result !== "object") {
     return false;
@@ -742,7 +795,7 @@ function patchAISDKStreamingResult(args: {
 
         const output = await processAISDKStreamingOutput(
           result,
-          denyOutputPaths,
+          resolveDenyOutputPaths(endEvent, defaultDenyOutputPaths),
         );
         const metadata = buildResolvedMetadataPayload(result).metadata;
 
@@ -848,6 +901,7 @@ function buildResolvedMetadataPayload(result: AISDKResult): {
 
 function resolveAISDKModel(
   model: AISDKModel | undefined,
+  aiSDK?: AISDK,
 ): AISDKModel | undefined {
   if (typeof model !== "string") {
     return model;
@@ -860,7 +914,9 @@ function resolveAISDKModel(
           languageModel?: (modelId: string) => AISDKLanguageModel;
         };
       }
-    ).AI_SDK_DEFAULT_PROVIDER ?? null;
+    ).AI_SDK_DEFAULT_PROVIDER ??
+    aiSDK?.gateway ??
+    null;
 
   if (provider && typeof provider.languageModel === "function") {
     return provider.languageModel(model);
