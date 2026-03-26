@@ -36,6 +36,7 @@ type GenerateContentStreamEvent =
   ChannelMessage<GenerateContentStreamChannel> & {
     googleGenAIInput?: Record<string, unknown>;
     googleGenAIMetadata?: Record<string, unknown>;
+    googleGenAIStartTime?: number;
   };
 
 type SpanState = {
@@ -184,12 +185,14 @@ export class GoogleGenAIPlugin extends BasePlugin {
         const params = event.arguments[0];
         streamEvent.googleGenAIInput = serializeInput(params);
         streamEvent.googleGenAIMetadata = extractMetadata(params);
+        streamEvent.googleGenAIStartTime = getCurrentUnixTimestamp();
       },
       asyncEnd: (event) => {
         const streamEvent = event as GenerateContentStreamEvent;
         patchGoogleGenAIStreamingResult({
           input: streamEvent.googleGenAIInput,
           metadata: streamEvent.googleGenAIMetadata,
+          startTime: streamEvent.googleGenAIStartTime,
           result: streamEvent.result,
         });
       },
@@ -277,9 +280,10 @@ function logErrorAndEndSpan<TChannel extends GenerateContentChannel>(
 function patchGoogleGenAIStreamingResult(args: {
   input: Record<string, unknown> | undefined;
   metadata: Record<string, unknown> | undefined;
+  startTime: number | undefined;
   result: unknown;
 }): boolean {
-  const { input, metadata, result } = args;
+  const { input, metadata, result, startTime } = args;
 
   if (
     !input ||
@@ -296,7 +300,7 @@ function patchGoogleGenAIStreamingResult(args: {
   let firstTokenTime: number | null = null;
   let finalized = false;
   let span: Span | null = null;
-  let startTime: number | null = null;
+  const requestStartTime = startTime ?? getCurrentUnixTimestamp();
 
   const ensureSpan = () => {
     if (!span) {
@@ -310,7 +314,6 @@ function patchGoogleGenAIStreamingResult(args: {
           metadata,
         },
       });
-      startTime = getCurrentUnixTimestamp();
     }
 
     return span;
@@ -420,11 +423,11 @@ function patchGoogleGenAIStreamingResult(args: {
             chunks.push(nextResult.value);
           }
 
-          if (nextResult.done && startTime !== null) {
+          if (nextResult.done) {
             finalize({
               result: aggregateGenerateContentChunks(
                 chunks,
-                startTime,
+                requestStartTime,
                 firstTokenTime,
               ),
             });
@@ -447,16 +450,13 @@ function patchGoogleGenAIStreamingResult(args: {
             ...returnArgs,
           )) as IteratorResult<GoogleGenAIGenerateContentResponse>;
         } finally {
-          if (startTime !== null) {
+          if (chunks.length > 0) {
             finalize({
-              result:
-                chunks.length > 0
-                  ? aggregateGenerateContentChunks(
-                      chunks,
-                      startTime,
-                      firstTokenTime,
-                    )
-                  : undefined,
+              result: aggregateGenerateContentChunks(
+                chunks,
+                requestStartTime,
+                firstTokenTime,
+              ),
             });
           } else {
             finalize({});

@@ -11,7 +11,7 @@ import {
   findChildSpans,
   findLatestSpan,
 } from "../../helpers/trace-selectors";
-import { E2E_TAGS } from "../../helpers/tags";
+
 import { summarizeWrapperContract } from "../../helpers/wrapper-contract";
 import { ROOT_NAME, SCENARIO_NAME } from "./scenario.impl.mjs";
 
@@ -206,7 +206,6 @@ export function defineClaudeAgentSDKInstrumentationAssertions(options: {
     `${options.snapshotName}.span-events.json`,
   );
   const testConfig = {
-    tags: [E2E_TAGS.externalApi],
     timeout: options.timeoutMs,
   };
 

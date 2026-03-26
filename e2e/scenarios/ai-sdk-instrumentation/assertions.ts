@@ -11,7 +11,7 @@ import {
   findChildSpans,
   findLatestSpan,
 } from "../../helpers/trace-selectors";
-import { E2E_TAGS } from "../../helpers/tags";
+
 import { ROOT_NAME, SCENARIO_NAME } from "./scenario.impl.mjs";
 
 type AgentSpanName = "Agent" | "ToolLoopAgent";
@@ -508,7 +508,6 @@ export function defineAISDKInstrumentationAssertions(options: {
     `${options.snapshotName}.log-payloads.json`,
   );
   const testConfig = {
-    tags: [E2E_TAGS.externalApi],
     timeout: options.timeoutMs,
   };
 

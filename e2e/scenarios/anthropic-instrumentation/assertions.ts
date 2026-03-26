@@ -8,7 +8,7 @@ import {
 import { withScenarioHarness } from "../../helpers/scenario-harness";
 import { findChildSpans, findLatestSpan } from "../../helpers/trace-selectors";
 import { summarizeWrapperContract } from "../../helpers/wrapper-contract";
-import { E2E_TAGS } from "../../helpers/tags";
+
 import { ROOT_NAME, SCENARIO_NAME } from "./scenario.impl.mjs";
 
 type RunAnthropicScenario = (harness: {
@@ -289,7 +289,6 @@ export function defineAnthropicInstrumentationAssertions(options: {
     `${options.snapshotName}.log-payloads.json`,
   );
   const testConfig = {
-    tags: [E2E_TAGS.externalApi],
     timeout: options.timeoutMs,
   };
 
@@ -329,6 +328,31 @@ export function defineAnthropicInstrumentationAssertions(options: {
         typeof (span?.row.metadata as { model?: unknown } | undefined)?.model,
       ).toBe("string");
     });
+
+    test(
+      "captures trace for client.messages.create().withResponse()",
+      testConfig,
+      () => {
+        const root = findLatestSpan(events, ROOT_NAME);
+        const operation = findLatestSpan(
+          events,
+          "anthropic-create-with-response-operation",
+        );
+        const span = findAnthropicSpan(events, operation?.span.id, [
+          "anthropic.messages.create",
+        ]);
+
+        expect(operation).toBeDefined();
+        expect(span).toBeDefined();
+        expect(operation?.span.parentIds).toEqual([root?.span.id ?? ""]);
+        expect(span?.row.metadata).toMatchObject({
+          provider: "anthropic",
+        });
+        expect(
+          typeof (span?.row.metadata as { model?: unknown } | undefined)?.model,
+        ).toBe("string");
+      },
+    );
 
     test("captures trace for sending an attachment", testConfig, () => {
       const root = findLatestSpan(events, ROOT_NAME);

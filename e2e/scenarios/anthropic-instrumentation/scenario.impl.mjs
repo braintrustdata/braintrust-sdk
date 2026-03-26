@@ -52,6 +52,27 @@ async function runAnthropicInstrumentationScenario(
       });
 
       await runOperation(
+        "anthropic-create-with-response-operation",
+        "create-with-response",
+        async () => {
+          const response = await client.messages
+            .create({
+              model: ANTHROPIC_MODEL,
+              max_tokens: 16,
+              temperature: 0,
+              messages: [
+                {
+                  role: "user",
+                  content: "Reply with exactly WITH_RESPONSE.",
+                },
+              ],
+            })
+            .withResponse();
+          void response.data;
+        },
+      );
+
+      await runOperation(
         "anthropic-attachment-operation",
         "attachment",
         async () => {
