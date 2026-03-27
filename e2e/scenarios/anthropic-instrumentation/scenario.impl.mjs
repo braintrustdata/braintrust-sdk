@@ -26,7 +26,11 @@ const WEATHER_TOOL = {
 
 async function runAnthropicInstrumentationScenario(
   Anthropic,
-  { decorateClient, useBetaMessages = true } = {},
+  {
+    decorateClient,
+    expectStreamWithResponse = true,
+    useBetaMessages = true,
+  } = {},
 ) {
   const imageBase64 = (
     await readFile(new URL("./test-image.png", import.meta.url))
@@ -131,7 +135,20 @@ async function runAnthropicInstrumentationScenario(
               },
             ],
           });
-          await stream.withResponse();
+
+          if (expectStreamWithResponse) {
+            if (typeof stream.withResponse !== "function") {
+              throw new Error(
+                "Expected messages.stream() to expose withResponse()",
+              );
+            }
+            await stream.withResponse();
+          } else if (typeof stream.withResponse === "function") {
+            throw new Error(
+              "Expected messages.stream() to not expose withResponse()",
+            );
+          }
+
           await collectAsync(stream);
         },
       );

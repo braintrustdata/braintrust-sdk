@@ -10,6 +10,15 @@
  * and in configureNode/configureBrowser for the bundler plugin path.
  */
 
+function isPlainNativePromiseWithoutHelpers(result: Promise<unknown>): boolean {
+  return (
+    result.constructor === Promise &&
+    Object.getPrototypeOf(result) === Promise.prototype &&
+    Object.getOwnPropertyNames(result).length === 0 &&
+    Object.getOwnPropertySymbols(result).length === 0
+  );
+}
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function patchTracingChannel(
   tracingChannelFn: (name: string) => any,
@@ -90,11 +99,10 @@ export function patchTracingChannel(
             typeof result.then === "function"
           ) {
             if (
-              // We only want to return the Promise chain when it's an actual
-              // promise and also doesn't have any additional fields
-              result.constructor === Promise &&
-              Object.getOwnPropertyNames(result).length === 0 &&
-              Object.getOwnPropertySymbols(result).length === 0
+              // Return the Promise chain only for plain native Promises.
+              // Promise subclasses and prototype-augmented Promises must be
+              // returned as-is so SDK helper methods stay intact.
+              isPlainNativePromiseWithoutHelpers(result)
             ) {
               return result.then(
                 (res) => {
