@@ -568,12 +568,13 @@ export function traceSyncStreamChannel<TChannel extends AnySyncStreamChannel>(
 
       const { span, startTime } = spanData;
       const endEvent = event as EndOf<TChannel>;
+      const result = endEvent.result;
 
       if (
         config.patchResult?.({
           channelName,
           endEvent,
-          result: endEvent.result,
+          result,
           span,
           startTime,
         })
@@ -581,7 +582,7 @@ export function traceSyncStreamChannel<TChannel extends AnySyncStreamChannel>(
         return;
       }
 
-      const stream = endEvent.result;
+      const stream = result;
 
       if (!isSyncStreamLike<ChunkOf<TChannel>>(stream)) {
         span.end();

@@ -1,16 +1,24 @@
 import { channel, defineChannels } from "../core/channel-definitions";
+import type { ChannelSpanInfo } from "../core/types";
 import type {
+  AISDK,
   AISDKCallParams,
   AISDKResult,
 } from "../../vendor-sdk-types/ai-sdk";
 
 type AISDKStreamResult = AISDKResult | AsyncIterable<unknown>;
+type AISDKChannelContext = {
+  aiSDK?: AISDK;
+  denyOutputPaths?: string[];
+  self?: unknown;
+  span_info?: ChannelSpanInfo;
+};
 
 export const aiSDKChannels = defineChannels("ai", {
   generateText: channel<
     [AISDKCallParams],
     AISDKStreamResult,
-    Record<string, never>,
+    AISDKChannelContext,
     unknown
   >({
     channelName: "generateText",
@@ -19,7 +27,7 @@ export const aiSDKChannels = defineChannels("ai", {
   streamText: channel<
     [AISDKCallParams],
     AISDKStreamResult,
-    Record<string, never>,
+    AISDKChannelContext,
     unknown
   >({
     channelName: "streamText",
@@ -28,7 +36,7 @@ export const aiSDKChannels = defineChannels("ai", {
   streamTextSync: channel<
     [AISDKCallParams],
     AISDKResult,
-    Record<string, never>,
+    AISDKChannelContext,
     unknown
   >({
     channelName: "streamText.sync",
@@ -37,7 +45,7 @@ export const aiSDKChannels = defineChannels("ai", {
   generateObject: channel<
     [AISDKCallParams],
     AISDKStreamResult,
-    Record<string, never>,
+    AISDKChannelContext,
     unknown
   >({
     channelName: "generateObject",
@@ -46,7 +54,7 @@ export const aiSDKChannels = defineChannels("ai", {
   streamObject: channel<
     [AISDKCallParams],
     AISDKStreamResult,
-    Record<string, never>,
+    AISDKChannelContext,
     unknown
   >({
     channelName: "streamObject",
@@ -55,7 +63,7 @@ export const aiSDKChannels = defineChannels("ai", {
   streamObjectSync: channel<
     [AISDKCallParams],
     AISDKResult,
-    Record<string, never>,
+    AISDKChannelContext,
     unknown
   >({
     channelName: "streamObject.sync",
@@ -64,7 +72,7 @@ export const aiSDKChannels = defineChannels("ai", {
   agentGenerate: channel<
     [AISDKCallParams],
     AISDKStreamResult,
-    Record<string, never>,
+    AISDKChannelContext,
     unknown
   >({
     channelName: "Agent.generate",
@@ -73,7 +81,7 @@ export const aiSDKChannels = defineChannels("ai", {
   agentStream: channel<
     [AISDKCallParams],
     AISDKStreamResult,
-    Record<string, never>,
+    AISDKChannelContext,
     unknown
   >({
     channelName: "Agent.stream",
@@ -82,7 +90,7 @@ export const aiSDKChannels = defineChannels("ai", {
   toolLoopAgentGenerate: channel<
     [AISDKCallParams],
     AISDKStreamResult,
-    Record<string, never>,
+    AISDKChannelContext,
     unknown
   >({
     channelName: "ToolLoopAgent.generate",
@@ -91,7 +99,7 @@ export const aiSDKChannels = defineChannels("ai", {
   toolLoopAgentStream: channel<
     [AISDKCallParams],
     AISDKStreamResult,
-    Record<string, never>,
+    AISDKChannelContext,
     unknown
   >({
     channelName: "ToolLoopAgent.stream",
