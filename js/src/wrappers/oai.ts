@@ -1,6 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import type { CompiledPrompt } from "../logger";
-import { debugLogger } from "../debug-logger";
 import {
   LEGACY_CACHED_HEADER,
   parseCachedHeader,
@@ -64,9 +63,7 @@ export function wrapOpenAI<T extends object>(openai: T): T {
     // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
     return wrapOpenAIv4(typedOpenAI) as T;
   } else {
-    debugLogger.warn(
-      "Unsupported OpenAI library (potentially v3). Not wrapping.",
-    );
+    console.warn("Unsupported OpenAI library (potentially v3). Not wrapping.");
     return openai;
   }
 }

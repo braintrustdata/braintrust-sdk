@@ -301,7 +301,6 @@ const iso: Common = {
   ) => new DefaultTracingChannel<M>(nameOrChannels),
   processOn: (_0, _1) => {},
   basename: (filepath: string) => filepath.split(/[\\/]/).pop() || filepath,
-  // eslint-disable-next-line no-restricted-properties -- iso.writeln intentionally maps to stdout.
   writeln: (text: string) => console.log(text),
 };
 export default iso;

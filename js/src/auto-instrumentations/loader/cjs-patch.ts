@@ -66,7 +66,6 @@ export class ModulePatch {
             const transformedCode = transformer.transform(content, "unknown");
             args[0] = transformedCode?.code;
           } catch (error) {
-            // eslint-disable-next-line no-restricted-properties -- loader warnings are intentionally user-facing.
             console.warn(`Error transforming module ${filename}:`, error);
           } finally {
             transformer.free();

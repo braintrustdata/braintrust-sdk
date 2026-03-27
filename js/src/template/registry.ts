@@ -1,4 +1,3 @@
-import { debugLogger } from "../debug-logger";
 import { mustachePlugin } from "./plugins/mustache";
 
 export type TemplateFormat = "mustache" | "nunjucks" | "none";
@@ -68,7 +67,7 @@ class TemplatePluginRegistry {
 
   register(plugin: TemplateRendererPlugin): void {
     if (this.plugins.has(plugin.name)) {
-      debugLogger.warn(
+      console.warn(
         `Template plugin '${plugin.name}' already registered, overwriting`,
       );
     }

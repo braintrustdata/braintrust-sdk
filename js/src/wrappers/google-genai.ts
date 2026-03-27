@@ -1,4 +1,3 @@
-import { debugLogger } from "../debug-logger";
 import { googleGenAIChannels } from "../instrumentation/plugins/google-genai-channels";
 import type {
   GoogleGenAIClient,
@@ -28,12 +27,12 @@ export function wrapGoogleGenAI<T extends Record<string, any>>(
   googleGenAI: T,
 ): T {
   if (!googleGenAI || typeof googleGenAI !== "object") {
-    debugLogger.warn("Invalid Google GenAI module. Not wrapping.");
+    console.warn("Invalid Google GenAI module. Not wrapping.");
     return googleGenAI;
   }
 
   if (!("GoogleGenAI" in googleGenAI)) {
-    debugLogger.warn(
+    console.warn(
       "GoogleGenAI class not found in module. Not wrapping. Make sure you're passing the module itself (import * as googleGenAI from '@google/genai').",
     );
     return googleGenAI;

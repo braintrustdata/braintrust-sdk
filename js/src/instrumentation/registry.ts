@@ -6,7 +6,6 @@
  */
 
 import { BraintrustPlugin } from "./braintrust-plugin";
-import { debugLogger } from "../debug-logger";
 import iso from "../isomorph";
 
 export interface InstrumentationConfig {
@@ -36,7 +35,7 @@ class PluginRegistry {
    */
   configure(config: InstrumentationConfig): void {
     if (this.enabled) {
-      debugLogger.warn(
+      console.warn(
         "Braintrust: Cannot configure instrumentation after it has been enabled. " +
           "Call configureInstrumentation() before importing any AI SDKs.",
       );

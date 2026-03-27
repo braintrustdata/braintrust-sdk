@@ -1,4 +1,3 @@
-import { debugLogger } from "../../debug-logger";
 import { claudeAgentSDKChannels } from "../../instrumentation/plugins/claude-agent-sdk-channels";
 import type {
   ClaudeAgentSDKModule,
@@ -25,7 +24,7 @@ export function wrapClaudeAgentSDK<T extends object>(sdk: T): T {
     return claudeAgentSDKProxy(s as ClaudeAgentSDKModule) as unknown as T;
   }
 
-  debugLogger.warn("Unsupported Claude Agent SDK. Not wrapping.");
+  console.warn("Unsupported Claude Agent SDK. Not wrapping.");
   return sdk;
 }
 

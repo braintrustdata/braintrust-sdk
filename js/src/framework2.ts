@@ -117,7 +117,6 @@ export class Project {
 
   async publish() {
     if (globalThis._lazy_load) {
-      // eslint-disable-next-line no-restricted-properties -- publish warnings are user-facing.
       console.warn("publish() is a no-op when running `braintrust push`.");
       return;
     }
@@ -125,7 +124,6 @@ export class Project {
     const projectMap = new ProjectNameIdMap();
     const functionDefinitions: FunctionEvent[] = [];
     if (this._publishableCodeFunctions.length > 0) {
-      // eslint-disable-next-line no-restricted-properties -- publish warnings are user-facing.
       console.warn(
         "Code functions cannot be published directly. Use `braintrust push` instead.",
       );

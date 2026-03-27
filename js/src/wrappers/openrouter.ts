@@ -1,5 +1,4 @@
 import { openRouterChannels } from "../instrumentation/plugins/openrouter-channels";
-import { debugLogger } from "../debug-logger";
 import type {
   OpenRouterBeta,
   OpenRouterCallModelRequest,
@@ -37,7 +36,7 @@ export function wrapOpenRouter<T>(openrouter: T): T {
     return openRouterProxy(or as OpenRouterClient) as T;
   }
 
-  debugLogger.warn("Unsupported OpenRouter library. Not wrapping.");
+  console.warn("Unsupported OpenRouter library. Not wrapping.");
   return openrouter;
 }
 

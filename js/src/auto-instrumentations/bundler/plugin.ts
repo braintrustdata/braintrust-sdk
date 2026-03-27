@@ -118,7 +118,6 @@ export const unplugin = createUnplugin<BundlerPluginOptions>((options = {}) => {
 
       // If no version found
       if (!moduleVersion) {
-        // eslint-disable-next-line no-restricted-properties -- bundler warnings are intentionally user-facing.
         console.warn(
           `No 'package.json' version found for module ${moduleName} at ${moduleDetails.basedir}. Skipping transformation.`,
         );
@@ -150,7 +149,6 @@ export const unplugin = createUnplugin<BundlerPluginOptions>((options = {}) => {
         };
       } catch (error) {
         // If transformation fails, warn and return original code
-        // eslint-disable-next-line no-restricted-properties -- bundler warnings are intentionally user-facing.
         console.warn(`Code transformation failed for ${id}: ${error}`);
         return null;
       }

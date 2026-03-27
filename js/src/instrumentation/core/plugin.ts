@@ -2,7 +2,6 @@ import iso from "../../isomorph";
 import type { IsoChannelHandlers } from "../../isomorph";
 import { isAsyncIterable, patchStreamIfNeeded } from "./stream-patcher";
 import type { StartEvent } from "./types";
-import { debugLogger } from "../../debug-logger";
 import { startSpan } from "../../logger";
 import type { Span } from "../../logger";
 import { getCurrentUnixTimestamp } from "../../util";
@@ -110,10 +109,7 @@ export abstract class BasePlugin {
             metadata: mergeInputMetadata(metadata, spanInfoMetadata),
           });
         } catch (error) {
-          debugLogger.error(
-            `Error extracting input for ${channelName}:`,
-            error,
-          );
+          console.error(`Error extracting input for ${channelName}:`, error);
         }
       },
 
@@ -136,10 +132,7 @@ export abstract class BasePlugin {
             metrics,
           });
         } catch (error) {
-          debugLogger.error(
-            `Error extracting output for ${channelName}:`,
-            error,
-          );
+          console.error(`Error extracting output for ${channelName}:`, error);
         } finally {
           span.end();
           spans.delete(event);
@@ -223,10 +216,7 @@ export abstract class BasePlugin {
             metadata: mergeInputMetadata(metadata, spanInfoMetadata),
           });
         } catch (error) {
-          debugLogger.error(
-            `Error extracting input for ${channelName}:`,
-            error,
-          );
+          console.error(`Error extracting input for ${channelName}:`, error);
         }
       },
 
@@ -289,7 +279,7 @@ export abstract class BasePlugin {
                   metrics,
                 });
               } catch (error) {
-                debugLogger.error(
+                console.error(
                   `Error extracting output for ${channelName}:`,
                   error,
                 );
@@ -325,10 +315,7 @@ export abstract class BasePlugin {
               metrics,
             });
           } catch (error) {
-            debugLogger.error(
-              `Error extracting output for ${channelName}:`,
-              error,
-            );
+            console.error(`Error extracting output for ${channelName}:`, error);
           } finally {
             span.end();
             spans.delete(event);
@@ -402,10 +389,7 @@ export abstract class BasePlugin {
             metadata: mergeInputMetadata(metadata, spanInfoMetadata),
           });
         } catch (error) {
-          debugLogger.error(
-            `Error extracting input for ${channelName}:`,
-            error,
-          );
+          console.error(`Error extracting input for ${channelName}:`, error);
         }
       },
 
@@ -446,7 +430,7 @@ export abstract class BasePlugin {
               output: completion.choices,
             });
           } catch (error) {
-            debugLogger.error(
+            console.error(
               `Error extracting chatCompletion for ${channelName}:`,
               error,
             );
@@ -471,7 +455,7 @@ export abstract class BasePlugin {
                 span.log(extracted);
               }
             } catch (error) {
-              debugLogger.error(
+              console.error(
                 `Error extracting event for ${channelName}:`,
                 error,
               );

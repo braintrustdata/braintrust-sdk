@@ -46,7 +46,6 @@ export async function pullCommand(args: PullArgs) {
         typeof rawFunc === "object" && rawFunc && "id" in rawFunc
           ? ` ${rawFunc.id}`
           : "";
-      // eslint-disable-next-line no-restricted-properties -- CLI pull warnings are intentionally user-facing.
       console.warn(
         warning(`Failed to parse function${id}: ${parsedFunc.error.message}`),
       );
@@ -61,10 +60,8 @@ export async function pullCommand(args: PullArgs) {
     projectNameToFunctions[projectName].push(func);
   }
 
-  // eslint-disable-next-line no-restricted-properties -- CLI pull output is intentionally user-facing.
   console.log("Found functions in the following projects:");
   for (const projectName of Object.keys(projectNameToFunctions)) {
-    // eslint-disable-next-line no-restricted-properties -- CLI pull output is intentionally user-facing.
     console.log(` * ${projectName}`);
   }
 
@@ -95,7 +92,6 @@ export async function pullCommand(args: PullArgs) {
     );
     if (args.force) {
       if (fileExists) {
-        // eslint-disable-next-line no-restricted-properties -- CLI pull warnings are intentionally user-facing.
         console.warn(
           warning(
             `Overwriting ${doubleQuote(projectFile)} because --force is set.`,
@@ -103,7 +99,6 @@ export async function pullCommand(args: PullArgs) {
         );
       }
     } else if (dirtyFiles.has(resolvedProjectFile)) {
-      // eslint-disable-next-line no-restricted-properties -- CLI pull warnings are intentionally user-facing.
       console.warn(
         warning(
           `Skipping project ${projectName} because ${doubleQuote(projectFile)} has uncommitted changes.`,
@@ -112,7 +107,6 @@ export async function pullCommand(args: PullArgs) {
       continue;
     } else if (fileExists) {
       if (!git) {
-        // eslint-disable-next-line no-restricted-properties -- CLI pull warnings are intentionally user-facing.
         console.warn(
           warning(
             `Project ${projectName} already exists in ${doubleQuote(projectFile)}. Skipping since this is not a git repository...`,
@@ -120,7 +114,6 @@ export async function pullCommand(args: PullArgs) {
         );
         continue;
       } else {
-        // eslint-disable-next-line no-restricted-properties -- CLI pull warnings are intentionally user-facing.
         console.warn(
           warning(
             `Project ${projectName} already exists in ${doubleQuote(projectFile)}. Overwriting...`,
@@ -137,7 +130,6 @@ export async function pullCommand(args: PullArgs) {
       hasSpecifiedFunction: !!args.slug || !!args.id,
     });
     await fs.writeFile(projectFile, projectFileContents || "");
-    // eslint-disable-next-line no-restricted-properties -- CLI pull output is intentionally user-facing.
     console.log(`Wrote ${projectName} to ${doubleQuote(projectFile)}`);
   }
 }
@@ -186,7 +178,6 @@ ${functionDefinitions.join("\n")}
       });
       return formatted;
     } catch (error) {
-      // eslint-disable-next-line no-restricted-properties -- CLI pull warnings are intentionally user-facing.
       console.warn(
         warning(
           `Failed to format with prettier (${error instanceof Error ? error.message : error}). Using unformatted output.`,
@@ -208,7 +199,6 @@ function makeFunctionDefinition({
 }): string | null {
   if (func.function_data.type !== "prompt") {
     if (hasSpecifiedFunction) {
-      // eslint-disable-next-line no-restricted-properties -- CLI pull warnings are intentionally user-facing.
       console.warn(
         warning(
           `Skipping function ${doubleQuote(func.name)} because it is not a prompt.`,
@@ -228,7 +218,6 @@ function makeFunctionDefinition({
   varNames[varName] = func.slug;
 
   if (!func.prompt_data || !func.prompt_data.prompt) {
-    // eslint-disable-next-line no-restricted-properties -- CLI pull warnings are intentionally user-facing.
     console.warn(
       warning(
         `Prompt ${doubleQuote(func.name)} has an invalid (empty) prompt definition.`,
@@ -251,7 +240,6 @@ function makeFunctionDefinition({
       : undefined;
 
   if (rawToolsParsed && !rawToolsParsed.success) {
-    // eslint-disable-next-line no-restricted-properties -- CLI pull warnings are intentionally user-facing.
     console.warn(
       warning(
         `Prompt ${doubleQuote(func.name)} has an invalid tools definition: ${rawToolsParsed.error.message}. Skipping...`,
@@ -360,7 +348,6 @@ async function getPrettierModule() {
 
         prettierModule = await importWithTimeout();
       } catch {
-        // eslint-disable-next-line no-restricted-properties -- CLI pull warnings are intentionally user-facing.
         console.warn(
           warning(
             "Failed to load prettier module. Will not use prettier to format output.",

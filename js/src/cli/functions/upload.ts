@@ -82,7 +82,6 @@ export async function uploadHandleBundles({
   setCurrent: boolean;
   defaultIfExists: IfExists;
 }) {
-  // eslint-disable-next-line no-restricted-properties -- CLI upload progress is intentionally user-facing.
   console.error(
     `Processing ${buildResults.length} ${pluralize("file", buildResults.length)}...`,
   );
@@ -277,7 +276,6 @@ export async function uploadHandleBundles({
   const numUploaded = uploadResults.length;
   const numFailed = uploadResults.filter((result) => !result).length;
 
-  // eslint-disable-next-line no-restricted-properties -- CLI upload progress is intentionally user-facing.
   console.error(
     `${numUploaded} ${pluralize("file", numUploaded)} uploaded ${
       numFailed > 0
@@ -346,14 +344,12 @@ async function uploadBundles({
       );
     } catch (e) {
       if (showDetailedErrors) {
-        // eslint-disable-next-line no-restricted-properties -- CLI upload errors are intentionally user-facing.
         console.error(e);
       }
       const msg =
         e instanceof FailedHTTPResponse
           ? `Unable to upload your code. ${e.status} (${e.text}): ${e.data}`
           : `Unable to upload your code. You most likely need to update the API: ${e}`;
-      // eslint-disable-next-line no-restricted-properties -- CLI upload errors are intentionally user-facing.
       console.error(warning(msg));
       return false;
     }
@@ -426,14 +422,12 @@ async function uploadBundles({
       });
     } catch (e) {
       if (showDetailedErrors) {
-        // eslint-disable-next-line no-restricted-properties -- CLI upload errors are intentionally user-facing.
         console.error(e);
       }
       const msg =
         e instanceof FailedHTTPResponse
           ? `Failed to save function definitions for '${sourceFile}'. ${e.status} (${e.text}): ${e.data}`
           : `Failed to save function definitions for '${sourceFile}'. You most likely need to update the API: ${e}`;
-      // eslint-disable-next-line no-restricted-properties -- CLI upload warnings are intentionally user-facing.
       console.warn(warning(msg));
       return false;
     }

@@ -1,7 +1,6 @@
 /* eslint-disable @typescript-eslint/consistent-type-assertions */
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { startSpan } from "../../../logger";
-import { debugLogger } from "../../../debug-logger";
 import { getCurrentUnixTimestamp, isEmpty } from "../../../util";
 import {
   LEGACY_CACHED_HEADER,
@@ -26,7 +25,7 @@ export function wrapAISDKModel<T extends object>(model: T): T {
   ) {
     return new BraintrustLanguageModelWrapper(m) as any as T;
   } else {
-    debugLogger.warn("Unsupported AI SDK model. Not wrapping.");
+    console.warn("Unsupported AI SDK model. Not wrapping.");
     return model;
   }
 }

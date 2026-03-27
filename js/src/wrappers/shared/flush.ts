@@ -13,7 +13,6 @@ export async function summarizeAndFlush(
   const shouldDisplay = options.displaySummary ?? true;
   const summary = await experiment.summarize();
   if (shouldDisplay) {
-    // eslint-disable-next-line no-restricted-properties -- summary output is intentionally written to stdout.
     console.log(formatExperimentSummary(summary));
   }
 }
