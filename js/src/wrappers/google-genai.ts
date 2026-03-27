@@ -112,9 +112,7 @@ function wrapGenerateContentStream(
   return function (params: GoogleGenAIGenerateContentParams) {
     return googleGenAIChannels.generateContentStream.tracePromise(
       () => original(params),
-      { arguments: [params] } as Parameters<
-        typeof googleGenAIChannels.generateContentStream.tracePromise
-      >[1],
+      { arguments: [params] },
     );
   };
 }

@@ -1,10 +1,5 @@
 import { openRouterChannels } from "../instrumentation/plugins/openrouter-channels";
 import { debugLogger } from "../debug-logger";
-import {
-  patchOpenRouterCallModelRequestTools,
-  patchOpenRouterCallModelResult,
-  startOpenRouterCallModelSpan,
-} from "../openrouter-tool-wrapping";
 import type {
   OpenRouterBeta,
   OpenRouterCallModelRequest,
@@ -160,22 +155,12 @@ function wrapCallModel(
   ) => unknown,
 ): NonNullable<OpenRouterClient["callModel"]> {
   return (request, options) => {
-    const patchedRequest = { ...request };
-    patchOpenRouterCallModelRequestTools(patchedRequest);
-    const span = startOpenRouterCallModelSpan(patchedRequest);
-
-    try {
-      const result = callModel(patchedRequest, options);
-      if (!patchOpenRouterCallModelResult(span, result, patchedRequest)) {
-        span.end();
-      }
-      return result;
-    } catch (error) {
-      span.log({
-        error: error instanceof Error ? error.message : String(error),
-      });
-      span.end();
-      throw error;
-    }
+    const tracedRequest = { ...request };
+    return openRouterChannels.callModel.traceSync(
+      () => callModel(tracedRequest, options),
+      {
+        arguments: [tracedRequest],
+      } as Parameters<typeof openRouterChannels.callModel.traceSync>[1],
+    );
   };
 }

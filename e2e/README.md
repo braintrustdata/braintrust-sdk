@@ -70,12 +70,9 @@ Use `normalizeForSnapshot(...)` before snapshotting. It replaces timestamps and 
 
 ### Test tags
 
-Every `scenario.test.ts` must tag each test with exactly one e2e tag from `e2e/helpers/tags.ts`:
+Hermetic tests (those that use only the mock Braintrust server and local fixtures) must be tagged with `E2E_TAGS.hermetic` from `e2e/helpers/tags.ts`. This allows CI to run hermetic tests separately without provider credentials.
 
-- `E2E_TAGS.hermetic` - Uses only the mock Braintrust server and local fixtures. These run in the GitHub checks workflow.
-- `E2E_TAGS.externalApi` - Calls a real provider API. These automatically get `retry: 1` from `e2e/vitest.config.mts`.
-
-Use the tag directly in the Vitest test options:
+Tests that call real provider APIs do not need a tag.
 
 ```ts
 import { E2E_TAGS } from "../../helpers/tags";
@@ -113,7 +110,7 @@ The Deno scenarios follow the same pattern, except the harness invokes `deno tes
 
 ### Environment variables
 
-`externalApi` scenarios require provider credentials in addition to the mock Braintrust server config supplied by the harness:
+Non-hermetic scenarios require provider credentials in addition to the mock Braintrust server config supplied by the harness:
 
 - `OPENAI_API_KEY`
 - `ANTHROPIC_API_KEY`
@@ -133,6 +130,5 @@ Scenario-local manifests are optional and should stay slim. They are only for sc
 ```bash
 pnpm run test:e2e            # Run all e2e tests
 pnpm run test:e2e:hermetic   # Run hermetic-only e2e tests
-pnpm run test:e2e:external   # Run external-api-only e2e tests
 pnpm run test:e2e:update     # Run tests and update snapshots
 ```
