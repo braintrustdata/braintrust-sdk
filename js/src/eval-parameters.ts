@@ -170,7 +170,10 @@ function rehydrateRemoteParameters(
       }
 
       if (Reflect.get(propertySchema, "x-bt-type") === "prompt") {
-        return [name, Prompt.fromPromptData(name, promptDataSchema.parse(value))];
+        return [
+          name,
+          Prompt.fromPromptData(name, promptDataSchema.parse(value)),
+        ];
       }
 
       return [name, value];
