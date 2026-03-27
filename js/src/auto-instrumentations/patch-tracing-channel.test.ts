@@ -201,6 +201,58 @@ describe("patchTracingChannel", () => {
     expect(withResponse.response.ok).toBe(true);
   });
 
+  it("patched tracePromise preserves helper methods on augmented native Promise instances", async () => {
+    const FakeTCClass = makeUnpatchedTracingChannel();
+    const channel = new FakeTCClass();
+    patchTracingChannel(() => channel);
+
+    const nativePromise = Promise.resolve("hello") as Promise<string> & {
+      withResponse: () => Promise<{ data: string; response: { ok: boolean } }>;
+    };
+    nativePromise.withResponse = async () => ({
+      data: await nativePromise,
+      response: { ok: true },
+    });
+
+    const traced = channel.tracePromise(() => nativePromise, {}, null);
+    const withResponse = await traced.withResponse();
+
+    expect(traced).toBe(nativePromise);
+    expect(withResponse.data).toBe("hello");
+    expect(withResponse.response.ok).toBe(true);
+  });
+
+  it("patched tracePromise preserves helper methods on prototype-augmented native Promise instances", async () => {
+    const FakeTCClass = makeUnpatchedTracingChannel();
+    const channel = new FakeTCClass();
+    patchTracingChannel(() => channel);
+
+    const nativePromise = Promise.resolve("hello");
+    const augmentedProto = Object.create(
+      Promise.prototype,
+    ) as Promise<string> & {
+      withResponse: () => Promise<{ data: string; response: { ok: boolean } }>;
+    };
+
+    augmentedProto.withResponse = async function () {
+      const data = await this;
+      return { data, response: { ok: true } };
+    };
+
+    Object.setPrototypeOf(nativePromise, augmentedProto);
+
+    const traced = channel.tracePromise(
+      () => nativePromise,
+      {},
+      null,
+    ) as typeof nativePromise & typeof augmentedProto;
+    const withResponse = await traced.withResponse();
+
+    expect(traced).toBe(nativePromise);
+    expect(withResponse.data).toBe("hello");
+    expect(withResponse.response.ok).toBe(true);
+  });
+
   it("patched tracePromise correctly handles plain async functions", async () => {
     const FakeTCClass = makeUnpatchedTracingChannel();
     const channel = new FakeTCClass();

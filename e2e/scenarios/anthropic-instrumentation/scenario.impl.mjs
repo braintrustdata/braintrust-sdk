@@ -28,8 +28,8 @@ async function runAnthropicInstrumentationScenario(
   Anthropic,
   {
     decorateClient,
+    expectStreamWithResponse = true,
     useBetaMessages = true,
-    useMessagesStreamHelper = true,
   } = {},
 ) {
   const imageBase64 = (
@@ -123,33 +123,32 @@ async function runAnthropicInstrumentationScenario(
         "anthropic-stream-with-response-operation",
         "stream-with-response",
         async () => {
-          const stream =
-            useMessagesStreamHelper === false
-              ? await client.messages.create({
-                  model: ANTHROPIC_MODEL,
-                  max_tokens: 32,
-                  temperature: 0,
-                  stream: true,
-                  messages: [
-                    {
-                      role: "user",
-                      content:
-                        "Count from 1 to 3 and include the words one two three.",
-                    },
-                  ],
-                })
-              : client.messages.stream({
-                  model: ANTHROPIC_MODEL,
-                  max_tokens: 32,
-                  temperature: 0,
-                  messages: [
-                    {
-                      role: "user",
-                      content:
-                        "Count from 1 to 3 and include the words one two three.",
-                    },
-                  ],
-                });
+          const stream = client.messages.stream({
+            model: ANTHROPIC_MODEL,
+            max_tokens: 32,
+            temperature: 0,
+            messages: [
+              {
+                role: "user",
+                content:
+                  "Count from 1 to 3 and include the words one two three.",
+              },
+            ],
+          });
+
+          if (expectStreamWithResponse) {
+            if (typeof stream.withResponse !== "function") {
+              throw new Error(
+                "Expected messages.stream() to expose withResponse()",
+              );
+            }
+            await stream.withResponse();
+          } else if (typeof stream.withResponse === "function") {
+            throw new Error(
+              "Expected messages.stream() to not expose withResponse()",
+            );
+          }
+
           await collectAsync(stream);
         },
       );
@@ -251,7 +250,6 @@ export async function runWrappedAnthropicInstrumentation(Anthropic, options) {
 export async function runAutoAnthropicInstrumentation(Anthropic, options) {
   await runAnthropicInstrumentationScenario(Anthropic, {
     ...options,
-    useMessagesStreamHelper: false,
   });
 }
 

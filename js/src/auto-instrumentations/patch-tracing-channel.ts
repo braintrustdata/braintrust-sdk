@@ -10,6 +10,15 @@
  * and in configureNode/configureBrowser for the bundler plugin path.
  */
 
+function isPlainNativePromiseWithoutHelpers(result: Promise<unknown>): boolean {
+  return (
+    result.constructor === Promise &&
+    Object.getPrototypeOf(result) === Promise.prototype &&
+    Object.getOwnPropertyNames(result).length === 0 &&
+    Object.getOwnPropertySymbols(result).length === 0
+  );
+}
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function patchTracingChannel(
   tracingChannelFn: (name: string) => any,
@@ -77,7 +86,7 @@ export function patchTracingChannel(
       // established by bindStore — required for span context to propagate across awaits.
       // PATCHED: inside the callback, use duck-type thenable check instead of
       // PromisePrototypeThen, which triggers Symbol.species and breaks Promise subclasses
-      // like Anthropic's APIPromise that have non-standard constructors.
+      // like Anthropic's and Openai's APIPromise that have non-standard constructors.
       return start.runStores(context, () => {
         try {
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -89,13 +98,18 @@ export function patchTracingChannel(
             (typeof result === "object" || typeof result === "function") &&
             typeof result.then === "function"
           ) {
-            if (result.constructor === Promise) {
+            if (
+              // Return the Promise chain only for plain native Promises.
+              // Promise subclasses and prototype-augmented Promises must be
+              // returned as-is so SDK helper methods stay intact.
+              isPlainNativePromiseWithoutHelpers(result)
+            ) {
               return result.then(
-                (res) => {
+                (res: unknown) => {
                   publishResolved(res);
                   return res;
                 },
-                (err) => {
+                (err: unknown) => {
                   publishRejected(err);
                   return Promise.reject(err);
                 },
