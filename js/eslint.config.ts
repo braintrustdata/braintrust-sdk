@@ -18,57 +18,6 @@ const entryFiles = tsupConfig
   })
   .filter((entry) => !entry.includes("cli"));
 
-const consoleRestrictions = [
-  {
-    object: "console",
-    property: "log",
-    message: "Use debugLogger instead of console for SDK logging.",
-  },
-  {
-    object: "console",
-    property: "warn",
-    message: "Use debugLogger instead of console for SDK logging.",
-  },
-  {
-    object: "console",
-    property: "error",
-    message: "Use debugLogger instead of console for SDK logging.",
-  },
-  {
-    object: "console",
-    property: "debug",
-    message: "Use debugLogger instead of console for SDK logging.",
-  },
-  {
-    object: "console",
-    property: "info",
-    message: "Use debugLogger instead of console for SDK logging.",
-  },
-  {
-    object: "console",
-    property: "trace",
-    message: "Use debugLogger instead of console for SDK logging.",
-  },
-] as const;
-
-const consoleAllowedFiles = ["src/queue.bench.ts"];
-
-const cliImportAllowedFiles = [
-  "src/cli/**",
-  "src/debug-logger.ts",
-  "src/framework.ts",
-  "src/framework2.ts",
-  "src/isomorph.ts",
-  "src/sandbox.ts",
-  "src/template/**",
-  "src/reporters/**",
-  "src/prompt-cache/**",
-  "src/eval-parameters.ts",
-  "src/wrappers/**",
-  "src/instrumentation/**",
-  "src/auto-instrumentations/**",
-];
-
 export default [
   {
     ignores: [
@@ -133,21 +82,67 @@ export default [
       "@typescript-eslint/no-empty-object-type": "error",
       "@typescript-eslint/no-unsafe-function-type": "error",
       "@typescript-eslint/prefer-as-const": "error",
-      "no-restricted-properties": ["error", ...consoleRestrictions],
+      "no-restricted-properties": [
+        "error",
+        {
+          object: "console",
+          property: "log",
+          message: "Use debugLogger instead of console for SDK logging.",
+        },
+        {
+          object: "console",
+          property: "warn",
+          message: "Use debugLogger instead of console for SDK logging.",
+        },
+        {
+          object: "console",
+          property: "error",
+          message: "Use debugLogger instead of console for SDK logging.",
+        },
+        {
+          object: "console",
+          property: "debug",
+          message: "Use debugLogger instead of console for SDK logging.",
+        },
+        {
+          object: "console",
+          property: "info",
+          message: "Use debugLogger instead of console for SDK logging.",
+        },
+        {
+          object: "console",
+          property: "trace",
+          message: "Use debugLogger instead of console for SDK logging.",
+        },
+      ],
       // Require node: protocol for Node.js built-in imports (for Deno compatibility)
       // This plugin automatically detects ALL Node.js built-ins - no manual list needed!
       "node-import/prefer-node-protocol": "error",
     },
   },
   {
-    files: consoleAllowedFiles,
+    files: ["src/queue.bench.ts"],
     rules: {
       "no-restricted-properties": "off",
     },
   },
   {
     files: ["src/**/*.ts", "src/**/*.tsx"],
-    ignores: cliImportAllowedFiles,
+    ignores: [
+      "src/cli/**",
+      "src/debug-logger.ts",
+      "src/framework.ts",
+      "src/framework2.ts",
+      "src/isomorph.ts",
+      "src/sandbox.ts",
+      "src/template/**",
+      "src/reporters/**",
+      "src/prompt-cache/**",
+      "src/eval-parameters.ts",
+      "src/wrappers/**",
+      "src/instrumentation/**",
+      "src/auto-instrumentations/**",
+    ],
     rules: {
       "no-restricted-imports": [
         "error",
