@@ -105,11 +105,11 @@ export function patchTracingChannel(
               isPlainNativePromiseWithoutHelpers(result)
             ) {
               return result.then(
-                (res) => {
+                (res: unknown) => {
                   publishResolved(res);
                   return res;
                 },
-                (err) => {
+                (err: unknown) => {
                   publishRejected(err);
                   return Promise.reject(err);
                 },
