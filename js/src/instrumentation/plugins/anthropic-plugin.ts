@@ -1,5 +1,9 @@
 import { BasePlugin } from "../core";
-import { traceStreamingChannel, unsubscribeAll } from "../core/channel-tracing";
+import {
+  traceAsyncChannel,
+  traceStreamingChannel,
+  unsubscribeAll,
+} from "../core/channel-tracing";
 import { Attachment } from "../../logger";
 import { SpanTypeAttribute, isObject } from "../../../util/index";
 import { filterFrom, getCurrentUnixTimestamp } from "../../util";
@@ -93,6 +97,75 @@ export class AnthropicPlugin extends BasePlugin {
       traceStreamingChannel(anthropicChannels.betaMessagesCreate, {
         ...anthropicConfig,
         name: "anthropic.messages.create",
+      }),
+    );
+
+    // Message Batches API
+    this.unsubscribers.push(
+      traceAsyncChannel(anthropicChannels.messagesBatchesCreate, {
+        name: "anthropic.messages.batches.create",
+        type: SpanTypeAttribute.LLM,
+        extractInput: ([params]) => ({
+          input: params.requests,
+          metadata: {
+            ...filterFrom(params, ["requests"]),
+            provider: "anthropic",
+          },
+        }),
+        extractOutput: (result) => result ?? null,
+        extractMetrics: () => ({}),
+      }),
+    );
+
+    this.unsubscribers.push(
+      traceAsyncChannel(anthropicChannels.messagesBatchesRetrieve, {
+        name: "anthropic.messages.batches.retrieve",
+        type: SpanTypeAttribute.LLM,
+        extractInput: ([batchId]) => ({
+          input: batchId,
+          metadata: { provider: "anthropic" },
+        }),
+        extractOutput: (result) => result ?? null,
+        extractMetrics: () => ({}),
+      }),
+    );
+
+    this.unsubscribers.push(
+      traceAsyncChannel(anthropicChannels.messagesBatchesList, {
+        name: "anthropic.messages.batches.list",
+        type: SpanTypeAttribute.LLM,
+        extractInput: ([params]) => ({
+          input: params ?? null,
+          metadata: { provider: "anthropic" },
+        }),
+        extractOutput: (result) => result ?? null,
+        extractMetrics: () => ({}),
+      }),
+    );
+
+    this.unsubscribers.push(
+      traceAsyncChannel(anthropicChannels.messagesBatchesCancel, {
+        name: "anthropic.messages.batches.cancel",
+        type: SpanTypeAttribute.LLM,
+        extractInput: ([batchId]) => ({
+          input: batchId,
+          metadata: { provider: "anthropic" },
+        }),
+        extractOutput: (result) => result ?? null,
+        extractMetrics: () => ({}),
+      }),
+    );
+
+    this.unsubscribers.push(
+      traceAsyncChannel(anthropicChannels.messagesBatchesDelete, {
+        name: "anthropic.messages.batches.delete",
+        type: SpanTypeAttribute.LLM,
+        extractInput: ([batchId]) => ({
+          input: batchId,
+          metadata: { provider: "anthropic" },
+        }),
+        extractOutput: (result) => result ?? null,
+        extractMetrics: () => ({}),
       }),
     );
   }
