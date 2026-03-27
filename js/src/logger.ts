@@ -2509,6 +2509,74 @@ function constructLogs3Data(items: LogItemWithMeta[]) {
   return `{"rows": ${constructJsonArray(items.map((i) => i.str))}, "api_version": 2}`;
 }
 
+function extractLastXactIdFromLogs3Response(response: unknown): string | null {
+  if (typeof response === "string") {
+    return null;
+  }
+
+  if (Array.isArray(response)) {
+    for (let i = response.length - 1; i >= 0; i--) {
+      const xactId = extractLastXactIdFromLogs3Response(response[i]);
+      if (xactId) {
+        return xactId;
+      }
+    }
+    return null;
+  }
+
+  if (!response || typeof response !== "object") {
+    return null;
+  }
+
+  const record = response as Record<string, unknown>;
+  for (const field of ["_xact_id", "xact_id", "transaction_id"] as const) {
+    const value = record[field];
+    if (typeof value === "string") {
+      return value;
+    }
+  }
+
+  for (const field of ["_xact_ids", "xact_ids"] as const) {
+    const value = record[field];
+    if (Array.isArray(value)) {
+      for (let i = value.length - 1; i >= 0; i--) {
+        if (typeof value[i] === "string") {
+          return value[i];
+        }
+      }
+    }
+  }
+
+  for (const field of ["data", "rows"] as const) {
+    const xactId = extractLastXactIdFromLogs3Response(record[field]);
+    if (xactId) {
+      return xactId;
+    }
+  }
+
+  return null;
+}
+
+function maxXactId(
+  currentXactId: string | null,
+  candidateXactId: string | null,
+): string | null {
+  if (!candidateXactId) {
+    return currentXactId;
+  }
+  if (!currentXactId) {
+    return candidateXactId;
+  }
+
+  try {
+    return BigInt(candidateXactId) > BigInt(currentXactId)
+      ? candidateXactId
+      : currentXactId;
+  } catch {
+    return currentXactId;
+  }
+}
+
 export function constructLogs3OverflowRequest(key: string) {
   return {
     rows: {
@@ -2627,6 +2695,7 @@ const DEFAULT_FLUSH_BACKPRESSURE_BYTES = 10 * 1024 * 1024; // 10 MB
 interface BackgroundLogger {
   log(items: LazyValue<BackgroundLogEvent>[]): void;
   flush(): Promise<void>;
+  lastFlushedXactId(): string | null;
   pendingFlushBytes(): number;
   flushBackpressureBytes(): number;
   setMaskingFunction(
@@ -2650,6 +2719,10 @@ export class TestBackgroundLogger implements BackgroundLogger {
 
   async flush(): Promise<void> {
     return Promise.resolve();
+  }
+
+  lastFlushedXactId(): string | null {
+    return null;
   }
 
   pendingFlushBytes(): number {
@@ -2745,6 +2818,7 @@ class HTTPBackgroundLogger implements BackgroundLogger {
   public failedPublishPayloadsDir: string | undefined = undefined;
   public allPublishPayloadsDir: string | undefined = undefined;
   private _flushBackpressureBytes: number = DEFAULT_FLUSH_BACKPRESSURE_BYTES;
+  private _lastFlushedXactId: string | null = null;
 
   private _pendingBytes: number = 0;
 
@@ -2846,6 +2920,10 @@ class HTTPBackgroundLogger implements BackgroundLogger {
 
   pendingFlushBytes(): number {
     return this._pendingBytes;
+  }
+
+  lastFlushedXactId(): string | null {
+    return this._lastFlushedXactId;
   }
 
   flushBackpressureBytes(): number {
@@ -3168,6 +3246,7 @@ class HTTPBackgroundLogger implements BackgroundLogger {
       const startTime = now();
       let error: unknown = undefined;
       try {
+        let response: unknown;
         if (overflowRows) {
           if (!overflowUpload) {
             const currentUpload = await this.requestLogs3OverflowUpload(conn, {
@@ -3181,12 +3260,19 @@ class HTTPBackgroundLogger implements BackgroundLogger {
             );
             overflowUpload = currentUpload;
           }
-          await conn.post_json(
+          response = await conn.post_json(
             "logs3",
             constructLogs3OverflowRequest(overflowUpload.key),
           );
         } else {
-          await conn.post_json("logs3", dataStr);
+          response = await conn.post_json("logs3", dataStr);
+        }
+        const lastXactId = extractLastXactIdFromLogs3Response(response);
+        if (lastXactId) {
+          this._lastFlushedXactId = maxXactId(
+            this._lastFlushedXactId,
+            lastXactId,
+          );
         }
       } catch (e) {
         error = e;
@@ -5771,9 +5857,7 @@ export class ObjectFetcher<RecordType> implements AsyncIterable<
       let maxVersion: string | undefined = undefined;
       for await (const record of this.fetch(options)) {
         const xactId = String(record[TRANSACTION_ID_FIELD] ?? "0");
-        if (maxVersion === undefined || xactId > maxVersion) {
-          maxVersion = xactId;
-        }
+        maxVersion = maxXactId(maxVersion ?? null, xactId) ?? undefined;
       }
       return maxVersion;
     }
@@ -8051,6 +8135,8 @@ function resetIdGenStateForTests() {
 
 export const _exportsForTestingOnly = {
   extractAttachments,
+  extractLastXactIdFromLogs3Response,
+  maxXactId,
   deepCopyEvent,
   useTestBackgroundLogger,
   clearTestBackgroundLogger,
