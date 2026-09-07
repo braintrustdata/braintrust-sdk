@@ -408,8 +408,14 @@
     "label": "LangSmith Instrumentation",
     "metadataScenario": "langsmith-instrumentation",
     "variants": [
-      { "variantKey": "langsmith-v0", "label": "v0 pinned" },
-      { "variantKey": "langsmith-v0-latest", "label": "v0 latest" }
+      {
+        "variantKey": "langsmith-v0",
+        "label": "v0 pinned"
+      },
+      {
+        "variantKey": "langsmith-v0-latest",
+        "label": "v0 latest"
+      }
     ]
   },
   {
@@ -654,10 +660,22 @@
     "label": "Eve Instrumentation",
     "metadataScenario": "eve-instrumentation",
     "variants": [
-      { "variantKey": "eve-v0", "label": "v0 pinned" },
-      { "variantKey": "eve-v0-provider", "label": "v0 provider minimum" },
-      { "variantKey": "eve-v0-latest-pinned", "label": "v0 latest pinned" },
-      { "variantKey": "eve-v0-latest", "label": "v0 latest" }
+      {
+        "variantKey": "eve-v0",
+        "label": "v0 pinned"
+      },
+      {
+        "variantKey": "eve-v0-provider",
+        "label": "v0 provider minimum"
+      },
+      {
+        "variantKey": "eve-v0-latest-pinned",
+        "label": "v0 latest pinned"
+      },
+      {
+        "variantKey": "eve-v0-latest",
+        "label": "v0 latest"
+      }
     ]
   },
   {
@@ -775,6 +793,37 @@
       {
         "variantKey": "wrap-langchain-js-traces-v1-latest",
         "label": "v1 latest"
+      }
+    ]
+  },
+  {
+    "scenarioDirName": "openai-multimodal-instrumentation",
+    "label": "OpenAI Multimodal Instrumentation",
+    "metadataScenario": "openai-multimodal-instrumentation",
+    "variants": [
+      {
+        "variantKey": "openai-v4",
+        "label": "v4 pinned"
+      },
+      {
+        "variantKey": "openai-v4-latest",
+        "label": "v4 latest"
+      },
+      {
+        "variantKey": "openai-v5",
+        "label": "v5 pinned"
+      },
+      {
+        "variantKey": "openai-v5-latest",
+        "label": "v5 latest"
+      },
+      {
+        "variantKey": "openai-v6",
+        "label": "v6 pinned"
+      },
+      {
+        "variantKey": "openai-v6-latest",
+        "label": "v6 latest"
       }
     ]
   }

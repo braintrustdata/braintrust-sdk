@@ -1,0 +1,1470 @@
+span_tree:
+└── multimodal-root [task]
+    metadata: {
+      "scenario": "openai-multimodal-instrumentation",
+      "testRunId": "<run:1>"
+    }
+    context: {
+      "caller_filename": "<repo>/e2e/helpers/provider-runtime.mjs",
+      "caller_functionname": "runTracedScenario",
+      "caller_lineno": 0
+    }
+    ├── openai.images.generate [llm]
+    │   input: {
+    │     "operation": "generate",
+    │     "parameters": {
+    │       "n": 2,
+    │       "quality": "low",
+    │       "size": "1024x1024"
+    │     },
+    │     "prompt": "A plain red square on white."
+    │   }
+    │   output: {
+    │     "content": [
+    │       {
+    │         "image_url": {
+    │           "url": {
+    │             "content_type": "image/png",
+    │             "filename": "generated-image.png",
+    │             "key": "<uuid:1>",
+    │             "type": "braintrust_attachment"
+    │           }
+    │         },
+    │         "type": "image_url"
+    │       },
+    │       {
+    │         "image_url": {
+    │           "url": {
+    │             "content_type": "image/png",
+    │             "filename": "generated-image.png",
+    │             "key": "<uuid:2>",
+    │             "type": "braintrust_attachment"
+    │           }
+    │         },
+    │         "type": "image_url"
+    │       }
+    │     ]
+    │   }
+    │   metadata: {
+    │     "model": "gpt-image-2",
+    │     "provider": "openai"
+    │   }
+    │   metrics: {
+    │     "completion_image_tokens": 391,
+    │     "completion_text_tokens": 0,
+    │     "completion_tokens": 391,
+    │     "prompt_image_tokens": 0,
+    │     "prompt_text_tokens": 26,
+    │     "prompt_tokens": 26,
+    │     "tokens": 417
+    │   }
+    ├── openai.images.edit [llm]
+    │   input: {
+    │     "content": [
+    │       {
+    │         "image_url": {
+    │           "url": {
+    │             "content_type": "image/png",
+    │             "filename": "input.png",
+    │             "key": "<uuid:1>",
+    │             "type": "braintrust_attachment"
+    │           }
+    │         },
+    │         "purpose": "reference",
+    │         "type": "image_url"
+    │       }
+    │     ],
+    │     "operation": "edit",
+    │     "parameters": {
+    │       "quality": "low",
+    │       "size": "1024x1024"
+    │     },
+    │     "prompt": "Make a plain blue square on white."
+    │   }
+    │   output: {
+    │     "content": [
+    │       {
+    │         "image_url": {
+    │           "url": {
+    │             "content_type": "image/png",
+    │             "filename": "generated-image.png",
+    │             "key": "<uuid:1>",
+    │             "type": "braintrust_attachment"
+    │           }
+    │         },
+    │         "type": "image_url"
+    │       }
+    │     ]
+    │   }
+    │   metadata: {
+    │     "model": "gpt-image-2",
+    │     "provider": "openai"
+    │   }
+    │   metrics: {
+    │     "completion_image_tokens": 196,
+    │     "completion_text_tokens": 0,
+    │     "completion_tokens": 196,
+    │     "prompt_image_tokens": 1,
+    │     "prompt_text_tokens": 14,
+    │     "prompt_tokens": 15,
+    │     "tokens": 211
+    │   }
+    ├── openai.images.createVariation [llm]
+    │   input: {
+    │     "content": [
+    │       {
+    │         "image_url": {
+    │           "url": {
+    │             "content_type": "image/png",
+    │             "filename": "input.png",
+    │             "key": "<uuid:1>",
+    │             "type": "braintrust_attachment"
+    │           }
+    │         },
+    │         "purpose": "reference",
+    │         "type": "image_url"
+    │       }
+    │     ],
+    │     "operation": "variation"
+    │   }
+    │   metadata: {
+    │     "model": "dall-e-2",
+    │     "provider": "openai"
+    │   }
+    │   error: "404 status code (no body)"
+    ├── openai.images.generate [llm]
+    │   input: {
+    │     "operation": "generate",
+    │     "parameters": {
+    │       "quality": "low",
+    │       "size": "1024x1024"
+    │     },
+    │     "prompt": "A plain green square on white."
+    │   }
+    │   output: {
+    │     "content": [
+    │       {
+    │         "image_url": {
+    │           "url": {
+    │             "content_type": "image/png",
+    │             "filename": "generated-image.png",
+    │             "key": "<uuid:1>",
+    │             "type": "braintrust_attachment"
+    │           }
+    │         },
+    │         "type": "image_url"
+    │       }
+    │     ]
+    │   }
+    │   metadata: {
+    │     "model": "gpt-image-2",
+    │     "provider": "openai"
+    │   }
+    │   metrics: {
+    │     "completion_image_tokens": 273,
+    │     "completion_text_tokens": 0,
+    │     "completion_tokens": 273,
+    │     "prompt_image_tokens": 0,
+    │     "prompt_text_tokens": 13,
+    │     "prompt_tokens": 13,
+    │     "time_to_first_token": 0,
+    │     "tokens": 286
+    │   }
+    ├── openai.images.edit [llm]
+    │   input: {
+    │     "content": [
+    │       {
+    │         "image_url": {
+    │           "url": {
+    │             "content_type": "image/png",
+    │             "filename": "input.png",
+    │             "key": "<uuid:1>",
+    │             "type": "braintrust_attachment"
+    │           }
+    │         },
+    │         "purpose": "reference",
+    │         "type": "image_url"
+    │       }
+    │     ],
+    │     "operation": "edit",
+    │     "parameters": {
+    │       "quality": "low",
+    │       "size": "1024x1024"
+    │     },
+    │     "prompt": "A plain green square on white."
+    │   }
+    │   output: {
+    │     "content": [
+    │       {
+    │         "image_url": {
+    │           "url": {
+    │             "content_type": "image/png",
+    │             "filename": "generated-image.png",
+    │             "key": "<uuid:1>",
+    │             "type": "braintrust_attachment"
+    │           }
+    │         },
+    │         "type": "image_url"
+    │       }
+    │     ]
+    │   }
+    │   metadata: {
+    │     "model": "gpt-image-2",
+    │     "provider": "openai"
+    │   }
+    │   metrics: {
+    │     "completion_image_tokens": 273,
+    │     "completion_text_tokens": 0,
+    │     "completion_tokens": 273,
+    │     "prompt_image_tokens": 1,
+    │     "prompt_text_tokens": 13,
+    │     "prompt_tokens": 14,
+    │     "time_to_first_token": 0,
+    │     "tokens": 287
+    │   }
+    ├── openai.audio.speech.create [llm]
+    │   input: {
+    │     "operation": "speech",
+    │     "parameters": {
+    │       "format": "wav",
+    │       "voice": "coral"
+    │     },
+    │     "prompt": "Hello."
+    │   }
+    │   output: {
+    │     "content": [
+    │       {
+    │         "file": {
+    │           "byte_size": 76844,
+    │           "file_data": {
+    │             "content_type": "audio/wav",
+    │             "filename": "speech.wav",
+    │             "key": "<uuid:1>",
+    │             "type": "braintrust_attachment"
+    │           },
+    │           "filename": "speech.wav"
+    │         },
+    │         "type": "file"
+    │       }
+    │     ]
+    │   }
+    │   metadata: {
+    │     "model": "gpt-4o-mini-tts",
+    │     "provider": "openai"
+    │   }
+    │   metrics: {
+    │     "time_to_first_token": 0
+    │   }
+    ├── openai.audio.transcriptions.create [llm]
+    │   input: {
+    │     "content": [
+    │       {
+    │         "file": {
+    │           "file_data": {
+    │             "content_type": "audio/wav",
+    │             "filename": "hello.wav",
+    │             "key": "<uuid:1>",
+    │             "type": "braintrust_attachment"
+    │           },
+    │           "filename": "hello.wav"
+    │         },
+    │         "type": "file"
+    │       }
+    │     ],
+    │     "operation": "transcribe",
+    │     "parameters": {
+    │       "language": "en"
+    │     }
+    │   }
+    │   output: {
+    │     "content": [
+    │       {
+    │         "text": "Hello",
+    │         "type": "text"
+    │       }
+    │     ]
+    │   }
+    │   metadata: {
+    │     "model": "gpt-4o-transcribe",
+    │     "provider": "openai"
+    │   }
+    │   metrics: {
+    │     "completion_tokens": 3,
+    │     "prompt_audio_tokens": 16,
+    │     "prompt_text_tokens": 0,
+    │     "prompt_tokens": 16,
+    │     "tokens": 19
+    │   }
+    ├── openai.audio.transcriptions.create [llm]
+    │   input: {
+    │     "content": [
+    │       {
+    │         "file": {
+    │           "file_data": {
+    │             "content_type": "audio/wav",
+    │             "filename": "hello.wav",
+    │             "key": "<uuid:1>",
+    │             "type": "braintrust_attachment"
+    │           },
+    │           "filename": "hello.wav"
+    │         },
+    │         "type": "file"
+    │       }
+    │     ],
+    │     "operation": "transcribe"
+    │   }
+    │   output: {
+    │     "content": [
+    │       {
+    │         "text": "Hello",
+    │         "type": "text"
+    │       }
+    │     ]
+    │   }
+    │   metadata: {
+    │     "model": "gpt-4o-transcribe",
+    │     "provider": "openai"
+    │   }
+    │   metrics: {
+    │     "completion_tokens": 3,
+    │     "prompt_audio_tokens": 16,
+    │     "prompt_text_tokens": 0,
+    │     "prompt_tokens": 16,
+    │     "time_to_first_token": 0,
+    │     "tokens": 19
+    │   }
+    ├── openai.audio.translations.create [llm]
+    │   input: {
+    │     "content": [
+    │       {
+    │         "file": {
+    │           "file_data": {
+    │             "content_type": "audio/wav",
+    │             "filename": "hello.wav",
+    │             "key": "<uuid:1>",
+    │             "type": "braintrust_attachment"
+    │           },
+    │           "filename": "hello.wav"
+    │         },
+    │         "type": "file"
+    │       }
+    │     ],
+    │     "operation": "translate"
+    │   }
+    │   output: {
+    │     "content": [
+    │       {
+    │         "text": "Hello.",
+    │         "type": "text"
+    │       }
+    │     ]
+    │   }
+    │   metadata: {
+    │     "model": "whisper-1",
+    │     "provider": "openai"
+    │   }
+    ├── openai.audio.speech.create [llm]
+    │   input: {
+    │     "operation": "speech",
+    │     "parameters": {
+    │       "voice": "coral"
+    │     },
+    │     "prompt": "Hello reader."
+    │   }
+    │   output: {
+    │     "content": [
+    │       {
+    │         "file": {
+    │           "byte_size": 28800,
+    │           "file_data": {
+    │             "content_type": "audio/mpeg",
+    │             "filename": "speech.mp3",
+    │             "key": "<uuid:1>",
+    │             "type": "braintrust_attachment"
+    │           },
+    │           "filename": "speech.mp3"
+    │         },
+    │         "type": "file"
+    │       }
+    │     ]
+    │   }
+    │   metadata: {
+    │     "model": "gpt-4o-mini-tts",
+    │     "provider": "openai"
+    │   }
+    │   metrics: {
+    │     "time_to_first_token": 0
+    │   }
+    ├── openai.audio.speech.create [llm]
+    │   input: {
+    │     "operation": "speech",
+    │     "parameters": {
+    │       "voice": "coral"
+    │     },
+    │     "prompt": "Hello iterate."
+    │   }
+    │   output: {
+    │     "content": [
+    │       {
+    │         "file": {
+    │           "byte_size": 41088,
+    │           "file_data": {
+    │             "content_type": "audio/mpeg",
+    │             "filename": "speech.mp3",
+    │             "key": "<uuid:1>",
+    │             "type": "braintrust_attachment"
+    │           },
+    │           "filename": "speech.mp3"
+    │         },
+    │         "type": "file"
+    │       }
+    │     ]
+    │   }
+    │   metadata: {
+    │     "model": "gpt-4o-mini-tts",
+    │     "provider": "openai"
+    │   }
+    │   metrics: {
+    │     "time_to_first_token": 0
+    │   }
+    ├── openai.audio.speech.create [llm]
+    │   input: {
+    │     "operation": "speech",
+    │     "parameters": {
+    │       "voice": "coral"
+    │     },
+    │     "prompt": "Hello pipe."
+    │   }
+    │   output: {
+    │     "content": [
+    │       {
+    │         "file": {
+    │           "byte_size": 21120,
+    │           "file_data": {
+    │             "content_type": "audio/mpeg",
+    │             "filename": "speech.mp3",
+    │             "key": "<uuid:1>",
+    │             "type": "braintrust_attachment"
+    │           },
+    │           "filename": "speech.mp3"
+    │         },
+    │         "type": "file"
+    │       }
+    │     ]
+    │   }
+    │   metadata: {
+    │     "model": "gpt-4o-mini-tts",
+    │     "provider": "openai"
+    │   }
+    │   metrics: {
+    │     "time_to_first_token": 0
+    │   }
+    ├── openai.audio.speech.create [llm]
+    │   input: {
+    │     "operation": "speech",
+    │     "parameters": {
+    │       "voice": "coral"
+    │     },
+    │     "prompt": "Hello cancel."
+    │   }
+    │   output: {
+    │     "content": []
+    │   }
+    │   metadata: {
+    │     "model": "gpt-4o-mini-tts",
+    │     "provider": "openai"
+    │   }
+    ├── openai.audio.speech.create [llm]
+    │   input: {
+    │     "operation": "speech",
+    │     "parameters": {
+    │       "voice": "coral"
+    │     },
+    │     "prompt": "Hello unread."
+    │   }
+    │   output: {
+    │     "content": []
+    │   }
+    │   metadata: {
+    │     "model": "gpt-4o-mini-tts",
+    │     "provider": "openai"
+    │   }
+    ├── openai.audio.speech.create [llm]
+    │   input: {
+    │     "operation": "speech",
+    │     "parameters": {
+    │       "voice": "coral"
+    │     },
+    │     "prompt": "Hello streaming."
+    │   }
+    │   output: {
+    │     "content": [
+    │       {
+    │         "file": {
+    │           "byte_size": 30720,
+    │           "file_data": {
+    │             "content_type": "audio/mpeg",
+    │             "filename": "speech.mp3",
+    │             "key": "<uuid:1>",
+    │             "type": "braintrust_attachment"
+    │           },
+    │           "filename": "speech.mp3"
+    │         },
+    │         "type": "file"
+    │       }
+    │     ]
+    │   }
+    │   metadata: {
+    │     "model": "gpt-4o-mini-tts",
+    │     "provider": "openai"
+    │   }
+    │   metrics: {
+    │     "completion_tokens": 50,
+    │     "prompt_tokens": 3,
+    │     "time_to_first_token": 0,
+    │     "tokens": 53
+    │   }
+    ├── openai.realtime.session [task]
+    │   metadata: {
+    │     "instructions": "Use get_weather when asked. Speak briefly in English.",
+    │     "model": "gpt-realtime-2",
+    │     "output_modalities": [
+    │       "audio"
+    │     ],
+    │     "provider": "openai",
+    │     "tool_choice": "auto",
+    │     "tools": [
+    │       {
+    │         "description": "Get the weather in Vienna.",
+    │         "name": "get_weather",
+    │         "parameters": {
+    │           "additionalProperties": false,
+    │           "properties": {},
+    │           "type": "object"
+    │         },
+    │         "type": "function"
+    │       }
+    │     ]
+    │   }
+    │   ├── openai.realtime.response [llm]
+    │   │   input: [
+    │   │     {
+    │   │       "content": [
+    │   │         {
+    │   │           "audio": {
+    │   │             "content_type": "audio/pcm",
+    │   │             "filename": "input-audio.pcm",
+    │   │             "key": "<uuid:2>",
+    │   │             "type": "braintrust_attachment"
+    │   │           },
+    │   │           "transcript": null,
+    │   │           "type": "input_audio"
+    │   │         }
+    │   │       ],
+    │   │       "id": "<span:1>",
+    │   │       "role": "user",
+    │   │       "status": "completed",
+    │   │       "type": "message"
+    │   │     },
+    │   │     {
+    │   │       "content": [
+    │   │         {
+    │   │           "text": "What is the weather in Vienna?",
+    │   │           "type": "input_text"
+    │   │         }
+    │   │       ],
+    │   │       "id": "<span:3>",
+    │   │       "role": "user",
+    │   │       "status": "completed",
+    │   │       "type": "message"
+    │   │     }
+    │   │   ]
+    │   │   output: [
+    │   │     {
+    │   │       "content": [
+    │   │         {
+    │   │           "text": "I’ll quickly check the current weather in Vienna for you.",
+    │   │           "type": "output_text"
+    │   │         }
+    │   │       ],
+    │   │       "id": "<span:1>",
+    │   │       "phase": "commentary",
+    │   │       "role": "assistant",
+    │   │       "status": "completed",
+    │   │       "type": "message"
+    │   │     },
+    │   │     {
+    │   │       "arguments": "{}",
+    │   │       "call_id": "call_7uBGZUMycu8DuZU1",
+    │   │       "id": "<span:2>",
+    │   │       "name": "get_weather",
+    │   │       "status": "completed",
+    │   │       "type": "function_call"
+    │   │     }
+    │   │   ]
+    │   │   metadata: {
+    │   │     "instructions": "Use get_weather when asked. Speak briefly in English.",
+    │   │     "model": "gpt-realtime-2",
+    │   │     "output_modalities": [
+    │   │       "audio"
+    │   │     ],
+    │   │     "provider": "openai",
+    │   │     "status": "completed",
+    │   │     "tool_choice": "auto",
+    │   │     "tools": [
+    │   │       {
+    │   │         "description": "Get the weather in Vienna.",
+    │   │         "name": "get_weather",
+    │   │         "parameters": {
+    │   │           "additionalProperties": false,
+    │   │           "properties": {},
+    │   │           "type": "object"
+    │   │         },
+    │   │         "type": "function"
+    │   │       }
+    │   │     ]
+    │   │   }
+    │   │   metrics: {
+    │   │     "completion_audio_tokens": 0,
+    │   │     "completion_text_tokens": 54,
+    │   │     "completion_tokens": 54,
+    │   │     "prompt_audio_tokens": 0,
+    │   │     "prompt_cached_tokens": 0,
+    │   │     "prompt_image_tokens": 0,
+    │   │     "prompt_text_tokens": 0,
+    │   │     "prompt_tokens": 0,
+    │   │     "time_to_first_token": 0,
+    │   │     "tokens": 54
+    │   │   }
+    │   │   context: {
+    │   │     "caller_filename": "<node-internal>",
+    │   │     "caller_functionname": "<node-internal>",
+    │   │     "caller_lineno": 0
+    │   │   }
+    │   │   └── get_weather [tool]
+    │   │       input: "{}"
+    │   │       output: "Sunny."
+    │   │       metadata: {
+    │   │         "provider": "openai",
+    │   │         "tool_call_id": "call_7uBGZUMycu8DuZU1"
+    │   │       }
+    │   │       context: {
+    │   │         "caller_filename": "<node-internal>",
+    │   │         "caller_functionname": "<node-internal>",
+    │   │         "caller_lineno": 0
+    │   │       }
+    │   ├── openai.realtime.response [llm]
+    │   │   input: [
+    │   │     {
+    │   │       "content": [
+    │   │         {
+    │   │           "audio": {
+    │   │             "content_type": "audio/pcm",
+    │   │             "filename": "input-audio.pcm",
+    │   │             "key": "<uuid:2>",
+    │   │             "type": "braintrust_attachment"
+    │   │           },
+    │   │           "transcript": null,
+    │   │           "type": "input_audio"
+    │   │         }
+    │   │       ],
+    │   │       "id": "<span:1>",
+    │   │       "role": "user",
+    │   │       "status": "completed",
+    │   │       "type": "message"
+    │   │     },
+    │   │     {
+    │   │       "content": [
+    │   │         {
+    │   │           "text": "What is the weather in Vienna?",
+    │   │           "type": "input_text"
+    │   │         }
+    │   │       ],
+    │   │       "id": "<span:3>",
+    │   │       "role": "user",
+    │   │       "status": "completed",
+    │   │       "type": "message"
+    │   │     },
+    │   │     {
+    │   │       "content": [
+    │   │         {
+    │   │           "text": "I’ll quickly check the current weather in Vienna for you.",
+    │   │           "type": "output_text"
+    │   │         }
+    │   │       ],
+    │   │       "id": "<span:4>",
+    │   │       "phase": "commentary",
+    │   │       "role": "assistant",
+    │   │       "status": "completed",
+    │   │       "type": "message"
+    │   │     },
+    │   │     {
+    │   │       "arguments": "{}",
+    │   │       "call_id": "call_7uBGZUMycu8DuZU1",
+    │   │       "id": "<span:5>",
+    │   │       "name": "get_weather",
+    │   │       "status": "completed",
+    │   │       "type": "function_call"
+    │   │     },
+    │   │     {
+    │   │       "call_id": "call_7uBGZUMycu8DuZU1",
+    │   │       "id": "<span:6>",
+    │   │       "output": "Sunny.",
+    │   │       "type": "function_call_output"
+    │   │     }
+    │   │   ]
+    │   │   output: [
+    │   │     {
+    │   │       "content": [
+    │   │         {
+    │   │           "audio": {
+    │   │             "content_type": "audio/pcm",
+    │   │             "filename": "output-audio.pcm",
+    │   │             "key": "<uuid:2>",
+    │   │             "type": "braintrust_attachment"
+    │   │           },
+    │   │           "transcript": "It is sunny.",
+    │   │           "type": "output_audio"
+    │   │         }
+    │   │       ],
+    │   │       "id": "<span:1>",
+    │   │       "phase": "final_answer",
+    │   │       "role": "assistant",
+    │   │       "status": "completed",
+    │   │       "type": "message"
+    │   │     }
+    │   │   ]
+    │   │   metadata: {
+    │   │     "instructions": "Use get_weather when asked. Speak briefly in English.",
+    │   │     "model": "gpt-realtime-2",
+    │   │     "output_modalities": [
+    │   │       "audio"
+    │   │     ],
+    │   │     "provider": "openai",
+    │   │     "status": "completed",
+    │   │     "tool_choice": "auto",
+    │   │     "tools": [
+    │   │       {
+    │   │         "description": "Get the weather in Vienna.",
+    │   │         "name": "get_weather",
+    │   │         "parameters": {
+    │   │           "additionalProperties": false,
+    │   │           "properties": {},
+    │   │           "type": "object"
+    │   │         },
+    │   │         "type": "function"
+    │   │       }
+    │   │     ]
+    │   │   }
+    │   │   metrics: {
+    │   │     "completion_audio_tokens": 27,
+    │   │     "completion_text_tokens": 12,
+    │   │     "completion_tokens": 39,
+    │   │     "prompt_audio_tokens": 16,
+    │   │     "prompt_cached_tokens": 0,
+    │   │     "prompt_image_tokens": 0,
+    │   │     "prompt_text_tokens": 410,
+    │   │     "prompt_tokens": 426,
+    │   │     "time_to_first_token": 0,
+    │   │     "tokens": 465
+    │   │   }
+    │   │   context: {
+    │   │     "caller_filename": "<node-internal>",
+    │   │     "caller_functionname": "<node-internal>",
+    │   │     "caller_lineno": 0
+    │   │   }
+    │   ├── openai.realtime.response [llm]
+    │   │   input: [
+    │   │     {
+    │   │       "content": [
+    │   │         {
+    │   │           "audio": {
+    │   │             "content_type": "audio/pcm",
+    │   │             "filename": "input-audio.pcm",
+    │   │             "key": "<uuid:2>",
+    │   │             "type": "braintrust_attachment"
+    │   │           },
+    │   │           "transcript": null,
+    │   │           "type": "input_audio"
+    │   │         }
+    │   │       ],
+    │   │       "id": "<span:1>",
+    │   │       "role": "user",
+    │   │       "status": "completed",
+    │   │       "type": "message"
+    │   │     },
+    │   │     {
+    │   │       "content": [
+    │   │         {
+    │   │           "text": "What is the weather in Vienna?",
+    │   │           "type": "input_text"
+    │   │         }
+    │   │       ],
+    │   │       "id": "<span:3>",
+    │   │       "role": "user",
+    │   │       "status": "completed",
+    │   │       "type": "message"
+    │   │     },
+    │   │     {
+    │   │       "content": [
+    │   │         {
+    │   │           "text": "I’ll quickly check the current weather in Vienna for you.",
+    │   │           "type": "output_text"
+    │   │         }
+    │   │       ],
+    │   │       "id": "<span:4>",
+    │   │       "phase": "commentary",
+    │   │       "role": "assistant",
+    │   │       "status": "completed",
+    │   │       "type": "message"
+    │   │     },
+    │   │     {
+    │   │       "arguments": "{}",
+    │   │       "call_id": "call_7uBGZUMycu8DuZU1",
+    │   │       "id": "<span:5>",
+    │   │       "name": "get_weather",
+    │   │       "status": "completed",
+    │   │       "type": "function_call"
+    │   │     },
+    │   │     {
+    │   │       "call_id": "call_7uBGZUMycu8DuZU1",
+    │   │       "id": "<span:6>",
+    │   │       "output": "Sunny.",
+    │   │       "type": "function_call_output"
+    │   │     },
+    │   │     {
+    │   │       "content": [
+    │   │         {
+    │   │           "audio": {
+    │   │             "content_type": "audio/pcm",
+    │   │             "filename": "output-audio.pcm",
+    │   │             "key": "<uuid:8>",
+    │   │             "type": "braintrust_attachment"
+    │   │           },
+    │   │           "transcript": "It is sunny.",
+    │   │           "type": "output_audio"
+    │   │         }
+    │   │       ],
+    │   │       "id": "<span:7>",
+    │   │       "phase": "final_answer",
+    │   │       "role": "assistant",
+    │   │       "status": "completed",
+    │   │       "type": "message"
+    │   │     }
+    │   │   ]
+    │   │   metadata: {
+    │   │     "instructions": "Use get_weather when asked. Speak briefly in English.",
+    │   │     "model": "gpt-realtime-2",
+    │   │     "output_modalities": [
+    │   │       "audio"
+    │   │     ],
+    │   │     "provider": "openai",
+    │   │     "status": "cancelled",
+    │   │     "tool_choice": "auto",
+    │   │     "tools": [
+    │   │       {
+    │   │         "description": "Get the weather in Vienna.",
+    │   │         "name": "get_weather",
+    │   │         "parameters": {
+    │   │           "additionalProperties": false,
+    │   │           "properties": {},
+    │   │           "type": "object"
+    │   │         },
+    │   │         "type": "function"
+    │   │       }
+    │   │     ]
+    │   │   }
+    │   │   metrics: {
+    │   │     "completion_audio_tokens": 0,
+    │   │     "completion_text_tokens": 0,
+    │   │     "completion_tokens": 0,
+    │   │     "prompt_audio_tokens": 0,
+    │   │     "prompt_cached_tokens": 0,
+    │   │     "prompt_image_tokens": 0,
+    │   │     "prompt_text_tokens": 0,
+    │   │     "prompt_tokens": 0,
+    │   │     "tokens": 0
+    │   │   }
+    │   │   context: {
+    │   │     "caller_filename": "<node-internal>",
+    │   │     "caller_functionname": "<node-internal>",
+    │   │     "caller_lineno": 0
+    │   │   }
+    │   └── openai.realtime.response [llm]
+    │       input: [
+    │         {
+    │           "content": [
+    │             {
+    │               "audio": {
+    │                 "content_type": "audio/pcm",
+    │                 "filename": "input-audio.pcm",
+    │                 "key": "<uuid:2>",
+    │                 "type": "braintrust_attachment"
+    │               },
+    │               "transcript": null,
+    │               "type": "input_audio"
+    │             }
+    │           ],
+    │           "id": "<span:1>",
+    │           "role": "user",
+    │           "status": "completed",
+    │           "type": "message"
+    │         },
+    │         {
+    │           "content": [
+    │             {
+    │               "text": "What is the weather in Vienna?",
+    │               "type": "input_text"
+    │             }
+    │           ],
+    │           "id": "<span:3>",
+    │           "role": "user",
+    │           "status": "completed",
+    │           "type": "message"
+    │         },
+    │         {
+    │           "content": [
+    │             {
+    │               "text": "I’ll quickly check the current weather in Vienna for you.",
+    │               "type": "output_text"
+    │             }
+    │           ],
+    │           "id": "<span:4>",
+    │           "phase": "commentary",
+    │           "role": "assistant",
+    │           "status": "completed",
+    │           "type": "message"
+    │         },
+    │         {
+    │           "arguments": "{}",
+    │           "call_id": "call_7uBGZUMycu8DuZU1",
+    │           "id": "<span:5>",
+    │           "name": "get_weather",
+    │           "status": "completed",
+    │           "type": "function_call"
+    │         },
+    │         {
+    │           "call_id": "call_7uBGZUMycu8DuZU1",
+    │           "id": "<span:6>",
+    │           "output": "Sunny.",
+    │           "type": "function_call_output"
+    │         },
+    │         {
+    │           "content": [
+    │             {
+    │               "audio": {
+    │                 "content_type": "audio/pcm",
+    │                 "filename": "output-audio.pcm",
+    │                 "key": "<uuid:8>",
+    │                 "type": "braintrust_attachment"
+    │               },
+    │               "transcript": "It is sunny.",
+    │               "type": "output_audio"
+    │             }
+    │           ],
+    │           "id": "<span:7>",
+    │           "phase": "final_answer",
+    │           "role": "assistant",
+    │           "status": "completed",
+    │           "type": "message"
+    │         }
+    │       ]
+    │       metadata: {
+    │         "instructions": "Use get_weather when asked. Speak briefly in English.",
+    │         "model": "gpt-realtime-2",
+    │         "output_modalities": [
+    │           "audio"
+    │         ],
+    │         "provider": "openai",
+    │         "status": "interrupted",
+    │         "tool_choice": "auto",
+    │         "tools": [
+    │           {
+    │             "description": "Get the weather in Vienna.",
+    │             "name": "get_weather",
+    │             "parameters": {
+    │               "additionalProperties": false,
+    │               "properties": {},
+    │               "type": "object"
+    │             },
+    │             "type": "function"
+    │           }
+    │         ]
+    │       }
+    │       context: {
+    │         "caller_filename": "<node-internal>",
+    │         "caller_functionname": "<node-internal>",
+    │         "caller_lineno": 0
+    │       }
+    └── openai.realtime.session [task]
+        metadata: {
+          "instructions": "Use get_weather when asked. Speak briefly in English.",
+          "model": "gpt-realtime-2",
+          "output_modalities": [
+            "audio"
+          ],
+          "provider": "openai",
+          "tool_choice": "auto",
+          "tools": [
+            {
+              "description": "Get the weather in Vienna.",
+              "name": "get_weather",
+              "parameters": {
+                "additionalProperties": false,
+                "properties": {},
+                "type": "object"
+              },
+              "type": "function"
+            }
+          ]
+        }
+        ├── openai.realtime.response [llm]
+        │   input: [
+        │     {
+        │       "content": [
+        │         {
+        │           "audio": {
+        │             "content_type": "audio/pcm",
+        │             "filename": "input-audio.pcm",
+        │             "key": "<uuid:2>",
+        │             "type": "braintrust_attachment"
+        │           },
+        │           "transcript": null,
+        │           "type": "input_audio"
+        │         }
+        │       ],
+        │       "id": "<span:1>",
+        │       "role": "user",
+        │       "status": "completed",
+        │       "type": "message"
+        │     },
+        │     {
+        │       "content": [
+        │         {
+        │           "text": "What is the weather in Vienna?",
+        │           "type": "input_text"
+        │         }
+        │       ],
+        │       "id": "<span:3>",
+        │       "role": "user",
+        │       "status": "completed",
+        │       "type": "message"
+        │     }
+        │   ]
+        │   output: [
+        │     {
+        │       "content": [
+        │         {
+        │           "text": "I’ll check the current weather in Vienna for you now.",
+        │           "type": "output_text"
+        │         }
+        │       ],
+        │       "id": "<span:1>",
+        │       "phase": "commentary",
+        │       "role": "assistant",
+        │       "status": "completed",
+        │       "type": "message"
+        │     },
+        │     {
+        │       "arguments": "{}",
+        │       "call_id": "call_Jx1Pl9eZHUhaKMZU",
+        │       "id": "<span:2>",
+        │       "name": "get_weather",
+        │       "status": "completed",
+        │       "type": "function_call"
+        │     }
+        │   ]
+        │   metadata: {
+        │     "instructions": "Use get_weather when asked. Speak briefly in English.",
+        │     "model": "gpt-realtime-2",
+        │     "output_modalities": [
+        │       "audio"
+        │     ],
+        │     "provider": "openai",
+        │     "status": "completed",
+        │     "tool_choice": "auto",
+        │     "tools": [
+        │       {
+        │         "description": "Get the weather in Vienna.",
+        │         "name": "get_weather",
+        │         "parameters": {
+        │           "additionalProperties": false,
+        │           "properties": {},
+        │           "type": "object"
+        │         },
+        │         "type": "function"
+        │       }
+        │     ]
+        │   }
+        │   metrics: {
+        │     "completion_audio_tokens": 0,
+        │     "completion_text_tokens": 66,
+        │     "completion_tokens": 66,
+        │     "prompt_audio_tokens": 0,
+        │     "prompt_cached_tokens": 0,
+        │     "prompt_image_tokens": 0,
+        │     "prompt_text_tokens": 0,
+        │     "prompt_tokens": 0,
+        │     "time_to_first_token": 0,
+        │     "tokens": 66
+        │   }
+        │   context: {
+        │     "caller_filename": "<node-internal>",
+        │     "caller_functionname": "<node-internal>",
+        │     "caller_lineno": 0
+        │   }
+        │   └── get_weather [tool]
+        │       input: "{}"
+        │       output: "Sunny."
+        │       metadata: {
+        │         "provider": "openai",
+        │         "tool_call_id": "call_Jx1Pl9eZHUhaKMZU"
+        │       }
+        │       context: {
+        │         "caller_filename": "<node-internal>",
+        │         "caller_functionname": "<node-internal>",
+        │         "caller_lineno": 0
+        │       }
+        ├── openai.realtime.response [llm]
+        │   input: [
+        │     {
+        │       "content": [
+        │         {
+        │           "audio": {
+        │             "content_type": "audio/pcm",
+        │             "filename": "input-audio.pcm",
+        │             "key": "<uuid:2>",
+        │             "type": "braintrust_attachment"
+        │           },
+        │           "transcript": null,
+        │           "type": "input_audio"
+        │         }
+        │       ],
+        │       "id": "<span:1>",
+        │       "role": "user",
+        │       "status": "completed",
+        │       "type": "message"
+        │     },
+        │     {
+        │       "content": [
+        │         {
+        │           "text": "What is the weather in Vienna?",
+        │           "type": "input_text"
+        │         }
+        │       ],
+        │       "id": "<span:3>",
+        │       "role": "user",
+        │       "status": "completed",
+        │       "type": "message"
+        │     },
+        │     {
+        │       "content": [
+        │         {
+        │           "text": "I’ll check the current weather in Vienna for you now.",
+        │           "type": "output_text"
+        │         }
+        │       ],
+        │       "id": "<span:4>",
+        │       "phase": "commentary",
+        │       "role": "assistant",
+        │       "status": "completed",
+        │       "type": "message"
+        │     },
+        │     {
+        │       "arguments": "{}",
+        │       "call_id": "call_Jx1Pl9eZHUhaKMZU",
+        │       "id": "<span:5>",
+        │       "name": "get_weather",
+        │       "status": "completed",
+        │       "type": "function_call"
+        │     },
+        │     {
+        │       "call_id": "call_Jx1Pl9eZHUhaKMZU",
+        │       "id": "<span:6>",
+        │       "output": "Sunny.",
+        │       "type": "function_call_output"
+        │     }
+        │   ]
+        │   output: [
+        │     {
+        │       "content": [
+        │         {
+        │           "audio": {
+        │             "content_type": "audio/pcm",
+        │             "filename": "output-audio.pcm",
+        │             "key": "<uuid:2>",
+        │             "type": "braintrust_attachment"
+        │           },
+        │           "transcript": "It is sunny.",
+        │           "type": "output_audio"
+        │         }
+        │       ],
+        │       "id": "<span:1>",
+        │       "phase": "final_answer",
+        │       "role": "assistant",
+        │       "status": "completed",
+        │       "type": "message"
+        │     }
+        │   ]
+        │   metadata: {
+        │     "instructions": "Use get_weather when asked. Speak briefly in English.",
+        │     "model": "gpt-realtime-2",
+        │     "output_modalities": [
+        │       "audio"
+        │     ],
+        │     "provider": "openai",
+        │     "status": "completed",
+        │     "tool_choice": "auto",
+        │     "tools": [
+        │       {
+        │         "description": "Get the weather in Vienna.",
+        │         "name": "get_weather",
+        │         "parameters": {
+        │           "additionalProperties": false,
+        │           "properties": {},
+        │           "type": "object"
+        │         },
+        │         "type": "function"
+        │       }
+        │     ]
+        │   }
+        │   metrics: {
+        │     "completion_audio_tokens": 21,
+        │     "completion_text_tokens": 12,
+        │     "completion_tokens": 33,
+        │     "prompt_audio_tokens": 16,
+        │     "prompt_cached_tokens": 320,
+        │     "prompt_image_tokens": 0,
+        │     "prompt_text_tokens": 410,
+        │     "prompt_tokens": 426,
+        │     "time_to_first_token": 0,
+        │     "tokens": 459
+        │   }
+        │   context: {
+        │     "caller_filename": "<node-internal>",
+        │     "caller_functionname": "<node-internal>",
+        │     "caller_lineno": 0
+        │   }
+        ├── openai.realtime.response [llm]
+        │   input: [
+        │     {
+        │       "content": [
+        │         {
+        │           "audio": {
+        │             "content_type": "audio/pcm",
+        │             "filename": "input-audio.pcm",
+        │             "key": "<uuid:2>",
+        │             "type": "braintrust_attachment"
+        │           },
+        │           "transcript": null,
+        │           "type": "input_audio"
+        │         }
+        │       ],
+        │       "id": "<span:1>",
+        │       "role": "user",
+        │       "status": "completed",
+        │       "type": "message"
+        │     },
+        │     {
+        │       "content": [
+        │         {
+        │           "text": "What is the weather in Vienna?",
+        │           "type": "input_text"
+        │         }
+        │       ],
+        │       "id": "<span:3>",
+        │       "role": "user",
+        │       "status": "completed",
+        │       "type": "message"
+        │     },
+        │     {
+        │       "content": [
+        │         {
+        │           "text": "I’ll check the current weather in Vienna for you now.",
+        │           "type": "output_text"
+        │         }
+        │       ],
+        │       "id": "<span:4>",
+        │       "phase": "commentary",
+        │       "role": "assistant",
+        │       "status": "completed",
+        │       "type": "message"
+        │     },
+        │     {
+        │       "arguments": "{}",
+        │       "call_id": "call_Jx1Pl9eZHUhaKMZU",
+        │       "id": "<span:5>",
+        │       "name": "get_weather",
+        │       "status": "completed",
+        │       "type": "function_call"
+        │     },
+        │     {
+        │       "call_id": "call_Jx1Pl9eZHUhaKMZU",
+        │       "id": "<span:6>",
+        │       "output": "Sunny.",
+        │       "type": "function_call_output"
+        │     },
+        │     {
+        │       "content": [
+        │         {
+        │           "audio": {
+        │             "content_type": "audio/pcm",
+        │             "filename": "output-audio.pcm",
+        │             "key": "<uuid:8>",
+        │             "type": "braintrust_attachment"
+        │           },
+        │           "transcript": "It is sunny.",
+        │           "type": "output_audio"
+        │         }
+        │       ],
+        │       "id": "<span:7>",
+        │       "phase": "final_answer",
+        │       "role": "assistant",
+        │       "status": "completed",
+        │       "type": "message"
+        │     }
+        │   ]
+        │   metadata: {
+        │     "instructions": "Use get_weather when asked. Speak briefly in English.",
+        │     "model": "gpt-realtime-2",
+        │     "output_modalities": [
+        │       "audio"
+        │     ],
+        │     "provider": "openai",
+        │     "status": "cancelled",
+        │     "tool_choice": "auto",
+        │     "tools": [
+        │       {
+        │         "description": "Get the weather in Vienna.",
+        │         "name": "get_weather",
+        │         "parameters": {
+        │           "additionalProperties": false,
+        │           "properties": {},
+        │           "type": "object"
+        │         },
+        │         "type": "function"
+        │       }
+        │     ]
+        │   }
+        │   metrics: {
+        │     "completion_audio_tokens": 0,
+        │     "completion_text_tokens": 0,
+        │     "completion_tokens": 0,
+        │     "prompt_audio_tokens": 0,
+        │     "prompt_cached_tokens": 0,
+        │     "prompt_image_tokens": 0,
+        │     "prompt_text_tokens": 0,
+        │     "prompt_tokens": 0,
+        │     "tokens": 0
+        │   }
+        │   context: {
+        │     "caller_filename": "<node-internal>",
+        │     "caller_functionname": "<node-internal>",
+        │     "caller_lineno": 0
+        │   }
+        └── openai.realtime.response [llm]
+            input: [
+              {
+                "content": [
+                  {
+                    "audio": {
+                      "content_type": "audio/pcm",
+                      "filename": "input-audio.pcm",
+                      "key": "<uuid:2>",
+                      "type": "braintrust_attachment"
+                    },
+                    "transcript": null,
+                    "type": "input_audio"
+                  }
+                ],
+                "id": "<span:1>",
+                "role": "user",
+                "status": "completed",
+                "type": "message"
+              },
+              {
+                "content": [
+                  {
+                    "text": "What is the weather in Vienna?",
+                    "type": "input_text"
+                  }
+                ],
+                "id": "<span:3>",
+                "role": "user",
+                "status": "completed",
+                "type": "message"
+              },
+              {
+                "content": [
+                  {
+                    "text": "I’ll check the current weather in Vienna for you now.",
+                    "type": "output_text"
+                  }
+                ],
+                "id": "<span:4>",
+                "phase": "commentary",
+                "role": "assistant",
+                "status": "completed",
+                "type": "message"
+              },
+              {
+                "arguments": "{}",
+                "call_id": "call_Jx1Pl9eZHUhaKMZU",
+                "id": "<span:5>",
+                "name": "get_weather",
+                "status": "completed",
+                "type": "function_call"
+              },
+              {
+                "call_id": "call_Jx1Pl9eZHUhaKMZU",
+                "id": "<span:6>",
+                "output": "Sunny.",
+                "type": "function_call_output"
+              },
+              {
+                "content": [
+                  {
+                    "audio": {
+                      "content_type": "audio/pcm",
+                      "filename": "output-audio.pcm",
+                      "key": "<uuid:8>",
+                      "type": "braintrust_attachment"
+                    },
+                    "transcript": "It is sunny.",
+                    "type": "output_audio"
+                  }
+                ],
+                "id": "<span:7>",
+                "phase": "final_answer",
+                "role": "assistant",
+                "status": "completed",
+                "type": "message"
+              }
+            ]
+            metadata: {
+              "instructions": "Use get_weather when asked. Speak briefly in English.",
+              "model": "gpt-realtime-2",
+              "output_modalities": [
+                "audio"
+              ],
+              "provider": "openai",
+              "status": "interrupted",
+              "tool_choice": "auto",
+              "tools": [
+                {
+                  "description": "Get the weather in Vienna.",
+                  "name": "get_weather",
+                  "parameters": {
+                    "additionalProperties": false,
+                    "properties": {},
+                    "type": "object"
+                  },
+                  "type": "function"
+                }
+              ]
+            }
+            context: {
+              "caller_filename": "<node-internal>",
+              "caller_functionname": "<node-internal>",
+              "caller_lineno": 0
+            }

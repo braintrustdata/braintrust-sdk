@@ -1,0 +1,20 @@
+{
+  "model": "gpt-realtime-2",
+  "beta": true,
+  "events": [
+    {
+      "direction": "server",
+      "event": {
+        "type": "error",
+        "event_id": "event_ELWaYsuR5U0GDgBZh4qUz",
+        "error": {
+          "type": "invalid_request_error",
+          "code": "beta_api_shape_disabled",
+          "message": "The Realtime Beta API is no longer supported. Please use /v1/realtime for the GA API.",
+          "param": null,
+          "event_id": null
+        }
+      }
+    }
+  ]
+}

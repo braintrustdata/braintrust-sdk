@@ -166,3 +166,44 @@ See the [Migrate from v1.x to v2.x guide](https://www.braintrust.dev/docs/refere
 ## Compatibility
 
 The `braintrust` package is compatible with Node.js versions 20.12.0, 22.13.0, for the respective major Node.js release lines and above.
+
+## OpenAI images, audio, and Realtime
+
+`wrapOpenAI(client)` traces `images.generate()`, `images.edit()`,
+`images.createVariation()`, and `audio.speech.create()`,
+`audio.transcriptions.create()`, and `audio.translations.create()`. The Node
+import hook instruments the same methods automatically. Instrumentation accepts
+any model supported by the installed OpenAI SDK and endpoint.
+
+Media calls produce one LLM span, including streamed image generation and edits,
+streamed transcripts, and speech SSE responses. Inputs and outputs use media
+content parts, with inline media stored as Braintrust attachments. Remote image
+URLs remain URLs. Speech responses retain their original response and stream
+interfaces; audio is captured as the application reads it. Unread or cancelled
+speech does not produce a partial audio attachment.
+
+Realtime connections are separate objects in the OpenAI SDK. Wrap them before
+sending events or adding listeners:
+
+```ts
+import { initLogger, wrapOpenAIRealtime } from "braintrust";
+import { OpenAIRealtimeWebSocket } from "openai/realtime/websocket";
+
+initLogger({ projectName: "voice-app" });
+const realtime = wrapOpenAIRealtime(
+  new OpenAIRealtimeWebSocket({ model: "gpt-realtime-2" }),
+);
+realtime.on("response.done", (event) => {
+  console.log(event.response.output);
+});
+// Close the connection when the application is finished with it.
+```
+
+`OpenAIRealtimeWS` and the older `openai/beta/realtime/*` transports are supported
+as well. With automatic instrumentation, use the SDK connection directly.
+Realtime traces contain a session task span, child LLM spans for responses, and
+tool spans linking generated function calls to their submitted results. Traces
+capture audio attachments, transcripts, reported usage, response failures, and
+interrupted turns when the connection closes. Credential creation through
+`client.realtime.clientSecrets` is not a model call and is not traced; session
+credentials and transport authentication are excluded from span metadata.

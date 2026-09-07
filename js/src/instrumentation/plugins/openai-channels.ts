@@ -1,3 +1,9 @@
+import type {
+  OpenAIMediaParams,
+  OpenAIMediaResponse,
+  OpenAIRealtimeConnection,
+  OpenAIRealtimeEvent,
+} from "../../vendor-sdk-types/openai-media";
 import type { CompiledPrompt } from "../../logger";
 import { channel, defineChannels } from "../core/channel-definitions";
 import { INSTRUMENTATION_NAMES } from "../../span-origin";
@@ -38,6 +44,48 @@ type OpenAIResponsesChannelExtras = OpenAIChannelExtras;
 export const openAIChannels = defineChannels(
   "openai",
   {
+    imagesGenerate: channel<
+      [OpenAIMediaParams, unknown?],
+      OpenAIMediaResponse,
+      OpenAIChannelExtras
+    >({ channelName: "images.generate", kind: "async" }),
+    imagesEdit: channel<
+      [OpenAIMediaParams, unknown?],
+      OpenAIMediaResponse,
+      OpenAIChannelExtras
+    >({ channelName: "images.edit", kind: "async" }),
+    imagesCreateVariation: channel<
+      [OpenAIMediaParams, unknown?],
+      OpenAIMediaResponse,
+      OpenAIChannelExtras
+    >({ channelName: "images.createVariation", kind: "async" }),
+    audioSpeechCreate: channel<
+      [OpenAIMediaParams, unknown?],
+      OpenAIMediaResponse,
+      OpenAIChannelExtras
+    >({ channelName: "audio.speech.create", kind: "async" }),
+    audioTranscriptionsCreate: channel<
+      [OpenAIMediaParams, unknown?],
+      OpenAIMediaResponse,
+      OpenAIChannelExtras
+    >({ channelName: "audio.transcriptions.create", kind: "async" }),
+    audioTranslationsCreate: channel<
+      [OpenAIMediaParams, unknown?],
+      OpenAIMediaResponse,
+      OpenAIChannelExtras
+    >({ channelName: "audio.translations.create", kind: "async" }),
+    realtimeConnect: channel<
+      [OpenAIRealtimeConnection],
+      OpenAIRealtimeConnection
+    >({ channelName: "realtime.connect", kind: "sync-stream" }),
+    realtimeSend: channel<[OpenAIRealtimeEvent], void>({
+      channelName: "realtime.send",
+      kind: "sync-stream",
+    }),
+    realtimeOn: channel<
+      [string, (event: OpenAIRealtimeEvent) => void],
+      unknown
+    >({ channelName: "realtime.on", kind: "sync-stream" }),
     filesCreateTraced: channel<
       [OpenAIFilesCreateTraceArgs],
       OpenAIFileLike,

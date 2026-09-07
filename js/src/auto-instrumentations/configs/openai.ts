@@ -13,6 +13,232 @@ import { openAIChannels } from "../../instrumentation/plugins/openai-channels";
  * "orchestrion:openai:chat.completions.create"
  */
 export const openaiConfigs: InstrumentationConfig[] = [
+  {
+    channelName: openAIChannels.imagesGenerate.channelName,
+    module: {
+      name: "openai",
+      versionRange: ">=4.0.0",
+      filePath: "resources/images.mjs",
+    },
+    functionQuery: {
+      className: "Images",
+      methodName: "generate",
+      kind: "Async",
+    },
+  },
+  {
+    channelName: openAIChannels.imagesEdit.channelName,
+    module: {
+      name: "openai",
+      versionRange: ">=4.0.0",
+      filePath: "resources/images.mjs",
+    },
+    functionQuery: { className: "Images", methodName: "edit", kind: "Async" },
+  },
+  {
+    channelName: openAIChannels.imagesCreateVariation.channelName,
+    module: {
+      name: "openai",
+      versionRange: ">=4.0.0",
+      filePath: "resources/images.mjs",
+    },
+    functionQuery: {
+      className: "Images",
+      methodName: "createVariation",
+      kind: "Async",
+    },
+  },
+  {
+    channelName: openAIChannels.audioSpeechCreate.channelName,
+    module: {
+      name: "openai",
+      versionRange: ">=4.0.0",
+      filePath: "resources/audio/speech.mjs",
+    },
+    functionQuery: { className: "Speech", methodName: "create", kind: "Async" },
+  },
+  {
+    channelName: openAIChannels.audioTranscriptionsCreate.channelName,
+    module: {
+      name: "openai",
+      versionRange: ">=4.0.0",
+      filePath: "resources/audio/transcriptions.mjs",
+    },
+    functionQuery: {
+      className: "Transcriptions",
+      methodName: "create",
+      kind: "Async",
+    },
+  },
+  {
+    channelName: openAIChannels.audioTranslationsCreate.channelName,
+    module: {
+      name: "openai",
+      versionRange: ">=4.0.0",
+      filePath: "resources/audio/translations.mjs",
+    },
+    functionQuery: {
+      className: "Translations",
+      methodName: "create",
+      kind: "Async",
+    },
+  },
+  {
+    channelName: openAIChannels.realtimeSend.channelName,
+    module: {
+      name: "openai",
+      versionRange: ">=4.0.0",
+      filePath: "realtime/websocket.mjs",
+    },
+    functionQuery: {
+      className: "OpenAIRealtimeWebSocket",
+      methodName: "send",
+      kind: "Sync",
+    },
+  },
+  {
+    channelName: openAIChannels.realtimeOn.channelName,
+    module: {
+      name: "openai",
+      versionRange: ">=4.0.0",
+      filePath: "realtime/websocket.mjs",
+    },
+    functionQuery: {
+      className: "OpenAIRealtimeWebSocket",
+      methodName: "on",
+      kind: "Sync",
+    },
+  },
+  {
+    channelName: openAIChannels.realtimeSend.channelName,
+    module: {
+      name: "openai",
+      versionRange: ">=4.0.0",
+      filePath: "realtime/ws.mjs",
+    },
+    functionQuery: {
+      className: "OpenAIRealtimeWS",
+      methodName: "send",
+      kind: "Sync",
+    },
+  },
+  {
+    channelName: openAIChannels.realtimeOn.channelName,
+    module: {
+      name: "openai",
+      versionRange: ">=4.0.0",
+      filePath: "realtime/ws.mjs",
+    },
+    functionQuery: {
+      className: "OpenAIRealtimeWS",
+      methodName: "on",
+      kind: "Sync",
+    },
+  },
+  {
+    channelName: openAIChannels.realtimeSend.channelName,
+    module: {
+      name: "openai",
+      versionRange: ">=4.0.0 <6.0.0",
+      filePath: "beta/realtime/websocket.mjs",
+    },
+    functionQuery: {
+      className: "OpenAIRealtimeWebSocket",
+      methodName: "send",
+      kind: "Sync",
+    },
+  },
+  {
+    channelName: openAIChannels.realtimeOn.channelName,
+    module: {
+      name: "openai",
+      versionRange: ">=4.0.0 <6.0.0",
+      filePath: "beta/realtime/websocket.mjs",
+    },
+    functionQuery: {
+      className: "OpenAIRealtimeWebSocket",
+      methodName: "on",
+      kind: "Sync",
+    },
+  },
+  {
+    channelName: openAIChannels.realtimeSend.channelName,
+    module: {
+      name: "openai",
+      versionRange: ">=4.0.0 <6.0.0",
+      filePath: "beta/realtime/ws.mjs",
+    },
+    functionQuery: {
+      className: "OpenAIRealtimeWS",
+      methodName: "send",
+      kind: "Sync",
+    },
+  },
+  {
+    channelName: openAIChannels.realtimeOn.channelName,
+    module: {
+      name: "openai",
+      versionRange: ">=4.0.0 <6.0.0",
+      filePath: "beta/realtime/ws.mjs",
+    },
+    functionQuery: {
+      className: "OpenAIRealtimeWS",
+      methodName: "on",
+      kind: "Sync",
+    },
+  },
+  {
+    channelName: openAIChannels.realtimeOn.channelName,
+    module: {
+      name: "openai",
+      versionRange: ">=4.0.0",
+      filePath: "realtime/websocket.mjs",
+    },
+    functionQuery: {
+      className: "OpenAIRealtimeWebSocket",
+      methodName: "once",
+      kind: "Sync",
+    },
+  },
+  {
+    channelName: openAIChannels.realtimeOn.channelName,
+    module: {
+      name: "openai",
+      versionRange: ">=4.0.0",
+      filePath: "beta/realtime/websocket.mjs",
+    },
+    functionQuery: {
+      className: "OpenAIRealtimeWebSocket",
+      methodName: "once",
+      kind: "Sync",
+    },
+  },
+  {
+    channelName: openAIChannels.realtimeOn.channelName,
+    module: {
+      name: "openai",
+      versionRange: ">=4.0.0",
+      filePath: "realtime/ws.mjs",
+    },
+    functionQuery: {
+      className: "OpenAIRealtimeWS",
+      methodName: "once",
+      kind: "Sync",
+    },
+  },
+  {
+    channelName: openAIChannels.realtimeOn.channelName,
+    module: {
+      name: "openai",
+      versionRange: ">=4.0.0",
+      filePath: "beta/realtime/ws.mjs",
+    },
+    functionQuery: {
+      className: "OpenAIRealtimeWS",
+      methodName: "once",
+      kind: "Sync",
+    },
+  },
   // Chat Completions
   {
     channelName: openAIChannels.chatCompletionsCreate.channelName,
