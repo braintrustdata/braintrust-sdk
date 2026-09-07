@@ -1,5 +1,4 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { SpanTypeAttribute } from "braintrust/util";
 import {
   Span as BraintrustSpan,
   startSpan,
@@ -7,6 +6,7 @@ import {
   currentSpan,
   NOOP_SPAN,
   Attachment,
+  type StartSpanArgs,
 } from "braintrust";
 import {
   SpanType,
@@ -29,7 +29,9 @@ import {
   isSpeechGroupSpanData,
 } from "./types";
 
-function spanTypeFromAgents(span: AgentsSpan): SpanTypeAttribute {
+function spanTypeFromAgents(
+  span: AgentsSpan,
+): NonNullable<StartSpanArgs["type"]> {
   const spanType = span.spanData.type;
 
   if (
@@ -38,7 +40,7 @@ function spanTypeFromAgents(span: AgentsSpan): SpanTypeAttribute {
     spanType === SpanType.CUSTOM ||
     spanType === SpanType.SPEECH_GROUP
   ) {
-    return SpanTypeAttribute.TASK;
+    return "task";
   }
 
   if (
@@ -46,7 +48,7 @@ function spanTypeFromAgents(span: AgentsSpan): SpanTypeAttribute {
     spanType === SpanType.GUARDRAIL ||
     spanType === SpanType.MCP_TOOLS
   ) {
-    return SpanTypeAttribute.TOOL;
+    return "tool";
   }
 
   if (
@@ -55,10 +57,10 @@ function spanTypeFromAgents(span: AgentsSpan): SpanTypeAttribute {
     spanType === SpanType.TRANSCRIPTION ||
     spanType === SpanType.SPEECH
   ) {
-    return SpanTypeAttribute.LLM;
+    return "llm";
   }
 
-  return SpanTypeAttribute.TASK;
+  return "task";
 }
 
 function spanNameFromAgents(span: AgentsSpan): string {
@@ -120,7 +122,7 @@ function getTimeElapsed(end?: string, start?: string): number | undefined {
 export class OpenAIAgentsTraceProcessor {
   private static readonly DEFAULT_MAX_TRACES = 10000;
 
-  private logger?: Logger<any>;
+  private logger?: Logger;
   private maxTraces: number;
   private traceSpans = new Map<
     string,
@@ -284,18 +286,18 @@ export class OpenAIAgentsTraceProcessor {
       // Create as child of current span
       span = current.startSpan({
         name: trace.name,
-        type: SpanTypeAttribute.TASK,
+        type: "task",
       });
     } else {
       // No parent span available, create as root
       span = this.logger
         ? this.logger.startSpan({
             name: trace.name,
-            type: SpanTypeAttribute.TASK,
+            type: "task",
           })
         : startSpan({
             name: trace.name,
-            type: SpanTypeAttribute.TASK,
+            type: "task",
           });
     }
 

@@ -18,20 +18,14 @@ import iso from "../isomorph";
 
 const mockNewTracingChannel = iso.newTracingChannel as ReturnType<typeof vi.fn>;
 
-describe("Plugin Registry", () => {
+describe("Instrumentation Registry", () => {
   beforeEach(() => {
     // Setup mock channel
     const mockChannel = {
       subscribe: vi.fn(),
-      unsubscribe: vi.fn(),
       hasSubscribers: false,
     };
     mockNewTracingChannel.mockReturnValue(mockChannel);
-  });
-
-  // Clean up after each test
-  afterEach(() => {
-    registry.disable();
   });
 
   it("should not be enabled by default", () => {
@@ -39,11 +33,10 @@ describe("Plugin Registry", () => {
     expect(testRegistry.isEnabled()).toBe(false);
   });
 
-  it("should enable plugins when enable() is called", () => {
+  it("should enable instrumentation consumers when enable() is called", () => {
     const testRegistry = new (registry.constructor as any)();
     testRegistry.enable();
     expect(testRegistry.isEnabled()).toBe(true);
-    testRegistry.disable();
   });
 
   it("should be idempotent (calling enable() multiple times)", () => {
@@ -51,12 +44,11 @@ describe("Plugin Registry", () => {
     testRegistry.enable();
     testRegistry.enable(); // Should not throw
     expect(testRegistry.isEnabled()).toBe(true);
-    testRegistry.disable();
   });
 
   it("should block a second instance from subscribing when another is already enabled", () => {
     // Regression test for BT-5139: when the SDK is loaded from two different
-    // module paths in the same process, each gets its own PluginRegistry
+    // module paths in the same process, each gets its own instrumentation registry
     // instance. Without cross-instance deduplication, both would subscribe to
     // the same global hook, causing every OpenAI call to produce two
     // LLM spans.
@@ -79,8 +71,6 @@ describe("Plugin Registry", () => {
       instanceB.enable();
       expect(instanceB.isEnabled()).toBe(false);
     } finally {
-      instanceA.disable();
-      instanceB.disable();
       delete (globalThis as any)[stateKey];
     }
   });
@@ -96,7 +86,6 @@ describe("Plugin Registry", () => {
       testRegistry.enable();
       expect(testRegistry.isEnabled()).toBe(true);
     } finally {
-      testRegistry.disable();
       delete (globalThis as any)[stateKey];
     }
   });
@@ -115,7 +104,6 @@ describe("Plugin Registry", () => {
       expect(warnSpy[0]).toContain("Cannot configure instrumentation");
     } finally {
       console.warn = originalWarn;
-      testRegistry.disable();
     }
   });
 
@@ -132,33 +120,11 @@ describe("Plugin Registry", () => {
       expect(warnSpy.length).toBe(0);
     } finally {
       console.warn = originalWarn;
-      testRegistry.disable();
     }
-  });
-
-  it("should disable plugins when disable() is called", () => {
-    const testRegistry = new (registry.constructor as any)();
-    testRegistry.enable();
-    expect(testRegistry.isEnabled()).toBe(true);
-
-    testRegistry.disable();
-    expect(testRegistry.isEnabled()).toBe(false);
-  });
-
-  it("should be idempotent (calling disable() multiple times)", () => {
-    const testRegistry = new (registry.constructor as any)();
-    testRegistry.enable();
-    testRegistry.disable();
-    testRegistry.disable(); // Should not throw
-    expect(testRegistry.isEnabled()).toBe(false);
   });
 });
 
 describe("configureInstrumentation API", () => {
-  afterEach(() => {
-    registry.disable();
-  });
-
   it("should export configureInstrumentation function", () => {
     expect(typeof configureInstrumentation).toBe("function");
   });
@@ -194,7 +160,6 @@ describe("Environment Variable Configuration", () => {
   afterEach(async () => {
     const iso = (await import("../isomorph")).default;
     iso.getEnv = originalGetEnv;
-    registry.disable();
   });
 
   it("should parse BRAINTRUST_DISABLE_INSTRUMENTATION with single SDK", async () => {
@@ -211,7 +176,6 @@ describe("Environment Variable Configuration", () => {
 
     // OpenAI should be disabled, others enabled by default
     expect(testRegistry.isEnabled()).toBe(true);
-    testRegistry.disable();
   });
 
   it("should parse BRAINTRUST_DISABLE_INSTRUMENTATION with multiple SDKs", async () => {
@@ -228,7 +192,6 @@ describe("Environment Variable Configuration", () => {
 
     // Both should be disabled
     expect(testRegistry.isEnabled()).toBe(true);
-    testRegistry.disable();
   });
 
   it("should handle whitespace in BRAINTRUST_DISABLE_INSTRUMENTATION", async () => {
@@ -244,7 +207,6 @@ describe("Environment Variable Configuration", () => {
     testRegistry.enable();
 
     expect(testRegistry.isEnabled()).toBe(true);
-    testRegistry.disable();
   });
 
   it("should handle empty BRAINTRUST_DISABLE_INSTRUMENTATION", async () => {
@@ -261,7 +223,6 @@ describe("Environment Variable Configuration", () => {
 
     // All should be enabled (nothing disabled)
     expect(testRegistry.isEnabled()).toBe(true);
-    testRegistry.disable();
   });
 
   it("should be case-insensitive for SDK names", async () => {
@@ -277,6 +238,5 @@ describe("Environment Variable Configuration", () => {
     testRegistry.enable();
 
     expect(testRegistry.isEnabled()).toBe(true);
-    testRegistry.disable();
   });
 });

@@ -1,11 +1,21 @@
 /* eslint-disable @typescript-eslint/consistent-type-assertions */
 
-import { vi, expect, test, describe, beforeEach, afterEach } from "vitest";
+import {
+  vi,
+  expect,
+  expectTypeOf,
+  test,
+  describe,
+  beforeEach,
+  afterEach,
+} from "vitest";
 import {
   _exportsForTestingOnly,
+  _internalStartSpan,
   init,
   initDataset,
   initLogger,
+  extractTraceContextFromHeaders,
   Prompt,
   RemoteEvalParameters,
   BraintrustState,
@@ -13,6 +23,7 @@ import {
   loadPrompt,
   loadParameters,
   wrapTraced,
+  traced,
   currentSpan,
   withParent,
   startSpan,
@@ -21,6 +32,8 @@ import {
   deepCopyEvent,
   ReadonlyExperiment,
   renderMessageImpl,
+  flush,
+  type InitLoggerOptions,
 } from "./logger";
 
 import { configureNode } from "./node/config";
@@ -43,6 +56,12 @@ import { DiskCache } from "./prompt-cache/disk-cache";
 import { LRUCache } from "./lru-cache";
 
 configureNode();
+
+type InitLoggerHasAsyncFlush = "asyncFlush" extends keyof InitLoggerOptions
+  ? true
+  : false;
+
+expectTypeOf<InitLoggerHasAsyncFlush>().toEqualTypeOf<false>();
 
 test("renderMessage with file content parts", () => {
   const message = {
@@ -437,6 +456,57 @@ test("verify MemoryBackgroundLogger intercepts logs", async () => {
   expect(await memoryLogger.drain()).length(0);
 
   _exportsForTestingOnly.clearTestBackgroundLogger(); // can go back to normal
+});
+
+test("logger and tracing APIs preserve return shapes without implicit flushing", async () => {
+  await _exportsForTestingOnly.simulateLoginForTests();
+  const backgroundLogger = _exportsForTestingOnly.useTestBackgroundLogger();
+  const flushSpy = vi.spyOn(backgroundLogger, "flush");
+
+  try {
+    const logger = initLogger({
+      projectName: "test",
+      projectId: "test-project-id",
+    });
+
+    const id = logger.log({ input: "input" });
+    expectTypeOf(id).toEqualTypeOf<string>();
+
+    const loggerSyncResult = logger.traced(() => 42 as const);
+    expectTypeOf(loggerSyncResult).toEqualTypeOf<42>();
+    expect(loggerSyncResult).toBe(42);
+
+    const loggerAsyncResult = logger.traced(async () => 43);
+    expectTypeOf(loggerAsyncResult).toEqualTypeOf<Promise<number>>();
+    await expect(loggerAsyncResult).resolves.toBe(43);
+
+    const tracedSyncResult = traced(() => "sync" as const);
+    expectTypeOf(tracedSyncResult).toEqualTypeOf<"sync">();
+    expect(tracedSyncResult).toBe("sync");
+
+    const syncFunction = (value: number) => value + 1;
+    const wrappedSyncFunction = wrapTraced(syncFunction);
+    expectTypeOf(wrappedSyncFunction).toEqualTypeOf<typeof syncFunction>();
+    expect(wrappedSyncFunction(1)).toBe(2);
+
+    const asyncFunction = async (value: number) => value + 1;
+    const wrappedAsyncFunction = wrapTraced(asyncFunction);
+    expectTypeOf(wrappedAsyncFunction).toEqualTypeOf<typeof asyncFunction>();
+    await expect(wrappedAsyncFunction(2)).resolves.toBe(3);
+
+    expect(flushSpy).not.toHaveBeenCalled();
+
+    await logger.flush();
+    const span = logger.startSpan({ name: "explicit-flush" });
+    span.end();
+    await span.flush();
+    await flush();
+
+    expect(flushSpy).toHaveBeenCalledTimes(3);
+  } finally {
+    _exportsForTestingOnly.clearTestBackgroundLogger();
+    _exportsForTestingOnly.simulateLogoutForTests();
+  }
 });
 
 test("init validation", () => {
@@ -1017,7 +1087,8 @@ test("legacy initDataset applies bt eval internal BTQL runtime value", async () 
       },
     });
 
-    const dataset = initDataset("test-project", {
+    const dataset = initDataset({
+      project: "test-project",
       dataset: "test-dataset",
       state,
     });
@@ -3501,7 +3572,7 @@ describe("wrapTraced noTraceIO", () => {
         });
         return response;
       },
-      { noTraceIO: true, asyncFlush: true },
+      { noTraceIO: true },
     );
 
     expect(callModel({ input: "manual input" })).toEqual({
@@ -3951,7 +4022,7 @@ describe("parent precedence", () => {
   test("withParent + wrapTraced: child spans attach to current span (not directly to withParent)", async () => {
     const logger = initLogger({ projectName: "test", projectId: "pid" });
     const outer = logger.startSpan({ name: "outer" });
-    const parentStr = await outer.export();
+    const parentContext = extractTraceContextFromHeaders(outer.inject())!;
     outer.end();
 
     const inner = wrapTraced(
@@ -3961,7 +4032,7 @@ describe("parent precedence", () => {
       { name: "inner" },
     );
 
-    await withParent(parentStr, () => inner());
+    await withParent(parentContext, () => inner());
 
     await memory.flush();
     const events = await memory.drain();
@@ -4005,7 +4076,7 @@ describe("parent precedence", () => {
 
     const inner = wrapTraced(
       async function inner() {
-        startSpan({ name: "forced", parent: parentStr }).end();
+        _internalStartSpan({ name: "forced", parent: parentStr }).end();
       },
       { name: "inner" },
     );
@@ -4037,7 +4108,7 @@ describe("parent precedence", () => {
 
     const child = secondaryLogger.startSpan({
       name: "child",
-      parent: parentStr,
+      parent: parentStr as never,
     });
     child.end();
 
@@ -4068,7 +4139,7 @@ describe("parent precedence", () => {
 
     const child = secondaryExperiment.startSpan({
       name: "child",
-      parent: parentStr,
+      parent: parentStr as never,
     });
     child.end();
 

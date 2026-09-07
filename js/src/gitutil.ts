@@ -1,7 +1,7 @@
-import {
-  type GitMetadataSettingsType as GitMetadataSettings,
-  type RepoInfoType as RepoInfo,
-} from "./generated_types";
+import type {
+  GitMetadataSettingsType as GitMetadataSettings,
+  RepoInfoType as RepoInfo,
+} from "./generated_plain_types";
 import { debugLogger } from "./debug-logger";
 import { runGitCommand } from "./git-command";
 
@@ -171,7 +171,7 @@ export async function getRepoInfo(settings?: GitMetadataSettings) {
   return sanitized;
 }
 
-export async function currentRepoPath(): Promise<string | undefined> {
+async function currentRepoPath(): Promise<string | undefined> {
   return await attempt(async () =>
     (await runGitCommand(["rev-parse", "--show-toplevel"])).trim(),
   );

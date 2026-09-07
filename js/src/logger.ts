@@ -37,8 +37,7 @@ import {
   batchItems,
   constructJsonArray,
   DatasetRecord,
-  DEFAULT_IS_LEGACY_DATASET,
-  ensureDatasetRecord,
+  ensureNewDatasetRecord,
   ExperimentEvent,
   ExperimentLogFullArgs,
   ExperimentLogPartialArgs,
@@ -66,37 +65,38 @@ import {
   getObjValueByPath,
 } from "./util";
 import {
-  type AnyModelParamsType as AnyModelParam,
   AttachmentReference as attachmentReferenceSchema,
-  type AttachmentReferenceType as AttachmentReference,
   BraintrustAttachmentReference as BraintrustAttachmentReferenceSchema,
-  type BraintrustAttachmentReferenceType as BraintrustAttachmentReference,
   BraintrustModelParams as braintrustModelParamsSchema,
   ChatCompletionTool as chatCompletionToolSchema,
-  type ChatCompletionToolType as ChatCompletionTool,
   ExternalAttachmentReference as ExternalAttachmentReferenceSchema,
-  type ExternalAttachmentReferenceType as ExternalAttachmentReference,
-  type ModelParamsType as ModelParams,
   ResponseFormatJsonSchema as responseFormatJsonSchemaSchema,
   AttachmentStatus as attachmentStatusSchema,
-  type AttachmentStatusType as AttachmentStatus,
   GitMetadataSettings as gitMetadataSettingsSchema,
-  type GitMetadataSettingsType as GitMetadataSettings,
-  type ChatCompletionMessageParamType as Message,
-  type ChatCompletionOpenAIMessageParamType as OpenAIMessage,
   DatasetSnapshot as datasetSnapshotSchema,
-  type DatasetSnapshotType as DatasetSnapshot,
   PromptData as promptDataSchema,
-  type PromptDataType as PromptData,
   Prompt as promptSchema,
-  type PromptType as PromptRow,
-  type PromptSessionEventType as PromptSessionEvent,
-  type RepoInfoType as RepoInfo,
-  type ObjectReferenceType as ObjectReference,
-  type PromptBlockDataType as PromptBlockData,
-  type ResponseFormatJsonSchemaType as ResponseFormatJsonSchema,
-  type ObjectReferenceType,
 } from "./generated_types";
+import type {
+  AnyModelParamsType as AnyModelParam,
+  AttachmentReferenceType as AttachmentReference,
+  BraintrustAttachmentReferenceType as BraintrustAttachmentReference,
+  ChatCompletionToolType as ChatCompletionTool,
+  ExternalAttachmentReferenceType as ExternalAttachmentReference,
+  ModelParamsType as ModelParams,
+  AttachmentStatusType as AttachmentStatus,
+  GitMetadataSettingsType as GitMetadataSettings,
+  ChatCompletionMessageParamType as Message,
+  ChatCompletionOpenAIMessageParamType as OpenAIMessage,
+  DatasetSnapshotType as DatasetSnapshot,
+  PromptDataType as PromptData,
+  PromptType as PromptRow,
+  PromptSessionEventType as PromptSessionEvent,
+  RepoInfoType as RepoInfo,
+  ObjectReferenceType as ObjectReference,
+  PromptBlockDataType as PromptBlockData,
+  ResponseFormatJsonSchemaType as ResponseFormatJsonSchema,
+} from "./generated_plain_types";
 
 const BRAINTRUST_ATTACHMENT =
   BraintrustAttachmentReferenceSchema.shape.type.value;
@@ -131,16 +131,21 @@ const datasetRestorePreviewResultSchema = z.object({
   rows_to_restore: z.number(),
   rows_to_delete: z.number(),
 });
-export type DatasetRestorePreviewResult = z.infer<
-  typeof datasetRestorePreviewResultSchema
->;
+export type DatasetRestorePreviewResult = {
+  rows_to_restore: number;
+  rows_to_delete: number;
+};
 
 const datasetRestoreResultSchema = z.object({
   xact_id: z.string().nullable(),
   rows_restored: z.number(),
   rows_deleted: z.number(),
 });
-export type DatasetRestoreResult = z.infer<typeof datasetRestoreResultSchema>;
+export type DatasetRestoreResult = {
+  xact_id: string | null;
+  rows_restored: number;
+  rows_deleted: number;
+};
 
 const parametersRowSchema = z.object({
   id: z.string().uuid(),
@@ -159,7 +164,21 @@ const parametersRowSchema = z.object({
     .union([z.object({}).partial().passthrough(), z.null()])
     .optional(),
 });
-type ParametersRow = z.infer<typeof parametersRowSchema>;
+type ParametersRow = {
+  id: string;
+  _xact_id: string;
+  project_id: string;
+  name: string;
+  slug: string;
+  description?: string | null;
+  function_type: "parameters";
+  function_data: {
+    type: "parameters";
+    data?: Record<string, unknown>;
+    __schema: Record<string, unknown>;
+  };
+  metadata?: Record<string, unknown> | null;
+};
 
 import { waitUntil } from "@vercel/functions";
 import {
@@ -313,15 +332,18 @@ export type StartSpanArgs = {
   spanAttributes?: Record<any, any>;
   startTime?: number;
   /**
-   * The parent to start this span under. May be an exported span slug string
-   * (from `span.export()`) or an opaque W3C trace-context (from
-   * {@link extractTraceContextFromHeaders}).
+   * An opaque W3C trace context returned by
+   * {@link extractTraceContextFromHeaders}.
    */
-  parent?: string | PropagationContext;
+  parent?: PropagationContext;
   event?: StartSpanEventArgs;
   propagatedEvent?: StartSpanEventArgs;
   spanId?: string;
   parentSpanIds?: ParentSpanIds | MultiParentSpanIds;
+};
+
+type InternalStartSpanArgs = Omit<StartSpanArgs, "parent"> & {
+  parent?: string | PropagationContext;
 };
 
 export type EndSpanArgs = {
@@ -431,8 +453,8 @@ export interface Span extends Exportable {
    * parameters of {@link Span.startSpan} for usage details.
    *
    * Callers should treat the return value as opaque. The serialization format
-   * may change from time to time. If parsing is needed, use
-   * `SpanComponentsV3.fromStr`.
+   * may change from time to time. For cross-service propagation, prefer
+   * {@link Span.inject} and {@link extractTraceContextFromHeaders}.
    *
    * @returns Serialized representation of this span's identifiers.
    */
@@ -490,11 +512,6 @@ export interface Span extends Exportable {
   flush(): Promise<void>;
 
   /**
-   * Alias for `end`.
-   */
-  close(args?: EndSpanArgs): number;
-
-  /**
    * Set the span's name, type, or other attributes after it's created.
    */
   setAttributes(args: Omit<StartSpanArgs, "event">): void;
@@ -518,12 +535,8 @@ export interface Span extends Exportable {
   kind: "span";
 }
 
-export const BRAINTRUST_CURRENT_SPAN_STORE = Symbol.for(
-  "braintrust.currentSpanStore",
-);
-
 /**
- * The type of AsyncLocalStorage exposed via {@link BRAINTRUST_CURRENT_SPAN_STORE}.
+ * The AsyncLocalStorage contract used by context-manager integrations.
  *
  * The stored value is intentionally opaque (`unknown`) because the concrete type
  * depends on the active context manager:
@@ -541,6 +554,14 @@ export abstract class ContextManager {
   abstract getCurrentSpan(): Span | undefined;
 
   /**
+   * Return the store used by instrumentation hooks to propagate the current
+   * span, when the context manager supports direct store binding.
+   */
+  getCurrentSpanStore(): CurrentSpanStore | undefined {
+    return undefined;
+  }
+
+  /**
    * Returns the value to store in the ALS bound to a global hook's start event.
    * In default mode this is the Span itself; in OTEL mode it is the OTEL Context
    * containing the span so that OTEL's own ALS stores a proper Context object.
@@ -553,12 +574,14 @@ export abstract class ContextManager {
 
 class BraintrustContextManager extends ContextManager {
   private _currentSpan: IsoAsyncLocalStorage<Span>;
-  [BRAINTRUST_CURRENT_SPAN_STORE]: IsoAsyncLocalStorage<Span>;
 
   constructor() {
     super();
     this._currentSpan = iso.newAsyncLocalStorage();
-    this[BRAINTRUST_CURRENT_SPAN_STORE] = this._currentSpan;
+  }
+
+  getCurrentSpanStore(): CurrentSpanStore {
+    return this._currentSpan;
   }
 
   getParentSpanIds(): ContextParentSpanIds | undefined {
@@ -582,11 +605,8 @@ class BraintrustContextManager extends ContextManager {
   }
 }
 
-// make sure to update @braintrust/otel package
 declare global {
   var BRAINTRUST_CONTEXT_MANAGER: (new () => ContextManager) | undefined;
-  var BRAINTRUST_ID_GENERATOR: (new () => IDGenerator) | undefined;
-  var BRAINTRUST_SPAN_COMPONENT: SpanComponent | undefined;
 }
 
 type SpanComponent = typeof SpanComponentsV3 | typeof SpanComponentsV4;
@@ -597,11 +617,7 @@ type SpanComponent = typeof SpanComponentsV3 | typeof SpanComponentsV4;
 // serialize as V4, legacy UUID IDs serialize as V3. These must move together --
 // serializing hex IDs via V3 would lose the compact encoding and risk
 // corrupting hex values that happen to parse as UUIDs. An explicit
-// `globalThis.BRAINTRUST_SPAN_COMPONENT` (e.g. from `@braintrust/otel`) wins.
 function getSpanComponentsClass(): SpanComponent {
-  if (globalThis.BRAINTRUST_SPAN_COMPONENT) {
-    return globalThis.BRAINTRUST_SPAN_COMPONENT;
-  }
   return resolveUseLegacyUuidIds() ? SpanComponentsV3 : SpanComponentsV4;
 }
 
@@ -609,6 +625,20 @@ export function getContextManager(): ContextManager {
   return globalThis.BRAINTRUST_CONTEXT_MANAGER
     ? new globalThis.BRAINTRUST_CONTEXT_MANAGER()
     : new BraintrustContextManager();
+}
+
+/**
+ * Configure the context manager used by Braintrust.
+ *
+ * This extension point is intended for runtime integrations such as
+ * `@braintrust/otel` and `@braintrust/browser`. Passing `undefined` restores
+ * Braintrust's default context manager.
+ */
+export function configureContextManager(
+  contextManager: (new () => ContextManager) | undefined,
+): void {
+  globalThis.BRAINTRUST_CONTEXT_MANAGER = contextManager;
+  _globalState?.[RESET_CONTEXT_MANAGER_STATE]();
 }
 
 /**
@@ -674,10 +704,6 @@ export class NoopSpan implements Span {
 
   public async flush(): Promise<void> {}
 
-  public close(args?: EndSpanArgs): number {
-    return this.end(args);
-  }
-
   public setAttributes(_args: Omit<StartSpanArgs, "event">) {}
 
   public startSpanWithParents(
@@ -734,7 +760,18 @@ const loginSchema = z.strictObject({
   debugLogLevelDisabled: z.boolean().optional(),
 });
 
-export type SerializedBraintrustState = z.infer<typeof loginSchema>;
+export type SerializedBraintrustState = {
+  appUrl: string;
+  appPublicUrl: string;
+  orgName: string;
+  apiUrl: string;
+  proxyUrl: string;
+  loginToken: string;
+  orgId?: string | null;
+  gitMetadataSettings?: GitMetadataSettings | null;
+  debugLogLevel?: "error" | "warn" | "info" | "debug";
+  debugLogLevelDisabled?: boolean;
+};
 
 let stateNonce = 0;
 
@@ -770,9 +807,7 @@ function normalizeProxyConnUrl(proxyUrl: string): string {
 export class BraintrustState {
   public id: string;
   public currentExperiment: Experiment | undefined;
-  // Note: the value of IsAsyncFlush doesn't really matter here, since we
-  // (safely) dynamically cast it whenever retrieving the logger.
-  public currentLogger: Logger<false> | undefined;
+  public currentLogger: Logger | undefined;
   public currentParent: IsoAsyncLocalStorage<string | PropagationContext>;
   public currentSpan: IsoAsyncLocalStorage<Span>;
   // Any time we re-log in, we directly update the apiConn inside the logger.
@@ -1782,20 +1817,15 @@ interface OrgProjectMetadata {
   project: ObjectMetadata;
 }
 
-export interface LinkArgs {
+interface LinkArgs {
   org_name?: string;
   app_url?: string;
+}
+
+type ProjectMetadataArgs = {
   project_name?: string;
   project_id?: string;
-}
-
-export interface LogOptions<IsAsyncFlush> {
-  asyncFlush?: IsAsyncFlush;
-  computeMetadataArgs?: Record<string, any>;
-  linkArgs?: LinkArgs;
-}
-
-export type PromiseUnless<B, R> = B extends true ? R : Promise<Awaited<R>>;
+};
 
 export interface AttachmentParams {
   data: string | Blob | ArrayBuffer;
@@ -2145,7 +2175,10 @@ const attachmentMetadataSchema = z.object({
   status: attachmentStatusSchema,
 });
 
-type AttachmentMetadata = z.infer<typeof attachmentMetadataSchema>;
+type AttachmentMetadata = {
+  downloadUrl: string;
+  status: AttachmentStatus;
+};
 
 /**
  * A readonly alternative to `Attachment`, which can be used for fetching
@@ -2794,12 +2827,11 @@ function startSpanParentArgs(args: {
   };
 }
 
-export class Logger<IsAsyncFlush extends boolean> implements Exportable {
+export class Logger implements Exportable {
   private state: BraintrustState;
   private lazyMetadata: LazyValue<OrgProjectMetadata>;
-  private _asyncFlush: IsAsyncFlush | undefined;
-  private computeMetadataArgs: Record<string, any> | undefined;
-  private _linkArgs: LinkArgs | undefined;
+  private computeMetadataArgs: ProjectMetadataArgs | undefined;
+  private linkArgs: LinkArgs | undefined;
   private lastStartTime: number;
   private lazyId: LazyValue<string>;
   private calledStartSpan: boolean;
@@ -2810,14 +2842,16 @@ export class Logger<IsAsyncFlush extends boolean> implements Exportable {
   constructor(
     state: BraintrustState,
     lazyMetadata: LazyValue<OrgProjectMetadata>,
-    logOptions: LogOptions<IsAsyncFlush> = {},
+    options: {
+      computeMetadataArgs?: ProjectMetadataArgs;
+      linkArgs?: LinkArgs;
+    } = {},
   ) {
     this.lazyMetadata = lazyMetadata;
-    this._asyncFlush = logOptions.asyncFlush;
-    this.computeMetadataArgs = logOptions.computeMetadataArgs;
-    this._linkArgs = logOptions.linkArgs;
+    this.computeMetadataArgs = options.computeMetadataArgs;
+    this.linkArgs = options.linkArgs;
     this.lastStartTime = getCurrentUnixTimestamp();
-    this.lazyId = new LazyValue(async () => await this.id);
+    this.lazyId = new LazyValue(() => this.id);
     this.calledStartSpan = false;
     this.state = state;
   }
@@ -2847,7 +2881,7 @@ export class Logger<IsAsyncFlush extends boolean> implements Exportable {
   }
 
   /**
-   * Log a single event. The event will be batched and uploaded behind the scenes if `logOptions.asyncFlush` is true.
+   * Log a single event. The event will be batched and uploaded behind the scenes. Call and await {@link Logger.flush} to ensure the event has been uploaded.
    *
    * @param event The event to log.
    * @param event.input: (Optional) the arguments that uniquely define a user input (an arbitrary, JSON serializable object).
@@ -2865,7 +2899,7 @@ export class Logger<IsAsyncFlush extends boolean> implements Exportable {
   public log(
     event: Readonly<StartSpanEventArgs>,
     options?: { allowConcurrentWithSpans?: boolean },
-  ): PromiseUnless<IsAsyncFlush, string> {
+  ): string {
     if (this.calledStartSpan && !options?.allowConcurrentWithSpans) {
       throw new Error(
         "Cannot run toplevel `log` method while using spans. To log to the span, call `logger.traced` and then log with `span.log`",
@@ -2874,16 +2908,7 @@ export class Logger<IsAsyncFlush extends boolean> implements Exportable {
 
     const span = this.startSpanImpl({ startTime: this.lastStartTime, event });
     this.lastStartTime = span.end();
-    const ret = span.id;
-    type Ret = PromiseUnless<IsAsyncFlush, string>;
-    if (this.asyncFlush === true) {
-      return ret as Ret;
-    } else {
-      return (async () => {
-        await this.flush();
-        return ret;
-      })() as Ret;
-    }
+    return span.id;
   }
 
   /**
@@ -2894,11 +2919,11 @@ export class Logger<IsAsyncFlush extends boolean> implements Exportable {
   public traced<R>(
     callback: (span: Span) => R,
     args?: StartSpanArgs & SetCurrentArg,
-  ): PromiseUnless<IsAsyncFlush, R> {
+  ): R {
     const { setCurrent, ...argsRest } = args ?? {};
     const span = this.startSpan(argsRest);
 
-    const ret = runCatchFinally(
+    return runCatchFinally(
       () => {
         if (setCurrent ?? true) {
           return withCurrent(span, callback);
@@ -2906,23 +2931,12 @@ export class Logger<IsAsyncFlush extends boolean> implements Exportable {
           return callback(span);
         }
       },
-      (e) => {
-        logError(span, e);
-        throw e;
+      (error) => {
+        logError(span, error);
+        throw error;
       },
       () => span.end(),
     );
-    type Ret = PromiseUnless<IsAsyncFlush, R>;
-
-    if (this.asyncFlush) {
-      return ret as Ret;
-    } else {
-      return (async () => {
-        const awaitedRet = await ret;
-        await this.flush();
-        return awaitedRet;
-      })() as Ret;
-    }
   }
 
   /**
@@ -3021,17 +3035,13 @@ export class Logger<IsAsyncFlush extends boolean> implements Exportable {
     return await this.state.bgLogger().flush();
   }
 
-  get asyncFlush(): IsAsyncFlush | undefined {
-    return this._asyncFlush;
-  }
-
   /**
    * Return the base URL for links (e.g. https://braintrust.dev/app/my-org-name)
    * if we have the info, otherwise return null.
    * Resolution order: state -> linkArgs -> env var
    */
   public _getLinkBaseUrl(): string | null {
-    return _getLinkBaseUrl(this.state, this._linkArgs);
+    return _getLinkBaseUrl(this.state, this.linkArgs);
   }
 
   /**
@@ -3053,27 +3063,22 @@ export class Logger<IsAsyncFlush extends boolean> implements Exportable {
   }
 }
 
-function castLogger<ToB extends boolean, FromB extends boolean>(
-  logger: Logger<FromB> | undefined,
-  asyncFlush?: ToB,
-): Logger<ToB> | undefined {
-  if (logger === undefined) return undefined;
-  if (asyncFlush !== undefined && !!asyncFlush !== !!logger.asyncFlush) {
-    throw new Error(
-      `Asserted asyncFlush setting ${asyncFlush} does not match stored logger's setting ${logger.asyncFlush}`,
-    );
-  }
-  return logger as unknown as Logger<ToB>;
-}
+export type Logs3OverflowUpload = {
+  method: "PUT" | "POST";
+  signedUrl: string;
+  headers?: Record<string, string>;
+  fields?: Record<string, string>;
+  key: string;
+};
 
-export const logs3OverflowUploadSchema = z.object({
-  method: z.enum(["PUT", "POST"]),
-  signedUrl: z.string().url(),
-  headers: z.record(z.string()).optional(),
-  fields: z.record(z.string()).optional(),
-  key: z.string().min(1),
-});
-export type Logs3OverflowUpload = z.infer<typeof logs3OverflowUploadSchema>;
+export const logs3OverflowUploadSchema: z.ZodType<Logs3OverflowUpload> =
+  z.object({
+    method: z.enum(["PUT", "POST"]),
+    signedUrl: z.string().url(),
+    headers: z.record(z.string()).optional(),
+    fields: z.record(z.string()).optional(),
+    key: z.string().min(1),
+  });
 
 export type Logs3OverflowInputRow = {
   object_ids: Record<string, unknown>;
@@ -4134,38 +4139,7 @@ type InitializedExperiment<IsOpen extends boolean | undefined> =
  */
 export function init<IsOpen extends boolean = false>(
   options: Readonly<FullInitOptions<IsOpen>>,
-): InitializedExperiment<IsOpen>;
-
-/**
- * Legacy form of `init` which accepts the project name as the first parameter,
- * separately from the remaining options. See `init(options)` for full details.
- */
-export function init<IsOpen extends boolean = false>(
-  project: string,
-  options?: Readonly<InitOptions<IsOpen>>,
-): InitializedExperiment<IsOpen>;
-
-/**
- * Combined overload implementation of `init`. Do not call this directly.
- * Instead, call `init(options)` or `init(project, options)`.
- */
-export function init<IsOpen extends boolean = false>(
-  projectOrOptions: string | Readonly<FullInitOptions<IsOpen>>,
-  optionalOptions?: Readonly<InitOptions<IsOpen>>,
 ): InitializedExperiment<IsOpen> {
-  const options = ((): Readonly<FullInitOptions<IsOpen>> => {
-    if (typeof projectOrOptions === "string") {
-      return { ...optionalOptions, project: projectOrOptions };
-    } else {
-      if (optionalOptions !== undefined) {
-        throw new Error(
-          "Cannot specify options struct as both parameters. Must call either init(project, options) or init(options).",
-        );
-      }
-      return projectOrOptions;
-    }
-  })();
-
   const {
     project,
     experiment,
@@ -4394,82 +4368,6 @@ export function init<IsOpen extends boolean = false>(
   return ret as InitializedExperiment<IsOpen>;
 }
 
-/**
- * Alias for init(options).
- */
-export function initExperiment<IsOpen extends boolean = false>(
-  options: Readonly<InitOptions<IsOpen>>,
-): InitializedExperiment<IsOpen>;
-
-/**
- * Alias for init(project, options).
- */
-export function initExperiment<IsOpen extends boolean = false>(
-  project: string,
-  options?: Readonly<InitOptions<IsOpen>>,
-): InitializedExperiment<IsOpen>;
-
-/**
- * Combined overload implementation of `initExperiment`, which is an alias for
- * `init`. Do not call this directly. Instead, call `initExperiment(options)` or
- * `initExperiment(project, options)`.
- */
-export function initExperiment<IsOpen extends boolean = false>(
-  projectOrOptions: string | Readonly<InitOptions<IsOpen>>,
-  optionalOptions?: Readonly<InitOptions<IsOpen>>,
-): InitializedExperiment<IsOpen> {
-  const options = ((): Readonly<FullInitOptions<IsOpen>> => {
-    if (typeof projectOrOptions === "string") {
-      return { ...optionalOptions, project: projectOrOptions };
-    } else {
-      if (optionalOptions !== undefined) {
-        throw new Error(
-          "Cannot specify options struct as both parameters. Must call either init(project, options) or init(options).",
-        );
-      }
-      return projectOrOptions;
-    }
-  })();
-  return init(options);
-}
-
-/**
- * @deprecated Use {@link init} instead.
- */
-export function withExperiment<R>(
-  project: string,
-  callback: (experiment: Experiment) => R,
-  options: Readonly<InitOptions<false> & SetCurrentArg> = {},
-): R {
-  debugLogger
-    .forState(options.state)
-    .warn(
-      "withExperiment is deprecated and will be removed in a future version of braintrust. Simply create the experiment with `init`.",
-    );
-  const experiment = init(project, options);
-  return callback(experiment);
-}
-
-/**
- * @deprecated Use {@link initLogger} instead.
- */
-export function withLogger<IsAsyncFlush extends boolean = false, R = void>(
-  callback: (logger: Logger<IsAsyncFlush>) => R,
-  options: Readonly<InitLoggerOptions<IsAsyncFlush> & SetCurrentArg> = {},
-): R {
-  debugLogger
-    .forState(options.state)
-    .warn(
-      "withLogger is deprecated and will be removed in a future version of braintrust. Simply create the logger with `initLogger`.",
-    );
-  const logger = initLogger(options);
-  return callback(logger);
-}
-
-type UseOutputOption<IsLegacyDataset extends boolean> = {
-  useOutput?: IsLegacyDataset;
-};
-
 declare global {
   // Set by the bt eval runner when CLI-controlled BTQL should be pushed down
   // into dataset-backed evals.
@@ -4477,23 +4375,22 @@ declare global {
   var __bt_eval_internal_btql: Record<string, unknown> | undefined;
 }
 
-export type InitDatasetOptions<IsLegacyDataset extends boolean> =
-  FullLoginOptions & {
-    dataset?: string;
-    datasetId?: string;
-    description?: string;
-    version?: string;
-    environment?: string;
-    snapshotName?: string;
-    projectId?: string;
-    metadata?: Record<string, unknown>;
-    state?: BraintrustState;
-    _internal_btql?: Record<string, unknown>;
-  } & UseOutputOption<IsLegacyDataset>;
+export type InitDatasetOptions = FullLoginOptions & {
+  dataset?: string;
+  datasetId?: string;
+  description?: string;
+  version?: string;
+  environment?: string;
+  snapshotName?: string;
+  projectId?: string;
+  metadata?: Record<string, unknown>;
+  state?: BraintrustState;
+  _internal_btql?: Record<string, unknown>;
+};
 
-export type FullInitDatasetOptions<IsLegacyDataset extends boolean> = {
+export type FullInitDatasetOptions = {
   project?: string;
-} & InitDatasetOptions<IsLegacyDataset>;
+} & InitDatasetOptions;
 
 async function getDatasetSnapshots(
   params:
@@ -4717,52 +4614,11 @@ async function serializeDatasetForExperiment({
  * @param options.orgName (Optional) The name of a specific organization to connect to. This is useful if you belong to multiple.
  * @param options.projectId The id of the project to create the dataset in. This takes precedence over `project` if specified and is not required when `datasetId` is provided.
  * @param options.metadata A dictionary with additional data when initializing a dataset by name. Cannot be used with `datasetId`. The values in `metadata` can be any JSON-serializable type, but its keys must be strings.
- * @param options.useOutput (Deprecated) If true, records will be fetched from this dataset in the legacy format, with the "expected" field renamed to "output". This option will be removed in a future version of Braintrust.
  * @returns The initialized Dataset.
  */
-export function initDataset<
-  IsLegacyDataset extends boolean = typeof DEFAULT_IS_LEGACY_DATASET,
->(
-  options: Readonly<FullInitDatasetOptions<IsLegacyDataset>>,
-): Dataset<IsLegacyDataset>;
-
-/**
- * Legacy form of `initDataset` which accepts the project name as the first
- * parameter, separately from the remaining options.
- *
- * See `initDataset(options)` for full details.
- */
-export function initDataset<
-  IsLegacyDataset extends boolean = typeof DEFAULT_IS_LEGACY_DATASET,
->(
-  project: string,
-  options?: Readonly<InitDatasetOptions<IsLegacyDataset>>,
-): Dataset<IsLegacyDataset>;
-
-/**
- * Combined overload implementation of `initDataset`. Do not call this
- * directly. Instead, call `initDataset(options)` or `initDataset(project,
- * options)`.
- */
-export function initDataset<
-  IsLegacyDataset extends boolean = typeof DEFAULT_IS_LEGACY_DATASET,
->(
-  projectOrOptions: string | Readonly<FullInitDatasetOptions<IsLegacyDataset>>,
-  optionalOptions?: Readonly<InitDatasetOptions<IsLegacyDataset>>,
-): Dataset<IsLegacyDataset> {
-  const options = ((): Readonly<FullInitDatasetOptions<IsLegacyDataset>> => {
-    if (typeof projectOrOptions === "string") {
-      return { ...optionalOptions, project: projectOrOptions };
-    } else {
-      if (optionalOptions !== undefined) {
-        throw new Error(
-          "Cannot specify options struct as both parameters. Must call either initDataset(project, options) or initDataset(options).",
-        );
-      }
-      return projectOrOptions;
-    }
-  })();
-
+export function initDataset(
+  options: Readonly<FullInitDatasetOptions>,
+): Dataset {
   const {
     project,
     dataset,
@@ -4778,7 +4634,6 @@ export function initDataset<
     forceLogin,
     projectId,
     metadata,
-    useOutput: legacy,
     state: stateArg,
     _internal_btql,
   } = options;
@@ -4905,7 +4760,6 @@ export function initDataset<
     stateArg ?? _globalState,
     lazyMetadata,
     typeof resolvedVersion === "string" ? resolvedVersion : undefined,
-    legacy,
     internalBtql,
     resolvedVersion instanceof LazyValue ||
       normalizedEnvironment !== undefined ||
@@ -4933,38 +4787,12 @@ export function initDataset<
   return datasetObject;
 }
 
-/**
- * @deprecated Use {@link initDataset} instead.
- */
-export function withDataset<
-  R,
-  IsLegacyDataset extends boolean = typeof DEFAULT_IS_LEGACY_DATASET,
->(
-  project: string,
-  callback: (dataset: Dataset<IsLegacyDataset>) => R,
-  options: Readonly<InitDatasetOptions<IsLegacyDataset>> = {},
-): R {
-  debugLogger
-    .forState(options.state)
-    .warn(
-      "withDataset is deprecated and will be removed in a future version of braintrust. Simply create the dataset with `initDataset`.",
-    );
-  const dataset = initDataset<IsLegacyDataset>(project, options);
-  return callback(dataset);
-}
-
 // Note: the argument names *must* serialize the same way as the argument names
 // for the corresponding python function, because this function may be invoked
 // from arguments serialized elsewhere.
 async function computeLoggerMetadata(
   state: BraintrustState,
-  {
-    project_name,
-    project_id,
-  }: {
-    project_name?: string;
-    project_id?: string;
-  },
+  { project_name, project_id }: ProjectMetadataArgs,
 ) {
   await state.login({});
   const org_id = state.orgId!;
@@ -5001,18 +4829,13 @@ async function computeLoggerMetadata(
   }
 }
 
-type AsyncFlushArg<IsAsyncFlush> = {
-  asyncFlush?: IsAsyncFlush;
-};
-
-export type InitLoggerOptions<IsAsyncFlush> = FullLoginOptions & {
+export type InitLoggerOptions = FullLoginOptions & {
   projectName?: string;
   projectId?: string;
   environment?: SpanOriginEnvironment;
   setCurrent?: boolean;
   state?: BraintrustState;
-  orgProjectMetadata?: OrgProjectMetadata;
-} & AsyncFlushArg<IsAsyncFlush>;
+};
 
 /**
  * Create a new logger in a specified project. If the project does not exist, it will be created.
@@ -5020,7 +4843,6 @@ export type InitLoggerOptions<IsAsyncFlush> = FullLoginOptions & {
  * @param options Additional options for configuring init().
  * @param options.projectName The name of the project to log into. If unspecified, will default to the Global project.
  * @param options.projectId The id of the project to log into. This takes precedence over projectName if specified.
- * @param options.asyncFlush If true, will log asynchronously in the background. Otherwise, will log synchronously. (true by default)
  * @param options.appUrl The URL of the Braintrust App. Defaults to https://www.braintrust.dev.
  * @param options.apiKey The API key to use. If the parameter is not specified, will try to use the `BRAINTRUST_API_KEY` environment variable. In Node.js,
  * if that is unset, will try the nearest `.env.braintrust` file in the current working directory or parent directories. If no API key is specified, will prompt the user to login.
@@ -5030,13 +4852,10 @@ export type InitLoggerOptions<IsAsyncFlush> = FullLoginOptions & {
  * @param setCurrent If true (the default), set the global current-experiment to the newly-created one.
  * @returns The newly created Logger.
  */
-export function initLogger<IsAsyncFlush extends boolean = true>(
-  options: Readonly<InitLoggerOptions<IsAsyncFlush>> = {},
-) {
+export function initLogger(options: Readonly<InitLoggerOptions> = {}): Logger {
   const {
     projectName,
     projectId,
-    asyncFlush: asyncFlushArg,
     appUrl,
     apiKey,
     orgName,
@@ -5047,9 +4866,6 @@ export function initLogger<IsAsyncFlush extends boolean = true>(
     state: stateArg,
   } = options || {};
 
-  const asyncFlush =
-    asyncFlushArg === undefined ? (true as IsAsyncFlush) : asyncFlushArg;
-
   const computeMetadataArgs = {
     project_name: projectName,
     project_id: projectId,
@@ -5058,8 +4874,6 @@ export function initLogger<IsAsyncFlush extends boolean = true>(
   const linkArgs = {
     org_name: orgName,
     app_url: appUrl,
-    project_name: projectName,
-    project_id: projectId,
   };
 
   const state = stateArg ?? _globalState;
@@ -5084,13 +4898,12 @@ export function initLogger<IsAsyncFlush extends boolean = true>(
     },
   );
 
-  const ret = new Logger<IsAsyncFlush>(state, lazyMetadata, {
-    asyncFlush,
+  const ret = new Logger(state, lazyMetadata, {
     computeMetadataArgs,
     linkArgs,
   });
   if (options.setCurrent ?? true) {
-    state.currentLogger = ret as Logger<false>;
+    state.currentLogger = ret;
   }
   return ret;
 }
@@ -5865,11 +5678,9 @@ export function currentExperiment(
 /**
  * Returns the currently-active logger (set by {@link initLogger}). Returns undefined if no current logger has been set.
  */
-export function currentLogger<IsAsyncFlush extends boolean>(
-  options?: AsyncFlushArg<IsAsyncFlush> & OptionalStateArg,
-): Logger<IsAsyncFlush> | undefined {
+export function currentLogger(options?: OptionalStateArg): Logger | undefined {
   const state = options?.state ?? _globalState;
-  return castLogger(state.currentLogger, options?.asyncFlush);
+  return state.currentLogger;
 }
 
 /**
@@ -5892,16 +5703,15 @@ export function currentSpan(options?: OptionalStateArg): Span {
  * disagreeing if state changed between calls). The state is only meaningful when
  * a parent slug was resolved; otherwise it is undefined.
  */
-function getSpanParentObjectAndPropagatedState<IsAsyncFlush extends boolean>(
-  options?: AsyncFlushArg<IsAsyncFlush> &
-    OptionalStateArg & { parent?: string | PropagationContext },
+function getSpanParentObjectAndPropagatedState(
+  options?: OptionalStateArg & { parent?: string | PropagationContext },
 ): {
   parentObject:
     | SpanComponentsV3
     | SpanComponentsV4
     | Span
     | Experiment
-    | Logger<IsAsyncFlush>;
+    | Logger;
   propagatedState: PropagatedState | undefined;
 } {
   const state = options?.state ?? _globalState;
@@ -5920,11 +5730,11 @@ function getSpanParentObjectAndPropagatedState<IsAsyncFlush extends boolean>(
     };
   }
 
-  const experiment = currentExperiment();
+  const experiment = state.currentExperiment;
   if (experiment) {
     return { parentObject: experiment, propagatedState: undefined };
   }
-  const logger = currentLogger<IsAsyncFlush>(options);
+  const logger = state.currentLogger;
   if (logger) {
     return { parentObject: logger, propagatedState: undefined };
   }
@@ -5938,15 +5748,9 @@ function getSpanParentObjectAndPropagatedState<IsAsyncFlush extends boolean>(
  * `parent` may be an exported slug string or an opaque W3C trace-context (from
  * {@link extractTraceContextFromHeaders}).
  */
-export function getSpanParentObject<IsAsyncFlush extends boolean>(
-  options?: AsyncFlushArg<IsAsyncFlush> &
-    OptionalStateArg & { parent?: string | PropagationContext },
-):
-  | SpanComponentsV3
-  | SpanComponentsV4
-  | Span
-  | Experiment
-  | Logger<IsAsyncFlush> {
+export function getSpanParentObject(
+  options?: OptionalStateArg & { parent?: string | PropagationContext },
+): SpanComponentsV3 | SpanComponentsV4 | Span | Experiment | Logger {
   return getSpanParentObjectAndPropagatedState(options).parentObject;
 }
 
@@ -6444,44 +6248,32 @@ export function logError(span: Span, error: unknown) {
  *
  * See {@link Span.traced} for full details.
  */
-export function traced<IsAsyncFlush extends boolean = true, R = void>(
+export function traced<R>(
   callback: (span: Span) => R,
-  args?: StartSpanArgs &
-    SetCurrentArg &
-    AsyncFlushArg<IsAsyncFlush> &
-    OptionalStateArg,
-): PromiseUnless<IsAsyncFlush, R> {
-  const { span, isSyncFlushLogger } = startSpanAndIsLogger(args);
+  args?: StartSpanArgs & SetCurrentArg & OptionalStateArg,
+): R {
+  const { setCurrent, ...spanArgs } = args ?? {};
+  const span = startSpanImpl(spanArgs);
 
-  const ret = runCatchFinally(
+  return runCatchFinally(
     () => {
-      if (args?.setCurrent ?? true) {
+      if (setCurrent ?? true) {
         return withCurrent(span, callback);
       } else {
         return callback(span);
       }
     },
-    (e) => {
-      logError(span, e);
-      throw e;
+    (error) => {
+      logError(span, error);
+      throw error;
     },
     () => span.end(),
   );
-
-  type Ret = PromiseUnless<IsAsyncFlush, R>;
-
-  if (args?.asyncFlush === undefined || args?.asyncFlush) {
-    return ret as Ret;
-  } else {
-    return (async () => {
-      const awaitedRet = await ret;
-      if (isSyncFlushLogger) {
-        await span.flush();
-      }
-      return awaitedRet;
-    })() as Ret;
-  }
 }
+
+type WrapTracedArgs = {
+  noTraceIO?: boolean;
+};
 
 /**
  * Check if a function is a sync generator function.
@@ -6494,7 +6286,7 @@ export function traced<IsAsyncFlush extends boolean = true, R = void>(
  * @param fn The function to check.
  * @returns True if the function is a sync generator function.
  */
-function isGeneratorFunction(fn: any): boolean {
+function isGeneratorFunction(fn: unknown): boolean {
   return Object.prototype.toString.call(fn) === "[object GeneratorFunction]";
 }
 
@@ -6505,7 +6297,7 @@ function isGeneratorFunction(fn: any): boolean {
  * @param fn The function to check.
  * @returns True if the function is an async generator function.
  */
-function isAsyncGeneratorFunction(fn: any): boolean {
+function isAsyncGeneratorFunction(fn: unknown): boolean {
   return (
     Object.prototype.toString.call(fn) === "[object AsyncGeneratorFunction]"
   );
@@ -6516,10 +6308,13 @@ function isAsyncGeneratorFunction(fn: any): boolean {
  */
 function wrapTracedSyncGenerator<F extends (...args: any[]) => any>(
   fn: F,
-  spanArgs: any,
+  spanArgs: StartSpanArgs & SetCurrentArg,
   noTraceIO: boolean,
 ): F {
-  const wrapper = function* (this: any, ...fnArgs: Parameters<F>) {
+  const wrapper = function* (
+    this: ThisParameterType<F>,
+    ...fnArgs: Parameters<F>
+  ) {
     const span = startSpan(spanArgs);
     try {
       if (!noTraceIO) {
@@ -6530,7 +6325,7 @@ function wrapTracedSyncGenerator<F extends (...args: any[]) => any>(
       const maxItems = envValue !== undefined ? Number(envValue) : 1000;
 
       if (!noTraceIO && maxItems !== 0) {
-        let collected: any[] = [];
+        let collected: unknown[] = [];
         let truncated = false;
 
         const gen = generatorWithCurrent(span, fn.apply(this, fnArgs));
@@ -6583,10 +6378,13 @@ function wrapTracedSyncGenerator<F extends (...args: any[]) => any>(
  */
 function wrapTracedAsyncGenerator<F extends (...args: any[]) => any>(
   fn: F,
-  spanArgs: any,
+  spanArgs: StartSpanArgs & SetCurrentArg,
   noTraceIO: boolean,
 ): F {
-  const wrapper = async function* (this: any, ...fnArgs: Parameters<F>) {
+  const wrapper = async function* (
+    this: ThisParameterType<F>,
+    ...fnArgs: Parameters<F>
+  ) {
     const span = startSpan(spanArgs);
     try {
       if (!noTraceIO) {
@@ -6597,7 +6395,7 @@ function wrapTracedAsyncGenerator<F extends (...args: any[]) => any>(
       const maxItems = envValue !== undefined ? Number(envValue) : 1000;
 
       if (!noTraceIO && maxItems !== 0) {
-        let collected: any[] = [];
+        let collected: unknown[] = [];
         let truncated = false;
 
         const gen = asyncGeneratorWithCurrent(span, fn.apply(this, fnArgs));
@@ -6645,10 +6443,6 @@ function wrapTracedAsyncGenerator<F extends (...args: any[]) => any>(
   return wrapper as F;
 }
 
-type WrapTracedArgs = {
-  noTraceIO?: boolean;
-};
-
 /**
  * Wrap a function with `traced`, using the arguments as `input` and return value as `output`.
  * Any functions wrapped this way will automatically be traced, similar to the `@traced` decorator
@@ -6674,91 +6468,53 @@ type WrapTracedArgs = {
  * @param args Span-level arguments (e.g. a custom name or type) to pass to `traced`.
  * @returns The wrapped function.
  */
-export function wrapTraced<
-  F extends (...args: any[]) => any,
-  IsAsyncFlush extends boolean = true,
->(
+export function wrapTraced<F extends (...args: any[]) => any>(
   fn: F,
-  args?: StartSpanArgs &
-    SetCurrentArg &
-    AsyncFlushArg<IsAsyncFlush> &
-    WrapTracedArgs,
-): IsAsyncFlush extends false
-  ? (...args: Parameters<F>) => Promise<Awaited<ReturnType<F>>>
-  : F {
-  const spanArgs: typeof args = {
+  args?: StartSpanArgs & SetCurrentArg & WrapTracedArgs,
+): F {
+  const { noTraceIO, ...argsRest } = args ?? {};
+  const spanArgs: StartSpanArgs & SetCurrentArg = {
     name: fn.name,
     type: "function",
-    ...args,
+    ...argsRest,
   };
-  const hasExplicitInput =
-    args &&
-    args.event &&
-    "input" in args.event &&
-    args.event.input !== undefined;
-  const hasExplicitOutput =
-    args && args.event && args.event.output !== undefined;
+  const hasExplicitInput = spanArgs.event?.input !== undefined;
+  const hasExplicitOutput = spanArgs.event?.output !== undefined;
 
-  const noTraceIO = args?.noTraceIO || hasExplicitInput || hasExplicitOutput;
+  const disableGeneratorTraceIO =
+    !!noTraceIO || hasExplicitInput || hasExplicitOutput;
   // Check if the function is a generator
   if (isGeneratorFunction(fn)) {
-    return wrapTracedSyncGenerator(fn, spanArgs, !!noTraceIO);
+    return wrapTracedSyncGenerator(fn, spanArgs, disableGeneratorTraceIO);
   }
 
   if (isAsyncGeneratorFunction(fn)) {
-    return wrapTracedAsyncGenerator(fn, spanArgs, !!noTraceIO);
+    return wrapTracedAsyncGenerator(fn, spanArgs, disableGeneratorTraceIO);
   }
 
-  if (args?.asyncFlush) {
-    return ((...fnArgs: Parameters<F>) =>
-      traced((span) => {
-        if (!args?.noTraceIO && !hasExplicitInput) {
-          span.log({ input: fnArgs });
-        }
+  return ((...fnArgs: Parameters<F>) =>
+    traced((span) => {
+      if (!noTraceIO && !hasExplicitInput) {
+        span.log({ input: fnArgs });
+      }
 
-        const output = fn(...fnArgs);
+      const output = fn(...fnArgs);
 
-        if (!args?.noTraceIO && !hasExplicitOutput) {
-          if (output instanceof Promise) {
-            return (async () => {
-              const result = await output;
-              span.log({ output: result });
-              return result;
-            })();
-          } else {
-            span.log({ output: output });
-          }
-        }
-
-        return output;
-      }, spanArgs)) as IsAsyncFlush extends false ? never : F;
-  } else {
-    return ((...fnArgs: Parameters<F>) =>
-      traced(async (span) => {
-        if (!args?.noTraceIO && !hasExplicitInput) {
-          span.log({ input: fnArgs });
-        }
-
-        const outputResult = fn(...fnArgs);
-
-        const output = await outputResult;
-
-        if (!args?.noTraceIO && !hasExplicitOutput) {
+      if (!noTraceIO && !hasExplicitOutput) {
+        if (output instanceof Promise) {
+          return (async () => {
+            const result = await output;
+            span.log({ output: result });
+            return result;
+          })();
+        } else {
           span.log({ output });
         }
+      }
 
-        return output;
-      }, spanArgs)) as IsAsyncFlush extends false
-      ? (...args: Parameters<F>) => Promise<Awaited<ReturnType<F>>>
-      : never;
-  }
+      return output;
+    }, spanArgs)) as F;
 }
-
-/**
- * A synonym for `wrapTraced`. If you're porting from systems that use `traceable`, you can use this to
- * make your codebase more consistent.
- */
-export const traceable = wrapTraced;
 
 /**
  * Lower-level alternative to `traced`. This allows you to start a span yourself, and can be useful in situations
@@ -6767,52 +6523,48 @@ export const traceable = wrapTraced;
  *
  * See {@link traced} for full details.
  */
-export function startSpan<IsAsyncFlush extends boolean = true>(
-  args?: StartSpanArgs & AsyncFlushArg<IsAsyncFlush> & OptionalStateArg,
+export function startSpan(args?: StartSpanArgs & OptionalStateArg): Span {
+  return startSpanImpl(args);
+}
+
+export function _internalStartSpan(
+  args?: InternalStartSpanArgs & OptionalStateArg,
 ): Span {
-  return startSpanAndIsLogger(args).span;
+  return startSpanImpl(args);
 }
 
 /** @internal Start a span whose initial row is merged with concurrent writes. */
-export function _internalStartSpanWithInitialMerge<
-  IsAsyncFlush extends boolean = true,
->(args?: StartSpanArgs & AsyncFlushArg<IsAsyncFlush> & OptionalStateArg): Span {
-  return startSpanAndIsLogger({
+export function _internalStartSpanWithInitialMerge(
+  args?: InternalStartSpanArgs & OptionalStateArg,
+): Span {
+  return startSpanImpl({
     ...args,
     [INITIAL_SPAN_WRITE_AS_MERGE]: true,
-  } as StartSpanArgs &
-    AsyncFlushArg<IsAsyncFlush> &
-    OptionalStateArg &
-    InitialSpanWriteAsMergeArg).span;
+  } as InternalStartSpanArgs & OptionalStateArg & InitialSpanWriteAsMergeArg);
 }
 
 /** @internal Start a deterministic span under an exported object-only parent. */
-export function _internalStartSpanWithInitialMergeAndParentSpanIds<
-  IsAsyncFlush extends boolean = true,
->(args: StartSpanArgs & AsyncFlushArg<IsAsyncFlush> & OptionalStateArg): Span {
-  return startSpanAndIsLogger(
+export function _internalStartSpanWithInitialMergeAndParentSpanIds(
+  args: InternalStartSpanArgs & OptionalStateArg,
+): Span {
+  return startSpanImpl(
     {
       ...args,
       [INITIAL_SPAN_WRITE_AS_MERGE]: true,
-    } as StartSpanArgs &
-      AsyncFlushArg<IsAsyncFlush> &
-      OptionalStateArg &
-      InitialSpanWriteAsMergeArg,
+    } as InternalStartSpanArgs & OptionalStateArg & InitialSpanWriteAsMergeArg,
     { useParentSpanIdsForObjectParent: true },
-  ).span;
+  );
 }
 
 /** @internal Start a span with SDK-controlled context fields. */
-export function _internalStartSpanWithContext<
-  IsAsyncFlush extends boolean = true,
->(
-  args: StartSpanArgs & AsyncFlushArg<IsAsyncFlush> & OptionalStateArg,
+export function _internalStartSpanWithContext(
+  args: InternalStartSpanArgs & OptionalStateArg,
   context: Record<string, unknown>,
 ): Span {
-  return startSpanAndIsLogger({
+  return startSpanImpl({
     ...args,
     [INTERNAL_SPAN_CONTEXT]: context,
-  }).span;
+  });
 }
 
 /**
@@ -6833,24 +6585,17 @@ export function setFetch(fetch: typeof globalThis.fetch): void {
   _internalGetGlobalState().setFetch(fetch);
 }
 
-function startSpanAndIsLogger<IsAsyncFlush extends boolean = true>(
-  args?: StartSpanArgs &
-    AsyncFlushArg<IsAsyncFlush> &
-    OptionalStateArg &
-    InternalSpanContextArg,
+function startSpanImpl(
+  args?: InternalStartSpanArgs & OptionalStateArg & InternalSpanContextArg,
   internalOptions?: { useParentSpanIdsForObjectParent?: boolean },
-): { span: Span; isSyncFlushLogger: boolean } {
+): Span {
   const state = args?.state ?? _globalState;
 
   // Resolve the parent object and any forwarded W3C state in one pass, so we
   // don't re-normalize `parent` (which could disagree if the active
   // logger/experiment changed between calls).
   const { parentObject, propagatedState } =
-    getSpanParentObjectAndPropagatedState<IsAsyncFlush>({
-      asyncFlush: args?.asyncFlush,
-      parent: args?.parent,
-      state,
-    });
+    getSpanParentObjectAndPropagatedState(args);
 
   if (
     parentObject instanceof SpanComponentsV3 ||
@@ -6872,7 +6617,7 @@ function startSpanAndIsLogger<IsAsyncFlush extends boolean = true>(
     // The parent object/state are already resolved from `parent` above; drop
     // the raw `parent` so it isn't re-normalized.
     const { parent: _ignoredParent, ...spanArgs } = args ?? {};
-    const span = new SpanImpl({
+    return new SpanImpl({
       state,
       ...spanArgs,
       parentObjectType: parentObject.data.object_type,
@@ -6890,21 +6635,11 @@ function startSpanAndIsLogger<IsAsyncFlush extends boolean = true>(
           | undefined),
       propagatedState,
     });
-    return {
-      span,
-      isSyncFlushLogger:
-        parentObject.data.object_type === SpanObjectTypeV3.PROJECT_LOGS &&
-        // Since there's no parent logger here, we're free to choose the async flush
-        // behavior, and therefore propagate along whatever we get from the arguments
-        args?.asyncFlush === false,
-    };
   } else {
-    const span = parentObject.startSpan(args);
-    return {
-      span,
-      isSyncFlushLogger:
-        parentObject.kind === "logger" && parentObject.asyncFlush === false,
-    };
+    // The internal entrypoint still accepts exported Braintrust parent slugs.
+    // Span implementations support that runtime form even though it is no
+    // longer part of their public method signature.
+    return parentObject.startSpan(args as StartSpanArgs);
   }
 }
 
@@ -6991,6 +6726,14 @@ async function* asyncGeneratorWithCurrent<T>(
 }
 
 export function withParent<R>(
+  parent: PropagationContext,
+  callback: () => R,
+  state: BraintrustState | undefined = undefined,
+): R {
+  return (state ?? _globalState).currentParent.run(parent, () => callback());
+}
+
+export function _internalWithParent<R>(
   parent: string | PropagationContext,
   callback: () => R,
   state: BraintrustState | undefined = undefined,
@@ -7096,22 +6839,11 @@ function validateAndSanitizeExperimentLogPartialArgs(
     }
   }
 
-  if ("input" in event && event.input && "inputs" in event && event.inputs) {
-    throw new Error(
-      "Only one of input or inputs (deprecated) can be specified. Prefer input.",
-    );
-  }
-
   if ("tags" in event && event.tags) {
     validateTags(event.tags);
   }
 
-  if ("inputs" in event) {
-    const { inputs, ...rest } = event;
-    return { input: inputs, ...rest };
-  } else {
-    return { ...event };
-  }
+  return { ...event };
 }
 
 /**
@@ -7322,18 +7054,9 @@ async function resolveAttachmentsToBase64<T extends Record<string, any>>(
 // handling special fields like 'id').
 function validateAndSanitizeExperimentLogFullArgs(
   event: ExperimentLogFullArgs,
-  hasDataset: boolean,
 ): ExperimentLogFullArgs {
-  if (
-    ("input" in event &&
-      !isEmpty(event.input) &&
-      "inputs" in event &&
-      !isEmpty(event.inputs)) ||
-    (!("input" in event) && !("inputs" in event))
-  ) {
-    throw new Error(
-      "Exactly one of input or inputs (deprecated) must be specified. Prefer input.",
-    );
+  if (!("input" in event)) {
+    throw new Error("input must be specified");
   }
 
   if (isEmpty(event.output)) {
@@ -7341,14 +7064,6 @@ function validateAndSanitizeExperimentLogFullArgs(
   }
   if (isEmpty(event.scores)) {
     throw new Error("scores must be specified");
-  }
-
-  if (hasDataset && event.datasetRecordId === undefined) {
-    throw new Error("datasetRecordId must be specified when using a dataset");
-  } else if (!hasDataset && event.datasetRecordId !== undefined) {
-    throw new Error(
-      "datasetRecordId cannot be specified when not using a dataset",
-    );
   }
 
   return event;
@@ -7599,7 +7314,7 @@ export class Experiment
     this.lazyMetadata = lazyMetadata;
     this.dataset = dataset;
     this.lastStartTime = getCurrentUnixTimestamp();
-    this.lazyId = new LazyValue(async () => await this.id);
+    this.lazyId = new LazyValue(() => this.id);
     this.calledStartSpan = false;
     this.state = state;
   }
@@ -7682,7 +7397,7 @@ export class Experiment
       );
     }
 
-    event = validateAndSanitizeExperimentLogFullArgs(event, !!this.dataset);
+    event = validateAndSanitizeExperimentLogFullArgs(event);
     const span = this.startSpanImpl({ startTime: this.lastStartTime, event });
     this.lastStartTime = span.end();
     return span.id;
@@ -7700,7 +7415,7 @@ export class Experiment
     const { setCurrent, ...argsRest } = args ?? {};
     const span = this.startSpan(argsRest);
 
-    const ret = runCatchFinally(
+    return runCatchFinally(
       () => {
         if (setCurrent ?? true) {
           return withCurrent(span, callback);
@@ -7708,14 +7423,12 @@ export class Experiment
           return callback(span);
         }
       },
-      (e) => {
-        logError(span, e);
-        throw e;
+      (error) => {
+        logError(span, error);
+        throw error;
       },
       () => span.end(),
     );
-
-    return ret as R;
   }
 
   /**
@@ -7928,18 +7641,6 @@ export class Experiment
    */
   async flush(): Promise<void> {
     return await this.state.bgLogger().flush();
-  }
-
-  /**
-   * @deprecated This function is deprecated. You can simply remove it from your code.
-   */
-  public async close(): Promise<string> {
-    debugLogger
-      .forState(this.state)
-      .warn(
-        "close is deprecated and will be removed in a future version of braintrust. It is now a no-op and can be removed",
-      );
-    return this.id;
   }
 }
 
@@ -8343,9 +8044,9 @@ export class SpanImpl implements Span {
           return callback(span);
         }
       },
-      (e) => {
-        logError(span, e);
-        throw e;
+      (error) => {
+        logError(span, error);
+        throw error;
       },
       () => span.end(),
     );
@@ -8564,10 +8265,6 @@ export class SpanImpl implements Span {
     return await this._state.bgLogger().flush();
   }
 
-  public close(args?: EndSpanArgs): number {
-    return this.end(args);
-  }
-
   public state(): BraintrustState {
     return this._state;
   }
@@ -8648,9 +8345,7 @@ function splitLoggingData({
  *
  * You should not create `Dataset` objects directly. Instead, use the `braintrust.initDataset()` method.
  */
-export class Dataset<
-  IsLegacyDataset extends boolean = typeof DEFAULT_IS_LEGACY_DATASET,
-> extends ObjectFetcher<DatasetRecord<IsLegacyDataset>> {
+export class Dataset extends ObjectFetcher<DatasetRecord> {
   private readonly lazyMetadata: LazyValue<ProjectDatasetMetadata>;
   private readonly __braintrust_dataset_marker = true;
   private newRecords = 0;
@@ -8662,29 +8357,16 @@ export class Dataset<
     private state: BraintrustState,
     lazyMetadata: LazyValue<ProjectDatasetMetadata>,
     pinnedVersion?: string,
-    legacy?: IsLegacyDataset,
     _internal_btql?: Record<string, unknown>,
     pinState?: DatasetPinState,
   ) {
-    // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
-    const isLegacyDataset = (legacy ??
-      DEFAULT_IS_LEGACY_DATASET) as IsLegacyDataset;
-    if (isLegacyDataset) {
-      debugLogger
-        .forState(state)
-        .warn(
-          `Records will be fetched from this dataset in the legacy format, with the "expected" field renamed to "output". Please update your code to use "expected", and use \`braintrust.initDataset()\` with \`{ useOutput: false }\`, which will become the default in a future version of Braintrust.`,
-        );
-    }
     super(
       "dataset",
       pinnedVersion,
       (r: AnyDatasetRecord) =>
-        // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
-        ensureDatasetRecord(
+        ensureNewDatasetRecord(
           enrichAttachments(r, this.state),
-          isLegacyDataset,
-        ) as WithTransactionId<DatasetRecord<IsLegacyDataset>>,
+        ) as WithTransactionId<DatasetRecord>,
       _internal_btql,
     );
     void this.__braintrust_dataset_marker;
@@ -8775,13 +8457,9 @@ export class Dataset<
 
   private validateEvent({
     metadata,
-    expected,
-    output,
     tags,
   }: {
     metadata?: Record<string, unknown>;
-    expected?: unknown;
-    output?: unknown;
     tags?: string[];
   }) {
     if (metadata !== undefined) {
@@ -8790,12 +8468,6 @@ export class Dataset<
           throw new Error("metadata keys must be strings");
         }
       }
-    }
-
-    if (expected !== undefined && output !== undefined) {
-      throw new Error(
-        "Only one of expected or output (deprecated) can be specified. Prefer expected.",
-      );
     }
 
     if (tags) {
@@ -8809,7 +8481,6 @@ export class Dataset<
     expected,
     metadata,
     tags,
-    output,
     origin,
     isMerge,
   }: {
@@ -8818,18 +8489,15 @@ export class Dataset<
     expected?: unknown;
     metadata?: Record<string, unknown>;
     tags?: string[];
-    output?: unknown;
-    origin?: ObjectReferenceType;
+    origin?: ObjectReference;
     isMerge?: boolean;
   }): LazyValue<BackgroundLogEvent> {
     return new LazyValue(async () => {
       const dataset_id = await this.id;
-      const expectedValue = expected === undefined ? output : expected;
-
       const args: BackgroundLogEvent = {
         id,
         input,
-        expected: expectedValue,
+        expected,
         tags,
         dataset_id,
         created: !isMerge ? new Date().toISOString() : undefined, //if we're merging/updating an event we will not add this ts
@@ -8860,7 +8528,6 @@ export class Dataset<
    * JSON-serializable type, but its keys must be strings.
    * @param event.origin (Optional) a reference to the source object this dataset record was derived from.
    * @param event.id (Optional) a unique identifier for the event. If you don't provide one, Braintrust will generate one for you.
-   * @param event.output: (Deprecated) The output of your application. Use `expected` instead.
    * @returns The `id` of the logged record.
    */
   public insert({
@@ -8869,7 +8536,6 @@ export class Dataset<
     metadata,
     tags,
     id,
-    output,
     origin,
   }: {
     readonly input?: unknown;
@@ -8877,10 +8543,9 @@ export class Dataset<
     readonly tags?: string[];
     readonly metadata?: Record<string, unknown>;
     readonly id?: string;
-    readonly output?: unknown;
-    readonly origin?: ObjectReferenceType;
+    readonly origin?: ObjectReference;
   }): string {
-    this.validateEvent({ metadata, expected, output, tags });
+    this.validateEvent({ metadata, tags });
 
     const rowId = id || uuidv4();
     const args = this.createArgs(
@@ -8890,7 +8555,6 @@ export class Dataset<
         expected,
         metadata,
         tags,
-        output,
         origin,
         isMerge: false,
       }),
@@ -8927,7 +8591,7 @@ export class Dataset<
     readonly tags?: string[];
     readonly metadata?: Record<string, unknown>;
   }): string {
-    this.validateEvent({ metadata, expected, tags });
+    this.validateEvent({ metadata, tags });
 
     const args = this.createArgs(
       deepCopyEvent({
@@ -9121,18 +8785,6 @@ export class Dataset<
    */
   async flush(): Promise<void> {
     return await this.state.bgLogger().flush();
-  }
-
-  /**
-   * @deprecated This function is deprecated. You can simply remove it from your code.
-   */
-  public async close(): Promise<string> {
-    debugLogger
-      .forState(this.state)
-      .warn(
-        "close is deprecated and will be removed in a future version of braintrust. It is now a no-op and can be removed",
-      );
-    return this.id;
   }
 
   public static isDataset(data: unknown): data is Dataset {
@@ -9914,7 +9566,7 @@ export class RemoteEvalParameters<
   }
 }
 
-export type AnyDataset = Dataset<boolean>;
+export type AnyDataset = Dataset;
 
 /**
  * Summary of a score's performance.

@@ -13,7 +13,6 @@ import { cloudflareAgentsConfigs } from "./cloudflare-agents";
 import { cloudflareThinkConfigs } from "./cloudflare-think";
 import { cohereConfigs } from "./cohere";
 import { cursorSDKConfigs } from "./cursor-sdk";
-import { flueConfigs } from "./flue";
 import { genkitConfigs } from "./genkit";
 import { gitHubCopilotConfigs } from "./github-copilot";
 import { googleADKConfigs } from "./google-adk";
@@ -48,11 +47,11 @@ const defaultInstrumentationConfigGroups: readonly InstrumentationConfigGroup[] 
     },
     { integrations: ["anthropic"], configs: anthropicConfigs },
     {
-      integrations: ["bedrock", "awsBedrock", "awsBedrockRuntime"],
+      integrations: ["awsBedrockRuntime"],
       configs: bedrockRuntimeConfigs,
     },
     {
-      integrations: ["aisdk", "vercel"],
+      integrations: ["aisdk"],
       configs: aiSDKConfigs,
     },
     {
@@ -71,13 +70,13 @@ const defaultInstrumentationConfigGroups: readonly InstrumentationConfigGroup[] 
       integrations: ["cloudflareThink"],
       configs: cloudflareThinkConfigs,
     },
-    { integrations: ["cursor", "cursorSDK"], configs: cursorSDKConfigs },
+    { integrations: ["cursorSDK"], configs: cursorSDKConfigs },
     {
       integrations: ["openAIAgents"],
       configs: openAIAgentsCoreConfigs,
     },
     {
-      integrations: ["google", "googleGenAI"],
+      integrations: ["googleGenAI"],
       configs: googleGenAIConfigs,
     },
     {
@@ -114,10 +113,6 @@ const defaultInstrumentationConfigGroups: readonly InstrumentationConfigGroup[] 
     {
       integrations: ["strandsAgentSDK"],
       configs: strandsAgentSDKConfigs,
-    },
-    {
-      integrations: ["flue"],
-      configs: flueConfigs,
     },
     {
       integrations: ["voyageai"],

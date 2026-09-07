@@ -15,22 +15,18 @@ import type {
 export const BRAINTRUST_LANGCHAIN_CALLBACK_HANDLER_NAME =
   "BraintrustCallbackHandler";
 
-export class BraintrustLangChainCallbackHandler<
-  IsAsyncFlush extends boolean = true,
-> {
+export class BraintrustLangChainCallbackHandler {
   name = BRAINTRUST_LANGCHAIN_CALLBACK_HANDLER_NAME;
   private spans = new Map<string, Span>();
   private skippedRuns = new Set<string>();
   private parent?: Span | (() => Span);
   private rootRunId?: string;
-  private options: LangChainCallbackHandlerOptions<IsAsyncFlush>;
+  private options: LangChainCallbackHandlerOptions;
   private startTimes = new Map<string, number>();
   private firstTokenTimes = new Map<string, number>();
   private ttftMs = new Map<string, number>();
 
-  constructor(
-    options?: Partial<LangChainCallbackHandlerOptions<IsAsyncFlush>>,
-  ) {
+  constructor(options?: Partial<LangChainCallbackHandlerOptions>) {
     this.parent = options?.parent;
     this.options = {
       debug: options?.debug ?? false,
@@ -93,13 +89,14 @@ export class BraintrustLangChainCallbackHandler<
       INSTRUMENTATION_NAMES.LANGCHAIN,
     );
 
-    let span = parentSpan.startSpan(spanArgs);
+    const { parent: _ignoredParent, ...publicSpanArgs } = spanArgs;
+    let span = parentSpan.startSpan(publicSpanArgs);
 
     if (
       !Object.is(this.options.logger, NOOP_SPAN) &&
       Object.is(span, NOOP_SPAN)
     ) {
-      span = initLogger().startSpan(spanArgs);
+      span = initLogger().startSpan(publicSpanArgs);
     }
 
     this.spans.set(runId, span);

@@ -2,8 +2,8 @@ import iso from "../../isomorph";
 import type { IsoAsyncLocalStorage, IsoTracingChannel } from "../../isomorph";
 import {
   _internalGetGlobalState,
+  _internalStartSpan,
   currentSpan,
-  startSpan,
   updateSpan,
   type Span,
   type StartSpanArgs,
@@ -335,10 +335,10 @@ export function currentHarnessTurnParent(): HarnessTurnParent | undefined {
 export function bindHarnessTurnParentToStart<T>(
   tracingChannel: IsoTracingChannel<T>,
   parentFromEvent: (event: T) => HarnessTurnParent | undefined,
-): () => void {
+): void {
   const startChannel = tracingChannel.start;
   if (!startChannel) {
-    return () => {};
+    return;
   }
 
   harnessTurnParentStore ??= iso.newAsyncLocalStorage<
@@ -349,9 +349,6 @@ export function bindHarnessTurnParentToStart<T>(
     store,
     (event) => parentFromEvent(event) ?? store.getStore(),
   );
-  return () => {
-    startChannel.unbindStore(store);
-  };
 }
 
 export function startHarnessTurnChildSpan(
@@ -362,9 +359,10 @@ export function startHarnessTurnChildSpan(
     args,
     INSTRUMENTATION_NAMES.AI_SDK,
   );
+  const { parent: _ignoredParent, ...publicSpanArgs } = spanArgs;
   return typeof parent === "string"
-    ? startSpan({ ...spanArgs, parent })
-    : parent.startSpan(spanArgs);
+    ? _internalStartSpan({ ...spanArgs, parent })
+    : parent.startSpan(publicSpanArgs);
 }
 
 export function updateHarnessTurn(

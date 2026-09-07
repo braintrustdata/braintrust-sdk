@@ -1,11 +1,7 @@
 import { debugLogger } from "../../debug-logger";
 import type { IsoChannelHandlers, IsoTracingChannel } from "../../isomorph";
-import {
-  _internalGetGlobalState,
-  BRAINTRUST_CURRENT_SPAN_STORE,
-  startSpan,
-} from "../../logger";
-import type { CurrentSpanStore, Span } from "../../logger";
+import { _internalGetGlobalState, startSpan } from "../../logger";
+import type { Span } from "../../logger";
 import {
   withSpanInstrumentationName,
   type SpanInstrumentationName,
@@ -312,20 +308,14 @@ function bindCurrentSpanStoreToStart<
   },
   channelName: string,
   instrumentationName: SpanInstrumentationName,
-): (() => void) | undefined {
+): void {
   const state = _internalGetGlobalState();
   const startChannel = tracingChannel.start;
   const contextManager = state?.contextManager;
-  const currentSpanStore = contextManager
-    ? (
-        contextManager as {
-          [BRAINTRUST_CURRENT_SPAN_STORE]?: CurrentSpanStore;
-        }
-      )[BRAINTRUST_CURRENT_SPAN_STORE]
-    : undefined;
+  const currentSpanStore = contextManager?.getCurrentSpanStore();
 
   if (!currentSpanStore || !startChannel) {
-    return undefined;
+    return;
   }
 
   startChannel.bindStore(
@@ -347,10 +337,6 @@ function bindCurrentSpanStoreToStart<
         : currentSpanStore.getStore();
     },
   );
-
-  return () => {
-    startChannel.unbindStore(currentSpanStore);
-  };
 }
 
 function logErrorAndEnd<
@@ -442,13 +428,13 @@ function runStreamingErrorHook<TChannel extends AnyAsyncChannel>(args: {
 export function traceAsyncChannel<TChannel extends AnyAsyncChannel>(
   channel: TChannel,
   config: AsyncChannelSpanConfig<TChannel>,
-): () => void {
+): void {
   const tracingChannel = channel.tracingChannel() as IsoTracingChannel<
     ChannelMessage<TChannel>
   >;
   const states = new WeakMap<object, SpanState>();
   const channelName = channel.channelName;
-  const unbindCurrentSpanStore = bindCurrentSpanStoreToStart(
+  bindCurrentSpanStoreToStart(
     tracingChannel,
     states,
     config,
@@ -514,23 +500,18 @@ export function traceAsyncChannel<TChannel extends AnyAsyncChannel>(
   };
 
   tracingChannel.subscribe(handlers);
-
-  return () => {
-    unbindCurrentSpanStore?.();
-    tracingChannel.unsubscribe(handlers);
-  };
 }
 
 export function traceStreamingChannel<TChannel extends AnyAsyncChannel>(
   channel: TChannel,
   config: StreamingChannelSpanConfig<TChannel>,
-): () => void {
+): void {
   const tracingChannel = channel.tracingChannel() as IsoTracingChannel<
     ChannelMessage<TChannel>
   >;
   const states = new WeakMap<object, SpanState>();
   const channelName = channel.channelName;
-  const unbindCurrentSpanStore = bindCurrentSpanStoreToStart(
+  bindCurrentSpanStoreToStart(
     tracingChannel,
     states,
     config,
@@ -790,23 +771,18 @@ export function traceStreamingChannel<TChannel extends AnyAsyncChannel>(
   };
 
   tracingChannel.subscribe(handlers);
-
-  return () => {
-    unbindCurrentSpanStore?.();
-    tracingChannel.unsubscribe(handlers);
-  };
 }
 
 export function traceSyncStreamChannel<TChannel extends AnySyncStreamChannel>(
   channel: TChannel,
   config: SyncStreamChannelSpanConfig<TChannel>,
-): () => void {
+): void {
   const tracingChannel = channel.tracingChannel() as IsoTracingChannel<
     ChannelMessage<TChannel>
   >;
   const states = new WeakMap<object, SpanState>();
   const channelName = channel.channelName;
-  const unbindCurrentSpanStore = bindCurrentSpanStoreToStart(
+  bindCurrentSpanStoreToStart(
     tracingChannel,
     states,
     config,
@@ -939,19 +915,4 @@ export function traceSyncStreamChannel<TChannel extends AnySyncStreamChannel>(
   };
 
   tracingChannel.subscribe(handlers);
-
-  return () => {
-    unbindCurrentSpanStore?.();
-    tracingChannel.unsubscribe(handlers);
-  };
-}
-
-export function unsubscribeAll(
-  unsubscribers: Array<() => void>,
-): Array<() => void> {
-  for (const unsubscribe of unsubscribers) {
-    unsubscribe();
-  }
-
-  return [];
 }

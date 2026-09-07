@@ -42,10 +42,10 @@
  * });
  * ```
  *
- * Finally, run the script with `npx braintrust eval hello.eval.ts`.
+ * Finally, run the script with `npx bt eval hello.eval.ts`.
  *
  * ```bash
- * BRAINTRUST_API_KEY=<YOUR_BRAINTRUST_API_KEY> npx braintrust eval hello.eval.ts
+ * BRAINTRUST_API_KEY=<YOUR_BRAINTRUST_API_KEY> npx bt eval hello.eval.ts
  * ```
  *
  * @module braintrust
@@ -56,4 +56,3 @@ import { configureNode } from "./config";
 configureNode();
 
 export * from "../exports";
-export * as default from "../exports";

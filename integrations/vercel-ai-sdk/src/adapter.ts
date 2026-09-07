@@ -1,4 +1,4 @@
-import { BraintrustStream, BraintrustStreamChunk } from "braintrust";
+import { BraintrustStream } from "braintrust";
 
 /**
  * @deprecated Use the AI SDK integration exported by `braintrust` instead. This package will stop being published after the next release.
@@ -17,6 +17,13 @@ function formatStreamPart(type: "text" | "data", value: unknown): string {
 }
 
 import { ReadableStream, TransformStream } from "stream/web";
+
+type BraintrustStreamChunk =
+  ReturnType<BraintrustStream["toReadableStream"]> extends ReadableStream<
+    infer Chunk
+  >
+    ? Chunk
+    : never;
 
 /**
  * @deprecated Use `BraintrustStream` from `braintrust` with the current AI SDK response APIs instead. This package will stop being published after the next release.
@@ -57,16 +64,6 @@ export function toDataStreamResponse(
     },
     ...init,
   });
-}
-
-/**
- * @deprecated Use `BraintrustStream` from `braintrust` with the current AI SDK response APIs instead. This package will stop being published after the next release.
- */
-export function toAIStreamResponse(
-  stream: BraintrustStreamOrReadable,
-  init?: ResponseInit,
-): Response {
-  return toDataStreamResponse(stream, init);
 }
 
 function btStreamToAISDKTransformStream(

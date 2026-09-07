@@ -3,25 +3,23 @@ import type { Trace } from "./trace";
 import iso from "./isomorph";
 import { slugify } from "../util/string_util";
 import { z } from "zod/v3";
-import {
-  type FunctionTypeEnumType as FunctionType,
-  type IfExistsType as IfExists,
-  type SavedFunctionIdType as SavedFunctionId,
-  type PromptBlockDataType as PromptBlockData,
-  type PromptDataType as PromptData,
-  ToolFunctionDefinition as toolFunctionDefinitionSchema,
-  type ToolFunctionDefinitionType as ToolFunctionDefinition,
-  FunctionData as functionDataSchema,
-  Project as projectSchema,
-  type ExtendedSavedFunctionIdType as ExtendedSavedFunctionId,
-} from "./generated_types";
+import { Project as projectSchema } from "./generated_types";
+import type {
+  FunctionTypeEnumType as FunctionType,
+  IfExistsType as IfExists,
+  SavedFunctionIdType as SavedFunctionId,
+  PromptBlockDataType as PromptBlockData,
+  PromptDataType as PromptData,
+  ToolFunctionDefinitionType as ToolFunctionDefinition,
+  ExtendedSavedFunctionIdType as ExtendedSavedFunctionId,
+  FunctionDataType,
+} from "./generated_plain_types";
 import { loadPrettyXact, TransactionId } from "../util/index";
 import {
   _internalGetGlobalState,
   login,
   Prompt,
   PromptRowWithId,
-  RemoteEvalParameters,
 } from "./logger";
 import type { BaseFnOpts, GenericFunction } from "./framework-types";
 import type { EvalParameters } from "./eval-parameters";
@@ -30,14 +28,12 @@ import {
   type PromptDefinition,
 } from "./prompt-schemas";
 import { zodToJsonSchema } from "./zod/utils";
-import type {
-  ParametersSchema,
-  StaticParametersSchema,
-  SerializedParametersContainer,
-} from "../dev/types";
-
-export { toolFunctionDefinitionSchema };
-// ToolFunctionDefinition exported as type-only from main index to avoid namespace issues
+type ParametersSchema = {
+  type: "object";
+  properties: Record<string, Record<string, unknown>>;
+  required?: string[];
+  additionalProperties?: boolean;
+};
 
 // Safe access to __filename (only exists in Node.js CJS)
 const currentFilename =
@@ -45,7 +41,7 @@ const currentFilename =
 
 type NameOrId = { name: string } | { id: string };
 
-export type CreateProjectOpts = NameOrId;
+type CreateProjectOpts = NameOrId;
 class ProjectBuilder {
   create(opts: CreateProjectOpts) {
     return new Project(opts);
@@ -53,7 +49,7 @@ class ProjectBuilder {
 }
 export const projects = new ProjectBuilder();
 
-export class Project {
+class Project {
   public readonly name?: string;
   public readonly id?: string;
   public tools: ToolBuilder;
@@ -120,7 +116,7 @@ export class Project {
   async publish() {
     if (globalThis._lazy_load) {
       // eslint-disable-next-line no-restricted-properties -- preserving intentional console usage.
-      console.warn("publish() is a no-op when running `braintrust push`.");
+      console.warn("publish() is a no-op when running `bt push`.");
       return;
     }
     await login();
@@ -129,7 +125,7 @@ export class Project {
     if (this._publishableCodeFunctions.length > 0) {
       // eslint-disable-next-line no-restricted-properties -- preserving intentional console usage.
       console.warn(
-        "Code functions cannot be published directly. Use `braintrust push` instead.",
+        "Code functions cannot be published directly. Use `bt push` instead.",
       );
     }
     if (this._publishablePrompts.length > 0) {
@@ -146,7 +142,7 @@ export class Project {
   }
 }
 
-export class ToolBuilder {
+class ToolBuilder {
   private taskCounter = 0;
   constructor(private readonly project: Project) {}
 
@@ -216,7 +212,7 @@ export class ToolBuilder {
   }
 }
 
-export class ScorerBuilder {
+class ScorerBuilder {
   private taskCounter = 0;
   constructor(private readonly project: Project) {}
 
@@ -339,7 +335,7 @@ type Schema<Input, Output> = Partial<{
   returns: z.ZodSchema<Output>;
 }>;
 
-export type CodeOpts<
+type CodeOpts<
   Params,
   Returns,
   Fn extends GenericFunction<Params, Returns>,
@@ -380,7 +376,7 @@ type ScorerOptsUnion<
   | CodeOpts<Exact<Params, ScorerArgs<Output, Input>>, Returns, Fn>
   | ScorerPromptOpts;
 
-export type ScorerOpts<
+type ScorerOpts<
   Output,
   Input,
   Params,
@@ -565,7 +561,7 @@ interface PromptNoTrace {
   noTrace: boolean;
 }
 
-export type PromptOpts<
+type PromptOpts<
   HasId extends boolean,
   HasVersion extends boolean,
   HasTools extends boolean = true,
@@ -579,7 +575,7 @@ export type PromptOpts<
   (HasNoTrace extends true ? Partial<PromptNoTrace> : {}) &
   PromptDefinition;
 
-export class PromptBuilder {
+class PromptBuilder {
   constructor(private readonly project: Project) {}
 
   public create<
@@ -710,53 +706,6 @@ class ParametersBuilder {
   }
 }
 
-export function serializeEvalParametersToStaticParametersSchema(
-  parameters: EvalParameters,
-): StaticParametersSchema {
-  return Object.fromEntries(
-    Object.entries(parameters).map(([name, value]) => {
-      if ("type" in value && value.type === "prompt") {
-        return [
-          name,
-          {
-            type: "prompt",
-            default: value.default
-              ? promptDefinitionToPromptData(value.default)
-              : undefined,
-            description: value.description,
-          },
-        ];
-      } else if ("type" in value && value.type === "model") {
-        return [
-          name,
-          {
-            type: "model",
-            default: value.default,
-            description: value.description,
-          },
-        ];
-      } else {
-        // Since this schema is bundled, it won't pass an instanceof check. For
-        // some reason, aliasing it to `z.ZodSchema` leads to `error TS2589:
-        // Type instantiation is excessively deep and possibly infinite.` So
-        // just using `any` to turn off the typesystem.
-        //
-        // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
-        const schemaObj = zodToJsonSchema(value as unknown as z.ZodType);
-        return [
-          name,
-          {
-            type: "data",
-            schema: schemaObj,
-            default: schemaObj.default,
-            description: schemaObj.description,
-          },
-        ];
-      }
-    }),
-  );
-}
-
 function serializeEvalParameterstoParametersSchema(
   parameters: EvalParameters,
 ): ParametersSchema {
@@ -827,38 +776,13 @@ function getDefaultDataFromParametersSchema(
   );
 }
 
-export function serializeRemoteEvalParametersContainer(
-  parameters: EvalParameters | RemoteEvalParameters<boolean, boolean>,
-): SerializedParametersContainer {
-  if (RemoteEvalParameters.isParameters(parameters)) {
-    return {
-      type: "braintrust.parameters",
-      // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
-      schema: parameters.schema as ParametersSchema,
-      source: {
-        parametersId: parameters.id,
-        slug: parameters.slug,
-        name: parameters.name,
-        projectId: parameters.projectId,
-        version: parameters.version,
-      },
-    };
-  }
-
-  return {
-    type: "braintrust.staticParameters",
-    schema: serializeEvalParametersToStaticParametersSchema(parameters),
-    source: null,
-  };
-}
-
-export interface FunctionEvent {
+interface FunctionEvent {
   project_id: string;
   slug: string;
   name: string;
   description: string;
   prompt_data?: PromptData;
-  function_data: z.infer<typeof functionDataSchema>;
+  function_data: FunctionDataType;
   function_type?: FunctionType;
   if_exists?: IfExists;
   tags?: string[];
@@ -866,7 +790,7 @@ export interface FunctionEvent {
   environments?: { slug: string }[];
 }
 
-export class ProjectNameIdMap {
+class ProjectNameIdMap {
   private nameToId: Record<string, string> = {};
   private idToName: Record<string, string> = {};
 

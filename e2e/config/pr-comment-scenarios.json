@@ -624,14 +624,6 @@
     "metadataScenario": "flue-instrumentation",
     "variants": [
       {
-        "variantKey": "flue-v0-8-0",
-        "label": "v0.8 pinned"
-      },
-      {
-        "variantKey": "flue-v0-8-latest",
-        "label": "v0.8 latest"
-      },
-      {
         "variantKey": "flue-v1-0-0-beta-3",
         "label": "v1 pinned"
       },
@@ -654,9 +646,7 @@
     "label": "Eve Instrumentation",
     "metadataScenario": "eve-instrumentation",
     "variants": [
-      { "variantKey": "eve-v0", "label": "v0 pinned" },
-      { "variantKey": "eve-v0-provider", "label": "v0 provider minimum" },
-      { "variantKey": "eve-v0-latest-pinned", "label": "v0 latest pinned" },
+      { "variantKey": "eve-v0", "label": "v0.34 pinned" },
       { "variantKey": "eve-v0-latest", "label": "v0 latest" }
     ]
   },

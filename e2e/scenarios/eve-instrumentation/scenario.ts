@@ -1,13 +1,6 @@
 import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
 import { once } from "node:events";
-import {
-  copyFile,
-  mkdir,
-  readFile,
-  rm,
-  symlink,
-  unlink,
-} from "node:fs/promises";
+import { readFile, symlink, unlink } from "node:fs/promises";
 import net from "node:net";
 import path from "node:path";
 import { runMain } from "../../helpers/scenario-runtime";
@@ -37,31 +30,6 @@ async function main() {
     }
   }
   await symlink(evePackageDir, eveModuleDir, "dir");
-
-  const agentDir = path.join(process.cwd(), "agent");
-  await rm(path.join(agentDir, "instrumentation.ts"), { force: true });
-  await rm(path.join(agentDir, "instrumentation"), {
-    force: true,
-    recursive: true,
-  });
-  await rm(path.join(agentDir, "channels", "eve.ts"), { force: true });
-  if (process.env.EVE_INSTRUMENTATION_PROVIDER === "1") {
-    await mkdir(path.join(agentDir, "instrumentation"), { recursive: true });
-    await mkdir(path.join(agentDir, "channels"), { recursive: true });
-    await copyFile(
-      path.join(process.cwd(), "config", "provider-instrumentation.ts"),
-      path.join(agentDir, "instrumentation", "braintrust.ts"),
-    );
-    await copyFile(
-      path.join(process.cwd(), "config", "provider-eve-channel.ts"),
-      path.join(agentDir, "channels", "eve.ts"),
-    );
-  } else {
-    await copyFile(
-      path.join(process.cwd(), "config", "legacy-instrumentation.ts"),
-      path.join(agentDir, "instrumentation.ts"),
-    );
-  }
 
   const eveBin = path.join(evePackageDir, eveBinPath);
 
@@ -97,7 +65,6 @@ async function main() {
     }
 
     const body = (await response.json()) as {
-      continuationToken?: string;
       sessionId?: string;
     };
     if (!body.sessionId) {
@@ -111,17 +78,14 @@ async function main() {
       seenSessionIds,
       "session.waiting",
     );
+    // Eve emits session.waiting just before its durable session snapshot is
+    // visible to the continuation route.
+    await new Promise((resolve) => setTimeout(resolve, 3000));
     const followUp = await fetch(
       `${baseUrl}/eve/v1/session/${body.sessionId}`,
       {
         body: JSON.stringify({
-          ...(body.continuationToken
-            ? { continuationToken: body.continuationToken }
-            : {}),
           message: "Run the Braintrust Eve instrumentation e2e scenario again",
-          // Queue the follow-up if the waiting event arrives while Eve is still
-          // committing the completed turn's model history.
-          turnPolicy: "queue",
         }),
         headers: { "content-type": "application/json" },
         method: "POST",
@@ -248,6 +212,7 @@ async function streamUntil(
   const decoder = new TextDecoder();
   let buffer = "";
   let nextIndex = startIndex;
+  let turnCompleted = false;
   try {
     while (true) {
       const { done, value } = await reader.read();
@@ -263,7 +228,10 @@ async function streamUntil(
           continue;
         }
         const event = JSON.parse(trimmed) as {
-          data?: { childSessionId?: string; message?: string };
+          data?: {
+            childSessionId?: string;
+            message?: string;
+          };
           type?: string;
         };
         nextIndex++;
@@ -291,7 +259,13 @@ async function streamUntil(
             ).then(() => undefined),
           );
         }
-        if (event.type === until) {
+        if (event.type === "turn.completed") {
+          turnCompleted = true;
+        }
+        if (
+          event.type === until &&
+          (until !== "session.waiting" || turnCompleted)
+        ) {
           await Promise.all(childStreams);
           return nextIndex;
         }

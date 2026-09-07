@@ -45,16 +45,13 @@ test("meta (write) is passed to task", async () => {
       projectName: "proj",
       evalName: "eval",
       data: [{ input: 1, metadata }],
-      task: async (input: number, { meta }) => {
-        meta({
-          foo: "barbar",
-        });
+      task: async (input: number, { metadata }) => {
+        metadata.foo = "barbar";
         return input * 2;
       },
       scores: [],
     },
     new NoopProgressReporter(),
-    [],
     undefined,
     undefined,
     true,
@@ -92,7 +89,6 @@ test("metadata (read/write) is passed to task", async () => {
       scores: [],
     },
     new NoopProgressReporter(),
-    [],
     undefined,
     undefined,
     true,
@@ -132,7 +128,6 @@ test("expected (read/write) is passed to task", async () => {
       scores: [],
     },
     new NoopProgressReporter(),
-    [],
     undefined,
     undefined,
     true,
@@ -175,7 +170,6 @@ test("EvalCase id and tags are passed to scorers", async () => {
       ],
     },
     new NoopProgressReporter(),
-    [],
     undefined,
     undefined,
     true,
@@ -259,7 +253,6 @@ describe("runEvaluator", () => {
         scores: [],
       },
       new NoopProgressReporter(),
-      [],
       undefined,
     );
 
@@ -292,7 +285,6 @@ describe("runEvaluator", () => {
         scores: [],
       },
       new NoopProgressReporter(),
-      [],
       undefined,
     );
 
@@ -331,7 +323,6 @@ describe("runEvaluator", () => {
         scores: [],
       },
       new NoopProgressReporter(),
-      [],
       undefined,
     );
 
@@ -369,7 +360,6 @@ describe("runEvaluator", () => {
         scores: [],
       },
       new NoopProgressReporter(),
-      [],
       (event) => streamEvents.push(event),
     );
 
@@ -408,7 +398,6 @@ describe("runEvaluator", () => {
         scores: [],
       },
       new NoopProgressReporter(),
-      [],
       undefined,
     );
 
@@ -432,7 +421,6 @@ describe("runEvaluator", () => {
           ),
         },
         new NoopProgressReporter(),
-        [],
         undefined,
       );
 
@@ -459,7 +447,6 @@ describe("runEvaluator", () => {
               errorScoreHandler: defaultErrorScoreHandler,
             },
             new NoopProgressReporter(),
-            [],
             undefined,
           );
 
@@ -488,7 +475,6 @@ describe("runEvaluator", () => {
               errorScoreHandler: defaultErrorScoreHandler,
             },
             new NoopProgressReporter(),
-            [],
             undefined,
           );
 
@@ -521,7 +507,6 @@ describe("runEvaluator", () => {
               errorScoreHandler: () => undefined,
             },
             new NoopProgressReporter(),
-            [],
             undefined,
           );
 
@@ -546,7 +531,6 @@ describe("runEvaluator", () => {
               errorScoreHandler: () => ({ error_score: 1 }),
             },
             new NoopProgressReporter(),
-            [],
             undefined,
           );
 
@@ -579,7 +563,6 @@ describe("runEvaluator", () => {
           },
         },
         new NoopProgressReporter(),
-        [],
         undefined,
         undefined,
         true,
@@ -624,7 +607,6 @@ describe("runEvaluator", () => {
             maxConcurrency: 1,
           },
           new NoopProgressReporter(),
-          [],
           undefined,
         ),
       ).rejects.toThrow(new InternalAbortError("Evaluator timed out"));
@@ -673,7 +655,6 @@ describe("runEvaluator", () => {
             maxConcurrency: 1,
           },
           new NoopProgressReporter(),
-          [],
           undefined,
         ),
       ).rejects.toThrow(new InternalAbortError("Evaluator aborted"));
@@ -708,7 +689,6 @@ describe("runEvaluator", () => {
           scores: [],
         },
         new NoopProgressReporter(),
-        [],
         undefined,
       );
 
@@ -740,7 +720,6 @@ describe("runEvaluator", () => {
           signal: abortController.signal,
         },
         new NoopProgressReporter(),
-        [],
         undefined,
       );
 
@@ -769,7 +748,6 @@ test("trialIndex is passed to task", async () => {
       trialCount: 3,
     },
     new NoopProgressReporter(),
-    [],
     undefined,
     undefined,
     true,
@@ -811,7 +789,6 @@ test("trialIndex with multiple inputs", async () => {
       trialCount: 2,
     },
     new NoopProgressReporter(),
-    [],
     undefined,
     undefined,
     true,
@@ -857,7 +834,6 @@ test("per-input trialCount overrides global trialCount", async () => {
       trialCount: 2,
     },
     new NoopProgressReporter(),
-    [],
     undefined,
     undefined,
     true,
@@ -904,7 +880,6 @@ test("per-input trialCount works without global trialCount", async () => {
       scores: [],
     },
     new NoopProgressReporter(),
-    [],
     undefined,
     undefined,
     true,
@@ -1071,7 +1046,6 @@ test("runEvaluator forwards baseExperimentId to summary", async () => {
       baseExperimentId: "base-exp-id",
     },
     new NoopProgressReporter(),
-    [],
     undefined,
     undefined,
     true,
@@ -1114,7 +1088,6 @@ test("runEvaluator forwards persisted baseExperimentName id to summary", async (
       baseExperimentName: "base-exp",
     },
     new NoopProgressReporter(),
-    [],
     undefined,
     undefined,
     true,
@@ -1156,7 +1129,6 @@ test("tags can be appended and logged to root span", async () => {
       summarizeScores: false,
     },
     new NoopProgressReporter(),
-    [],
     undefined,
     undefined,
     true,
@@ -1205,7 +1177,6 @@ test.each([
       summarizeScores: false,
     },
     new NoopProgressReporter(),
-    [],
     undefined,
     undefined,
     true,
@@ -1245,7 +1216,6 @@ test("tags are persisted with a failing scorer", async () => {
       summarizeScores: false,
     },
     new NoopProgressReporter(),
-    [],
     undefined,
     undefined,
     true,
@@ -1278,7 +1248,6 @@ test("tags remain empty when not set", async () => {
       summarizeScores: false,
     },
     new NoopProgressReporter(),
-    [],
     undefined,
     undefined,
     true,
@@ -1313,7 +1282,6 @@ test("scorer spans have purpose='scorer' attribute", async () => {
       ],
     },
     new NoopProgressReporter(),
-    [],
     undefined,
     undefined,
     true,

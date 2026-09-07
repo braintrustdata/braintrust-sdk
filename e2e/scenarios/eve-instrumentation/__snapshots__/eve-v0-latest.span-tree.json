@@ -141,7 +141,6 @@
                     "url": "https://eve.dev/docs/guides/instrumentation"
                   },
                   "metadata": {
-                    "eve.action_kind": "tool-call",
                     "eve.session_id": "<eve.session_id:1>",
                     "scenario": "eve-instrumentation",
                     "testRunId": "<run:1>"
@@ -227,10 +226,24 @@
                   }
                 }
               ],
+              "input": [
+                {
+                  "content": "You are the subagent \"researcher\".\nDescription: Research the Eve instrumentation documentation before the parent reads it.\n\nThe caller delegated the following task to you. Complete it and return the result directly. The caller may send follow-up messages after you answer.\n\nCaller message:\nRun the Braintrust Eve instrumentation e2e scenario",
+                  "role": "user"
+                }
+              ],
+              "output": "Researcher result: [Eve instrumentation](https://eve.dev/docs/guides/instrumentation)",
               "metadata": {
                 "eve.session_id": "<eve.session_id:1>",
                 "scenario": "eve-instrumentation",
                 "testRunId": "<run:1>"
+              },
+              "metrics": {
+                "completion_tokens": 388,
+                "prompt_cache_creation_tokens": 0,
+                "prompt_cached_tokens": 0,
+                "prompt_tokens": 6326,
+                "tokens": 6714
               }
             }
           ],
@@ -239,7 +252,6 @@
           },
           "output": "Researcher result: [Eve instrumentation](https://eve.dev/docs/guides/instrumentation)",
           "metadata": {
-            "eve.action_kind": "subagent-call",
             "eve.session_id": "<eve.session_id:1>",
             "scenario": "eve-instrumentation",
             "testRunId": "<run:1>"
@@ -259,7 +271,6 @@
             "url": "https://eve.dev/docs/guides/instrumentation"
           },
           "metadata": {
-            "eve.action_kind": "tool-call",
             "eve.session_id": "<eve.session_id:1>",
             "scenario": "eve-instrumentation",
             "testRunId": "<run:1>"
@@ -372,10 +383,24 @@
           }
         }
       ],
+      "input": [
+        {
+          "content": "[Agents]\n<agents>\n<agent id=\"ag_researcher:<id>\" name=\"researcher\">Researcher result: [Eve instrumentation](https://eve.dev/docs/guides/instrumentation)</agent>\n</agents>",
+          "role": "user"
+        }
+      ],
+      "output": "Final answer from read: Researcher result: [Eve instrumentation](https://eve.dev/docs/guides/instrumentation). Title: Eve instrumentation. URL: https://eve.dev/docs/guides/instrumentation. Excerpt: \"Eve hooks expose runtime stream events that Braintrust maps into a nested turn trace.\"",
       "metadata": {
         "eve.session_id": "<eve.session_id:1>",
         "scenario": "eve-instrumentation",
         "testRunId": "<run:1>"
+      },
+      "metrics": {
+        "completion_tokens": 853,
+        "prompt_cache_creation_tokens": 0,
+        "prompt_cached_tokens": 0,
+        "prompt_tokens": 7934,
+        "tokens": 8787
       }
     },
     {
@@ -598,7 +623,6 @@
                     "url": "https://eve.dev/docs/guides/instrumentation"
                   },
                   "metadata": {
-                    "eve.action_kind": "tool-call",
                     "eve.session_id": "<eve.session_id:1>",
                     "scenario": "eve-instrumentation",
                     "testRunId": "<run:1>"
@@ -684,10 +708,24 @@
                   }
                 }
               ],
+              "input": [
+                {
+                  "content": "You are the subagent \"researcher\".\nDescription: Research the Eve instrumentation documentation before the parent reads it.\n\nThe caller delegated the following task to you. Complete it and return the result directly. The caller may send follow-up messages after you answer.\n\nCaller message:\nRun the Braintrust Eve instrumentation e2e scenario again",
+                  "role": "user"
+                }
+              ],
+              "output": "Researcher result: Eve instrumentation https://eve.dev/docs/guides/instrumentation",
               "metadata": {
                 "eve.session_id": "<eve.session_id:1>",
                 "scenario": "eve-instrumentation",
                 "testRunId": "<run:1>"
+              },
+              "metrics": {
+                "completion_tokens": 376,
+                "prompt_cache_creation_tokens": 0,
+                "prompt_cached_tokens": 0,
+                "prompt_tokens": 6314,
+                "tokens": 6690
               }
             }
           ],
@@ -696,7 +734,6 @@
           },
           "output": "Researcher result: Eve instrumentation https://eve.dev/docs/guides/instrumentation",
           "metadata": {
-            "eve.action_kind": "subagent-call",
             "eve.session_id": "<eve.session_id:1>",
             "scenario": "eve-instrumentation",
             "testRunId": "<run:1>"
@@ -716,7 +753,6 @@
             "url": "https://eve.dev/docs/guides/instrumentation"
           },
           "metadata": {
-            "eve.action_kind": "tool-call",
             "eve.session_id": "<eve.session_id:1>",
             "scenario": "eve-instrumentation",
             "testRunId": "<run:1>"
@@ -908,10 +944,24 @@
           }
         }
       ],
+      "input": [
+        {
+          "content": "[Agents]\n<agents>\n<agent id=\"ag_researcher:<id>\" name=\"researcher\">Researcher result: [Eve instrumentation](https://eve.dev/docs/guides/instrumentation)</agent>\n<agent id=\"ag_researcher:<id>\" name=\"researcher\">Researcher result: Eve instrumentation https://eve.dev/docs/guides/instrumentation</agent>\n</agents>",
+          "role": "user"
+        }
+      ],
+      "output": "Final answer from read: Researcher result: [Eve instrumentation](https://eve.dev/docs/guides/instrumentation). Title: Eve instrumentation. URL: https://eve.dev/docs/guides/instrumentation. Excerpt: \"Eve hooks expose runtime stream events that Braintrust maps into a nested turn trace.\"",
       "metadata": {
         "eve.session_id": "<eve.session_id:1>",
         "scenario": "eve-instrumentation",
         "testRunId": "<run:1>"
+      },
+      "metrics": {
+        "completion_tokens": 568,
+        "prompt_cache_creation_tokens": 0,
+        "prompt_cached_tokens": 0,
+        "prompt_tokens": 8224,
+        "tokens": 8792
       }
     }
   ]

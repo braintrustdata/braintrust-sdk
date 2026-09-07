@@ -1,10 +1,10 @@
-import {
-  FunctionId as functionIdSchema,
-  type InvokeFunctionType as InvokeFunctionRequest,
-  type ChatCompletionMessageParamType as Message,
-  type StreamingModeType as StreamingMode,
-  type FunctionTypeEnumType as FunctionType,
-} from "../generated_types";
+import { FunctionId as functionIdSchema } from "../generated_types";
+import type {
+  InvokeFunctionType as InvokeFunctionRequest,
+  ChatCompletionMessageParamType as Message,
+  StreamingModeType as StreamingMode,
+  FunctionTypeEnumType as FunctionType,
+} from "../generated_plain_types";
 import {
   _internalGetGlobalState,
   BraintrustState,
@@ -18,11 +18,7 @@ import { z } from "zod/v3";
 /**
  * Arguments for the `invoke` function.
  */
-export interface InvokeFunctionArgs<
-  Input,
-  Output,
-  Stream extends boolean = false,
-> {
+interface InvokeFunctionArgs<Input, Output, Stream extends boolean = false> {
   // These parameters are duplicated from FunctionId, so that we can document them.
 
   /**
@@ -136,7 +132,7 @@ export interface InvokeFunctionArgs<
  * if `stream` is true, otherwise returns the output of the function using the Zod schema's
  * type if present.
  */
-export type InvokeReturn<Stream extends boolean, Output> = Stream extends true
+type InvokeReturn<Stream extends boolean, Output> = Stream extends true
   ? BraintrustStream
   : Output;
 

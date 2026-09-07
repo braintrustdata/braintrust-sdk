@@ -11,8 +11,7 @@ import {
   type LangChainCallbackHandlerOptions,
 } from "braintrust";
 
-type BraintrustCallbackHandlerOptions<IsAsyncFlush extends boolean> =
-  LangChainCallbackHandlerOptions<IsAsyncFlush>;
+type BraintrustCallbackHandlerOptions = LangChainCallbackHandlerOptions;
 
 /**
  * A Braintrust tracer for LangChain.js that logs LLM calls, chains, and tools.
@@ -21,17 +20,13 @@ type BraintrustCallbackHandlerOptions<IsAsyncFlush extends boolean> =
  * `BraintrustLangChainCallbackHandler` from `braintrust` for manual callbacks.
  * This package will stop being published after the next release.
  */
-export class BraintrustCallbackHandler<
-  IsAsyncFlush extends boolean,
-> extends BaseCallbackHandler {
+export class BraintrustCallbackHandler extends BaseCallbackHandler {
   name = "BraintrustCallbackHandler";
-  private inner: BraintrustLangChainCallbackHandler<IsAsyncFlush>;
+  private inner: BraintrustLangChainCallbackHandler;
 
-  constructor(
-    options?: Partial<BraintrustCallbackHandlerOptions<IsAsyncFlush>>,
-  ) {
+  constructor(options?: Partial<BraintrustCallbackHandlerOptions>) {
     super();
-    this.inner = new BraintrustLangChainCallbackHandler<IsAsyncFlush>(options);
+    this.inner = new BraintrustLangChainCallbackHandler(options);
   }
 
   handleLLMStart(
