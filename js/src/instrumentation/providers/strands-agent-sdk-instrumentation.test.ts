@@ -1,33 +1,26 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-const {
-  mockBindStore,
-  mockWithCurrent,
-  mockNewAsyncLocalStorage,
-  mockStartSpan,
-} = vi.hoisted(() => ({
-  mockBindStore: vi.fn(),
-  mockWithCurrent: vi.fn(),
-  mockNewAsyncLocalStorage: vi.fn(() => {
-    let current: unknown;
-    return {
-      enterWith: vi.fn((store: unknown) => {
-        current = store;
-      }),
-      getStore: vi.fn(() => current),
-      run: vi.fn((store: unknown, callback: () => unknown) => {
-        const previous = current;
-        current = store;
-        try {
-          return callback();
-        } finally {
-          current = previous;
-        }
-      }),
-    };
+const { mockWithCurrent, mockNewAsyncLocalStorage, mockStartSpan } = vi.hoisted(
+  () => ({
+    mockWithCurrent: vi.fn(),
+    mockNewAsyncLocalStorage: vi.fn(() => {
+      let current: unknown;
+      return {
+        getStore: vi.fn(() => current),
+        run: vi.fn((store: unknown, callback: () => unknown) => {
+          const previous = current;
+          current = store;
+          try {
+            return callback();
+          } finally {
+            current = previous;
+          }
+        }),
+      };
+    }),
+    mockStartSpan: vi.fn(),
   }),
-  mockStartSpan: vi.fn(),
-}));
+);
 
 vi.mock("../../isomorph", () => ({
   default: {
@@ -73,10 +66,47 @@ describe("registerStrandsAgentSDKInstrumentation", () => {
     handlersByName = new Map();
     spans = [];
     mockNewTracingChannel.mockImplementation((name: string) => ({
-      start: {
-        bindStore: mockBindStore,
-      },
-      subscribe: vi.fn((handlers) => handlersByName.set(name, handlers)),
+      intercept: vi.fn((interceptor) => {
+        const handlers = {
+          end: (event: any) =>
+            interceptor(
+              () =>
+                typeof event.invoke === "function"
+                  ? event.invoke()
+                  : event.result,
+              event.self,
+              event.arguments ?? [],
+              {
+                ...(event.agent ? { agent: event.agent } : {}),
+                ...(event.orchestrator
+                  ? { orchestrator: event.orchestrator }
+                  : {}),
+              },
+            ),
+          error: (event: any) => {
+            try {
+              interceptor(
+                () => {
+                  throw event.error;
+                },
+                event.self,
+                event.arguments ?? [],
+                {
+                  ...(event.agent ? { agent: event.agent } : {}),
+                  ...(event.orchestrator
+                    ? { orchestrator: event.orchestrator }
+                    : {}),
+                },
+              );
+            } catch {
+              // The real interceptor preserves the target error.
+            }
+          },
+          start: vi.fn(),
+        };
+        handlersByName.set(name, handlers);
+        return vi.fn();
+      }),
       traceSync: vi.fn((fn) => fn()),
     }));
     currentSpan = undefined;
@@ -118,7 +148,7 @@ describe("registerStrandsAgentSDKInstrumentation", () => {
     vi.clearAllMocks();
   });
 
-  it("subscribes to Strands stream channels and binds suppression", () => {
+  it("intercepts Strands stream channels", () => {
     registerStrandsAgentSDKInstrumentation();
 
     expect(
@@ -130,7 +160,6 @@ describe("registerStrandsAgentSDKInstrumentation", () => {
     expect(
       handlersByName.has("orchestrion:@strands-agents/sdk:Swarm.stream"),
     ).toBe(true);
-    expect(mockBindStore).toHaveBeenCalledTimes(3);
   });
 
   it("records agent model and tool spans from stream events", async () => {
@@ -216,6 +245,10 @@ describe("registerStrandsAgentSDKInstrumentation", () => {
     );
     const event = {
       arguments: ["hello", undefined],
+      invoke: () => {
+        suppressionStates.push(isAutoInstrumentationSuppressed());
+        return stream;
+      },
       moduleVersion: "1.6.0",
       result: stream,
       self: agent,
@@ -229,7 +262,15 @@ describe("registerStrandsAgentSDKInstrumentation", () => {
     }
 
     expect(chunks).toHaveLength(6);
-    expect(suppressionStates).toEqual([true, true, true, true, true, true]);
+    expect(suppressionStates).toEqual([
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+    ]);
     const rootSpan = spans.find((span) => span.args.name === "Agent: helper");
     const modelSpan = spans.find(
       (span) => span.args.name === "Strands model: gpt-4o-mini",

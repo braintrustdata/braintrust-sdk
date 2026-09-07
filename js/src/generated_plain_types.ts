@@ -1,15 +1,15 @@
-// Auto-generated file (content hash e392acbca346c32a) -- do not modify
+// Auto-generated file (content hash 719572142fc24803) -- do not modify
 
 export type AclObjectTypeType =
   /**
    * The object type that the ACL applies to
    *
-   * @enum organization, project, experiment, dataset, prompt, prompt_session, group, role, org_member, project_log, org_project, org_audit_logs, project_group
+   * @enum organization, project, experiment, dataset, prompt, prompt_session, group, role, org_member, project_log, org_project, org_audit_logs, project_group, ai_secret, org_ai_secret
    */
   | /**
    * The object type that the ACL applies to
    *
-   * @enum organization, project, experiment, dataset, prompt, prompt_session, group, role, org_member, project_log, org_project, org_audit_logs, project_group
+   * @enum organization, project, experiment, dataset, prompt, prompt_session, group, role, org_member, project_log, org_project, org_audit_logs, project_group, ai_secret, org_ai_secret
    */
   (| "organization"
       | "project"
@@ -24,11 +24,13 @@ export type AclObjectTypeType =
       | "org_project"
       | "org_audit_logs"
       | "project_group"
+      | "ai_secret"
+      | "org_ai_secret"
     )
   /**
    * The object type that the ACL applies to
    *
-   * @enum organization, project, experiment, dataset, prompt, prompt_session, group, role, org_member, project_log, org_project, org_audit_logs, project_group
+   * @enum organization, project, experiment, dataset, prompt, prompt_session, group, role, org_member, project_log, org_project, org_audit_logs, project_group, ai_secret, org_ai_secret
    */
   | null;
 export type PermissionType =
@@ -2752,9 +2754,9 @@ export type PromptParserNullishType = {
      */
     boolean | undefined;
 } | null;
-export type PreprocessorSavedFunctionIdType =
+export type PreprocessorIdType =
   /**
-   * For prompt-backed functions: the preprocessor function to use for trace template variables. Set to null to disable preprocessing. If omitted, the traced project's default preprocessor will be used, falling back to the global 'thread' preprocessor.
+   * For prompt-backed functions: the saved, global, or inline preprocessor to use for trace template variables. Set to null to disable preprocessing. If omitted, the traced project's default preprocessor will be used, falling back to the global 'thread' preprocessor.
    */
   | {
       /**
@@ -2781,6 +2783,18 @@ export type PreprocessorSavedFunctionIdType =
        */
       function_type: "preprocessor";
     }
+  | {
+      /**
+       * @enum inline
+       */
+      type: "inline";
+      /**
+       * The complete JavaScript preprocessor implementation, including its handler.
+       *
+       * @minLength 1
+       */
+      code: string;
+    }
   | null;
 export type PromptDataNullishType =
   /**
@@ -2793,7 +2807,7 @@ export type PromptDataNullishType =
       prompt: PromptBlockDataNullishType;
       options: PromptOptionsNullishType;
       parser: PromptParserNullishType;
-      preprocessor: PreprocessorSavedFunctionIdType;
+      preprocessor: PreprocessorIdType;
       tool_functions: Array<SavedFunctionIdType> | null;
       /**
        * @enum mustache, nunjucks, none
@@ -3521,7 +3535,7 @@ export type PromptDataType = Partial<{
   prompt: PromptBlockDataNullishType;
   options: PromptOptionsNullishType;
   parser: PromptParserNullishType;
-  preprocessor: PreprocessorSavedFunctionIdType;
+  preprocessor: PreprocessorIdType;
   tool_functions: Array<SavedFunctionIdType> | null;
   /**
    * @enum mustache, nunjucks, none
@@ -4500,6 +4514,17 @@ export type ProjectSettingsType = Partial<{
      * If true, use metrics.start rather than created for monitor chart time bucket dimensions.
      */
     | null;
+  /**
+   * If true, hide peer review scores, comments, and aggregate results from reviewers without project update permissions until they submit their own review.
+   */
+  blind_reviews: /**
+     * If true, hide peer review scores, comments, and aggregate results from reviewers without project update permissions until they submit their own review.
+     */
+    | boolean
+    /**
+     * If true, hide peer review scores, comments, and aggregate results from reviewers without project update permissions until they submit their own review.
+     */
+    | null;
   default_preprocessor: NullableSavedFunctionIdType;
 }> | null;
 export type ProjectType = {
@@ -4799,6 +4824,10 @@ export type WindowedAutomationConfigType = {
            * @minLength 1
            */
           string | undefined;
+        endpoint_name?: /**
+           * @minLength 1
+           */
+          string | undefined;
         reasoning_effort?:
           | /**
            * @enum none, minimal, low, medium, high, xhigh, max
@@ -4855,11 +4884,20 @@ export type WindowedAutomationConfigType = {
            */
           string | undefined;
         formatting_prompt?: /**
-           * Instructions for Loop to format content sent to this destination
-           *
-           * @minLength 1
-           * @maxLength 10000
-           */
+         * Publish a Slack mrkdwn digest.
+        
+        Include a complete "*Pattern outcomes*" section with one row for every selected Pattern from the run report, including created, updated, unchanged, failed, skipped, and newly inactive outcomes.
+        
+        Use this row format exactly:
+        • <pattern_url|Pattern title> — `outcome`
+        
+        If a Pattern has no URL, use the plain title instead. Do not use GitHub Markdown tables or code-block tables, because links must remain clickable. Do not omit any selected Pattern. If there are no selected Patterns, say "No pattern outcomes."
+        
+        After the outcome list, include a "*Highlights*" section with one very short paragraph, 2-3 sentences maximum. Summarize what changed or what broadly stands out from this run. Do not introduce new claims beyond the run report.
+         *
+         * @minLength 1
+         * @maxLength 10000
+         */
           string | undefined;
       }
   >;
@@ -5070,11 +5108,20 @@ export type TopicDigestAutomationConfigType = {
        */
       string | undefined;
     formatting_prompt?: /**
-       * Instructions for Loop to format content sent to this destination
-       *
-       * @minLength 1
-       * @maxLength 10000
-       */
+         * Publish a Slack mrkdwn digest.
+        
+        Include a complete "*Pattern outcomes*" section with one row for every selected Pattern from the run report, including created, updated, unchanged, failed, skipped, and newly inactive outcomes.
+        
+        Use this row format exactly:
+        • <pattern_url|Pattern title> — `outcome`
+        
+        If a Pattern has no URL, use the plain title instead. Do not use GitHub Markdown tables or code-block tables, because links must remain clickable. Do not omit any selected Pattern. If there are no selected Patterns, say "No pattern outcomes."
+        
+        After the outcome list, include a "*Highlights*" section with one very short paragraph, 2-3 sentences maximum. Summarize what changed or what broadly stands out from this run. Do not introduce new claims beyond the run report.
+         *
+         * @minLength 1
+         * @maxLength 10000
+         */
       string | undefined;
   };
   topic_map_function_ids?: /**
@@ -5203,11 +5250,20 @@ export type ProjectAutomationType = {
                  */
                 string | undefined;
               formatting_prompt?: /**
-                 * Instructions for Loop to format content sent to this destination
-                 *
-                 * @minLength 1
-                 * @maxLength 10000
-                 */
+             * Publish a Slack mrkdwn digest.
+            
+            Include a complete "*Pattern outcomes*" section with one row for every selected Pattern from the run report, including created, updated, unchanged, failed, skipped, and newly inactive outcomes.
+            
+            Use this row format exactly:
+            • <pattern_url|Pattern title> — `outcome`
+            
+            If a Pattern has no URL, use the plain title instead. Do not use GitHub Markdown tables or code-block tables, because links must remain clickable. Do not omit any selected Pattern. If there are no selected Patterns, say "No pattern outcomes."
+            
+            After the outcome list, include a "*Highlights*" section with one very short paragraph, 2-3 sentences maximum. Summarize what changed or what broadly stands out from this run. Do not introduce new claims beyond the run report.
+             *
+             * @minLength 1
+             * @maxLength 10000
+             */
                 string | undefined;
             };
       }
@@ -5435,11 +5491,20 @@ export type ProjectAutomationType = {
                  */
                 string | undefined;
               formatting_prompt?: /**
-                 * Instructions for Loop to format content sent to this destination
-                 *
-                 * @minLength 1
-                 * @maxLength 10000
-                 */
+             * Publish a Slack mrkdwn digest.
+            
+            Include a complete "*Pattern outcomes*" section with one row for every selected Pattern from the run report, including created, updated, unchanged, failed, skipped, and newly inactive outcomes.
+            
+            Use this row format exactly:
+            • <pattern_url|Pattern title> — `outcome`
+            
+            If a Pattern has no URL, use the plain title instead. Do not use GitHub Markdown tables or code-block tables, because links must remain clickable. Do not omit any selected Pattern. If there are no selected Patterns, say "No pattern outcomes."
+            
+            After the outcome list, include a "*Highlights*" section with one very short paragraph, 2-3 sentences maximum. Summarize what changed or what broadly stands out from this run. Do not introduce new claims beyond the run report.
+             *
+             * @minLength 1
+             * @maxLength 10000
+             */
                 string | undefined;
             };
       }
@@ -7105,6 +7170,10 @@ export type ViewType = {
         | null
       )
     | undefined;
+  starred?: /**
+     * Whether the view is starred in its project
+     */
+    boolean | undefined;
   created?:
     | /**
      * Date of view creation

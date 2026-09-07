@@ -1,5 +1,8 @@
 import { BraintrustStream } from "braintrust";
 
+/**
+ * @deprecated Use the AI SDK integration exported by `braintrust` instead. This package will stop being published after the next release.
+ */
 export interface AIStreamCallbacksAndOptions {
   onStart?: () => void | Promise<void>;
   onCompletion?: (completion: string) => void | Promise<void>;
@@ -22,12 +25,18 @@ type BraintrustStreamChunk =
     ? Chunk
     : never;
 
+/**
+ * @deprecated Use `BraintrustStream` from `braintrust` with the current AI SDK response APIs instead. This package will stop being published after the next release.
+ */
 export type BraintrustStreamOrReadable =
   | BraintrustStream
   | ReadableStream<BraintrustStreamChunk>
   | ReadableStream<string>
   | ReadableStream<Uint8Array>;
 
+/**
+ * @deprecated Use `BraintrustStream` from `braintrust` with the current AI SDK stream APIs instead. This package will stop being published after the next release.
+ */
 export function toAIStream(
   stream: BraintrustStreamOrReadable,
   callbacks?: AIStreamCallbacksAndOptions,
@@ -42,6 +51,9 @@ export function toAIStream(
     .pipeThrough(btStreamToAISDKTransformStream(callbacks));
 }
 
+/**
+ * @deprecated Use `BraintrustStream` from `braintrust` with the current AI SDK response APIs instead. This package will stop being published after the next release.
+ */
 export function toDataStreamResponse(
   stream: BraintrustStreamOrReadable,
   init?: ResponseInit,

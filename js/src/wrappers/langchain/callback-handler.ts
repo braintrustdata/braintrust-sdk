@@ -520,6 +520,7 @@ function getMetricsFromResponse(
     }
 
     const inputTokenDetails = usageMetadata.input_token_details;
+    const outputTokenDetails = usageMetadata.output_token_details;
     return normalizeTokenMetrics({
       total_tokens: usageMetadata.total_tokens,
       prompt_tokens: usageMetadata.input_tokens,
@@ -529,6 +530,9 @@ function getMetricsFromResponse(
         : undefined,
       prompt_cached_tokens: isRecord(inputTokenDetails)
         ? inputTokenDetails.cache_read
+        : undefined,
+      completion_reasoning_tokens: isRecord(outputTokenDetails)
+        ? outputTokenDetails.reasoning
         : undefined,
     });
   }

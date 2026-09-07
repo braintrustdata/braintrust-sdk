@@ -1,5 +1,20 @@
 [
   {
+    "scenarioDirName": "deepseek-harness-instrumentation",
+    "label": "DeepSeek Harness Instrumentation",
+    "metadataScenario": "deepseek-harness-instrumentation",
+    "variants": [
+      {
+        "variantKey": "deepseek-harness-v0",
+        "label": "v0.1 prerelease pinned"
+      },
+      {
+        "variantKey": "deepseek-harness-v0-latest",
+        "label": "v0.1 prerelease latest"
+      }
+    ]
+  },
+  {
     "scenarioDirName": "cloudflare-agents-instrumentation",
     "label": "Cloudflare Agents Instrumentation",
     "metadataScenario": "cloudflare-agents-instrumentation",
@@ -79,7 +94,15 @@
       },
       {
         "variantKey": "pi-coding-agent-v0-latest",
-        "label": "v0 latest"
+        "label": "latest"
+      },
+      {
+        "variantKey": "pi-coding-agent-v081",
+        "label": "v0.81 pinned"
+      },
+      {
+        "variantKey": "pi-coding-agent-v081-latest",
+        "label": "v0.81 latest"
       }
     ]
   },

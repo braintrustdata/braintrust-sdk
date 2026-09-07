@@ -75,6 +75,11 @@ describe("braintrustEveInstrumentation", () => {
     const provider = braintrustEveInstrumentation({ setup });
 
     expect(provider.capture).toBe("content");
+    expect(provider.tracePolicy?.({ audience: "private" })).toEqual({
+      emit: true,
+      recordInputs: true,
+      recordOutputs: true,
+    });
     expect(provider.setup).toBe(setup);
     expect(typeof provider.flush).toBe("function");
     expect(Object.keys(provider.events).sort()).toEqual([

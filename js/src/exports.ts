@@ -54,6 +54,12 @@ export {
 
 export { registerSandbox } from "./sandbox";
 
+export {
+  completeOpenAIBatchTrace,
+  openaiBatchesRetrieveTraced,
+  openaiFilesCreateTraced,
+} from "./openai-batch";
+
 export type { TemplateRendererPlugin } from "./template/registry";
 export { registerTemplatePlugin } from "./template/registry";
 export {

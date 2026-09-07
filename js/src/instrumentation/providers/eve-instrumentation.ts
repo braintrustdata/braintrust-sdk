@@ -90,7 +90,13 @@ export function braintrustEveInstrumentation(
 ): EveInstrumentationDefinition {
   const bridge = new EveBridge(options.metadata);
   return {
+    // Supported older Eve versions use capture; newer versions prefer tracePolicy.
     capture: "content",
+    tracePolicy: () => ({
+      emit: true,
+      recordInputs: true,
+      recordOutputs: true,
+    }),
     events: {
       "action.completed": (event, context) => bridge.handle(event, context),
       "action.failed": (event, context) => bridge.handle(event, context),

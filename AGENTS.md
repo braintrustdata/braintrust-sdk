@@ -40,6 +40,10 @@ parse, instantiate, and type-check, increasing compile time, declaration size,
 and memory usage. They also expose validation-library implementation details as
 part of the SDK's API surface.
 
+## Public API
+
+Keep public exports minimal. Generally, export only the requested runtime APIs and do not export types unless explicitly requested.
+
 ## Instrumentation
 
 Use the normal Orchestrion config plus plugin/channel path by default. Special-case source patches should be rare exceptions only when the target SDK cannot be instrumented through the standard transformer path, and the reason should be documented next to the patch.

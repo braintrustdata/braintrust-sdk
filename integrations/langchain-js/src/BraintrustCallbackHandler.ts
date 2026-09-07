@@ -15,6 +15,10 @@ type BraintrustCallbackHandlerOptions = LangChainCallbackHandlerOptions;
 
 /**
  * A Braintrust tracer for LangChain.js that logs LLM calls, chains, and tools.
+ *
+ * @deprecated Use automatic LangChain instrumentation from `braintrust`, or
+ * `BraintrustLangChainCallbackHandler` from `braintrust` for manual callbacks.
+ * This package will stop being published after the next release.
  */
 export class BraintrustCallbackHandler extends BaseCallbackHandler {
   name = "BraintrustCallbackHandler";

@@ -9,6 +9,7 @@
   },
   "devDependencies": {
     "@braintrust/browser": "workspace:^",
+    "@braintrust/deepseek-harness": "workspace:^",
     "@braintrust/langchain-js": "workspace:^",
     "@braintrust/otel": "workspace:^",
     "@braintrust/seinfeld": "workspace:^",

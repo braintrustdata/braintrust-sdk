@@ -1417,6 +1417,29 @@ describe("otel namespace helpers", () => {
     });
 
     it.each([
+      `braintrust.parent=project_name%3Atest,extra=${"x".repeat(8192)}`,
+      Array.from({ length: 181 }, (_, index) => `k${index}=v`).join(","),
+      `braintrust.parent=project_name%3Atest,extra=${"é".repeat(4096)}`,
+    ])(
+      "keeps oversized baggage opaque without invoking the OTEL parser",
+      (baggage) => {
+        const extractSpy = vi.spyOn(propagation, "extract");
+        try {
+          const parent = parentFromHeaders({
+            traceparent:
+              "00-12345678901234567890123456789012-1234567890123456-01",
+            baggage,
+          });
+          expect(parent?.traceparent).toBeDefined();
+          expect(parent?.baggage).toBe(baggage);
+          expect(extractSpy).not.toHaveBeenCalled();
+        } finally {
+          extractSpy.mockRestore();
+        }
+      },
+    );
+
+    it.each([
       {},
       { traceparent: "invalid-traceparent" },
       {

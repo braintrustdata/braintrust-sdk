@@ -188,6 +188,18 @@ type EveInstrumentationHandler<TEvent> = (
 
 export interface EveInstrumentationDefinition {
   readonly capture: "content";
+  readonly tracePolicy?: (trace: {
+    readonly agentName?: string;
+    readonly audience: "private" | "public" | "unknown";
+    readonly channelType?: string;
+  }) =>
+    | boolean
+    | { readonly emit: false }
+    | {
+        readonly emit: true;
+        readonly recordInputs: boolean;
+        readonly recordOutputs: boolean;
+      };
   readonly events: {
     readonly "action.completed": EveInstrumentationHandler<EveInstrumentationActionCompletedEvent>;
     readonly "action.failed": EveInstrumentationHandler<EveInstrumentationActionFailedEvent>;

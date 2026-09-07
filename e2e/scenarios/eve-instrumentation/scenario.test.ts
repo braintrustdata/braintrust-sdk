@@ -78,31 +78,21 @@ describe.sequential("eve instrumentation variants", () => {
 
       test("captures user turns as traces with subagent turns attached", async () => {
         const turns = findAllSpans(events, "eve.turn");
-        const root = turns.find(
-          (turn) =>
-            Array.isArray(turn.input) &&
-            turn.input[0]?.content ===
-              "Run the Braintrust Eve instrumentation e2e scenario",
-        );
-        const secondRoot = turns.find(
-          (turn) =>
-            Array.isArray(turn.input) &&
-            turn.input[0]?.content ===
-              "Run the Braintrust Eve instrumentation e2e scenario again",
-        );
+        const [root, secondRoot] = turns
+          .filter((turn) => turn.span.parentIds.length === 0)
+          .sort(
+            (left, right) =>
+              Number(left.metrics?.start ?? 0) -
+              Number(right.metrics?.start ?? 0),
+          );
         const steps = findChildSpans(events, "eve.step", root?.span.id);
         const researcher = findChildSpans(
           events,
           "researcher",
           root?.span.id,
         )[0];
-        const childTurn = turns.find(
-          (turn) =>
-            Array.isArray(turn.input) &&
-            String(turn.input[0]?.content).includes(
-              "Caller message:\nRun the Braintrust Eve instrumentation e2e scenario",
-            ) &&
-            !String(turn.input[0]?.content).includes("scenario again"),
+        const childTurn = turns.find((turn) =>
+          turn.span.parentIds.includes(researcher?.span.id ?? ""),
         );
         const childSteps = findChildSpans(
           events,
@@ -125,12 +115,8 @@ describe.sequential("eve instrumentation variants", () => {
           "researcher",
           secondRoot?.span.id,
         );
-        const secondChildTurn = turns.find(
-          (turn) =>
-            Array.isArray(turn.input) &&
-            String(turn.input[0]?.content).includes(
-              "Caller message:\nRun the Braintrust Eve instrumentation e2e scenario again",
-            ),
+        const secondChildTurn = turns.find((turn) =>
+          turn.span.parentIds.includes(secondResearcher?.span.id ?? ""),
         );
         const secondRead = findLatestChildSpan(
           events,
@@ -151,6 +137,21 @@ describe.sequential("eve instrumentation variants", () => {
 
         expect(root).toBeDefined();
         expect(root?.span.type).toBe("task");
+        if (scenario.dependencyName === "eve-v0") {
+          expect(root?.input).toEqual([
+            {
+              role: "user",
+              content: "Run the Braintrust Eve instrumentation e2e scenario",
+            },
+          ]);
+          expect(secondRoot?.input).toEqual([
+            {
+              role: "user",
+              content:
+                "Run the Braintrust Eve instrumentation e2e scenario again",
+            },
+          ]);
+        }
         expect(root?.span.parentIds).toEqual([]);
         expect(root?.metadata).toMatchObject({
           "eve.session_id": expect.any(String),
@@ -406,8 +407,14 @@ describe.sequential("eve instrumentation variants", () => {
           ).toHaveLength(1);
         }
 
+        const snapshotEvents = JSON.parse(
+          JSON.stringify(events).replace(
+            /ag_researcher:[0-9a-f]+/g,
+            "ag_researcher:<id>",
+          ),
+        ) as CapturedLogEvent[];
         await matchSpanTreeSnapshot(
-          events,
+          snapshotEvents,
           resolveFileSnapshotPath(
             import.meta.url,
             `${scenario.variantKey}.span-tree.json`,
