@@ -5,6 +5,7 @@ export interface InstrumentationIntegrationsConfig {
   aisdk?: boolean;
   google?: boolean;
   googleGenAI?: boolean;
+  googleGenerativeAI?: boolean;
   googleADK?: boolean;
   huggingface?: boolean;
   claudeAgentSDK?: boolean;
@@ -88,6 +89,8 @@ const envIntegrationAliases: Record<
   "openai-agents-core": "openAIAgents",
   openaiagentscore: "openAIAgents",
   google: "google",
+  "google-generative-ai": "googleGenerativeAI",
+  googlegenerativeai: "googleGenerativeAI",
   "google-genai": "googleGenAI",
   googlegenai: "googleGenAI",
   huggingface: "huggingface",
@@ -136,6 +139,7 @@ export function getDefaultInstrumentationIntegrations(): Record<
     aisdk: true,
     google: true,
     googleGenAI: true,
+    googleGenerativeAI: true,
     googleADK: true,
     huggingface: true,
     claudeAgentSDK: true,

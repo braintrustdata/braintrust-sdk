@@ -24,6 +24,7 @@ export const INSTRUMENTATION_NAMES = {
   GENKIT: "genkit",
   GITHUB_COPILOT: "github-copilot",
   GOOGLE_ADK: "google-adk",
+  GOOGLE_GENERATIVE_AI: "google-generative-ai",
   GOOGLE_GENAI: "google-genai",
   GROQ: "groq",
   HUGGINGFACE: "huggingface",

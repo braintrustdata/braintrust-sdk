@@ -1,0 +1,837 @@
+{
+  "entries": [
+    {
+      "callIndex": 0,
+      "id": "bd47bc20a9227081",
+      "matchKey": "POST generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent",
+      "recordedAt": "2026-09-07T15:41:14.692Z",
+      "request": {
+        "body": {
+          "kind": "json",
+          "value": {
+            "contents": [
+              {
+                "parts": [
+                  {
+                    "text": "What is the capital of France?"
+                  }
+                ],
+                "role": "user"
+              }
+            ],
+            "generationConfig": {
+              "maxOutputTokens": 128,
+              "temperature": 0,
+              "thinkingConfig": {
+                "thinkingBudget": 0
+              }
+            },
+            "safetySettings": [],
+            "systemInstruction": {
+              "parts": [
+                {
+                  "text": "Give short, factual answers."
+                }
+              ],
+              "role": "system"
+            }
+          }
+        },
+        "headers": {},
+        "method": "POST",
+        "url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent"
+      },
+      "response": {
+        "body": {
+          "kind": "json",
+          "value": {
+            "candidates": [
+              {
+                "content": {
+                  "parts": [
+                    {
+                      "text": "Paris"
+                    }
+                  ],
+                  "role": "model"
+                },
+                "finishReason": "STOP",
+                "index": 0
+              }
+            ],
+            "modelVersion": "gemini-2.5-flash",
+            "responseId": "GtueaoboFbrd-sAP-ZCV2As",
+            "usageMetadata": {
+              "candidatesTokenCount": 1,
+              "promptTokenCount": 15,
+              "promptTokensDetails": [
+                {
+                  "modality": "TEXT",
+                  "tokenCount": 15
+                }
+              ],
+              "serviceTier": "standard",
+              "totalTokenCount": 16
+            }
+          }
+        },
+        "headers": {
+          "alt-svc": "h3=\":443\"; ma=2592000,h3-29=\":443\"; ma=2592000",
+          "content-encoding": "gzip",
+          "content-type": "application/json; charset=UTF-8",
+          "date": "Mon, 07 Sep 2026 15:41:14 GMT",
+          "server": "scaffolding on HTTPServer2",
+          "server-timing": "gfet4t7; dur=356",
+          "transfer-encoding": "chunked",
+          "vary": "Origin, X-Origin, Referer",
+          "x-content-type-options": "nosniff",
+          "x-frame-options": "SAMEORIGIN",
+          "x-gemini-service-tier": "standard",
+          "x-xss-protection": "0"
+        },
+        "status": 200,
+        "statusText": "OK"
+      }
+    },
+    {
+      "callIndex": 1,
+      "id": "74e55beb88d16a30",
+      "matchKey": "POST generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent",
+      "recordedAt": "2026-09-07T15:41:16.672Z",
+      "request": {
+        "body": {
+          "contentType": "application/json",
+          "kind": "binary",
+          "path": "google-generative-ai-v0-latest.cassette.blobs/ccd6f84aad62241f237f3912f71cd3c2e2c2b784e7ef46de728d1ca8b58a9dc1.bin",
+          "sha256": "ccd6f84aad62241f237f3912f71cd3c2e2c2b784e7ef46de728d1ca8b58a9dc1"
+        },
+        "headers": {},
+        "method": "POST",
+        "url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent"
+      },
+      "response": {
+        "body": {
+          "kind": "json",
+          "value": {
+            "candidates": [
+              {
+                "content": {
+                  "parts": [
+                    {
+                      "text": "A tall ship with full sails navigates a stormy sea with large waves and lightning strikes."
+                    }
+                  ],
+                  "role": "model"
+                },
+                "finishReason": "STOP",
+                "index": 0
+              }
+            ],
+            "modelVersion": "gemini-2.5-flash",
+            "responseId": "GtueataDObHI-sAPjsCsoAo",
+            "usageMetadata": {
+              "candidatesTokenCount": 18,
+              "promptTokenCount": 271,
+              "promptTokensDetails": [
+                {
+                  "modality": "TEXT",
+                  "tokenCount": 13
+                },
+                {
+                  "modality": "IMAGE",
+                  "tokenCount": 258
+                }
+              ],
+              "serviceTier": "standard",
+              "totalTokenCount": 289
+            }
+          }
+        },
+        "headers": {
+          "alt-svc": "h3=\":443\"; ma=2592000,h3-29=\":443\"; ma=2592000",
+          "content-encoding": "gzip",
+          "content-type": "application/json; charset=UTF-8",
+          "date": "Mon, 07 Sep 2026 15:41:16 GMT",
+          "server": "scaffolding on HTTPServer2",
+          "server-timing": "gfet4t7; dur=1364",
+          "transfer-encoding": "chunked",
+          "vary": "Origin, X-Origin, Referer",
+          "x-content-type-options": "nosniff",
+          "x-frame-options": "SAMEORIGIN",
+          "x-gemini-service-tier": "standard",
+          "x-xss-protection": "0"
+        },
+        "status": 200,
+        "statusText": "OK"
+      }
+    },
+    {
+      "callIndex": 0,
+      "id": "9cc41db65a6edc9d",
+      "matchKey": "POST generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:streamGenerateContent",
+      "recordedAt": "2026-09-07T15:41:16.936Z",
+      "request": {
+        "body": {
+          "kind": "json",
+          "value": {
+            "contents": [
+              {
+                "parts": [
+                  {
+                    "text": "Count from one to three."
+                  }
+                ],
+                "role": "user"
+              }
+            ],
+            "generationConfig": {
+              "maxOutputTokens": 128,
+              "temperature": 0,
+              "thinkingConfig": {
+                "thinkingBudget": 0
+              }
+            },
+            "safetySettings": [],
+            "systemInstruction": {
+              "parts": [
+                {
+                  "text": "Give short, factual answers."
+                }
+              ],
+              "role": "system"
+            }
+          }
+        },
+        "headers": {},
+        "method": "POST",
+        "url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:streamGenerateContent?alt=sse"
+      },
+      "response": {
+        "body": {
+          "chunks": [
+            "data: {\"candidates\":[{\"content\":{\"parts\":[{\"text\":\"One\"}],\"role\":\"model\"},\"index\":0}],\"usageMetadata\":{\"promptTokenCount\":14,\"candidatesTokenCount\":1,\"totalTokenCount\":15,\"promptTokensDetails\":[{\"modality\":\"TEXT\",\"tokenCount\":14}],\"serviceTier\":\"standard\"},\"modelVersion\":\"gemini-2.5-flash\",\"responseId\":\"HNueav2hK4TVjMcP2ZXE-Q0\"}",
+            "data: {\"candidates\":[{\"content\":{\"parts\":[{\"text\":\", two, three.\"}],\"role\":\"model\"},\"finishReason\":\"STOP\",\"index\":0}],\"usageMetadata\":{\"promptTokenCount\":14,\"candidatesTokenCount\":6,\"totalTokenCount\":20,\"promptTokensDetails\":[{\"modality\":\"TEXT\",\"tokenCount\":14}],\"serviceTier\":\"standard\"},\"modelVersion\":\"gemini-2.5-flash\",\"responseId\":\"HNueav2hK4TVjMcP2ZXE-Q0\"}"
+          ],
+          "kind": "sse"
+        },
+        "headers": {
+          "alt-svc": "h3=\":443\"; ma=2592000,h3-29=\":443\"; ma=2592000",
+          "content-disposition": "attachment",
+          "content-type": "text/event-stream",
+          "date": "Mon, 07 Sep 2026 15:41:16 GMT",
+          "server": "scaffolding on HTTPServer2",
+          "server-timing": "gfet4t7; dur=219",
+          "transfer-encoding": "chunked",
+          "vary": "Origin, X-Origin, Referer",
+          "x-content-type-options": "nosniff",
+          "x-frame-options": "SAMEORIGIN",
+          "x-xss-protection": "0"
+        },
+        "status": 200,
+        "statusText": "OK"
+      }
+    },
+    {
+      "callIndex": 1,
+      "id": "68b730f10d23c395",
+      "matchKey": "POST generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:streamGenerateContent",
+      "recordedAt": "2026-09-07T15:41:17.220Z",
+      "request": {
+        "body": {
+          "kind": "json",
+          "value": {
+            "contents": [
+              {
+                "parts": [
+                  {
+                    "text": "Say hello."
+                  }
+                ],
+                "role": "user"
+              }
+            ],
+            "generationConfig": {
+              "maxOutputTokens": 128,
+              "temperature": 0,
+              "thinkingConfig": {
+                "thinkingBudget": 0
+              }
+            },
+            "safetySettings": [],
+            "systemInstruction": {
+              "parts": [
+                {
+                  "text": "Give short, factual answers."
+                }
+              ],
+              "role": "system"
+            }
+          }
+        },
+        "headers": {},
+        "method": "POST",
+        "url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:streamGenerateContent?alt=sse"
+      },
+      "response": {
+        "body": {
+          "chunks": [
+            "data: {\"candidates\":[{\"content\":{\"parts\":[{\"text\":\"Hello.\"}],\"role\":\"model\"},\"finishReason\":\"STOP\",\"index\":0}],\"usageMetadata\":{\"promptTokenCount\":11,\"candidatesTokenCount\":2,\"totalTokenCount\":13,\"promptTokensDetails\":[{\"modality\":\"TEXT\",\"tokenCount\":11}],\"serviceTier\":\"standard\"},\"modelVersion\":\"gemini-2.5-flash\",\"responseId\":\"HNueaquuO9LU-sAPoJe52Qs\"}"
+          ],
+          "kind": "sse"
+        },
+        "headers": {
+          "alt-svc": "h3=\":443\"; ma=2592000,h3-29=\":443\"; ma=2592000",
+          "content-disposition": "attachment",
+          "content-type": "text/event-stream",
+          "date": "Mon, 07 Sep 2026 15:41:17 GMT",
+          "server": "scaffolding on HTTPServer2",
+          "server-timing": "gfet4t7; dur=270",
+          "transfer-encoding": "chunked",
+          "vary": "Origin, X-Origin, Referer",
+          "x-content-type-options": "nosniff",
+          "x-frame-options": "SAMEORIGIN",
+          "x-xss-protection": "0"
+        },
+        "status": 200,
+        "statusText": "OK"
+      }
+    },
+    {
+      "callIndex": 2,
+      "id": "bfedc32819173f9b",
+      "matchKey": "POST generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent",
+      "recordedAt": "2026-09-07T15:41:17.574Z",
+      "request": {
+        "body": {
+          "kind": "json",
+          "value": {
+            "contents": [
+              {
+                "parts": [
+                  {
+                    "text": "My name is Ada."
+                  }
+                ],
+                "role": "user"
+              },
+              {
+                "parts": [
+                  {
+                    "text": "Hello, Ada."
+                  }
+                ],
+                "role": "model"
+              },
+              {
+                "parts": [
+                  {
+                    "text": "What is my name?"
+                  }
+                ],
+                "role": "user"
+              }
+            ],
+            "generationConfig": {
+              "maxOutputTokens": 128,
+              "temperature": 0,
+              "thinkingConfig": {
+                "thinkingBudget": 0
+              }
+            },
+            "safetySettings": [],
+            "systemInstruction": {
+              "parts": [
+                {
+                  "text": "Give short, factual answers."
+                }
+              ],
+              "role": "system"
+            }
+          }
+        },
+        "headers": {},
+        "method": "POST",
+        "url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent"
+      },
+      "response": {
+        "body": {
+          "kind": "json",
+          "value": {
+            "candidates": [
+              {
+                "content": {
+                  "parts": [
+                    {
+                      "text": "Your name is Ada."
+                    }
+                  ],
+                  "role": "model"
+                },
+                "finishReason": "STOP",
+                "index": 0
+              }
+            ],
+            "modelVersion": "gemini-2.5-flash",
+            "responseId": "HduearzDD5XJ-sAPhqWA8A4",
+            "usageMetadata": {
+              "candidatesTokenCount": 5,
+              "promptTokenCount": 24,
+              "promptTokensDetails": [
+                {
+                  "modality": "TEXT",
+                  "tokenCount": 24
+                }
+              ],
+              "serviceTier": "standard",
+              "totalTokenCount": 29
+            }
+          }
+        },
+        "headers": {
+          "alt-svc": "h3=\":443\"; ma=2592000,h3-29=\":443\"; ma=2592000",
+          "content-encoding": "gzip",
+          "content-type": "application/json; charset=UTF-8",
+          "date": "Mon, 07 Sep 2026 15:41:17 GMT",
+          "server": "scaffolding on HTTPServer2",
+          "server-timing": "gfet4t7; dur=344",
+          "transfer-encoding": "chunked",
+          "vary": "Origin, X-Origin, Referer",
+          "x-content-type-options": "nosniff",
+          "x-frame-options": "SAMEORIGIN",
+          "x-gemini-service-tier": "standard",
+          "x-xss-protection": "0"
+        },
+        "status": 200,
+        "statusText": "OK"
+      }
+    },
+    {
+      "callIndex": 2,
+      "id": "b8e30c3bc1790633",
+      "matchKey": "POST generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:streamGenerateContent",
+      "recordedAt": "2026-09-07T15:41:17.909Z",
+      "request": {
+        "body": {
+          "kind": "json",
+          "value": {
+            "contents": [
+              {
+                "parts": [
+                  {
+                    "text": "My name is Ada."
+                  }
+                ],
+                "role": "user"
+              },
+              {
+                "parts": [
+                  {
+                    "text": "Hello, Ada."
+                  }
+                ],
+                "role": "model"
+              },
+              {
+                "parts": [
+                  {
+                    "text": "What is my name?"
+                  }
+                ],
+                "role": "user"
+              },
+              {
+                "parts": [
+                  {
+                    "text": "Your name is Ada."
+                  }
+                ],
+                "role": "model"
+              },
+              {
+                "parts": [
+                  {
+                    "text": "Spell my name letter by letter."
+                  }
+                ],
+                "role": "user"
+              }
+            ],
+            "generationConfig": {
+              "maxOutputTokens": 128,
+              "temperature": 0,
+              "thinkingConfig": {
+                "thinkingBudget": 0
+              }
+            },
+            "safetySettings": [],
+            "systemInstruction": {
+              "parts": [
+                {
+                  "text": "Give short, factual answers."
+                }
+              ],
+              "role": "system"
+            }
+          }
+        },
+        "headers": {},
+        "method": "POST",
+        "url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:streamGenerateContent?alt=sse"
+      },
+      "response": {
+        "body": {
+          "chunks": [
+            "data: {\"candidates\":[{\"content\":{\"parts\":[{\"text\":\"A.\"}],\"role\":\"model\"},\"index\":0}],\"usageMetadata\":{\"promptTokenCount\":38,\"candidatesTokenCount\":2,\"totalTokenCount\":40,\"promptTokensDetails\":[{\"modality\":\"TEXT\",\"tokenCount\":38}],\"serviceTier\":\"standard\"},\"modelVersion\":\"gemini-2.5-flash\",\"responseId\":\"HdueavSdJbLbjMcP7Oe3yAc\"}",
+            "data: {\"candidates\":[{\"content\":{\"parts\":[{\"text\":\" D. A.\"}],\"role\":\"model\"},\"finishReason\":\"STOP\",\"index\":0}],\"usageMetadata\":{\"promptTokenCount\":38,\"candidatesTokenCount\":6,\"totalTokenCount\":44,\"promptTokensDetails\":[{\"modality\":\"TEXT\",\"tokenCount\":38}],\"serviceTier\":\"standard\"},\"modelVersion\":\"gemini-2.5-flash\",\"responseId\":\"HdueavSdJbLbjMcP7Oe3yAc\"}"
+          ],
+          "kind": "sse"
+        },
+        "headers": {
+          "alt-svc": "h3=\":443\"; ma=2592000,h3-29=\":443\"; ma=2592000",
+          "content-disposition": "attachment",
+          "content-type": "text/event-stream",
+          "date": "Mon, 07 Sep 2026 15:41:17 GMT",
+          "server": "scaffolding on HTTPServer2",
+          "server-timing": "gfet4t7; dur=292",
+          "transfer-encoding": "chunked",
+          "vary": "Origin, X-Origin, Referer",
+          "x-content-type-options": "nosniff",
+          "x-frame-options": "SAMEORIGIN",
+          "x-xss-protection": "0"
+        },
+        "status": 200,
+        "statusText": "OK"
+      }
+    },
+    {
+      "callIndex": 3,
+      "id": "4af0eb902906ee7f",
+      "matchKey": "POST generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent",
+      "recordedAt": "2026-09-07T15:41:18.332Z",
+      "request": {
+        "body": {
+          "kind": "json",
+          "value": {
+            "contents": [
+              {
+                "parts": [
+                  {
+                    "text": "Get the weather in Paris."
+                  }
+                ],
+                "role": "user"
+              }
+            ],
+            "generationConfig": {
+              "maxOutputTokens": 128,
+              "temperature": 0,
+              "thinkingConfig": {
+                "thinkingBudget": 0
+              }
+            },
+            "safetySettings": [],
+            "systemInstruction": {
+              "parts": [
+                {
+                  "text": "Give short, factual answers."
+                }
+              ],
+              "role": "system"
+            },
+            "toolConfig": {
+              "functionCallingConfig": {
+                "mode": "ANY"
+              }
+            },
+            "tools": [
+              {
+                "functionDeclarations": [
+                  {
+                    "description": "Get weather for a city",
+                    "name": "get_weather",
+                    "parameters": {
+                      "properties": {
+                        "city": {
+                          "type": "STRING"
+                        }
+                      },
+                      "required": ["city"],
+                      "type": "OBJECT"
+                    }
+                  }
+                ]
+              }
+            ]
+          }
+        },
+        "headers": {},
+        "method": "POST",
+        "url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent"
+      },
+      "response": {
+        "body": {
+          "kind": "json",
+          "value": {
+            "candidates": [
+              {
+                "content": {
+                  "parts": [
+                    {
+                      "functionCall": {
+                        "args": {
+                          "city": "Paris"
+                        },
+                        "name": "get_weather"
+                      }
+                    }
+                  ],
+                  "role": "model"
+                },
+                "finishMessage": "Model generated function call(s).",
+                "finishReason": "STOP",
+                "index": 0
+              }
+            ],
+            "modelVersion": "gemini-2.5-flash",
+            "responseId": "HdueasqeOYTVjMcPvcPX0QY",
+            "usageMetadata": {
+              "candidatesTokenCount": 15,
+              "promptTokenCount": 51,
+              "promptTokensDetails": [
+                {
+                  "modality": "TEXT",
+                  "tokenCount": 51
+                }
+              ],
+              "serviceTier": "standard",
+              "totalTokenCount": 66
+            }
+          }
+        },
+        "headers": {
+          "alt-svc": "h3=\":443\"; ma=2592000,h3-29=\":443\"; ma=2592000",
+          "content-encoding": "gzip",
+          "content-type": "application/json; charset=UTF-8",
+          "date": "Mon, 07 Sep 2026 15:41:18 GMT",
+          "server": "scaffolding on HTTPServer2",
+          "server-timing": "gfet4t7; dur=414",
+          "transfer-encoding": "chunked",
+          "vary": "Origin, X-Origin, Referer",
+          "x-content-type-options": "nosniff",
+          "x-frame-options": "SAMEORIGIN",
+          "x-gemini-service-tier": "standard",
+          "x-xss-protection": "0"
+        },
+        "status": 200,
+        "statusText": "OK"
+      }
+    },
+    {
+      "callIndex": 0,
+      "id": "6d554d2dcae5f704",
+      "matchKey": "POST generativelanguage.googleapis.com/v1beta/models/gemini-embedding-001:embedContent",
+      "recordedAt": "2026-09-07T15:41:18.482Z",
+      "request": {
+        "body": {
+          "kind": "json",
+          "value": {
+            "content": {
+              "parts": [
+                {
+                  "text": "Braintrust tracing"
+                }
+              ],
+              "role": "user"
+            },
+            "outputDimensionality": 32
+          }
+        },
+        "headers": {},
+        "method": "POST",
+        "url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-embedding-001:embedContent"
+      },
+      "response": {
+        "body": {
+          "kind": "json",
+          "value": {
+            "embedding": {
+              "values": [
+                -0.00056498207, 0.00067764724, 0.025515834, -0.06827484,
+                -0.018159438, -0.00066804345, -0.02059445, 0.019169684,
+                0.0007969225, 0.011048011, 0.01733174, -0.005276212,
+                -0.0023378462, 0.0012239993, 0.11950982, -0.004068754,
+                -0.0004498616, 0.028592361, 0.0013539455, 0.0043649697,
+                -0.00039828243, 0.020794528, -0.007384497, 0.0049769157,
+                -0.00249336, -0.015963668, 0.029339103, 0.019941056, 0.04195828,
+                0.006754775, 0.005152286, -0.0037557504
+              ]
+            }
+          }
+        },
+        "headers": {
+          "alt-svc": "h3=\":443\"; ma=2592000,h3-29=\":443\"; ma=2592000",
+          "content-encoding": "gzip",
+          "content-type": "application/json; charset=UTF-8",
+          "date": "Mon, 07 Sep 2026 15:41:18 GMT",
+          "server": "scaffolding on HTTPServer2",
+          "server-timing": "gfet4t7; dur=142",
+          "transfer-encoding": "chunked",
+          "vary": "Origin, X-Origin, Referer",
+          "x-content-type-options": "nosniff",
+          "x-frame-options": "SAMEORIGIN",
+          "x-xss-protection": "0"
+        },
+        "status": 200,
+        "statusText": "OK"
+      }
+    },
+    {
+      "callIndex": 0,
+      "id": "720a28fc31a343f4",
+      "matchKey": "POST generativelanguage.googleapis.com/v1beta/models/gemini-embedding-001:batchEmbedContents",
+      "recordedAt": "2026-09-07T15:41:18.621Z",
+      "request": {
+        "body": {
+          "kind": "json",
+          "value": {
+            "requests": [
+              {
+                "content": {
+                  "parts": [
+                    {
+                      "text": "Hello"
+                    }
+                  ],
+                  "role": "user"
+                },
+                "model": "models/gemini-embedding-001",
+                "outputDimensionality": 32
+              },
+              {
+                "content": {
+                  "parts": [
+                    {
+                      "text": "World"
+                    }
+                  ],
+                  "role": "user"
+                },
+                "model": "models/gemini-embedding-001",
+                "outputDimensionality": 32
+              }
+            ]
+          }
+        },
+        "headers": {},
+        "method": "POST",
+        "url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-embedding-001:batchEmbedContents"
+      },
+      "response": {
+        "body": {
+          "kind": "json",
+          "value": {
+            "embeddings": [
+              {
+                "values": [
+                  -0.033537783, 0.010872099, -0.018638643, -0.07056481,
+                  -0.012396566, -0.014437605, -0.012173588, 0.0077773663,
+                  0.022633733, -0.001237017, -0.015209624, -0.009981641,
+                  0.025919922, 0.00415327, 0.10641645, -0.017251352,
+                  0.0035167004, -0.0050875074, -0.0013598177, -0.0036230332,
+                  0.014257802, -0.005136757, 0.0048110997, 0.003975482,
+                  -0.014567856, 0.0038687838, 0.021737399, -0.0144291865,
+                  0.03812833, 0.017465321, 0.010914164, -0.005556262
+                ]
+              },
+              {
+                "values": [
+                  -0.018994348, 0.0012664916, 0.02265229, -0.055758394,
+                  -0.010440645, 0.006286945, -0.010687748, 0.013835131,
+                  0.011066136, -0.03224044, 0.008144715, -0.04485588,
+                  0.008004674, 0.03980209, 0.10230841, 0.0064024823,
+                  0.0019256125, -0.0056141005, -0.0050600125, -0.009704444,
+                  -0.003241131, -0.014003172, 0.028704025, -0.017749608,
+                  0.007662412, 0.0048232526, 0.013170705, -0.009186023,
+                  0.011946581, 0.023298215, 0.020411192, -0.008995693
+                ]
+              }
+            ]
+          }
+        },
+        "headers": {
+          "alt-svc": "h3=\":443\"; ma=2592000,h3-29=\":443\"; ma=2592000",
+          "content-encoding": "gzip",
+          "content-type": "application/json; charset=UTF-8",
+          "date": "Mon, 07 Sep 2026 15:41:18 GMT",
+          "server": "scaffolding on HTTPServer2",
+          "server-timing": "gfet4t7; dur=130",
+          "transfer-encoding": "chunked",
+          "vary": "Origin, X-Origin, Referer",
+          "x-content-type-options": "nosniff",
+          "x-frame-options": "SAMEORIGIN",
+          "x-xss-protection": "0"
+        },
+        "status": 200,
+        "statusText": "OK"
+      }
+    },
+    {
+      "callIndex": 0,
+      "id": "36e7d43fefe939f0",
+      "matchKey": "POST generativelanguage.googleapis.com/v1beta/models/braintrust-nonexistent-model:generateContent",
+      "recordedAt": "2026-09-07T15:41:18.675Z",
+      "request": {
+        "body": {
+          "kind": "json",
+          "value": {
+            "contents": [
+              {
+                "parts": [
+                  {
+                    "text": "Hello"
+                  }
+                ],
+                "role": "user"
+              }
+            ],
+            "generationConfig": {},
+            "safetySettings": []
+          }
+        },
+        "headers": {},
+        "method": "POST",
+        "url": "https://generativelanguage.googleapis.com/v1beta/models/braintrust-nonexistent-model:generateContent"
+      },
+      "response": {
+        "body": {
+          "kind": "json",
+          "value": {
+            "error": {
+              "code": 404,
+              "message": "models/braintrust-nonexistent-model is not found for API version v1beta, or is not supported for generateContent. Call ModelService.ListModels to see the list of available models and their supported methods.",
+              "status": "NOT_FOUND"
+            }
+          }
+        },
+        "headers": {
+          "alt-svc": "h3=\":443\"; ma=2592000,h3-29=\":443\"; ma=2592000",
+          "content-encoding": "gzip",
+          "content-type": "application/json; charset=UTF-8",
+          "date": "Mon, 07 Sep 2026 15:41:18 GMT",
+          "server": "scaffolding on HTTPServer2",
+          "server-timing": "gfet4t7; dur=45",
+          "transfer-encoding": "chunked",
+          "vary": "Origin, X-Origin, Referer",
+          "x-content-type-options": "nosniff",
+          "x-frame-options": "SAMEORIGIN",
+          "x-xss-protection": "0"
+        },
+        "status": 404,
+        "statusText": "Not Found"
+      }
+    }
+  ],
+  "meta": {
+    "createdAt": "2026-09-07T15:36:30.533Z"
+  }
+}
