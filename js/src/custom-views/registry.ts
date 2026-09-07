@@ -28,7 +28,7 @@ type TraceViewSpan<
     output?: TOutput;
     expected?: TExpected;
     metadata?: TMetadata;
-    scores?: Record<string, number>;
+    scores?: Record<string, number | null>;
     metrics?: Record<string, number | string>;
     error?: string;
     tags?: string[];
@@ -49,6 +49,7 @@ type CustomViewSpanUpdate<
 > = {
   target?: CustomViewUpdateTarget;
   metadata?: Partial<TMetadata> & Record<string, unknown>;
+  scores?: Record<string, number | null>;
   tags?: string[] | null;
 };
 
@@ -73,13 +74,6 @@ type TraceViewTrace<
   ) => Promise<CustomViewUpdateResult>;
 };
 
-type TraceViewUpdate<
-  TMetadata extends Record<string, unknown> = Record<string, unknown>,
-> = {
-  (field: string, value: unknown): void;
-  (patch: Partial<{ metadata: TMetadata; tags: string[] | null }>): void;
-};
-
 type TraceViewProps<
   TInput = unknown,
   TOutput = unknown,
@@ -89,7 +83,7 @@ type TraceViewProps<
   trace: TraceViewTrace<TInput, TOutput, TExpected, TMetadata>;
   span: TraceViewSpan<TInput, TOutput, TExpected, TMetadata>;
   selectSpan?: (spanId: string) => void;
-  update?: TraceViewUpdate<TMetadata>;
+  update?: (field: string, value: unknown) => void;
 };
 
 type DatasetViewProps<
@@ -102,6 +96,12 @@ type DatasetViewProps<
   expected?: TExpected;
   metadata?: TMetadata;
   tags?: string[];
+  update: (update: {
+    input?: TInput;
+    expected?: TExpected;
+    metadata?: Partial<TMetadata> & Record<string, unknown>;
+    tags?: string[] | null;
+  }) => Promise<CustomViewUpdateResult>;
 };
 
 type Component<Props> = (props: Props) => unknown;
