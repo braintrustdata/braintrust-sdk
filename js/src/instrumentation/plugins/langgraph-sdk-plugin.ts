@@ -143,8 +143,7 @@ function instrumentRun<T>(
       debugLogger.error("Error ending LangGraph SDK span:", error);
     }
   };
-  const observeValues = (value: unknown, streaming: boolean) => {
-    output = value;
+  const observeMessages = (value: unknown, streaming: boolean) => {
     if (!isObject(value) || !Array.isArray(value.messages)) return;
     const inputMessages =
       isObject(options?.input) && Array.isArray(options.input.messages)
@@ -193,9 +192,13 @@ function instrumentRun<T>(
         ? new Error(`${data.error ?? "Error"}: ${data.message ?? "Run failed"}`)
         : data;
     } else if (event === "values") {
-      observeValues(data, true);
+      output = data;
+      observeMessages(data, true);
     } else if (event === "updates") {
       updates.push(data);
+      if (isObject(data)) {
+        for (const update of Object.values(data)) observeMessages(update, true);
+      }
     } else if (
       (event === "messages" ||
         event === "messages/partial" ||
@@ -262,7 +265,8 @@ function instrumentRun<T>(
     void Promise.resolve(result).then(
       (value) => {
         try {
-          observeValues(value, false);
+          output = value;
+          observeMessages(value, false);
           if (isObject(value) && isObject(value.__error__))
             streamError = new Error(
               `${value.__error__.error}: ${value.__error__.message}`,

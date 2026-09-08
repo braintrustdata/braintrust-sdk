@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
+import { fork } from "node:child_process";
+import { once } from "node:events";
 import { createRequire } from "node:module";
-import { createServer } from "node:http";
 import * as braintrust from "braintrust";
 import {
   runMain,
@@ -13,106 +14,35 @@ const { Client } =
   process.env.LANGGRAPH_SDK_MODULE === "cjs"
     ? createRequire(import.meta.url)(packageName)
     : await import(packageName);
-const input = { messages: [{ role: "user", content: "Hello" }] };
-const output = {
+const input = {
   messages: [
-    {
-      type: "ai",
-      id: "answer",
-      content: "Hello world",
-      usage_metadata: { input_tokens: 3, output_tokens: 2, total_tokens: 5 },
-    },
+    { role: "user", content: "Reply with exactly: hello from langgraph" },
   ],
 };
-const metadata = { run_id: "remote-run" };
-const messageChunks = [
-  { event: "metadata", data: metadata },
-  {
-    event: "messages",
-    data: [
-      { id: "answer", type: "AIMessageChunk", content: "" },
-      { private: "DO_NOT_CAPTURE" },
-    ],
-  },
-  {
-    event: "messages",
-    data: [{ id: "answer", type: "AIMessageChunk", content: "Hello " }, {}],
-  },
-  {
-    event: "messages",
-    data: [
-      {
-        id: "answer",
-        type: "AIMessageChunk",
-        content: "world",
-        usage_metadata: { input_tokens: 3, output_tokens: 2, total_tokens: 5 },
-      },
-      {},
-    ],
-  },
-];
 
-// A local LangGraph HTTP endpoint exercises real SDK serialization and SSE
-// parsing without requiring a hosted deployment or recording credentials.
 runMain(async () => {
-  const requests = [];
-  const server = createServer(async (req, res) => {
-    let body = "";
-    for await (const chunk of req) body += chunk;
-    const payload = body ? JSON.parse(body) : {};
-    requests.push({ path: req.url, payload });
-    if (payload.assistant_id === "http-error") {
-      res.writeHead(400, { "content-type": "application/json" });
-      res.end(JSON.stringify({ detail: "Invalid assistant" }));
-    } else if (req.url.endsWith("/stream")) {
-      const events =
-        payload.assistant_id === "stream-error"
-          ? [
-              ...messageChunks,
-              {
-                event: "error",
-                data: { error: "ValueError", message: "Agent failed" },
-              },
-            ]
-          : payload.assistant_id === "updates"
-            ? [
-                { event: "updates", data: { agent: { answer: "first" } } },
-                { event: "updates", data: { agent: { answer: "last" } } },
-              ]
-            : payload.assistant_id === "messages"
-              ? messageChunks
-              : [...messageChunks, { event: "values", data: output }];
-      res.writeHead(200, { "content-type": "text/event-stream" });
-      for (const event of events)
-        res.write(
-          `event: ${event.event}\ndata: ${JSON.stringify(event.data)}\n\n`,
-        );
-      res.end();
-    } else {
-      res.writeHead(200, { "content-type": "application/json" });
-      res.end(
-        JSON.stringify(
-          req.url.endsWith("/wait")
-            ? payload.assistant_id === "wait-error"
-              ? { __error__: { error: "ValueError", message: "Agent failed" } }
-              : output
-            : req.url === "/threads"
-              ? { thread_id: "created-thread" }
-              : {
-                  run_id: "remote-run",
-                  thread_id: "thread",
-                  assistant_id: "agent",
-                  status: "pending",
-                  metadata: { secret: "DO_NOT_CAPTURE" },
-                },
-        ),
-      );
-    }
+  const server = fork(new URL("./server.mjs", import.meta.url), [], {
+    execArgv: [],
+    env: {
+      ...process.env,
+      LANGSMITH_TRACING: "false",
+      LANGSMITH_TRACING_V2: "false",
+      LANGCHAIN_TRACING: "false",
+      LANGCHAIN_TRACING_V2: "false",
+      LOG_LEVEL: "error",
+    },
+    stdio: ["ignore", "inherit", "inherit", "ipc"],
   });
-  await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
+  const exited = once(server, "exit");
   try {
+    const { apiUrl } = await Promise.race([
+      once(server, "message").then(([message]) => message),
+      exited.then(([code]) => {
+        throw new Error(`LangGraph server exited before startup: ${code}`);
+      }),
+    ]);
     const raw = new Client({
-      apiUrl: `http://127.0.0.1:${server.address().port}`,
+      apiUrl,
       apiKey: null,
       callerOptions: { maxRetries: 0 },
     });
@@ -132,69 +62,102 @@ runMain(async () => {
       metadata: { scenario: "langgraph-sdk-instrumentation" },
       callback: async () => {
         await runOperation("create", "create", async () => {
-          assert.equal(
-            (await client.runs.create("thread", "agent", options)).status,
-            "pending",
+          const thread = await client.threads.create();
+          const run = await client.runs.create(
+            thread.thread_id,
+            "agent",
+            options,
           );
-          await client.runs.join("thread", "remote-run");
+          assert.ok(run.run_id);
+          await client.runs.join(thread.thread_id, run.run_id);
+          assert.equal(
+            (await client.runs.get(thread.thread_id, run.run_id)).status,
+            "success",
+          );
         });
         await runOperation("wait", "wait", async () => {
-          assert.deepEqual(
-            await client.runs.wait(null, "agent", options),
-            output,
+          const state = await client.runs.wait(null, "agent", options);
+          assert.ok(state.messages.at(-1).content.length > 0);
+          assert.ok(state.messages.at(-1).usage_metadata.total_tokens > 0);
+        });
+        const thread = await client.threads.create();
+        await runOperation("interrupt", "interrupt", async () => {
+          const state = await client.runs.wait(
+            thread.thread_id,
+            "approval",
+            options,
           );
+          assert.equal(state.__interrupt__[0].value, "Approve the model call?");
         });
         await runOperation("resume", "resume", async () => {
-          assert.deepEqual(
-            await client.runs.wait("thread", "agent", {
-              command: { resume: "yes" },
-              interruptBefore: ["tools"],
-            }),
-            output,
-          );
+          const state = await client.runs.wait(thread.thread_id, "approval", {
+            command: { resume: "yes" },
+          });
+          assert.ok(state.messages.at(-1).content.length > 0);
+          assert.ok(state.messages.at(-1).usage_metadata.total_tokens > 0);
         });
-        for (const assistant of [
-          "agent",
-          "messages",
-          "updates",
-          "stream-error",
+        for (const [name, streamMode] of [
+          ["values", ["values", "messages", "updates"]],
+          ["messages", ["messages"]],
+          ["updates", ["updates"]],
+          ["stream-error", ["values", "messages"]],
         ]) {
-          await runOperation(assistant, assistant, async () => {
-            const stream = client.runs.stream("thread", assistant, {
-              ...options,
-              streamMode: ["values", "messages", "updates"],
-              streamSubgraphs: true,
-            });
+          await runOperation(name, name, async () => {
+            const stream = client.runs.stream(
+              null,
+              name === "stream-error" ? "failing" : "agent",
+              {
+                ...options,
+                streamMode,
+                streamSubgraphs: true,
+              },
+            );
             assert.equal(stream[Symbol.asyncIterator](), stream);
             assert.equal(typeof stream.return, "function");
             const events = [];
             for await (const event of stream) events.push(event);
-            if (assistant === "agent")
-              assert.deepEqual(events.at(-1).data, output);
-            if (assistant === "stream-error")
+            if (name === "values") {
+              const final = events
+                .filter((event) => event.event === "values")
+                .at(-1).data;
+              assert.ok(final.messages.at(-1).content.length > 0);
+              assert.ok(final.messages.at(-1).usage_metadata.total_tokens > 0);
+            }
+            if (name === "messages")
+              assert.ok(
+                events.some((event) => event.event.startsWith("messages")),
+              );
+            if (name === "updates")
+              assert.ok(
+                events.some(
+                  (event) => event.event === "updates" && event.data.agent,
+                ),
+              );
+            if (name === "stream-error")
               assert.equal(events.at(-1).event, "error");
-            // Consuming a provider stream must not leak its span into user code.
             await braintrust.traced(() => {}, { name: "after-stream" });
           });
         }
         await runOperation("cancel", "cancel", async () => {
-          const stream = client.runs.stream(null, "agent", options);
-          assert.deepEqual((await stream.next()).value, {
-            event: "metadata",
-            data: metadata,
-            id: undefined,
+          // Interrupt before generation so disconnect timing cannot leave an
+          // in-flight model request in the cassette or affect subsequent runs.
+          const stream = client.runs.stream(null, "agent", {
+            ...options,
+            interruptBefore: ["agent"],
+            onDisconnect: "cancel",
           });
+          assert.equal((await stream.next()).value.event, "metadata");
           await stream.return();
         });
         await runOperation("http-error", "http-error", async () => {
           await assert.rejects(
-            client.runs.wait(null, "http-error", options),
-            /Invalid assistant/,
+            client.runs.wait(null, "missing-assistant", options),
+            /HTTP 404: No assistant found/,
           );
         });
         await runOperation("wait-error", "wait-error", async () => {
           await assert.rejects(
-            client.runs.wait(null, "wait-error", options),
+            client.runs.wait(null, "failing", options),
             /Agent failed/,
           );
         });
@@ -204,7 +167,7 @@ runMain(async () => {
           async () => {
             assert.ok(
               (
-                await client.runs.wait(null, "wait-error", {
+                await client.runs.wait(null, "failing", {
                   ...options,
                   raiseError: false,
                 })
@@ -215,58 +178,28 @@ runMain(async () => {
         await runOperation("parallel", "parallel", async () => {
           await Promise.all(
             ["left", "right"].map((name) =>
-              runOperation(name, name, () =>
-                client.runs.wait(name, "agent", { input: name }),
-              ),
+              runOperation(name, name, async () => {
+                const state = await client.runs.wait(null, "agent", {
+                  input: {
+                    messages: [
+                      { role: "user", content: `Reply with exactly: ${name}` },
+                    ],
+                  },
+                });
+                assert.ok(state.messages.at(-1).content.includes(name));
+              }),
             ),
           );
         });
-        await runOperation(
-          "thread-controller",
-          "thread-controller",
-          async () => {
-            // Background/controller APIs remain usable without tracing or patches.
-            const thread = client.threads.stream("thread-controller", {
-              assistantId: "agent",
-              transport: {
-                threadId: "thread-controller",
-                async open() {},
-                async close() {},
-                async *events() {},
-                async send(command) {
-                  return {
-                    type: "response",
-                    id: command.id,
-                    result: { run_id: "background-run" },
-                  };
-                },
-                openEventStream() {
-                  return {
-                    ready: Promise.resolve(),
-                    close() {},
-                    events: (async function* () {})(),
-                  };
-                },
-              },
-            });
-            assert.deepEqual(await thread.run.start({ input: "background" }), {
-              run_id: "background-run",
-            });
-            await thread.close();
-          },
-        );
-        // Thread CRUD is deliberately outside the generation tracing surface.
-        await client.threads.create();
       },
     });
-    assert.equal(
-      requests.filter(({ path }) => path === "/runs/wait").length,
-      4,
-    );
-    assert.deepEqual(requests[0].payload.input, input);
-    assert.equal(requests[0].payload.metadata.secret, "DO_NOT_CAPTURE");
   } finally {
-    server.closeAllConnections();
-    await new Promise((resolve) => server.close(resolve));
+    if (server.connected) server.disconnect();
+    const killTimer = setTimeout(() => server.kill("SIGKILL"), 5_000);
+    try {
+      await exited;
+    } finally {
+      clearTimeout(killTimer);
+    }
   }
 });

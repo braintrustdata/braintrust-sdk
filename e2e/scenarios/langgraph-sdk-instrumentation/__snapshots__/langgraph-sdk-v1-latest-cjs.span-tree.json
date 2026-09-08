@@ -27,7 +27,7 @@
               "input": {
                 "messages": [
                   {
-                    "content": "Hello",
+                    "content": "Reply with exactly: hello from langgraph",
                     "role": "user"
                   }
                 ]
@@ -35,13 +35,50 @@
               "output": {
                 "messages": [
                   {
-                    "content": "Hello world",
+                    "additional_kwargs": {},
+                    "content": "Reply with exactly: hello from langgraph",
                     "id": "<span:1>",
+                    "response_metadata": {},
+                    "type": "human"
+                  },
+                  {
+                    "additional_kwargs": {},
+                    "content": "hello from langgraph",
+                    "id": "<span:2>",
+                    "invalid_tool_calls": [],
+                    "response_metadata": {
+                      "model_provider": "openai",
+                      "usage": {
+                        "completion_tokens": 4,
+                        "completion_tokens_details": {
+                          "accepted_prediction_tokens": 0,
+                          "audio_tokens": 0,
+                          "reasoning_tokens": 0,
+                          "rejected_prediction_tokens": 0
+                        },
+                        "prompt_tokens": 15,
+                        "prompt_tokens_details": {
+                          "audio_tokens": 0,
+                          "cached_tokens": 0
+                        },
+                        "total_tokens": 19
+                      }
+                    },
+                    "tool_call_chunks": [],
+                    "tool_calls": [],
                     "type": "ai",
                     "usage_metadata": {
-                      "input_tokens": 3,
-                      "output_tokens": 2,
-                      "total_tokens": 5
+                      "input_token_details": {
+                        "audio": 0,
+                        "cache_read": 0
+                      },
+                      "input_tokens": 15,
+                      "output_token_details": {
+                        "audio": 0,
+                        "reasoning": 0
+                      },
+                      "output_tokens": 4,
+                      "total_tokens": 19
                     }
                   }
                 ]
@@ -51,14 +88,53 @@
                 "langgraph.thread_id": null
               },
               "metrics": {
-                "completion_tokens": 2,
-                "prompt_tokens": 3,
-                "tokens": 5
+                "completion_tokens": 4,
+                "prompt_tokens": 15,
+                "tokens": 19
               }
             }
           ],
           "metadata": {
             "operation": "wait",
+            "testRunId": "<run:1>"
+          },
+          "context": {
+            "caller_filename": "<repo>/e2e/helpers/provider-runtime.mjs",
+            "caller_functionname": "runOperation",
+            "caller_lineno": 0
+          }
+        },
+        {
+          "name": "interrupt",
+          "children": [
+            {
+              "name": "langgraph.runs.wait",
+              "type": "task",
+              "children": [],
+              "input": {
+                "messages": [
+                  {
+                    "content": "Reply with exactly: hello from langgraph",
+                    "role": "user"
+                  }
+                ]
+              },
+              "output": {
+                "__interrupt__": [
+                  {
+                    "id": "<span:1>",
+                    "value": "Approve the model call?"
+                  }
+                ]
+              },
+              "metadata": {
+                "langgraph.assistant_id": "approval",
+                "langgraph.thread_id": "<uuid:1>"
+              }
+            }
+          ],
+          "metadata": {
+            "operation": "interrupt",
             "testRunId": "<run:1>"
           },
           "context": {
@@ -82,28 +158,62 @@
               "output": {
                 "messages": [
                   {
-                    "content": "Hello world",
+                    "additional_kwargs": {},
+                    "content": "Reply with exactly: hello from langgraph",
                     "id": "<span:1>",
+                    "response_metadata": {},
+                    "type": "human"
+                  },
+                  {
+                    "additional_kwargs": {},
+                    "content": "hello from langgraph",
+                    "id": "<span:2>",
+                    "invalid_tool_calls": [],
+                    "response_metadata": {
+                      "model_provider": "openai",
+                      "usage": {
+                        "completion_tokens": 4,
+                        "completion_tokens_details": {
+                          "accepted_prediction_tokens": 0,
+                          "audio_tokens": 0,
+                          "reasoning_tokens": 0,
+                          "rejected_prediction_tokens": 0
+                        },
+                        "prompt_tokens": 15,
+                        "prompt_tokens_details": {
+                          "audio_tokens": 0,
+                          "cached_tokens": 0
+                        },
+                        "total_tokens": 19
+                      }
+                    },
+                    "tool_call_chunks": [],
+                    "tool_calls": [],
                     "type": "ai",
                     "usage_metadata": {
-                      "input_tokens": 3,
-                      "output_tokens": 2,
-                      "total_tokens": 5
+                      "input_token_details": {
+                        "audio": 0,
+                        "cache_read": 0
+                      },
+                      "input_tokens": 15,
+                      "output_token_details": {
+                        "audio": 0,
+                        "reasoning": 0
+                      },
+                      "output_tokens": 4,
+                      "total_tokens": 19
                     }
                   }
                 ]
               },
               "metadata": {
-                "interruptBefore": [
-                  "tools"
-                ],
-                "langgraph.assistant_id": "agent",
-                "langgraph.thread_id": "thread"
+                "langgraph.assistant_id": "approval",
+                "langgraph.thread_id": "<uuid:1>"
               },
               "metrics": {
-                "completion_tokens": 2,
-                "prompt_tokens": 3,
-                "tokens": 5
+                "completion_tokens": 4,
+                "prompt_tokens": 15,
+                "tokens": 19
               }
             }
           ],
@@ -118,7 +228,7 @@
           }
         },
         {
-          "name": "agent",
+          "name": "values",
           "children": [
             {
               "name": "langgraph.runs.stream",
@@ -127,7 +237,7 @@
               "input": {
                 "messages": [
                   {
-                    "content": "Hello",
+                    "content": "Reply with exactly: hello from langgraph",
                     "role": "user"
                   }
                 ]
@@ -135,21 +245,58 @@
               "output": {
                 "messages": [
                   {
-                    "content": "Hello world",
+                    "additional_kwargs": {},
+                    "content": "Reply with exactly: hello from langgraph",
                     "id": "<span:1>",
+                    "response_metadata": {},
+                    "type": "human"
+                  },
+                  {
+                    "additional_kwargs": {},
+                    "content": "hello from langgraph",
+                    "id": "<span:2>",
+                    "invalid_tool_calls": [],
+                    "response_metadata": {
+                      "model_provider": "openai",
+                      "usage": {
+                        "completion_tokens": 4,
+                        "completion_tokens_details": {
+                          "accepted_prediction_tokens": 0,
+                          "audio_tokens": 0,
+                          "reasoning_tokens": 0,
+                          "rejected_prediction_tokens": 0
+                        },
+                        "prompt_tokens": 15,
+                        "prompt_tokens_details": {
+                          "audio_tokens": 0,
+                          "cached_tokens": 0
+                        },
+                        "total_tokens": 19
+                      }
+                    },
+                    "tool_call_chunks": [],
+                    "tool_calls": [],
                     "type": "ai",
                     "usage_metadata": {
-                      "input_tokens": 3,
-                      "output_tokens": 2,
-                      "total_tokens": 5
+                      "input_token_details": {
+                        "audio": 0,
+                        "cache_read": 0
+                      },
+                      "input_tokens": 15,
+                      "output_token_details": {
+                        "audio": 0,
+                        "reasoning": 0
+                      },
+                      "output_tokens": 4,
+                      "total_tokens": 19
                     }
                   }
                 ]
               },
               "metadata": {
                 "langgraph.assistant_id": "agent",
-                "langgraph.run_id": "remote-run",
-                "langgraph.thread_id": "thread",
+                "langgraph.run_id": "<uuid:1>",
+                "langgraph.thread_id": null,
                 "streamMode": [
                   "values",
                   "messages",
@@ -158,10 +305,10 @@
                 "streamSubgraphs": true
               },
               "metrics": {
-                "completion_tokens": 2,
-                "prompt_tokens": 3,
+                "completion_tokens": 4,
+                "prompt_tokens": 15,
                 "time_to_first_token": 0,
-                "tokens": 5
+                "tokens": 19
               }
             },
             {
@@ -175,7 +322,7 @@
             }
           ],
           "metadata": {
-            "operation": "agent",
+            "operation": "values",
             "testRunId": "<run:1>"
           },
           "context": {
@@ -194,7 +341,7 @@
               "input": {
                 "messages": [
                   {
-                    "content": "Hello",
+                    "content": "Reply with exactly: hello from langgraph",
                     "role": "user"
                   }
                 ]
@@ -202,33 +349,61 @@
               "output": {
                 "messages": [
                   {
-                    "content": "Hello world",
+                    "additional_kwargs": {},
+                    "content": "hello from langgraph",
                     "id": "<span:1>",
-                    "type": "AIMessageChunk",
+                    "invalid_tool_calls": [],
+                    "response_metadata": {
+                      "model_provider": "openai",
+                      "usage": {
+                        "completion_tokens": 4,
+                        "completion_tokens_details": {
+                          "accepted_prediction_tokens": 0,
+                          "audio_tokens": 0,
+                          "reasoning_tokens": 0,
+                          "rejected_prediction_tokens": 0
+                        },
+                        "prompt_tokens": 15,
+                        "prompt_tokens_details": {
+                          "audio_tokens": 0,
+                          "cached_tokens": 0
+                        },
+                        "total_tokens": 19
+                      }
+                    },
+                    "tool_call_chunks": [],
+                    "tool_calls": [],
+                    "type": "ai",
                     "usage_metadata": {
-                      "input_tokens": 3,
-                      "output_tokens": 2,
-                      "total_tokens": 5
+                      "input_token_details": {
+                        "audio": 0,
+                        "cache_read": 0
+                      },
+                      "input_tokens": 15,
+                      "output_token_details": {
+                        "audio": 0,
+                        "reasoning": 0
+                      },
+                      "output_tokens": 4,
+                      "total_tokens": 19
                     }
                   }
                 ]
               },
               "metadata": {
-                "langgraph.assistant_id": "messages",
-                "langgraph.run_id": "remote-run",
-                "langgraph.thread_id": "thread",
+                "langgraph.assistant_id": "agent",
+                "langgraph.run_id": "<uuid:1>",
+                "langgraph.thread_id": null,
                 "streamMode": [
-                  "values",
-                  "messages",
-                  "updates"
+                  "messages"
                 ],
                 "streamSubgraphs": true
               },
               "metrics": {
-                "completion_tokens": 2,
-                "prompt_tokens": 3,
+                "completion_tokens": 4,
+                "prompt_tokens": 15,
                 "time_to_first_token": 0,
-                "tokens": 5
+                "tokens": 19
               }
             },
             {
@@ -261,7 +436,7 @@
               "input": {
                 "messages": [
                   {
-                    "content": "Hello",
+                    "content": "Reply with exactly: hello from langgraph",
                     "role": "user"
                   }
                 ]
@@ -269,24 +444,65 @@
               "output": [
                 {
                   "agent": {
-                    "answer": "first"
-                  }
-                },
-                {
-                  "agent": {
-                    "answer": "last"
+                    "messages": [
+                      {
+                        "additional_kwargs": {},
+                        "content": "hello from langgraph",
+                        "id": "<span:1>",
+                        "invalid_tool_calls": [],
+                        "response_metadata": {
+                          "model_provider": "openai",
+                          "usage": {
+                            "completion_tokens": 4,
+                            "completion_tokens_details": {
+                              "accepted_prediction_tokens": 0,
+                              "audio_tokens": 0,
+                              "reasoning_tokens": 0,
+                              "rejected_prediction_tokens": 0
+                            },
+                            "prompt_tokens": 15,
+                            "prompt_tokens_details": {
+                              "audio_tokens": 0,
+                              "cached_tokens": 0
+                            },
+                            "total_tokens": 19
+                          }
+                        },
+                        "tool_call_chunks": [],
+                        "tool_calls": [],
+                        "type": "ai",
+                        "usage_metadata": {
+                          "input_token_details": {
+                            "audio": 0,
+                            "cache_read": 0
+                          },
+                          "input_tokens": 15,
+                          "output_token_details": {
+                            "audio": 0,
+                            "reasoning": 0
+                          },
+                          "output_tokens": 4,
+                          "total_tokens": 19
+                        }
+                      }
+                    ]
                   }
                 }
               ],
               "metadata": {
-                "langgraph.assistant_id": "updates",
-                "langgraph.thread_id": "thread",
+                "langgraph.assistant_id": "agent",
+                "langgraph.run_id": "<uuid:1>",
+                "langgraph.thread_id": null,
                 "streamMode": [
-                  "values",
-                  "messages",
                   "updates"
                 ],
                 "streamSubgraphs": true
+              },
+              "metrics": {
+                "completion_tokens": 4,
+                "prompt_tokens": 15,
+                "time_to_first_token": 0,
+                "tokens": 19
               }
             },
             {
@@ -319,7 +535,7 @@
               "input": {
                 "messages": [
                   {
-                    "content": "Hello",
+                    "content": "Reply with exactly: hello from langgraph",
                     "role": "user"
                   }
                 ]
@@ -327,35 +543,25 @@
               "output": {
                 "messages": [
                   {
-                    "content": "Hello world",
+                    "additional_kwargs": {},
+                    "content": "Reply with exactly: hello from langgraph",
                     "id": "<span:1>",
-                    "type": "AIMessageChunk",
-                    "usage_metadata": {
-                      "input_tokens": 3,
-                      "output_tokens": 2,
-                      "total_tokens": 5
-                    }
+                    "response_metadata": {},
+                    "type": "human"
                   }
                 ]
               },
               "metadata": {
-                "langgraph.assistant_id": "stream-error",
-                "langgraph.run_id": "remote-run",
-                "langgraph.thread_id": "thread",
+                "langgraph.assistant_id": "failing",
+                "langgraph.run_id": "<uuid:1>",
+                "langgraph.thread_id": null,
                 "streamMode": [
                   "values",
-                  "messages",
-                  "updates"
+                  "messages"
                 ],
                 "streamSubgraphs": true
               },
-              "metrics": {
-                "completion_tokens": 2,
-                "prompt_tokens": 3,
-                "time_to_first_token": 0,
-                "tokens": 5
-              },
-              "error": "ValueError: Agent failed"
+              "error": "Error: Agent failed"
             },
             {
               "name": "after-stream",
@@ -387,14 +593,17 @@
               "input": {
                 "messages": [
                   {
-                    "content": "Hello",
+                    "content": "Reply with exactly: hello from langgraph",
                     "role": "user"
                   }
                 ]
               },
               "metadata": {
+                "interruptBefore": [
+                  "agent"
+                ],
                 "langgraph.assistant_id": "agent",
-                "langgraph.run_id": "remote-run",
+                "langgraph.run_id": "<uuid:1>",
                 "langgraph.thread_id": null
               }
             }
@@ -419,16 +628,16 @@
               "input": {
                 "messages": [
                   {
-                    "content": "Hello",
+                    "content": "Reply with exactly: hello from langgraph",
                     "role": "user"
                   }
                 ]
               },
               "metadata": {
-                "langgraph.assistant_id": "http-error",
+                "langgraph.assistant_id": "missing-assistant",
                 "langgraph.thread_id": null
               },
-              "error": "HTTP 400: {\"detail\":\"Invalid assistant\"}"
+              "error": "HTTP 404: No assistant found for \"missing-assistant\". Make sure the assistant ID is for a valid assistant or a valid graph ID."
             }
           ],
           "metadata": {
@@ -451,16 +660,16 @@
               "input": {
                 "messages": [
                   {
-                    "content": "Hello",
+                    "content": "Reply with exactly: hello from langgraph",
                     "role": "user"
                   }
                 ]
               },
               "metadata": {
-                "langgraph.assistant_id": "wait-error",
+                "langgraph.assistant_id": "failing",
                 "langgraph.thread_id": null
               },
-              "error": "ValueError: Agent failed"
+              "error": "Error: {\"error\":\"Error\",\"message\":\"Agent failed\"}"
             }
           ],
           "metadata": {
@@ -483,22 +692,22 @@
               "input": {
                 "messages": [
                   {
-                    "content": "Hello",
+                    "content": "Reply with exactly: hello from langgraph",
                     "role": "user"
                   }
                 ]
               },
               "output": {
                 "__error__": {
-                  "error": "ValueError",
-                  "message": "Agent failed"
+                  "error": "Error",
+                  "message": "{\"error\":\"Error\",\"message\":\"Agent failed\"}"
                 }
               },
               "metadata": {
-                "langgraph.assistant_id": "wait-error",
+                "langgraph.assistant_id": "failing",
                 "langgraph.thread_id": null
               },
-              "error": "ValueError: Agent failed"
+              "error": "Error: {\"error\":\"Error\",\"message\":\"Agent failed\"}"
             }
           ],
           "metadata": {
@@ -521,29 +730,73 @@
                   "name": "langgraph.runs.wait",
                   "type": "task",
                   "children": [],
-                  "input": "left",
+                  "input": {
+                    "messages": [
+                      {
+                        "content": "Reply with exactly: left",
+                        "role": "user"
+                      }
+                    ]
+                  },
                   "output": {
                     "messages": [
                       {
-                        "content": "Hello world",
+                        "additional_kwargs": {},
+                        "content": "Reply with exactly: left",
                         "id": "<span:1>",
+                        "response_metadata": {},
+                        "type": "human"
+                      },
+                      {
+                        "additional_kwargs": {},
+                        "content": "left",
+                        "id": "<span:2>",
+                        "invalid_tool_calls": [],
+                        "response_metadata": {
+                          "model_provider": "openai",
+                          "usage": {
+                            "completion_tokens": 1,
+                            "completion_tokens_details": {
+                              "accepted_prediction_tokens": 0,
+                              "audio_tokens": 0,
+                              "reasoning_tokens": 0,
+                              "rejected_prediction_tokens": 0
+                            },
+                            "prompt_tokens": 12,
+                            "prompt_tokens_details": {
+                              "audio_tokens": 0,
+                              "cached_tokens": 0
+                            },
+                            "total_tokens": 13
+                          }
+                        },
+                        "tool_call_chunks": [],
+                        "tool_calls": [],
                         "type": "ai",
                         "usage_metadata": {
-                          "input_tokens": 3,
-                          "output_tokens": 2,
-                          "total_tokens": 5
+                          "input_token_details": {
+                            "audio": 0,
+                            "cache_read": 0
+                          },
+                          "input_tokens": 12,
+                          "output_token_details": {
+                            "audio": 0,
+                            "reasoning": 0
+                          },
+                          "output_tokens": 1,
+                          "total_tokens": 13
                         }
                       }
                     ]
                   },
                   "metadata": {
                     "langgraph.assistant_id": "agent",
-                    "langgraph.thread_id": "left"
+                    "langgraph.thread_id": null
                   },
                   "metrics": {
-                    "completion_tokens": 2,
-                    "prompt_tokens": 3,
-                    "tokens": 5
+                    "completion_tokens": 1,
+                    "prompt_tokens": 12,
+                    "tokens": 13
                   }
                 }
               ],
@@ -564,29 +817,73 @@
                   "name": "langgraph.runs.wait",
                   "type": "task",
                   "children": [],
-                  "input": "right",
+                  "input": {
+                    "messages": [
+                      {
+                        "content": "Reply with exactly: right",
+                        "role": "user"
+                      }
+                    ]
+                  },
                   "output": {
                     "messages": [
                       {
-                        "content": "Hello world",
+                        "additional_kwargs": {},
+                        "content": "Reply with exactly: right",
                         "id": "<span:1>",
+                        "response_metadata": {},
+                        "type": "human"
+                      },
+                      {
+                        "additional_kwargs": {},
+                        "content": "right",
+                        "id": "<span:2>",
+                        "invalid_tool_calls": [],
+                        "response_metadata": {
+                          "model_provider": "openai",
+                          "usage": {
+                            "completion_tokens": 1,
+                            "completion_tokens_details": {
+                              "accepted_prediction_tokens": 0,
+                              "audio_tokens": 0,
+                              "reasoning_tokens": 0,
+                              "rejected_prediction_tokens": 0
+                            },
+                            "prompt_tokens": 12,
+                            "prompt_tokens_details": {
+                              "audio_tokens": 0,
+                              "cached_tokens": 0
+                            },
+                            "total_tokens": 13
+                          }
+                        },
+                        "tool_call_chunks": [],
+                        "tool_calls": [],
                         "type": "ai",
                         "usage_metadata": {
-                          "input_tokens": 3,
-                          "output_tokens": 2,
-                          "total_tokens": 5
+                          "input_token_details": {
+                            "audio": 0,
+                            "cache_read": 0
+                          },
+                          "input_tokens": 12,
+                          "output_token_details": {
+                            "audio": 0,
+                            "reasoning": 0
+                          },
+                          "output_tokens": 1,
+                          "total_tokens": 13
                         }
                       }
                     ]
                   },
                   "metadata": {
                     "langgraph.assistant_id": "agent",
-                    "langgraph.thread_id": "right"
+                    "langgraph.thread_id": null
                   },
                   "metrics": {
-                    "completion_tokens": 2,
-                    "prompt_tokens": 3,
-                    "tokens": 5
+                    "completion_tokens": 1,
+                    "prompt_tokens": 12,
+                    "tokens": 13
                   }
                 }
               ],
@@ -603,19 +900,6 @@
           ],
           "metadata": {
             "operation": "parallel",
-            "testRunId": "<run:1>"
-          },
-          "context": {
-            "caller_filename": "<repo>/e2e/helpers/provider-runtime.mjs",
-            "caller_functionname": "runOperation",
-            "caller_lineno": 0
-          }
-        },
-        {
-          "name": "thread-controller",
-          "children": [],
-          "metadata": {
-            "operation": "thread-controller",
             "testRunId": "<run:1>"
           },
           "context": {
