@@ -1,3 +1,5 @@
+import type { ReactNode } from "react";
+
 type SpanFieldName = "input" | "output" | "expected" | "metadata";
 
 type SpanFields<
@@ -104,7 +106,7 @@ type DatasetViewProps<
   }) => Promise<CustomViewUpdateResult>;
 };
 
-type Component<Props> = (props: Props) => unknown;
+type Component<Props> = (props: Props) => ReactNode;
 
 type ProjectRef = string | { id: string } | { name: string };
 type DatasetRef = { id: string } | { name: string };
