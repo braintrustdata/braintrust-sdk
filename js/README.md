@@ -147,6 +147,29 @@ BRAINTRUST_DISABLE_INSTRUMENTATION=langsmith node --import braintrust/hook.mjs a
 
 When Braintrust LangChain/LangGraph instrumentation is enabled, LangSmith runs serialized by LangChain are ignored to avoid duplicate spans. Set `langchain: false` (and use LangSmith instrumentation) when LangSmith should be the source for those runs instead.
 
+## LangGraph Platform SDK instrumentation
+
+Braintrust supports `@langchain/langgraph-sdk >=1.9.25 <2.0.0` through the standard Node hook and bundler plugins. This integration traces remote agent execution separately from the local LangGraph framework integration.
+
+For explicit instrumentation:
+
+```typescript
+import { Client } from "@langchain/langgraph-sdk";
+import { initLogger, wrapLangGraphSDK } from "braintrust";
+
+initLogger({ projectName: "my-project" });
+const client = wrapLangGraphSDK(
+  new Client({ apiUrl: "https://your-deployment" }),
+);
+await client.runs.wait(null, "agent", {
+  input: { messages: [{ role: "user", content: "Hello" }] },
+});
+```
+
+The integration creates task spans for `runs.wait` and `runs.stream`, which execute a run and return its final state or stream its output to the caller. Spans capture final state when available, message output or updates otherwise, and errors and reported token usage. Background submission (`runs.create`), joining existing runs, and thread controllers are not instrumented. Model and tool execution inside the remote deployment requires server-side instrumentation.
+
+Disable this integration with `configureInstrumentation({ integrations: { langgraphSDK: false } })` or `BRAINTRUST_DISABLE_INSTRUMENTATION=langgraph-sdk`.
+
 ## Migration Guides
 
 ### Upgrading from 2.x to 3.x

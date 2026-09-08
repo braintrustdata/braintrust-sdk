@@ -31,6 +31,7 @@ export const INSTRUMENTATION_NAMES = {
   LANGSMITH: "langsmith",
   MASTRA: "mastra",
   MISTRAL: "mistral",
+  LANGGRAPH_SDK: "langgraph-sdk",
   OLLAMA: "ollama",
   OPENAI: "openai",
   OPENAI_AGENTS: "openai-agents",

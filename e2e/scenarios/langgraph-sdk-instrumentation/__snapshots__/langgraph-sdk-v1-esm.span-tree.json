@@ -1,0 +1,639 @@
+{
+  "span_tree": [
+    {
+      "name": "langgraph-sdk-instrumentation",
+      "type": "task",
+      "children": [
+        {
+          "name": "create",
+          "children": [],
+          "metadata": {
+            "operation": "create",
+            "testRunId": "<run:1>"
+          },
+          "context": {
+            "caller_filename": "<repo>/e2e/helpers/provider-runtime.mjs",
+            "caller_functionname": "runOperation",
+            "caller_lineno": 0
+          }
+        },
+        {
+          "name": "wait",
+          "children": [
+            {
+              "name": "langgraph.runs.wait",
+              "type": "task",
+              "children": [],
+              "input": {
+                "messages": [
+                  {
+                    "content": "Hello",
+                    "role": "user"
+                  }
+                ]
+              },
+              "output": {
+                "messages": [
+                  {
+                    "content": "Hello world",
+                    "id": "<span:1>",
+                    "type": "ai",
+                    "usage_metadata": {
+                      "input_tokens": 3,
+                      "output_tokens": 2,
+                      "total_tokens": 5
+                    }
+                  }
+                ]
+              },
+              "metadata": {
+                "langgraph.assistant_id": "agent",
+                "langgraph.thread_id": null
+              },
+              "metrics": {
+                "completion_tokens": 2,
+                "prompt_tokens": 3,
+                "tokens": 5
+              }
+            }
+          ],
+          "metadata": {
+            "operation": "wait",
+            "testRunId": "<run:1>"
+          },
+          "context": {
+            "caller_filename": "<repo>/e2e/helpers/provider-runtime.mjs",
+            "caller_functionname": "runOperation",
+            "caller_lineno": 0
+          }
+        },
+        {
+          "name": "resume",
+          "children": [
+            {
+              "name": "langgraph.runs.wait",
+              "type": "task",
+              "children": [],
+              "input": {
+                "command": {
+                  "resume": "yes"
+                }
+              },
+              "output": {
+                "messages": [
+                  {
+                    "content": "Hello world",
+                    "id": "<span:1>",
+                    "type": "ai",
+                    "usage_metadata": {
+                      "input_tokens": 3,
+                      "output_tokens": 2,
+                      "total_tokens": 5
+                    }
+                  }
+                ]
+              },
+              "metadata": {
+                "interruptBefore": [
+                  "tools"
+                ],
+                "langgraph.assistant_id": "agent",
+                "langgraph.thread_id": "thread"
+              },
+              "metrics": {
+                "completion_tokens": 2,
+                "prompt_tokens": 3,
+                "tokens": 5
+              }
+            }
+          ],
+          "metadata": {
+            "operation": "resume",
+            "testRunId": "<run:1>"
+          },
+          "context": {
+            "caller_filename": "<repo>/e2e/helpers/provider-runtime.mjs",
+            "caller_functionname": "runOperation",
+            "caller_lineno": 0
+          }
+        },
+        {
+          "name": "agent",
+          "children": [
+            {
+              "name": "langgraph.runs.stream",
+              "type": "task",
+              "children": [],
+              "input": {
+                "messages": [
+                  {
+                    "content": "Hello",
+                    "role": "user"
+                  }
+                ]
+              },
+              "output": {
+                "messages": [
+                  {
+                    "content": "Hello world",
+                    "id": "<span:1>",
+                    "type": "ai",
+                    "usage_metadata": {
+                      "input_tokens": 3,
+                      "output_tokens": 2,
+                      "total_tokens": 5
+                    }
+                  }
+                ]
+              },
+              "metadata": {
+                "langgraph.assistant_id": "agent",
+                "langgraph.run_id": "remote-run",
+                "langgraph.thread_id": "thread",
+                "streamMode": [
+                  "values",
+                  "messages",
+                  "updates"
+                ],
+                "streamSubgraphs": true
+              },
+              "metrics": {
+                "completion_tokens": 2,
+                "prompt_tokens": 3,
+                "time_to_first_token": 0,
+                "tokens": 5
+              }
+            },
+            {
+              "name": "after-stream",
+              "children": [],
+              "context": {
+                "caller_filename": "<node-internal>",
+                "caller_functionname": "<node-internal>",
+                "caller_lineno": 0
+              }
+            }
+          ],
+          "metadata": {
+            "operation": "agent",
+            "testRunId": "<run:1>"
+          },
+          "context": {
+            "caller_filename": "<repo>/e2e/helpers/provider-runtime.mjs",
+            "caller_functionname": "runOperation",
+            "caller_lineno": 0
+          }
+        },
+        {
+          "name": "messages",
+          "children": [
+            {
+              "name": "langgraph.runs.stream",
+              "type": "task",
+              "children": [],
+              "input": {
+                "messages": [
+                  {
+                    "content": "Hello",
+                    "role": "user"
+                  }
+                ]
+              },
+              "output": {
+                "messages": [
+                  {
+                    "content": "Hello world",
+                    "id": "<span:1>",
+                    "type": "AIMessageChunk",
+                    "usage_metadata": {
+                      "input_tokens": 3,
+                      "output_tokens": 2,
+                      "total_tokens": 5
+                    }
+                  }
+                ]
+              },
+              "metadata": {
+                "langgraph.assistant_id": "messages",
+                "langgraph.run_id": "remote-run",
+                "langgraph.thread_id": "thread",
+                "streamMode": [
+                  "values",
+                  "messages",
+                  "updates"
+                ],
+                "streamSubgraphs": true
+              },
+              "metrics": {
+                "completion_tokens": 2,
+                "prompt_tokens": 3,
+                "time_to_first_token": 0,
+                "tokens": 5
+              }
+            },
+            {
+              "name": "after-stream",
+              "children": [],
+              "context": {
+                "caller_filename": "<node-internal>",
+                "caller_functionname": "<node-internal>",
+                "caller_lineno": 0
+              }
+            }
+          ],
+          "metadata": {
+            "operation": "messages",
+            "testRunId": "<run:1>"
+          },
+          "context": {
+            "caller_filename": "<repo>/e2e/helpers/provider-runtime.mjs",
+            "caller_functionname": "runOperation",
+            "caller_lineno": 0
+          }
+        },
+        {
+          "name": "updates",
+          "children": [
+            {
+              "name": "langgraph.runs.stream",
+              "type": "task",
+              "children": [],
+              "input": {
+                "messages": [
+                  {
+                    "content": "Hello",
+                    "role": "user"
+                  }
+                ]
+              },
+              "output": [
+                {
+                  "agent": {
+                    "answer": "first"
+                  }
+                },
+                {
+                  "agent": {
+                    "answer": "last"
+                  }
+                }
+              ],
+              "metadata": {
+                "langgraph.assistant_id": "updates",
+                "langgraph.thread_id": "thread",
+                "streamMode": [
+                  "values",
+                  "messages",
+                  "updates"
+                ],
+                "streamSubgraphs": true
+              }
+            },
+            {
+              "name": "after-stream",
+              "children": [],
+              "context": {
+                "caller_filename": "<node-internal>",
+                "caller_functionname": "<node-internal>",
+                "caller_lineno": 0
+              }
+            }
+          ],
+          "metadata": {
+            "operation": "updates",
+            "testRunId": "<run:1>"
+          },
+          "context": {
+            "caller_filename": "<repo>/e2e/helpers/provider-runtime.mjs",
+            "caller_functionname": "runOperation",
+            "caller_lineno": 0
+          }
+        },
+        {
+          "name": "stream-error",
+          "children": [
+            {
+              "name": "langgraph.runs.stream",
+              "type": "task",
+              "children": [],
+              "input": {
+                "messages": [
+                  {
+                    "content": "Hello",
+                    "role": "user"
+                  }
+                ]
+              },
+              "output": {
+                "messages": [
+                  {
+                    "content": "Hello world",
+                    "id": "<span:1>",
+                    "type": "AIMessageChunk",
+                    "usage_metadata": {
+                      "input_tokens": 3,
+                      "output_tokens": 2,
+                      "total_tokens": 5
+                    }
+                  }
+                ]
+              },
+              "metadata": {
+                "langgraph.assistant_id": "stream-error",
+                "langgraph.run_id": "remote-run",
+                "langgraph.thread_id": "thread",
+                "streamMode": [
+                  "values",
+                  "messages",
+                  "updates"
+                ],
+                "streamSubgraphs": true
+              },
+              "metrics": {
+                "completion_tokens": 2,
+                "prompt_tokens": 3,
+                "time_to_first_token": 0,
+                "tokens": 5
+              },
+              "error": "ValueError: Agent failed"
+            },
+            {
+              "name": "after-stream",
+              "children": [],
+              "context": {
+                "caller_filename": "<node-internal>",
+                "caller_functionname": "<node-internal>",
+                "caller_lineno": 0
+              }
+            }
+          ],
+          "metadata": {
+            "operation": "stream-error",
+            "testRunId": "<run:1>"
+          },
+          "context": {
+            "caller_filename": "<repo>/e2e/helpers/provider-runtime.mjs",
+            "caller_functionname": "runOperation",
+            "caller_lineno": 0
+          }
+        },
+        {
+          "name": "cancel",
+          "children": [
+            {
+              "name": "langgraph.runs.stream",
+              "type": "task",
+              "children": [],
+              "input": {
+                "messages": [
+                  {
+                    "content": "Hello",
+                    "role": "user"
+                  }
+                ]
+              },
+              "metadata": {
+                "langgraph.assistant_id": "agent",
+                "langgraph.run_id": "remote-run",
+                "langgraph.thread_id": null
+              }
+            }
+          ],
+          "metadata": {
+            "operation": "cancel",
+            "testRunId": "<run:1>"
+          },
+          "context": {
+            "caller_filename": "<repo>/e2e/helpers/provider-runtime.mjs",
+            "caller_functionname": "runOperation",
+            "caller_lineno": 0
+          }
+        },
+        {
+          "name": "http-error",
+          "children": [
+            {
+              "name": "langgraph.runs.wait",
+              "type": "task",
+              "children": [],
+              "input": {
+                "messages": [
+                  {
+                    "content": "Hello",
+                    "role": "user"
+                  }
+                ]
+              },
+              "metadata": {
+                "langgraph.assistant_id": "http-error",
+                "langgraph.thread_id": null
+              },
+              "error": "HTTP 400: {\"detail\":\"Invalid assistant\"}"
+            }
+          ],
+          "metadata": {
+            "operation": "http-error",
+            "testRunId": "<run:1>"
+          },
+          "context": {
+            "caller_filename": "<repo>/e2e/helpers/provider-runtime.mjs",
+            "caller_functionname": "runOperation",
+            "caller_lineno": 0
+          }
+        },
+        {
+          "name": "wait-error",
+          "children": [
+            {
+              "name": "langgraph.runs.wait",
+              "type": "task",
+              "children": [],
+              "input": {
+                "messages": [
+                  {
+                    "content": "Hello",
+                    "role": "user"
+                  }
+                ]
+              },
+              "metadata": {
+                "langgraph.assistant_id": "wait-error",
+                "langgraph.thread_id": null
+              },
+              "error": "ValueError: Agent failed"
+            }
+          ],
+          "metadata": {
+            "operation": "wait-error",
+            "testRunId": "<run:1>"
+          },
+          "context": {
+            "caller_filename": "<repo>/e2e/helpers/provider-runtime.mjs",
+            "caller_functionname": "runOperation",
+            "caller_lineno": 0
+          }
+        },
+        {
+          "name": "wait-error-returned",
+          "children": [
+            {
+              "name": "langgraph.runs.wait",
+              "type": "task",
+              "children": [],
+              "input": {
+                "messages": [
+                  {
+                    "content": "Hello",
+                    "role": "user"
+                  }
+                ]
+              },
+              "output": {
+                "__error__": {
+                  "error": "ValueError",
+                  "message": "Agent failed"
+                }
+              },
+              "metadata": {
+                "langgraph.assistant_id": "wait-error",
+                "langgraph.thread_id": null
+              },
+              "error": "ValueError: Agent failed"
+            }
+          ],
+          "metadata": {
+            "operation": "wait-error-returned",
+            "testRunId": "<run:1>"
+          },
+          "context": {
+            "caller_filename": "<repo>/e2e/helpers/provider-runtime.mjs",
+            "caller_functionname": "runOperation",
+            "caller_lineno": 0
+          }
+        },
+        {
+          "name": "parallel",
+          "children": [
+            {
+              "name": "left",
+              "children": [
+                {
+                  "name": "langgraph.runs.wait",
+                  "type": "task",
+                  "children": [],
+                  "input": "left",
+                  "output": {
+                    "messages": [
+                      {
+                        "content": "Hello world",
+                        "id": "<span:1>",
+                        "type": "ai",
+                        "usage_metadata": {
+                          "input_tokens": 3,
+                          "output_tokens": 2,
+                          "total_tokens": 5
+                        }
+                      }
+                    ]
+                  },
+                  "metadata": {
+                    "langgraph.assistant_id": "agent",
+                    "langgraph.thread_id": "left"
+                  },
+                  "metrics": {
+                    "completion_tokens": 2,
+                    "prompt_tokens": 3,
+                    "tokens": 5
+                  }
+                }
+              ],
+              "metadata": {
+                "operation": "left",
+                "testRunId": "<run:1>"
+              },
+              "context": {
+                "caller_filename": "<repo>/e2e/helpers/provider-runtime.mjs",
+                "caller_functionname": "runOperation",
+                "caller_lineno": 0
+              }
+            },
+            {
+              "name": "right",
+              "children": [
+                {
+                  "name": "langgraph.runs.wait",
+                  "type": "task",
+                  "children": [],
+                  "input": "right",
+                  "output": {
+                    "messages": [
+                      {
+                        "content": "Hello world",
+                        "id": "<span:1>",
+                        "type": "ai",
+                        "usage_metadata": {
+                          "input_tokens": 3,
+                          "output_tokens": 2,
+                          "total_tokens": 5
+                        }
+                      }
+                    ]
+                  },
+                  "metadata": {
+                    "langgraph.assistant_id": "agent",
+                    "langgraph.thread_id": "right"
+                  },
+                  "metrics": {
+                    "completion_tokens": 2,
+                    "prompt_tokens": 3,
+                    "tokens": 5
+                  }
+                }
+              ],
+              "metadata": {
+                "operation": "right",
+                "testRunId": "<run:1>"
+              },
+              "context": {
+                "caller_filename": "<repo>/e2e/helpers/provider-runtime.mjs",
+                "caller_functionname": "runOperation",
+                "caller_lineno": 0
+              }
+            }
+          ],
+          "metadata": {
+            "operation": "parallel",
+            "testRunId": "<run:1>"
+          },
+          "context": {
+            "caller_filename": "<repo>/e2e/helpers/provider-runtime.mjs",
+            "caller_functionname": "runOperation",
+            "caller_lineno": 0
+          }
+        },
+        {
+          "name": "thread-controller",
+          "children": [],
+          "metadata": {
+            "operation": "thread-controller",
+            "testRunId": "<run:1>"
+          },
+          "context": {
+            "caller_filename": "<repo>/e2e/helpers/provider-runtime.mjs",
+            "caller_functionname": "runOperation",
+            "caller_lineno": 0
+          }
+        }
+      ],
+      "metadata": {
+        "scenario": "langgraph-sdk-instrumentation",
+        "testRunId": "<run:1>"
+      },
+      "context": {
+        "caller_filename": "<repo>/e2e/helpers/provider-runtime.mjs",
+        "caller_functionname": "runTracedScenario",
+        "caller_lineno": 0
+      }
+    }
+  ]
+}

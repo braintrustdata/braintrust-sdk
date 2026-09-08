@@ -32,6 +32,7 @@ export interface InstrumentationIntegrationsConfig {
   cloudflareAgents?: boolean;
   langchain?: boolean;
   langgraph?: boolean;
+  langgraphSDK?: boolean;
   langsmith?: boolean;
   voyageai?: boolean;
 }
@@ -118,6 +119,9 @@ const envIntegrationAliases: Record<
   "langchain-js": "langchain",
   "@langchain": "langchain",
   langgraph: "langgraph",
+  langgraphsdk: "langgraphSDK",
+  "langgraph-sdk": "langgraphSDK",
+  "@langchain/langgraph-sdk": "langgraphSDK",
   langsmith: "langsmith",
   voyage: "voyageai",
   "voyage-ai": "voyageai",
@@ -159,6 +163,7 @@ export function getDefaultInstrumentationIntegrations(): Record<
     gitHubCopilot: true,
     langchain: true,
     langgraph: true,
+    langgraphSDK: true,
     langsmith: true,
     voyageai: true,
     piCodingAgent: true,

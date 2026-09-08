@@ -1,0 +1,19 @@
+{
+  "name": "langgraph-sdk-instrumentation-scenario",
+  "private": true,
+  "type": "module",
+  "braintrustScenario": {
+    "bump": {
+      "dependencies": {
+        "langgraph-sdk-v1-latest": {
+          "package": "@langchain/langgraph-sdk",
+          "range": "1"
+        }
+      }
+    }
+  },
+  "dependencies": {
+    "langgraph-sdk-v1": "npm:@langchain/langgraph-sdk@1.9.25",
+    "langgraph-sdk-v1-latest": "npm:@langchain/langgraph-sdk@1.10.2"
+  }
+}

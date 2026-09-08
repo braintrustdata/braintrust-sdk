@@ -24,6 +24,7 @@ import { huggingFaceTransformersConfigs } from "./huggingface-transformers";
 import { langchainConfigs } from "./langchain";
 import { langSmithConfigs } from "./langsmith";
 import { mistralConfigs } from "./mistral";
+import { langGraphSDKConfigs } from "./langgraph-sdk";
 import { ollamaConfigs } from "./ollama";
 import { openAIAgentsCoreConfigs } from "./openai-agents";
 import { openaiConfigs } from "./openai";
@@ -95,6 +96,7 @@ const defaultInstrumentationConfigGroups: readonly InstrumentationConfigGroup[] 
       configs: openRouterAgentConfigs,
     },
     { integrations: ["mistral"], configs: mistralConfigs },
+    { integrations: ["langgraphSDK"], configs: langGraphSDKConfigs },
     { integrations: ["ollama"], configs: ollamaConfigs },
     { integrations: ["googleADK"], configs: googleADKConfigs },
     { integrations: ["cohere"], configs: cohereConfigs },
