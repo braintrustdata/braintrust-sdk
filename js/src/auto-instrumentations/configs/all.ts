@@ -32,6 +32,7 @@ import { openRouterConfigs } from "./openrouter";
 import { openRouterAgentConfigs } from "./openrouter-agent";
 import { piCodingAgentConfigs } from "./pi-coding-agent";
 import { strandsAgentSDKConfigs } from "./strands-agent-sdk";
+import { elevenLabsConfigs } from "./elevenlabs";
 import { voyageAIConfigs } from "./voyageai";
 
 interface InstrumentationConfigGroup {
@@ -118,6 +119,10 @@ const defaultInstrumentationConfigGroups: readonly InstrumentationConfigGroup[] 
     {
       integrations: ["flue"],
       configs: flueConfigs,
+    },
+    {
+      integrations: ["elevenlabs"],
+      configs: elevenLabsConfigs,
     },
     {
       integrations: ["voyageai"],

@@ -777,5 +777,20 @@
         "label": "v1 latest"
       }
     ]
+  },
+  {
+    "scenarioDirName": "elevenlabs-instrumentation",
+    "label": "ElevenLabs Instrumentation",
+    "metadataScenario": "elevenlabs-instrumentation",
+    "variants": [
+      {
+        "variantKey": "elevenlabs-v2",
+        "label": "v2 pinned"
+      },
+      {
+        "variantKey": "elevenlabs-v2-latest",
+        "label": "v2 latest"
+      }
+    ]
   }
 ]
