@@ -57,4 +57,4 @@ export type ScorerArgs<Output, Extra> = {
 
 export type Scorer<Output, Extra> = (
   args: ScorerArgs<Output, Extra>,
-) => SingleScore | Promise<SingleScore>;
+) => Score | Promise<Score>;
