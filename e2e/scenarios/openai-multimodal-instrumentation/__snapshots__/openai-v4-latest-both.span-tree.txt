@@ -399,50 +399,38 @@ span_tree:
     │     "model": "gpt-4o-mini-tts",
     │     "provider": "openai"
     │   }
-    ├── openai.audio.speech.create [llm]
-    │   input: {
-    │     "operation": "speech",
-    │     "parameters": {
-    │       "voice": "coral"
-    │     },
-    │     "prompt": "Hello streaming."
-    │   }
-    │   output: {
-    │     "content": [
-    │       {
-    │         "file": {
-    │           "byte_size": 25728,
-    │           "file_data": {
-    │             "content_type": "audio/mpeg",
-    │             "filename": "speech.mp3",
-    │             "key": "<uuid:1>",
-    │             "type": "braintrust_attachment"
-    │           },
-    │           "filename": "speech.mp3"
-    │         },
-    │         "type": "file"
-    │       }
-    │     ]
-    │   }
-    │   metadata: {
-    │     "model": "gpt-4o-mini-tts",
-    │     "provider": "openai"
-    │   }
-    │   metrics: {
-    │     "completion_tokens": 42,
-    │     "prompt_tokens": 3,
-    │     "time_to_first_token": 0,
-    │     "tokens": 45
-    │   }
-    ├── openai.realtime.session [task]
-    │   metadata: {
-    │     "model": "gpt-realtime-2",
-    │     "provider": "openai"
-    │   }
-    │   error: "The Realtime Beta API is no longer supported. Please use /v1/realtime for the GA API."
-    └── openai.realtime.session [task]
+    └── openai.audio.speech.create [llm]
+        input: {
+          "operation": "speech",
+          "parameters": {
+            "voice": "coral"
+          },
+          "prompt": "Hello streaming."
+        }
+        output: {
+          "content": [
+            {
+              "file": {
+                "byte_size": 25728,
+                "file_data": {
+                  "content_type": "audio/mpeg",
+                  "filename": "speech.mp3",
+                  "key": "<uuid:1>",
+                  "type": "braintrust_attachment"
+                },
+                "filename": "speech.mp3"
+              },
+              "type": "file"
+            }
+          ]
+        }
         metadata: {
-          "model": "gpt-realtime-2",
+          "model": "gpt-4o-mini-tts",
           "provider": "openai"
         }
-        error: "The Realtime Beta API is no longer supported. Please use /v1/realtime for the GA API."
+        metrics: {
+          "completion_tokens": 42,
+          "prompt_tokens": 3,
+          "time_to_first_token": 0,
+          "tokens": 45
+        }

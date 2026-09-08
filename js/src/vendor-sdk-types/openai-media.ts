@@ -1,4 +1,4 @@
-/** Minimal OpenAI image/audio and Realtime surfaces used by instrumentation. */
+/** Minimal OpenAI image/audio surfaces used by instrumentation. */
 export interface OpenAIMediaParams {
   model?: string;
   prompt?: string;
@@ -51,42 +51,5 @@ export interface OpenAIMediaClient {
     speech: { create: OpenAIMediaMethod };
     transcriptions: { create: OpenAIMediaMethod };
     translations: { create: OpenAIMediaMethod };
-  };
-}
-
-export interface OpenAIRealtimeEvent {
-  type: string;
-  response_id?: string;
-  item_id?: string;
-  output_index?: number;
-  content_index?: number;
-  delta?: string;
-  audio?: string;
-  transcript?: string;
-  item?: Record<string, unknown>;
-  session?: Record<string, unknown>;
-  response?: {
-    id?: string;
-    model?: string;
-    status?: string;
-    status_details?: unknown;
-    output?: Array<Record<string, unknown>>;
-    usage?: unknown;
-    [key: string]: unknown;
-  };
-  error?: { message?: string; code?: string };
-}
-
-export interface OpenAIRealtimeConnection {
-  url?: URL;
-  on(event: string, listener: (event: OpenAIRealtimeEvent) => void): unknown;
-  off(event: string, listener: (event: OpenAIRealtimeEvent) => void): unknown;
-  send(event: OpenAIRealtimeEvent): void;
-  close(...args: unknown[]): void;
-  socket?: {
-    addEventListener?(event: string, listener: () => void): void;
-    removeEventListener?(event: string, listener: () => void): void;
-    on?(event: string, listener: () => void): void;
-    off?(event: string, listener: () => void): void;
   };
 }

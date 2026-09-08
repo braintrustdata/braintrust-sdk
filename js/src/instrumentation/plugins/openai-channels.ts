@@ -1,8 +1,6 @@
 import type {
   OpenAIMediaParams,
   OpenAIMediaResponse,
-  OpenAIRealtimeConnection,
-  OpenAIRealtimeEvent,
 } from "../../vendor-sdk-types/openai-media";
 import type { CompiledPrompt } from "../../logger";
 import { channel, defineChannels } from "../core/channel-definitions";
@@ -74,18 +72,6 @@ export const openAIChannels = defineChannels(
       OpenAIMediaResponse,
       OpenAIChannelExtras
     >({ channelName: "audio.translations.create", kind: "async" }),
-    realtimeConnect: channel<
-      [OpenAIRealtimeConnection],
-      OpenAIRealtimeConnection
-    >({ channelName: "realtime.connect", kind: "sync-stream" }),
-    realtimeSend: channel<[OpenAIRealtimeEvent], void>({
-      channelName: "realtime.send",
-      kind: "sync-stream",
-    }),
-    realtimeOn: channel<
-      [string, (event: OpenAIRealtimeEvent) => void],
-      unknown
-    >({ channelName: "realtime.on", kind: "sync-stream" }),
     filesCreateTraced: channel<
       [OpenAIFilesCreateTraceArgs],
       OpenAIFileLike,

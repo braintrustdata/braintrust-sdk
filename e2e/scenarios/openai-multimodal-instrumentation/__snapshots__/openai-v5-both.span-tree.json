@@ -578,26 +578,6 @@
             "time_to_first_token": 0,
             "tokens": 58
           }
-        },
-        {
-          "name": "openai.realtime.session",
-          "type": "task",
-          "children": [],
-          "metadata": {
-            "model": "gpt-realtime-2",
-            "provider": "openai"
-          },
-          "error": "The Realtime Beta API is no longer supported. Please use /v1/realtime for the GA API."
-        },
-        {
-          "name": "openai.realtime.session",
-          "type": "task",
-          "children": [],
-          "metadata": {
-            "model": "gpt-realtime-2",
-            "provider": "openai"
-          },
-          "error": "The Realtime Beta API is no longer supported. Please use /v1/realtime for the GA API."
         }
       ],
       "metadata": {

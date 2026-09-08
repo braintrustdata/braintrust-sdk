@@ -3,8 +3,6 @@ import { afterEach, beforeAll, beforeEach, expect, it } from "vitest";
 import { Attachment, _exportsForTestingOnly, initLogger } from "../../logger";
 import { configureNode } from "../../node/config";
 import { openAIChannels } from "./openai-channels";
-import { wrapOpenAIRealtime } from "../../wrappers/openai-realtime";
-import type { OpenAIRealtimeEvent } from "../../vendor-sdk-types/openai-media";
 configureNode();
 let background: ReturnType<
   typeof _exportsForTestingOnly.useTestBackgroundLogger
@@ -118,75 +116,6 @@ it("does not upload incomplete speech and preserves response identity", async ()
     span_attributes?: { name?: string };
   }>;
   expect(rows.find((row) => row.output)?.output).toEqual({ content: [] });
-});
-
-it("isolates overlapping Realtime turns and finalizes them on remote close", async () => {
-  const listeners = new Map<
-    string,
-    Set<(event: OpenAIRealtimeEvent) => void>
-  >();
-  let remoteClose = () => {};
-  const connection = {
-    on(name: string, listener: (event: OpenAIRealtimeEvent) => void) {
-      const set = listeners.get(name) ?? new Set();
-      set.add(listener);
-      listeners.set(name, set);
-      return this;
-    },
-    off(name: string, listener: (event: OpenAIRealtimeEvent) => void) {
-      listeners.get(name)?.delete(listener);
-      return this;
-    },
-    send(_event: OpenAIRealtimeEvent) {},
-    close() {},
-    socket: {
-      addEventListener(_event: string, listener: () => void) {
-        if (_event === "close") remoteClose = listener;
-      },
-    },
-  };
-  expect(wrapOpenAIRealtime(connection)).toBe(connection);
-  expect(wrapOpenAIRealtime(connection)).toBe(connection);
-  for (const event of [
-    {
-      type: "session.created",
-      session: { model: "future-realtime", client_secret: "secret" },
-    },
-    { type: "response.created", response: { id: "one" } },
-    { type: "response.created", response: { id: "two" } },
-    {
-      type: "response.done",
-      response: {
-        id: "two",
-        status: "completed",
-        output: [],
-        usage: { input_tokens: 3 },
-      },
-    },
-  ])
-    for (const listener of listeners.get("event") ?? []) listener(event);
-  remoteClose();
-  remoteClose();
-  const rows = (await background.drain()) as Array<{
-    error?: string;
-    output?: unknown;
-    metrics?: Record<string, number>;
-    metadata?: Record<string, unknown>;
-    span_attributes?: { name?: string };
-  }>;
-  expect(
-    rows.filter(
-      (row) => row.span_attributes?.name === "openai.realtime.session",
-    ),
-  ).toHaveLength(1);
-  expect(
-    rows.filter(
-      (row) => row.span_attributes?.name === "openai.realtime.response",
-    ),
-  ).toHaveLength(2);
-  expect(rows.some((row) => row.metadata?.status === "interrupted")).toBe(true);
-  expect(JSON.stringify(rows)).not.toContain("secret");
-  expect(listeners.get("event")?.size).toBe(0);
 });
 
 it("copies consumed audio before application mutations", async () => {

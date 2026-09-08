@@ -194,7 +194,6 @@ export {
   wrapOpenAI,
   wrapOpenAIv4,
 } from "./wrappers/oai";
-export { wrapOpenAIRealtime } from "./wrappers/openai-realtime";
 
 export {
   braintrustAISDKTelemetry,

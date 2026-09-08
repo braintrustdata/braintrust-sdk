@@ -1,4 +1,3 @@
-import { interceptOpenAIRealtime } from "./openai-realtime";
 import { interceptOpenAIMedia } from "./openai-media";
 import { BasePlugin } from "../core";
 import {
@@ -49,7 +48,6 @@ export class OpenAIPlugin extends BasePlugin {
   }
 
   protected onEnable(): void {
-    this.unsubscribers.push(...interceptOpenAIRealtime());
     this.unsubscribers.push(
       openAIChannels.filesCreateTraced.intercept(
         interceptOpenAIFilesCreateTraced,

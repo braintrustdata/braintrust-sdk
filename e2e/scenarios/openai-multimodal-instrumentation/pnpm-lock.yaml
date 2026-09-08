@@ -26,9 +26,6 @@ importers:
       openai-v6-latest:
         specifier: npm:openai@6.49.0
         version: openai@6.49.0(ws@8.20.1)
-      ws:
-        specifier: 8.20.1
-        version: 8.20.1
 
 packages:
 
@@ -416,4 +413,5 @@ snapshots:
       tr46: 0.0.3
       webidl-conversions: 3.0.1
 
-  ws@8.20.1: {}
+  ws@8.20.1:
+    optional: true

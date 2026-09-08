@@ -69,7 +69,7 @@ function mediaAttachment(
   return value;
 }
 
-export function mediaUsage(usage: unknown): Record<string, number> {
+function mediaUsage(usage: unknown): Record<string, number> {
   if (!isObject(usage)) return {};
   const metrics: Record<string, number> = {};
   for (const [source, dest] of [

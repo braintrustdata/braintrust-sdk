@@ -26,10 +26,6 @@ for (const major of [4, 5, 6]) {
             },
             env: {
               OPENAI_PACKAGE_NAME: dependency,
-              ...(process.env.BRAINTRUST_E2E_REALTIME_CASSETTE_MODE ===
-                "record" && process.env.OPENAI_API_KEY
-                ? { OPENAI_API_KEY: process.env.OPENAI_API_KEY }
-                : {}),
               INSTRUMENTATION_MODE: mode === "both" ? "wrapped" : mode,
             },
             nodeArgs:
@@ -75,29 +71,6 @@ for (const major of [4, 5, 6]) {
               }
             }
           }
-          const sessions = findAllSpans(events, "openai.realtime.session");
-          const turns = findAllSpans(events, "openai.realtime.response");
-          expect(sessions).toHaveLength(2);
-          const betaRealtime = major === 4 || dependency === "openai-v5";
-          expect(turns).toHaveLength(betaRealtime ? 0 : 8);
-          expect(findAllSpans(events, "get_weather")).toHaveLength(
-            betaRealtime ? 0 : 2,
-          );
-          if (betaRealtime)
-            for (const session of sessions)
-              expect(session.row.error).toContain(
-                "Realtime Beta API is no longer supported",
-              );
-          for (const turn of turns) {
-            expect(
-              sessions.some((session) =>
-                turn.span.parentIds.includes(session.span.id),
-              ),
-            ).toBe(true);
-            if (turn.metadata?.status === "completed")
-              expect(turn.metrics?.tokens).toBeGreaterThan(0);
-          }
-          expect(JSON.stringify(events)).not.toContain("client_secret");
           if (process.env.OPENAI_API_KEY)
             expect(JSON.stringify(events)).not.toContain(
               process.env.OPENAI_API_KEY,
