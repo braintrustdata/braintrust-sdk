@@ -68,7 +68,6 @@ async function main() {
       return items.map((item) => ({
         id: item.id,
         score: {
-          name: "batch_exact",
           score: item.output === item.expected ? 1 : 0,
           metadata: { method: "batch-provider" },
         },
@@ -90,7 +89,6 @@ async function main() {
       scores: [
         function exact({ output, expected }) {
           return {
-            name: "exact",
             score: output === expected ? 1 : 0,
             metadata: { method: "shared-eval-runtime" },
           };

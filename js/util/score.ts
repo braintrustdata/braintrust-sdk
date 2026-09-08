@@ -47,6 +47,9 @@ export interface Score {
   error?: unknown;
 }
 
+// A single result can use the scorer's name; array entries must stay named.
+export type SingleScore = Omit<Score, "name"> & { name?: string };
+
 export type ScorerArgs<Output, Extra> = {
   output: Output;
   expected?: Output;
@@ -54,4 +57,4 @@ export type ScorerArgs<Output, Extra> = {
 
 export type Scorer<Output, Extra> = (
   args: ScorerArgs<Output, Extra>,
-) => Score | Promise<Score>;
+) => SingleScore | Promise<SingleScore>;
