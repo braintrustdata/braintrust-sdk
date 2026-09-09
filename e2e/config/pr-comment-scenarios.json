@@ -777,5 +777,20 @@
         "label": "v1 latest"
       }
     ]
+  },
+  {
+    "scenarioDirName": "anthropic-vertex-instrumentation",
+    "label": "Anthropic Vertex Instrumentation",
+    "metadataScenario": "anthropic-vertex-instrumentation",
+    "variants": [
+      {
+        "variantKey": "anthropic-vertex-v0",
+        "label": "v0 pinned"
+      },
+      {
+        "variantKey": "anthropic-vertex-v0-latest",
+        "label": "v0 latest"
+      }
+    ]
   }
 ]
