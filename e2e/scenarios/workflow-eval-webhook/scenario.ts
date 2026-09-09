@@ -58,7 +58,6 @@ async function main() {
       const item = jobs.get(submissionData.id)!;
       return {
         score: {
-          name: "workflow_exact",
           score: item.output === item.expected ? 1 : 0,
           metadata: { method: "workflow-provider" },
         },
@@ -82,7 +81,6 @@ async function main() {
         function exact({ output, expected }) {
           localScoreCount++;
           return {
-            name: "exact",
             score: output === expected ? 1 : 0,
             metadata: { method: "shared-eval-runtime" },
           };
