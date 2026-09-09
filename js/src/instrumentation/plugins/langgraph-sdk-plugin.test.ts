@@ -175,6 +175,178 @@ describe("LangGraph SDK instrumentation", () => {
     expect(await backgroundLogger.drain()).toMatchObject([{ output: null }]);
   });
 
+  it("normalizes messages without changing model responses or unrelated graph state", async () => {
+    const content = [
+      {
+        type: "image_url",
+        image_url: { url: "https://example.com/image.png" },
+      },
+    ];
+    const state = Object.freeze({
+      messages: [
+        {
+          type: "human",
+          content,
+          additional_kwargs: {},
+          response_metadata: {},
+        },
+        {
+          id: "answer",
+          type: "ai",
+          content: "",
+          additional_kwargs: {},
+          response_metadata: { internal: "omit" },
+          tool_calls: [
+            { id: "call-1", name: "search", args: { query: "hello" } },
+          ],
+          invalid_tool_calls: [],
+          tool_call_chunks: [],
+          usage_metadata: {
+            input_tokens: 3,
+            output_tokens: 2,
+            total_tokens: 5,
+          },
+        },
+        {
+          type: "tool",
+          content: "found",
+          name: "search",
+          tool_call_id: "call-1",
+        },
+      ],
+      application_state: { additional_kwargs: { preserve: true }, score: 0.9 },
+    });
+    const result = await langGraphSDKChannels.wait.invoke(
+      async () => state,
+      undefined,
+      [null, "agent", { input: state }],
+      {},
+    );
+    expect(result).toBe(state);
+    expect(state.messages[1]).toHaveProperty("usage_metadata");
+    const [span] = await backgroundLogger.drain();
+    const normalized = {
+      messages: [
+        { role: "user", content },
+        {
+          role: "assistant",
+          content: "",
+          tool_calls: [
+            {
+              id: "call-1",
+              type: "function",
+              function: { name: "search", arguments: '{"query":"hello"}' },
+            },
+          ],
+        },
+        {
+          role: "tool",
+          content: "found",
+          name: "search",
+          tool_call_id: "call-1",
+        },
+      ],
+      application_state: state.application_state,
+    };
+    expect(span).toHaveProperty("input", normalized);
+    expect(span).toHaveProperty("output", normalized);
+  });
+
+  it("combines message deltas and update snapshots without duplication or losing state updates", async () => {
+    const usage = { input_tokens: 3, output_tokens: 2, total_tokens: 5 };
+    const stream = langGraphSDKChannels.stream.invoke(
+      async function* () {
+        yield {
+          event: "messages",
+          data: [
+            { id: "answer", type: "AIMessageChunk", content: "hello " },
+            {},
+          ],
+        };
+        yield {
+          event: "messages",
+          data: [
+            {
+              id: "answer",
+              type: "AIMessageChunk",
+              content: "world",
+              usage_metadata: usage,
+            },
+            {},
+          ],
+        };
+        yield {
+          event: "updates",
+          data: {
+            agent: {
+              messages: [
+                {
+                  id: "answer",
+                  type: "ai",
+                  content: "hello world",
+                  usage_metadata: usage,
+                },
+              ],
+              score: 0.9,
+            },
+          },
+        };
+      },
+      undefined,
+      [null, "agent"],
+      {},
+    );
+    for await (const _ of stream) {
+      /* drain */
+    }
+    const [span] = await backgroundLogger.drain();
+    expect(span).toHaveProperty("output", {
+      messages: [{ role: "assistant", content: "hello world" }],
+      updates: [{ agent: { score: 0.9 } }],
+    });
+    expect(span).toMatchObject({
+      metrics: { prompt_tokens: 3, completion_tokens: 2, tokens: 5 },
+    });
+  });
+
+  it.each(["", "Error: "])(
+    "unwraps serialized remote errors with prefix '%s' only in logged data",
+    async (prefix) => {
+      const error = new Error(
+        prefix +
+          JSON.stringify({ error: "ValueError", message: "Agent failed" }),
+      );
+      const returned = {
+        __error__: { error: "Error", message: error.message },
+      };
+      await expect(
+        langGraphSDKChannels.wait.invoke(
+          async () => {
+            throw error;
+          },
+          undefined,
+          [null, "failing"],
+          {},
+        ),
+      ).rejects.toBe(error);
+      expect(
+        await langGraphSDKChannels.wait.invoke(
+          async () => returned,
+          undefined,
+          [null, "failing"],
+          {},
+        ),
+      ).toBe(returned);
+      const spans = await backgroundLogger.drain();
+      expect(spans).toHaveLength(2);
+      for (const span of spans)
+        expect(span).toHaveProperty("error", "Agent failed");
+      expect(spans[1]).toHaveProperty("output", {
+        __error__: { error: "ValueError", message: "Agent failed" },
+      });
+    },
+  );
+
   it("leaves unsupported wrapper inputs untouched", () => {
     for (const value of [null, undefined, {}, { runs: {} }])
       expect(wrapLangGraphSDK(value)).toBe(value);

@@ -1,0 +1,377 @@
+span_tree:
+└── LangGraph SDK 1.10.2 (esm, wrapped) [task]
+    input: {
+      "description": "Verify synchronous LangGraph run APIs",
+      "prompt": {
+        "messages": [
+          {
+            "content": "Reply with exactly: hello from langgraph",
+            "role": "user"
+          }
+        ]
+      }
+    }
+    output: {
+      "expected_error_cases": 4,
+      "status": "passed"
+    }
+    metadata: {
+      "expected_error_cases": 4,
+      "instrumentation_mode": "wrapped",
+      "module": "esm",
+      "scenario": "langgraph-sdk-instrumentation",
+      "sdk_version": "1.10.2",
+      "testRunId": "<run:1>"
+    }
+    context: {
+      "caller_filename": "<repo>/e2e/helpers/provider-runtime.mjs",
+      "caller_functionname": "runTracedScenario",
+      "caller_lineno": 0
+    }
+    ├── langgraph.runs.wait [task]
+    │   input: {
+    │     "messages": [
+    │       {
+    │         "content": "Reply with exactly: hello from langgraph",
+    │         "role": "user"
+    │       }
+    │     ]
+    │   }
+    │   output: {
+    │     "messages": [
+    │       {
+    │         "content": "Reply with exactly: hello from langgraph",
+    │         "role": "user"
+    │       },
+    │       {
+    │         "content": "hello from langgraph",
+    │         "role": "assistant"
+    │       }
+    │     ]
+    │   }
+    │   metadata: {
+    │     "langgraph.assistant_id": "agent",
+    │     "langgraph.thread_id": null
+    │   }
+    │   metrics: {
+    │     "completion_tokens": 4,
+    │     "prompt_tokens": 15,
+    │     "tokens": 19
+    │   }
+    ├── langgraph.runs.wait [task]
+    │   input: {
+    │     "messages": [
+    │       {
+    │         "content": "Reply with exactly: hello from langgraph",
+    │         "role": "user"
+    │       }
+    │     ]
+    │   }
+    │   output: {
+    │     "__interrupt__": [
+    │       {
+    │         "id": "<span:1>",
+    │         "value": "Approve the model call?"
+    │       }
+    │     ]
+    │   }
+    │   metadata: {
+    │     "langgraph.assistant_id": "approval",
+    │     "langgraph.thread_id": "<uuid:1>"
+    │   }
+    ├── langgraph.runs.wait [task]
+    │   input: {
+    │     "command": {
+    │       "resume": "yes"
+    │     }
+    │   }
+    │   output: {
+    │     "messages": [
+    │       {
+    │         "content": "Reply with exactly: hello from langgraph",
+    │         "role": "user"
+    │       },
+    │       {
+    │         "content": "hello from langgraph",
+    │         "role": "assistant"
+    │       }
+    │     ]
+    │   }
+    │   metadata: {
+    │     "langgraph.assistant_id": "approval",
+    │     "langgraph.thread_id": "<uuid:1>"
+    │   }
+    │   metrics: {
+    │     "completion_tokens": 4,
+    │     "prompt_tokens": 15,
+    │     "tokens": 19
+    │   }
+    ├── langgraph.runs.wait [task]
+    │   input: {
+    │     "messages": [
+    │       {
+    │         "content": "Reply with exactly: hello from langgraph",
+    │         "role": "user"
+    │       }
+    │     ]
+    │   }
+    │   metadata: {
+    │     "langgraph.assistant_id": "missing-assistant",
+    │     "langgraph.thread_id": null
+    │   }
+    │   error: "HTTP 404: No assistant found for \"missing-assistant\". Make sure the assistant ID is for a valid assistant or a valid graph ID."
+    ├── langgraph.runs.wait [task]
+    │   input: {
+    │     "messages": [
+    │       {
+    │         "content": "Reply with exactly: hello from langgraph",
+    │         "role": "user"
+    │       }
+    │     ]
+    │   }
+    │   metadata: {
+    │     "langgraph.assistant_id": "failing",
+    │     "langgraph.thread_id": null
+    │   }
+    │   error: "Agent failed"
+    ├── langgraph.runs.wait [task]
+    │   input: {
+    │     "messages": [
+    │       {
+    │         "content": "Reply with exactly: hello from langgraph",
+    │         "role": "user"
+    │       }
+    │     ]
+    │   }
+    │   output: {
+    │     "__error__": {
+    │       "error": "Error",
+    │       "message": "Agent failed"
+    │     }
+    │   }
+    │   metadata: {
+    │     "langgraph.assistant_id": "failing",
+    │     "langgraph.thread_id": null
+    │   }
+    │   error: "Agent failed"
+    ├── langgraph.runs.stream [task]
+    │   input: {
+    │     "messages": [
+    │       {
+    │         "content": "Reply with exactly: hello from langgraph",
+    │         "role": "user"
+    │       }
+    │     ]
+    │   }
+    │   output: {
+    │     "messages": [
+    │       {
+    │         "content": "Reply with exactly: hello from langgraph",
+    │         "role": "user"
+    │       },
+    │       {
+    │         "content": "hello from langgraph",
+    │         "role": "assistant"
+    │       }
+    │     ]
+    │   }
+    │   metadata: {
+    │     "langgraph.assistant_id": "agent",
+    │     "langgraph.run_id": "<uuid:1>",
+    │     "langgraph.thread_id": null,
+    │     "streamMode": [
+    │       "values",
+    │       "messages",
+    │       "updates"
+    │     ],
+    │     "streamSubgraphs": true
+    │   }
+    │   metrics: {
+    │     "completion_tokens": 4,
+    │     "prompt_tokens": 15,
+    │     "time_to_first_token": 0,
+    │     "tokens": 19
+    │   }
+    ├── langgraph.runs.stream [task]
+    │   input: {
+    │     "messages": [
+    │       {
+    │         "content": "Reply with exactly: hello from langgraph",
+    │         "role": "user"
+    │       }
+    │     ]
+    │   }
+    │   output: {
+    │     "messages": [
+    │       {
+    │         "content": "hello from langgraph",
+    │         "role": "assistant"
+    │       }
+    │     ]
+    │   }
+    │   metadata: {
+    │     "langgraph.assistant_id": "agent",
+    │     "langgraph.run_id": "<uuid:1>",
+    │     "langgraph.thread_id": null,
+    │     "streamMode": [
+    │       "messages"
+    │     ],
+    │     "streamSubgraphs": true
+    │   }
+    │   metrics: {
+    │     "completion_tokens": 4,
+    │     "prompt_tokens": 15,
+    │     "time_to_first_token": 0,
+    │     "tokens": 19
+    │   }
+    ├── langgraph.runs.stream [task]
+    │   input: {
+    │     "messages": [
+    │       {
+    │         "content": "Reply with exactly: hello from langgraph",
+    │         "role": "user"
+    │       }
+    │     ]
+    │   }
+    │   output: {
+    │     "messages": [
+    │       {
+    │         "content": "hello from langgraph",
+    │         "role": "assistant"
+    │       }
+    │     ]
+    │   }
+    │   metadata: {
+    │     "langgraph.assistant_id": "agent",
+    │     "langgraph.run_id": "<uuid:1>",
+    │     "langgraph.thread_id": null,
+    │     "streamMode": [
+    │       "updates"
+    │     ],
+    │     "streamSubgraphs": true
+    │   }
+    │   metrics: {
+    │     "completion_tokens": 4,
+    │     "prompt_tokens": 15,
+    │     "time_to_first_token": 0,
+    │     "tokens": 19
+    │   }
+    ├── langgraph.runs.stream [task]
+    │   input: {
+    │     "messages": [
+    │       {
+    │         "content": "Reply with exactly: hello from langgraph",
+    │         "role": "user"
+    │       }
+    │     ]
+    │   }
+    │   output: {
+    │     "messages": [
+    │       {
+    │         "content": "Reply with exactly: hello from langgraph",
+    │         "role": "user"
+    │       }
+    │     ]
+    │   }
+    │   metadata: {
+    │     "langgraph.assistant_id": "failing",
+    │     "langgraph.run_id": "<uuid:1>",
+    │     "langgraph.thread_id": null,
+    │     "streamMode": [
+    │       "values",
+    │       "messages"
+    │     ],
+    │     "streamSubgraphs": true
+    │   }
+    │   error: "Agent failed"
+    ├── langgraph.runs.stream [task]
+    │   input: {
+    │     "messages": [
+    │       {
+    │         "content": "Reply with exactly: hello from langgraph",
+    │         "role": "user"
+    │       }
+    │     ]
+    │   }
+    │   metadata: {
+    │     "interruptBefore": [
+    │       "agent"
+    │     ],
+    │     "langgraph.assistant_id": "agent",
+    │     "langgraph.run_id": "<uuid:1>",
+    │     "langgraph.thread_id": null
+    │   }
+    └── Concurrent runs
+        input: [
+          "left",
+          "right"
+        ]
+        output: [
+          "left",
+          "right"
+        ]
+        context: {
+          "caller_filename": "<repo>/e2e/scenarios/langgraph-sdk-instrumentation/scenario.mjs",
+          "caller_functionname": "Object.callback",
+          "caller_lineno": 0
+        }
+        ├── langgraph.runs.wait [task]
+        │   input: {
+        │     "messages": [
+        │       {
+        │         "content": "Reply with exactly: left",
+        │         "role": "user"
+        │       }
+        │     ]
+        │   }
+        │   output: {
+        │     "messages": [
+        │       {
+        │         "content": "Reply with exactly: left",
+        │         "role": "user"
+        │       },
+        │       {
+        │         "content": "left",
+        │         "role": "assistant"
+        │       }
+        │     ]
+        │   }
+        │   metadata: {
+        │     "langgraph.assistant_id": "agent",
+        │     "langgraph.thread_id": null
+        │   }
+        │   metrics: {
+        │     "completion_tokens": 1,
+        │     "prompt_tokens": 12,
+        │     "tokens": 13
+        │   }
+        └── langgraph.runs.wait [task]
+            input: {
+              "messages": [
+                {
+                  "content": "Reply with exactly: right",
+                  "role": "user"
+                }
+              ]
+            }
+            output: {
+              "messages": [
+                {
+                  "content": "Reply with exactly: right",
+                  "role": "user"
+                },
+                {
+                  "content": "right",
+                  "role": "assistant"
+                }
+              ]
+            }
+            metadata: {
+              "langgraph.assistant_id": "agent",
+              "langgraph.thread_id": null
+            }
+            metrics: {
+              "completion_tokens": 1,
+              "prompt_tokens": 12,
+              "tokens": 13
+            }

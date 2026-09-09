@@ -36,6 +36,124 @@ export class LangGraphSDKPlugin extends BasePlugin {
   }
 }
 
+// Normalize only message fields; arbitrary graph state is application data.
+function normalizeMessage(value: unknown): unknown {
+  if (!isObject(value)) return value;
+  const role =
+    value.role ??
+    (value.type === "human"
+      ? "user"
+      : value.type === "ai" || value.type === "AIMessageChunk"
+        ? "assistant"
+        : value.type === "system" ||
+            value.type === "tool" ||
+            value.type === "function"
+          ? value.type
+          : undefined);
+  if (typeof role !== "string") return value;
+  const message: Record<string, unknown> = {
+    role,
+    content: value.content ?? "",
+  };
+  for (const key of ["name", "tool_call_id", "refusal"] as const) {
+    if (value[key] !== undefined) message[key] = value[key];
+  }
+  const additional = isObject(value.additional_kwargs)
+    ? value.additional_kwargs
+    : {};
+  const toolCalls =
+    Array.isArray(value.tool_calls) && value.tool_calls.length
+      ? value.tool_calls
+      : additional.tool_calls;
+  if (Array.isArray(toolCalls) && toolCalls.length > 0) {
+    message.tool_calls = toolCalls.map((call) => {
+      if (!isObject(call)) return call;
+      if (isObject(call.function)) return call;
+      return {
+        id: call.id,
+        type: "function",
+        function: {
+          name: call.name,
+          arguments:
+            typeof call.args === "string"
+              ? call.args
+              : JSON.stringify(call.args ?? {}),
+        },
+      };
+    });
+  }
+  // Invalid calls and refusals are meaningful output, unlike empty SDK fields.
+  if (
+    Array.isArray(value.invalid_tool_calls) &&
+    value.invalid_tool_calls.length > 0
+  )
+    message.invalid_tool_calls = value.invalid_tool_calls;
+  if (message.refusal === undefined && additional.refusal !== undefined)
+    message.refusal = additional.refusal;
+  return message;
+}
+
+function normalizeRunError(value: unknown): unknown {
+  let name: string;
+  let message: string;
+  if (value instanceof Error) {
+    name = value.name;
+    message = value.message;
+  } else if (
+    isObject(value) &&
+    typeof value.error === "string" &&
+    typeof value.message === "string"
+  ) {
+    name = value.error;
+    message = value.message;
+  } else {
+    return value;
+  }
+  // The server may serialize a graph exception into another exception's message.
+  for (let depth = 0; depth < 3; depth++) {
+    try {
+      const nested: unknown = JSON.parse(
+        message.startsWith(`${name}: `)
+          ? message.slice(name.length + 2)
+          : message,
+      );
+      if (
+        !isObject(nested) ||
+        typeof nested.error !== "string" ||
+        typeof nested.message !== "string"
+      )
+        break;
+      name = nested.error;
+      message = nested.message;
+    } catch {
+      break;
+    }
+  }
+  if (
+    value instanceof Error &&
+    name === value.name &&
+    message === value.message
+  )
+    return value;
+  return Object.assign(new Error(message), { name });
+}
+
+function normalizeState(value: unknown): unknown {
+  if (!isObject(value)) return value;
+  return Object.fromEntries(
+    Object.entries(value).map(([key, field]) => {
+      if (key === "messages" && Array.isArray(field))
+        return [key, field.map(normalizeMessage)];
+      if (key === "__error__") {
+        const error = normalizeRunError(field);
+        if (error instanceof Error)
+          return [key, { error: error.name, message: error.message }];
+      }
+      return [key, field];
+    }),
+  );
+}
+
 function instrumentRun<T>(
   operation: "wait" | "stream",
   [threadId, assistantId, options]: LangGraphRunArgs,
@@ -69,8 +187,11 @@ function instrumentRun<T>(
           event: {
             input:
               options?.command === undefined
-                ? options?.input
-                : { input: options.input, command: options.command },
+                ? normalizeState(options?.input)
+                : {
+                    input: normalizeState(options.input),
+                    command: options.command,
+                  },
             metadata,
           },
         },
@@ -109,6 +230,7 @@ function instrumentRun<T>(
     usageByMessage.set(id, { ...usageByMessage.get(id), ...metrics });
   };
   const messages = new Map<string, Record<string, unknown>>();
+  const messageSnapshots = new Map<string, Record<string, unknown>>();
   const finish = (error?: unknown) => {
     if (ended) return;
     ended = true;
@@ -120,17 +242,23 @@ function instrumentRun<T>(
       }
       if (firstToken !== undefined)
         metrics.time_to_first_token = firstToken - start;
+      const finalMessages = [
+        ...new Map([...messages, ...messageSnapshots]).values(),
+      ];
       span.log({
         output:
           output !== undefined
-            ? output
-            : messages.size
-              ? { messages: [...messages.values()] }
-              : updates.length
-                ? updates
-                : undefined,
+            ? normalizeState(output)
+            : finalMessages.length || updates.length
+              ? {
+                  ...(finalMessages.length
+                    ? { messages: finalMessages.map(normalizeMessage) }
+                    : {}),
+                  ...(updates.length ? { updates } : {}),
+                }
+              : undefined,
         ...(error !== undefined || streamError !== undefined
-          ? { error: error ?? streamError }
+          ? { error: normalizeRunError(error ?? streamError) }
           : {}),
         metrics,
       });
@@ -188,16 +316,36 @@ function instrumentRun<T>(
       if (typeof data.run_id === "string")
         span.log({ metadata: { "langgraph.run_id": data.run_id } });
     } else if (event === "error") {
-      streamError = isObject(data)
-        ? new Error(`${data.error ?? "Error"}: ${data.message ?? "Run failed"}`)
-        : data;
+      streamError = normalizeRunError(data);
     } else if (event === "values") {
       output = data;
       observeMessages(data, true);
     } else if (event === "updates") {
-      updates.push(data);
       if (isObject(data)) {
-        for (const update of Object.values(data)) observeMessages(update, true);
+        const stateUpdates: Array<[string, unknown]> = [];
+        for (const [node, update] of Object.entries(data)) {
+          observeMessages(update, true);
+          if (isObject(update) && Array.isArray(update.messages)) {
+            for (const message of update.messages) {
+              if (isObject(message))
+                messageSnapshots.set(
+                  typeof message.id === "string"
+                    ? message.id
+                    : `update-${messageSnapshots.size}`,
+                  message,
+                );
+            }
+            const state = Object.fromEntries(
+              Object.entries(update).filter(([key]) => key !== "messages"),
+            );
+            if (Object.keys(state).length) stateUpdates.push([node, state]);
+          } else {
+            stateUpdates.push([node, update]);
+          }
+        }
+        if (stateUpdates.length) updates.push(Object.fromEntries(stateUpdates));
+      } else {
+        updates.push(data);
       }
     } else if (
       (event === "messages" ||
@@ -268,9 +416,7 @@ function instrumentRun<T>(
           output = value;
           observeMessages(value, false);
           if (isObject(value) && isObject(value.__error__))
-            streamError = new Error(
-              `${value.__error__.error}: ${value.__error__.message}`,
-            );
+            streamError = normalizeRunError(value.__error__);
           finish();
         } catch (error) {
           finish(error);

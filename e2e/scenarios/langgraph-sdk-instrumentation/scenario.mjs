@@ -3,11 +3,7 @@ import { fork } from "node:child_process";
 import { once } from "node:events";
 import { createRequire } from "node:module";
 import * as braintrust from "braintrust";
-import {
-  runMain,
-  runTracedScenario,
-  runOperation,
-} from "../../helpers/provider-runtime.mjs";
+import { runMain, runTracedScenario } from "../../helpers/provider-runtime.mjs";
 
 const packageName = process.env.LANGGRAPH_SDK_PACKAGE;
 const { Client } =
@@ -56,129 +52,132 @@ runMain(async () => {
       config: { configurable: { secret: "DO_NOT_CAPTURE" } },
       context: { secret: "DO_NOT_CAPTURE" },
     };
+    const expectedUsage = {};
     await runTracedScenario({
       projectNameBase: "tmp-luca-langgraph-sdk-e2e",
-      rootName: "langgraph-sdk-instrumentation",
-      metadata: { scenario: "langgraph-sdk-instrumentation" },
+      rootName: `LangGraph SDK ${process.env.LANGGRAPH_SDK_VERSION} (${process.env.LANGGRAPH_SDK_MODULE}, ${process.env.LANGGRAPH_SDK_MODE})`,
+      metadata: {
+        scenario: "langgraph-sdk-instrumentation",
+        sdk_version: process.env.LANGGRAPH_SDK_VERSION,
+        module: process.env.LANGGRAPH_SDK_MODULE,
+        instrumentation_mode: process.env.LANGGRAPH_SDK_MODE,
+        expected_error_cases: 4,
+      },
       callback: async () => {
-        await runOperation("create", "create", async () => {
-          const thread = await client.threads.create();
-          const run = await client.runs.create(
-            thread.thread_id,
-            "agent",
-            options,
-          );
-          assert.ok(run.run_id);
-          await client.runs.join(thread.thread_id, run.run_id);
-          assert.equal(
-            (await client.runs.get(thread.thread_id, run.run_id)).status,
-            "success",
-          );
+        const root = braintrust.currentSpan();
+        root.log({
+          input: {
+            description: "Verify synchronous LangGraph run APIs",
+            prompt: input,
+          },
         });
-        await runOperation("wait", "wait", async () => {
-          const state = await client.runs.wait(null, "agent", options);
-          assert.ok(state.messages.at(-1).content.length > 0);
-          assert.ok(state.messages.at(-1).usage_metadata.total_tokens > 0);
-        });
+        // Background submission and joining remain usable but uninstrumented.
+        const background = await client.threads.create();
+        const run = await client.runs.create(
+          background.thread_id,
+          "agent",
+          options,
+        );
+        await client.runs.join(background.thread_id, run.run_id);
+        assert.equal(
+          (await client.runs.get(background.thread_id, run.run_id)).status,
+          "success",
+        );
+
+        const state = await client.runs.wait(null, "agent", options);
+        assert.ok(state.messages.at(-1).content.length > 0);
+        expectedUsage.wait = state.messages.at(-1).usage_metadata;
+
         const thread = await client.threads.create();
-        await runOperation("interrupt", "interrupt", async () => {
-          const state = await client.runs.wait(
-            thread.thread_id,
-            "approval",
-            options,
-          );
-          assert.equal(state.__interrupt__[0].value, "Approve the model call?");
+        const interrupted = await client.runs.wait(
+          thread.thread_id,
+          "approval",
+          options,
+        );
+        assert.equal(
+          interrupted.__interrupt__[0].value,
+          "Approve the model call?",
+        );
+        const resumed = await client.runs.wait(thread.thread_id, "approval", {
+          command: { resume: "yes" },
         });
-        await runOperation("resume", "resume", async () => {
-          const state = await client.runs.wait(thread.thread_id, "approval", {
-            command: { resume: "yes" },
-          });
-          assert.ok(state.messages.at(-1).content.length > 0);
-          assert.ok(state.messages.at(-1).usage_metadata.total_tokens > 0);
-        });
+        assert.ok(resumed.messages.at(-1).content.length > 0);
+        expectedUsage.resume = resumed.messages.at(-1).usage_metadata;
+
         for (const [name, streamMode] of [
           ["values", ["values", "messages", "updates"]],
           ["messages", ["messages"]],
           ["updates", ["updates"]],
           ["stream-error", ["values", "messages"]],
         ]) {
-          await runOperation(name, name, async () => {
-            const stream = client.runs.stream(
-              null,
-              name === "stream-error" ? "failing" : "agent",
-              {
-                ...options,
-                streamMode,
-                streamSubgraphs: true,
-              },
-            );
-            assert.equal(stream[Symbol.asyncIterator](), stream);
-            assert.equal(typeof stream.return, "function");
-            const events = [];
-            for await (const event of stream) events.push(event);
-            if (name === "values") {
-              const final = events
-                .filter((event) => event.event === "values")
-                .at(-1).data;
-              assert.ok(final.messages.at(-1).content.length > 0);
-              assert.ok(final.messages.at(-1).usage_metadata.total_tokens > 0);
-            }
-            if (name === "messages")
-              assert.ok(
-                events.some((event) => event.event.startsWith("messages")),
-              );
-            if (name === "updates")
-              assert.ok(
-                events.some(
-                  (event) => event.event === "updates" && event.data.agent,
-                ),
-              );
-            if (name === "stream-error")
-              assert.equal(events.at(-1).event, "error");
-            await braintrust.traced(() => {}, { name: "after-stream" });
-          });
+          const stream = client.runs.stream(
+            null,
+            name === "stream-error" ? "failing" : "agent",
+            {
+              ...options,
+              streamMode,
+              streamSubgraphs: true,
+            },
+          );
+          assert.equal(stream[Symbol.asyncIterator](), stream);
+          assert.equal(typeof stream.return, "function");
+          const events = [];
+          for await (const event of stream) {
+            events.push(event);
+            assert.equal(braintrust.currentSpan().id, root.id);
+          }
+          assert.equal(braintrust.currentSpan().id, root.id);
+          if (name === "stream-error") {
+            assert.equal(events.at(-1).event, "error");
+          } else {
+            const messages = events.flatMap(({ event, data }) => {
+              if (event === "values") return data.messages ?? [];
+              if (event === "updates")
+                return Object.values(data).flatMap(
+                  (update) => update.messages ?? [],
+                );
+              if (event === "messages") return [data[0]];
+              if (event.startsWith("messages/")) return data;
+              return [];
+            });
+            expectedUsage[name] = messages
+              .filter((message) => message.usage_metadata)
+              .at(-1).usage_metadata;
+            assert.ok(expectedUsage[name].total_tokens > 0);
+          }
         }
-        await runOperation("cancel", "cancel", async () => {
-          // Interrupt before generation so disconnect timing cannot leave an
-          // in-flight model request in the cassette or affect subsequent runs.
-          const stream = client.runs.stream(null, "agent", {
-            ...options,
-            interruptBefore: ["agent"],
-            onDisconnect: "cancel",
-          });
-          assert.equal((await stream.next()).value.event, "metadata");
-          await stream.return();
+        // Interrupt before generation so disconnect timing cannot leave an
+        // in-flight model request in the cassette or affect subsequent runs.
+        const cancelled = client.runs.stream(null, "agent", {
+          ...options,
+          interruptBefore: ["agent"],
+          onDisconnect: "cancel",
         });
-        await runOperation("http-error", "http-error", async () => {
-          await assert.rejects(
-            client.runs.wait(null, "missing-assistant", options),
-            /HTTP 404: No assistant found/,
-          );
-        });
-        await runOperation("wait-error", "wait-error", async () => {
-          await assert.rejects(
-            client.runs.wait(null, "failing", options),
-            /Agent failed/,
-          );
-        });
-        await runOperation(
-          "wait-error-returned",
-          "wait-error-returned",
-          async () => {
-            assert.ok(
-              (
-                await client.runs.wait(null, "failing", {
-                  ...options,
-                  raiseError: false,
-                })
-              ).__error__,
-            );
-          },
+        assert.equal((await cancelled.next()).value.event, "metadata");
+        await cancelled.return();
+        assert.equal(braintrust.currentSpan().id, root.id);
+
+        await assert.rejects(
+          client.runs.wait(null, "missing-assistant", options),
+          /HTTP 404: No assistant found/,
         );
-        await runOperation("parallel", "parallel", async () => {
-          await Promise.all(
-            ["left", "right"].map((name) =>
-              runOperation(name, name, async () => {
+        await assert.rejects(
+          client.runs.wait(null, "failing", options),
+          /Agent failed/,
+        );
+        assert.ok(
+          (
+            await client.runs.wait(null, "failing", {
+              ...options,
+              raiseError: false,
+            })
+          ).__error__,
+        );
+
+        await braintrust.traced(
+          async (span) => {
+            const answers = await Promise.all(
+              ["left", "right"].map(async (name) => {
                 const state = await client.runs.wait(null, "agent", {
                   input: {
                     messages: [
@@ -186,13 +185,22 @@ runMain(async () => {
                     ],
                   },
                 });
-                assert.ok(state.messages.at(-1).content.includes(name));
+                const answer = state.messages.at(-1);
+                assert.ok(answer.content.includes(name));
+                expectedUsage[name] = answer.usage_metadata;
+                return answer.content;
               }),
-            ),
-          );
-        });
+            );
+            span.log({ input: ["left", "right"], output: answers });
+          },
+          { name: "Concurrent runs" },
+        );
+        root.log({ output: { status: "passed", expected_error_cases: 4 } });
       },
     });
+    // Compare logged metrics with the untouched real SDK responses, outside
+    // the trace payload so usage is not duplicated in the displayed messages.
+    console.log(`LANGGRAPH_EXPECTED_USAGE ${JSON.stringify(expectedUsage)}`);
   } finally {
     if (server.connected) server.disconnect();
     const killTimer = setTimeout(() => server.kill("SIGKILL"), 5_000);
