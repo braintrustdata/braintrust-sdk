@@ -361,3 +361,5 @@ export {
   braintrustFlueInstrumentation,
 } from "./instrumentation";
 export type { InstrumentationConfig } from "./instrumentation";
+
+export { wrapElevenLabs } from "./wrappers/elevenlabs";

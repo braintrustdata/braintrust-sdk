@@ -40,6 +40,8 @@ Try not to use specific test narrowing commands unless hunting down a very nasty
 
 Cassettes mock provider HTTP responses (OpenAI, Anthropic, ...) so external-provider scenarios replay in CI without provider keys. The harness starts a local `@braintrust/seinfeld` cassette server and points provider SDK base URL env vars at that server, so subprocesses and SDK-launched binaries are covered too.
 
+- Default to cheap provider models for real API calls and cassette recordings, unless the user explicitly requests otherwise. Choose a model that supports the behavior under test, and keep prompts, output limits, and media duration small while preserving meaningful coverage.
+
 - External-provider tests should thread `runContext: { variantKey: "...", originalScenarioDir }` into the scenario runner. In normal replay mode, missing cassette entries fail loudly instead of skipping or falling back to live providers. In `record` / `record-missing` mode, they run so new cassettes can be authored.
 - Thread `runContext: { variantKey: "...", originalScenarioDir }` into `runScenarioDir`/`runNodeScenarioDir`. Cassettes live at `e2e/scenarios/<name>/__cassettes__/<variantKey>.cassette.json` (parallel to `__snapshots__/`). Only set `runContext.cassette` explicitly for unusual cases, such as `cassette: false` on a non-provider mode inside an otherwise provider-backed scenario.
 - To re-record after changing a scenario:

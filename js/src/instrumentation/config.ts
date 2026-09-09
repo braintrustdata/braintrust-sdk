@@ -35,6 +35,7 @@ export interface InstrumentationIntegrationsConfig {
   langgraph?: boolean;
   langsmith?: boolean;
   voyageai?: boolean;
+  elevenlabs?: boolean;
 }
 
 export interface InstrumentationConfig {
@@ -125,6 +126,8 @@ const envIntegrationAliases: Record<
   voyage: "voyageai",
   "voyage-ai": "voyageai",
   voyageai: "voyageai",
+  elevenlabs: "elevenlabs",
+  "@elevenlabs/elevenlabs-js": "elevenlabs",
 };
 
 export function getDefaultInstrumentationIntegrations(): Record<
@@ -165,6 +168,7 @@ export function getDefaultInstrumentationIntegrations(): Record<
     langgraph: true,
     langsmith: true,
     voyageai: true,
+    elevenlabs: true,
     piCodingAgent: true,
     strandsAgentSDK: true,
     cloudflareAgents: true,

@@ -26,6 +26,7 @@ import { LangChainPlugin } from "./plugins/langchain-plugin";
 import { LangSmithPlugin } from "./plugins/langsmith-plugin";
 import { PiCodingAgentPlugin } from "./plugins/pi-coding-agent-plugin";
 import { StrandsAgentSDKPlugin } from "./plugins/strands-agent-sdk-plugin";
+import { ElevenLabsPlugin } from "./plugins/elevenlabs-plugin";
 import { VoyageAIPlugin } from "./plugins/voyageai-plugin";
 import { CloudflareAIChatPlugin } from "./plugins/cloudflare-ai-chat-plugin";
 import { CloudflareAgentsPlugin } from "./plugins/cloudflare-agents-plugin";
@@ -84,6 +85,7 @@ export class BraintrustPlugin extends BasePlugin {
   private langSmithPlugin: LangSmithPlugin | null = null;
   private piCodingAgentPlugin: PiCodingAgentPlugin | null = null;
   private strandsAgentSDKPlugin: StrandsAgentSDKPlugin | null = null;
+  private elevenLabsPlugin: ElevenLabsPlugin | null = null;
   private voyageAIPlugin: VoyageAIPlugin | null = null;
   private cloudflareAIChatPlugin: CloudflareAIChatPlugin | null = null;
   private cloudflareAgentsPlugin: CloudflareAgentsPlugin | null = null;
@@ -190,6 +192,11 @@ export class BraintrustPlugin extends BasePlugin {
     if (integrations.cohere !== false) {
       this.coherePlugin = new CoherePlugin();
       this.coherePlugin.enable();
+    }
+
+    if (integrations.elevenlabs !== false) {
+      this.elevenLabsPlugin = new ElevenLabsPlugin();
+      this.elevenLabsPlugin.enable();
     }
 
     if (integrations.voyageai !== false) {
@@ -353,6 +360,11 @@ export class BraintrustPlugin extends BasePlugin {
     if (this.coherePlugin) {
       this.coherePlugin.disable();
       this.coherePlugin = null;
+    }
+
+    if (this.elevenLabsPlugin) {
+      this.elevenLabsPlugin.disable();
+      this.elevenLabsPlugin = null;
     }
 
     if (this.voyageAIPlugin) {
