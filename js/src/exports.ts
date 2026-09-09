@@ -219,6 +219,7 @@ export { wrapPiCodingAgentSDK } from "./wrappers/pi-coding-agent";
 export { wrapCloudflareAgent } from "./wrappers/cloudflare-agent";
 export { wrapStrandsAgentSDK } from "./wrappers/strands-agent-sdk";
 export { wrapCloudflareAIChat } from "./wrappers/cloudflare-ai-chat";
+export { wrapGoogleGenerativeAI } from "./wrappers/google-generative-ai";
 export { wrapGoogleGenAI } from "./wrappers/google-genai";
 export { wrapGoogleADK } from "./wrappers/google-adk";
 export { wrapGenkit } from "./wrappers/genkit";
@@ -360,3 +361,5 @@ export {
   braintrustFlueInstrumentation,
 } from "./instrumentation";
 export type { InstrumentationConfig } from "./instrumentation";
+
+export { wrapElevenLabs } from "./wrappers/elevenlabs";
