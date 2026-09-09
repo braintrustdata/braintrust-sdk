@@ -689,6 +689,11 @@ export function defineGoogleGenAIInstrumentationAssertions(options: {
           model: GOOGLE_MULTIMODAL_EMBEDDING_MODEL,
         });
         expect(span?.output).toEqual({ count: 4 });
+        expect(span?.metrics).toMatchObject({
+          prompt_tokens: 699,
+          tokens: 699,
+          prompt_audio_tokens: 45,
+        });
         expect(span?.input).toMatchObject({
           output_dimensions: EMBEDDING_DIMENSIONS,
           inputs: [

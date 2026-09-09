@@ -174,11 +174,18 @@ export interface GoogleGenAIEmbedContentMetadata {
   billableCharacterCount?: number;
 }
 
+export interface GoogleGenAIHttpResponse {
+  json(): Promise<GoogleGenAIEmbedContentResponse>;
+}
+
 export interface GoogleGenAIEmbedContentResponse {
   embedding?: GoogleGenAIEmbedding;
   embeddings?: GoogleGenAIEmbedding[];
   metadata?: GoogleGenAIEmbedContentMetadata;
-  usageMetadata?: GoogleGenAIUsageMetadata;
+  usageMetadata?: GoogleGenAIUsageMetadata & {
+    // Embeddings use the singular "Token", unlike generateContent responses.
+    promptTokenDetails?: GoogleGenAIModalityTokenCount[];
+  };
   [key: string]: unknown;
 }
 

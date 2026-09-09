@@ -359,6 +359,11 @@ span_tree:
     │         "model": "gemini-embedding-2",
     │         "provider": "google"
     │       }
+    │       metrics: {
+    │         "prompt_audio_tokens": 45,
+    │         "prompt_tokens": 699,
+    │         "tokens": 699
+    │       }
     ├── google-attachment-operation
     │   metadata: {
     │     "operation": "attachment",

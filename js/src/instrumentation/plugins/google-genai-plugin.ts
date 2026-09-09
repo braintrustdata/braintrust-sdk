@@ -12,6 +12,7 @@ import type { IsoChannelHandlers, IsoTracingChannel } from "../../isomorph";
 import {
   _internalGetGlobalState,
   Attachment,
+  currentSpan,
   BRAINTRUST_CURRENT_SPAN_STORE,
   startSpan as startBaseSpan,
   type CurrentSpanStore,
@@ -242,6 +243,41 @@ export class GoogleGenAIPlugin extends BasePlugin {
         ChannelMessage<EmbedContentChannel>
       >;
     const states = new WeakMap<object, SpanState>();
+    const embeddingSpans = new WeakSet<Span>();
+    this.unsubscribers.push(
+      googleGenAIChannels.httpResponseJson.intercept(
+        (target, thisArg, args) => {
+          const span = currentSpan();
+          const result = Reflect.apply(target, thisArg, args);
+          if (embeddingSpans.has(span)) {
+            // Observe the SDK's own JSON parsing, without cloning/consuming the
+            // response again or retaining the embedding vectors.
+            void Promise.resolve(result).then(
+              (response) => {
+                try {
+                  const metrics = cleanMetrics(
+                    extractEmbedContentMetrics(response),
+                  );
+                  if (
+                    embeddingSpans.has(span) &&
+                    Object.keys(metrics).length > 0
+                  ) {
+                    span.log({ metrics });
+                  }
+                } catch (error) {
+                  debugLogger.error(
+                    "Error reading Google GenAI embedding usage:",
+                    error,
+                  );
+                }
+              },
+              () => {}, // The embedding channel handles the original rejection.
+            );
+          }
+          return result;
+        },
+      ),
+    );
     const unbindCurrentSpanStore = bindCurrentSpanStoreToStart(
       tracingChannel,
       states,
@@ -262,6 +298,7 @@ export class GoogleGenAIPlugin extends BasePlugin {
           ),
         );
 
+        embeddingSpans.add(span);
         return {
           span,
           startTime: getCurrentUnixTimestamp(),
@@ -288,6 +325,7 @@ export class GoogleGenAIPlugin extends BasePlugin {
             ),
           );
 
+          embeddingSpans.add(span);
           return {
             span,
             startTime: getCurrentUnixTimestamp(),
@@ -308,6 +346,7 @@ export class GoogleGenAIPlugin extends BasePlugin {
             ),
           });
         } finally {
+          embeddingSpans.delete(spanState.span);
           spanState.span.end();
           states.delete(event as object);
         }
@@ -318,6 +357,7 @@ export class GoogleGenAIPlugin extends BasePlugin {
         try {
           spanState.span.log({ error: event.error, output: { count: 0 } });
         } finally {
+          embeddingSpans.delete(spanState.span);
           spanState.span.end();
           states.delete(event as object);
         }
@@ -1095,7 +1135,10 @@ function extractEmbedContentMetrics(
   if (totalTokens !== undefined) {
     metrics.tokens = totalTokens;
   }
-  const audioTokens = response?.usageMetadata?.promptTokensDetails?.filter(
+  const audioTokens = (
+    response?.usageMetadata?.promptTokenDetails ??
+    response?.usageMetadata?.promptTokensDetails
+  )?.filter(
     (detail) => detail.modality === "AUDIO" && detail.tokenCount !== undefined,
   );
   if (audioTokens?.length) {
