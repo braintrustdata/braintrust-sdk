@@ -24,7 +24,7 @@
         "body": {
           "contentType": "application/json",
           "kind": "binary",
-          "path": "openai-v4-latest.cassette.blobs/f6980483968801317709322d6382345098d83e70eb12ffc15f51dc38be4eba92.bin",
+          "path": "openai-v4-latest-multimodal.cassette.blobs/f6980483968801317709322d6382345098d83e70eb12ffc15f51dc38be4eba92.bin",
           "sha256": "f6980483968801317709322d6382345098d83e70eb12ffc15f51dc38be4eba92"
         },
         "headers": {
@@ -70,7 +70,7 @@
         "body": {
           "contentType": "application/json",
           "kind": "binary",
-          "path": "openai-v4-latest.cassette.blobs/4856ff43cbcbddf6e464b07cb6c6149f8dedadbb1bee1747798cf94b47b22d6f.bin",
+          "path": "openai-v4-latest-multimodal.cassette.blobs/4856ff43cbcbddf6e464b07cb6c6149f8dedadbb1bee1747798cf94b47b22d6f.bin",
           "sha256": "4856ff43cbcbddf6e464b07cb6c6149f8dedadbb1bee1747798cf94b47b22d6f"
         },
         "headers": {

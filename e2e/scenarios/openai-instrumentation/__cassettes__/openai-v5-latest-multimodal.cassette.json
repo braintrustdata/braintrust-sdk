@@ -24,7 +24,7 @@
         "body": {
           "contentType": "application/json",
           "kind": "binary",
-          "path": "openai-v5-latest.cassette.blobs/a53e133b1b60f0e08e055e36a8d73cae784edf1750d57fadafcc97fc64a2d9dd.bin",
+          "path": "openai-v5-latest-multimodal.cassette.blobs/a53e133b1b60f0e08e055e36a8d73cae784edf1750d57fadafcc97fc64a2d9dd.bin",
           "sha256": "a53e133b1b60f0e08e055e36a8d73cae784edf1750d57fadafcc97fc64a2d9dd"
         },
         "headers": {
@@ -70,7 +70,7 @@
         "body": {
           "contentType": "application/json",
           "kind": "binary",
-          "path": "openai-v5-latest.cassette.blobs/2d79da38a031bd258eb8ac504e88fad0a7f46eb3dcd05ba61dc3aa5cb6d7ad83.bin",
+          "path": "openai-v5-latest-multimodal.cassette.blobs/2d79da38a031bd258eb8ac504e88fad0a7f46eb3dcd05ba61dc3aa5cb6d7ad83.bin",
           "sha256": "2d79da38a031bd258eb8ac504e88fad0a7f46eb3dcd05ba61dc3aa5cb6d7ad83"
         },
         "headers": {
@@ -158,7 +158,7 @@
         "body": {
           "contentType": "text/event-stream; charset=utf-8",
           "kind": "binary",
-          "path": "openai-v5-latest.cassette.blobs/1821f86ddf4493af5c1db69c0e527ea3c5e9a9815e6f8c0ed27c6db37588ac6c.bin",
+          "path": "openai-v5-latest-multimodal.cassette.blobs/1821f86ddf4493af5c1db69c0e527ea3c5e9a9815e6f8c0ed27c6db37588ac6c.bin",
           "sha256": "1821f86ddf4493af5c1db69c0e527ea3c5e9a9815e6f8c0ed27c6db37588ac6c"
         },
         "headers": {
@@ -203,7 +203,7 @@
         "body": {
           "contentType": "text/event-stream; charset=utf-8",
           "kind": "binary",
-          "path": "openai-v5-latest.cassette.blobs/751af68d377a4ba85b86dc7786d18a76cd4628d826018242ff28988b1bc962d5.bin",
+          "path": "openai-v5-latest-multimodal.cassette.blobs/751af68d377a4ba85b86dc7786d18a76cd4628d826018242ff28988b1bc962d5.bin",
           "sha256": "751af68d377a4ba85b86dc7786d18a76cd4628d826018242ff28988b1bc962d5"
         },
         "headers": {
@@ -252,7 +252,7 @@
         "body": {
           "contentType": "audio/wav",
           "kind": "binary",
-          "path": "openai-v5-latest.cassette.blobs/fafba814b8289861334271e2d2cbe833a3b75ede34865af93873c338027f713a.bin",
+          "path": "openai-v5-latest-multimodal.cassette.blobs/fafba814b8289861334271e2d2cbe833a3b75ede34865af93873c338027f713a.bin",
           "sha256": "fafba814b8289861334271e2d2cbe833a3b75ede34865af93873c338027f713a"
         },
         "headers": {

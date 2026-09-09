@@ -4,8 +4,10 @@ import {
   readInstalledPackageVersion,
   resolveScenarioDir,
   runNodeScenarioDir,
+  withScenarioHarness,
 } from "../../helpers/scenario-harness";
 import { defineOpenAIInstrumentationAssertions } from "./assertions";
+import type { CapturedLogEvent } from "../../helpers/mock-braintrust-server";
 
 const originalScenarioDir = resolveScenarioDir(import.meta.url);
 const scenarioDir = await prepareScenarioDir({
@@ -85,10 +87,36 @@ describe.concurrent("variants", () => {
     const assertPrivateFieldMethodsOperation =
       !scenario.disablePrivateFieldMethodsAssertion;
 
+    const runMultimodalScenario = async (mode: "wrapped" | "auto" | "both") => {
+      let events: CapturedLogEvent[] = [];
+      await withScenarioHarness(async (harness) => {
+        await harness.runNodeScenarioDir({
+          entry: "scenario.multimodal.mjs",
+          env: {
+            OPENAI_PACKAGE_NAME: scenario.dependencyName,
+            INSTRUMENTATION_MODE: mode === "both" ? "wrapped" : mode,
+          },
+          nodeArgs:
+            mode !== "wrapped" ? ["--import", "braintrust/hook.mjs"] : [],
+          runContext: {
+            variantKey: scenario.snapshotName,
+            originalScenarioDir,
+            cassette: { variantKey: `${scenario.snapshotName}-multimodal` },
+          },
+          scenarioDir,
+          timeoutMs: 300_000,
+        });
+        events = harness.events();
+      });
+      return events;
+    };
+
     describe.sequential(`openai sdk ${scenario.version}`, () => {
       defineOpenAIInstrumentationAssertions({
         assertPrivateFieldMethodsOperation,
         name: "wrapped instrumentation",
+        runMultimodalScenario,
+        multimodalMode: "wrapped",
         runScenario: async ({ runScenarioDir }) => {
           await runScenarioDir({
             entry: scenario.wrapperEntry,
@@ -110,6 +138,8 @@ describe.concurrent("variants", () => {
 
       defineOpenAIInstrumentationAssertions({
         name: "auto-hook instrumentation",
+        runMultimodalScenario,
+        multimodalMode: "auto",
         runScenario: async ({ runNodeScenarioDir }) => {
           await runNodeScenarioDir({
             entry: scenario.autoEntry,

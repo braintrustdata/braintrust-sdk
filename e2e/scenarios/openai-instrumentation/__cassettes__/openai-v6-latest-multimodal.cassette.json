@@ -24,7 +24,7 @@
         "body": {
           "contentType": "application/json",
           "kind": "binary",
-          "path": "openai-v6-latest.cassette.blobs/33029b4edd207c8f9e0d4ff6821cfc2955df4560ee409fae8cef9ae9a24bd02e.bin",
+          "path": "openai-v6-latest-multimodal.cassette.blobs/33029b4edd207c8f9e0d4ff6821cfc2955df4560ee409fae8cef9ae9a24bd02e.bin",
           "sha256": "33029b4edd207c8f9e0d4ff6821cfc2955df4560ee409fae8cef9ae9a24bd02e"
         },
         "headers": {
@@ -70,7 +70,7 @@
         "body": {
           "contentType": "application/json",
           "kind": "binary",
-          "path": "openai-v6-latest.cassette.blobs/d03907c108fe41ed771aad826911217106d019d2efa9d360bfd369d5d743f751.bin",
+          "path": "openai-v6-latest-multimodal.cassette.blobs/d03907c108fe41ed771aad826911217106d019d2efa9d360bfd369d5d743f751.bin",
           "sha256": "d03907c108fe41ed771aad826911217106d019d2efa9d360bfd369d5d743f751"
         },
         "headers": {
@@ -158,7 +158,7 @@
         "body": {
           "contentType": "text/event-stream; charset=utf-8",
           "kind": "binary",
-          "path": "openai-v6-latest.cassette.blobs/a665cbf791e9f9d6d9b68f58d698adbe195968c1fbf164c77a85f30d1b8d8219.bin",
+          "path": "openai-v6-latest-multimodal.cassette.blobs/a665cbf791e9f9d6d9b68f58d698adbe195968c1fbf164c77a85f30d1b8d8219.bin",
           "sha256": "a665cbf791e9f9d6d9b68f58d698adbe195968c1fbf164c77a85f30d1b8d8219"
         },
         "headers": {
@@ -203,7 +203,7 @@
         "body": {
           "contentType": "text/event-stream; charset=utf-8",
           "kind": "binary",
-          "path": "openai-v6-latest.cassette.blobs/8ad9efa2bd2ace24603d3d555636b8f4bec4eb686abe29632dde7d21677e928a.bin",
+          "path": "openai-v6-latest-multimodal.cassette.blobs/8ad9efa2bd2ace24603d3d555636b8f4bec4eb686abe29632dde7d21677e928a.bin",
           "sha256": "8ad9efa2bd2ace24603d3d555636b8f4bec4eb686abe29632dde7d21677e928a"
         },
         "headers": {

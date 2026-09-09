@@ -24,7 +24,7 @@
         "body": {
           "contentType": "application/json",
           "kind": "binary",
-          "path": "openai-v6.cassette.blobs/a8eafaa63e308a3fe9c28c4ea1c1b66e080f3e23a2155e39df9c190059a8ad76.bin",
+          "path": "openai-v6-multimodal.cassette.blobs/a8eafaa63e308a3fe9c28c4ea1c1b66e080f3e23a2155e39df9c190059a8ad76.bin",
           "sha256": "a8eafaa63e308a3fe9c28c4ea1c1b66e080f3e23a2155e39df9c190059a8ad76"
         },
         "headers": {
@@ -70,7 +70,7 @@
         "body": {
           "contentType": "application/json",
           "kind": "binary",
-          "path": "openai-v6.cassette.blobs/b117ac656178ba55c1ce69f498eb0048846fb53cb7db007a7dec6740704f6274.bin",
+          "path": "openai-v6-multimodal.cassette.blobs/b117ac656178ba55c1ce69f498eb0048846fb53cb7db007a7dec6740704f6274.bin",
           "sha256": "b117ac656178ba55c1ce69f498eb0048846fb53cb7db007a7dec6740704f6274"
         },
         "headers": {
@@ -158,7 +158,7 @@
         "body": {
           "contentType": "text/event-stream; charset=utf-8",
           "kind": "binary",
-          "path": "openai-v6.cassette.blobs/21a605fd53f2e8a3e27e67bac81381f118c7c2766fe7f8e55095a472de44513a.bin",
+          "path": "openai-v6-multimodal.cassette.blobs/21a605fd53f2e8a3e27e67bac81381f118c7c2766fe7f8e55095a472de44513a.bin",
           "sha256": "21a605fd53f2e8a3e27e67bac81381f118c7c2766fe7f8e55095a472de44513a"
         },
         "headers": {
@@ -203,7 +203,7 @@
         "body": {
           "contentType": "text/event-stream; charset=utf-8",
           "kind": "binary",
-          "path": "openai-v6.cassette.blobs/31fa242b38edd099696f3d2f443fa5a1457b403bcbfcc874efc44e4183b16685.bin",
+          "path": "openai-v6-multimodal.cassette.blobs/31fa242b38edd099696f3d2f443fa5a1457b403bcbfcc874efc44e4183b16685.bin",
           "sha256": "31fa242b38edd099696f3d2f443fa5a1457b403bcbfcc874efc44e4183b16685"
         },
         "headers": {
@@ -252,7 +252,7 @@
         "body": {
           "contentType": "audio/wav",
           "kind": "binary",
-          "path": "openai-v6.cassette.blobs/e6b65515b0bb82b4cf596b7b0945c65543864a27c30afce44e633cb7cb6bf1a5.bin",
+          "path": "openai-v6-multimodal.cassette.blobs/e6b65515b0bb82b4cf596b7b0945c65543864a27c30afce44e633cb7cb6bf1a5.bin",
           "sha256": "e6b65515b0bb82b4cf596b7b0945c65543864a27c30afce44e633cb7cb6bf1a5"
         },
         "headers": {

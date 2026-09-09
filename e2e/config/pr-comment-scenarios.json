@@ -795,36 +795,5 @@
         "label": "v1 latest"
       }
     ]
-  },
-  {
-    "scenarioDirName": "openai-multimodal-instrumentation",
-    "label": "OpenAI Multimodal Instrumentation",
-    "metadataScenario": "openai-multimodal-instrumentation",
-    "variants": [
-      {
-        "variantKey": "openai-v4",
-        "label": "v4 pinned"
-      },
-      {
-        "variantKey": "openai-v4-latest",
-        "label": "v4 latest"
-      },
-      {
-        "variantKey": "openai-v5",
-        "label": "v5 pinned"
-      },
-      {
-        "variantKey": "openai-v5-latest",
-        "label": "v5 latest"
-      },
-      {
-        "variantKey": "openai-v6",
-        "label": "v6 pinned"
-      },
-      {
-        "variantKey": "openai-v6-latest",
-        "label": "v6 latest"
-      }
-    ]
   }
 ]

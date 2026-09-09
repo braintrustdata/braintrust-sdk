@@ -16,7 +16,7 @@ const imageModel = "gpt-image-2";
 await runTracedScenario({
   projectNameBase: "tmp-luca-openai-multimodal",
   rootName: "multimodal-root",
-  metadata: { scenario: "openai-multimodal-instrumentation" },
+  metadata: { scenario: "openai-instrumentation" },
   callback: async () => {
     const inputImage = await toFile(
       Buffer.from(MINIMAL_PNG_BASE64, "base64"),
