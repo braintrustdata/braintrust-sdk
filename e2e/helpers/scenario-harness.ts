@@ -80,6 +80,7 @@ export interface ScenarioRunContext {
 }
 
 interface ScenarioRunContextRecord {
+  cassetteVariantKey?: string;
   entry: string;
   runner: ScenarioRunner;
   scenarioDirName: string;
@@ -829,6 +830,7 @@ export async function withScenarioHarness(
   ): Promise<ScenarioResult> => {
     const result = await run();
     await recordScenarioRunContext({
+      cassetteVariantKey: cassetteWiringFor(options)?.variantKey,
       entry: options.entry ?? defaultEntry,
       runner,
       scenarioDirName: path.basename(

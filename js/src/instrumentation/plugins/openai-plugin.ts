@@ -1,3 +1,4 @@
+import { interceptOpenAIMedia } from "./openai-media";
 import { BasePlugin } from "../core";
 import {
   traceAsyncChannel,
@@ -57,6 +58,18 @@ export class OpenAIPlugin extends BasePlugin {
       openAIChannels.batchesCompleteTrace.intercept(
         interceptOpenAIBatchTraceComplete,
       ),
+    );
+
+    this.unsubscribers.push(
+      interceptOpenAIMedia(openAIChannels.imagesGenerate, "generate"),
+      interceptOpenAIMedia(openAIChannels.imagesEdit, "edit"),
+      interceptOpenAIMedia(openAIChannels.imagesCreateVariation, "variation"),
+      interceptOpenAIMedia(openAIChannels.audioSpeechCreate, "speech"),
+      interceptOpenAIMedia(
+        openAIChannels.audioTranscriptionsCreate,
+        "transcribe",
+      ),
+      interceptOpenAIMedia(openAIChannels.audioTranslationsCreate, "translate"),
     );
 
     // Chat Completions - supports streaming
