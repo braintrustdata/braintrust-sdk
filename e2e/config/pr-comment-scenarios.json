@@ -792,5 +792,20 @@
         "label": "v1 latest"
       }
     ]
+  },
+  {
+    "scenarioDirName": "google-generative-ai-instrumentation",
+    "label": "Google Generative AI Instrumentation",
+    "metadataScenario": "google-generative-ai-instrumentation",
+    "variants": [
+      {
+        "variantKey": "google-generative-ai-v0",
+        "label": "v0.24 pinned"
+      },
+      {
+        "variantKey": "google-generative-ai-v0-latest",
+        "label": "v0.24 latest"
+      }
+    ]
   }
 ]
