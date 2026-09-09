@@ -672,6 +672,85 @@
           }
         },
         {
+          "name": "embedding-with-usage",
+          "children": [
+            {
+              "name": "embed_content",
+              "type": "llm",
+              "children": [],
+              "input": {
+                "inputs": [
+                  {
+                    "content": "Braintrust tracing"
+                  }
+                ],
+                "output_dimensions": 32
+              },
+              "output": {
+                "count": 1
+              },
+              "metadata": {
+                "model": "gemini-embedding-2",
+                "provider": "google"
+              },
+              "metrics": {
+                "prompt_tokens": 3,
+                "tokens": 3
+              }
+            }
+          ],
+          "metadata": {
+            "operation": "embedding",
+            "testRunId": "<run:1>"
+          },
+          "context": {
+            "caller_filename": "<repo>/e2e/helpers/provider-runtime.mjs",
+            "caller_functionname": "runOperation",
+            "caller_lineno": 0
+          }
+        },
+        {
+          "name": "batch-embedding-with-usage",
+          "children": [
+            {
+              "name": "batch_embed_contents",
+              "type": "llm",
+              "children": [],
+              "input": {
+                "inputs": [
+                  {
+                    "content": "Hello"
+                  },
+                  {
+                    "content": "World"
+                  }
+                ],
+                "output_dimensions": 32
+              },
+              "output": {
+                "count": 2
+              },
+              "metadata": {
+                "model": "gemini-embedding-2",
+                "provider": "google"
+              },
+              "metrics": {
+                "prompt_tokens": 2,
+                "tokens": 2
+              }
+            }
+          ],
+          "metadata": {
+            "operation": "batch-embedding",
+            "testRunId": "<run:1>"
+          },
+          "context": {
+            "caller_filename": "<repo>/e2e/helpers/provider-runtime.mjs",
+            "caller_functionname": "runOperation",
+            "caller_lineno": 0
+          }
+        },
+        {
           "name": "error",
           "children": [
             {

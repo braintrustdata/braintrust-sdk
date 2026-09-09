@@ -604,6 +604,69 @@ span_tree:
     │         "model": "gemini-embedding-001",
     │         "provider": "google"
     │       }
+    ├── embedding-with-usage
+    │   metadata: {
+    │     "operation": "embedding",
+    │     "testRunId": "<run:1>"
+    │   }
+    │   context: {
+    │     "caller_filename": "<repo>/e2e/helpers/provider-runtime.mjs",
+    │     "caller_functionname": "runOperation",
+    │     "caller_lineno": 0
+    │   }
+    │   └── embed_content [llm]
+    │       input: {
+    │         "inputs": [
+    │           {
+    │             "content": "Braintrust tracing"
+    │           }
+    │         ],
+    │         "output_dimensions": 32
+    │       }
+    │       output: {
+    │         "count": 1
+    │       }
+    │       metadata: {
+    │         "model": "gemini-embedding-2",
+    │         "provider": "google"
+    │       }
+    │       metrics: {
+    │         "prompt_tokens": 3,
+    │         "tokens": 3
+    │       }
+    ├── batch-embedding-with-usage
+    │   metadata: {
+    │     "operation": "batch-embedding",
+    │     "testRunId": "<run:1>"
+    │   }
+    │   context: {
+    │     "caller_filename": "<repo>/e2e/helpers/provider-runtime.mjs",
+    │     "caller_functionname": "runOperation",
+    │     "caller_lineno": 0
+    │   }
+    │   └── batch_embed_contents [llm]
+    │       input: {
+    │         "inputs": [
+    │           {
+    │             "content": "Hello"
+    │           },
+    │           {
+    │             "content": "World"
+    │           }
+    │         ],
+    │         "output_dimensions": 32
+    │       }
+    │       output: {
+    │         "count": 2
+    │       }
+    │       metadata: {
+    │         "model": "gemini-embedding-2",
+    │         "provider": "google"
+    │       }
+    │       metrics: {
+    │         "prompt_tokens": 2,
+    │         "tokens": 2
+    │       }
     └── error
         metadata: {
           "operation": "error",

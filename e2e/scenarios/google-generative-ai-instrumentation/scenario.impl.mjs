@@ -106,26 +106,35 @@ export async function runScenario(sdk, wrapped) {
         });
         assert.equal(result.response.functionCalls()[0].name, "get_weather");
       });
-      const embeddings = client.getGenerativeModel(
-        { model: EMBEDDING_MODEL },
-        options,
-      );
-      await runOperation("embedding", "embedding", async () => {
-        const result = await embeddings.embedContent({
-          content: { role: "user", parts: [{ text: "Braintrust tracing" }] },
-          outputDimensionality: 32,
-        });
-        assert.equal(result.embedding.values.length, 32);
-      });
-      await runOperation("batch-embedding", "batch-embedding", async () => {
-        const result = await embeddings.batchEmbedContents({
-          requests: ["Hello", "World"].map((text) => ({
-            content: { role: "user", parts: [{ text }] },
+      for (const embeddingModel of [EMBEDDING_MODEL, "gemini-embedding-2"]) {
+        const embeddings = client.getGenerativeModel(
+          { model: embeddingModel },
+          options,
+        );
+        const suffix = embeddingModel === EMBEDDING_MODEL ? "" : "-with-usage";
+        await runOperation(`embedding${suffix}`, "embedding", async () => {
+          const result = await embeddings.embedContent({
+            content: { role: "user", parts: [{ text: "Braintrust tracing" }] },
             outputDimensionality: 32,
-          })),
+          });
+          assert.equal(result.embedding.values.length, 32);
+          if (suffix) assert.ok(result.usageMetadata.promptTokenCount > 0);
         });
-        assert.equal(result.embeddings.length, 2);
-      });
+        await runOperation(
+          `batch-embedding${suffix}`,
+          "batch-embedding",
+          async () => {
+            const result = await embeddings.batchEmbedContents({
+              requests: ["Hello", "World"].map((text) => ({
+                content: { role: "user", parts: [{ text }] },
+                outputDimensionality: 32,
+              })),
+            });
+            assert.equal(result.embeddings.length, 2);
+            if (suffix) assert.ok(result.usageMetadata.promptTokenCount > 0);
+          },
+        );
+      }
       await runOperation("error", "error", async () => {
         const invalidModel = client.getGenerativeModel(
           { model: "braintrust-nonexistent-model" },

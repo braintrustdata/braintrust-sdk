@@ -63,6 +63,10 @@ export interface GenerativeAIStreamResult {
 export interface GenerativeAIEmbedResult {
   embedding?: { values: number[] };
   embeddings?: { values: number[] }[];
+  usageMetadata?: {
+    promptTokenCount?: number;
+    promptTokenDetails?: { modality?: string; tokenCount?: number }[];
+  };
 }
 
 export interface GenerativeAIChat {

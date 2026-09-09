@@ -44,7 +44,7 @@ describe.concurrent("variants", () => {
                 "embed_content",
                 "batch_embed_contents",
               ].flatMap((name) => findAllSpans(events, name));
-              expect(llms).toHaveLength(10);
+              expect(llms).toHaveLength(12);
               for (const name of [
                 "generation",
                 "image",
@@ -55,6 +55,8 @@ describe.concurrent("variants", () => {
                 "tools",
                 "embedding",
                 "batch-embedding",
+                "embedding-with-usage",
+                "batch-embedding-with-usage",
                 "error",
               ]) {
                 const operation = findLatestSpan(events, name);
@@ -82,15 +84,36 @@ describe.concurrent("variants", () => {
                   expect(children[0].metrics?.prompt_tokens).toBeGreaterThan(0);
                   expect(children[0].output).toHaveProperty("candidates");
                 }
-                if (name === "embedding") {
+                if (name.startsWith("embedding")) {
                   expect(children[0].output).toEqual({ count: 1 });
                   expect(children[0].input).toEqual({
                     inputs: [{ content: "Braintrust tracing" }],
                     output_dimensions: 32,
                   });
                 }
-                if (name === "batch-embedding")
+                if (name.startsWith("batch-embedding"))
                   expect(children[0].output).toEqual({ count: 2 });
+                if (name.includes("embedding")) {
+                  expect(children[0].metrics).not.toHaveProperty(
+                    "completion_tokens",
+                  );
+                  if (name.endsWith("-with-usage")) {
+                    expect(children[0].metrics?.prompt_tokens).toBeGreaterThan(
+                      0,
+                    );
+                    expect(children[0].metrics?.tokens).toBe(
+                      children[0].metrics?.prompt_tokens,
+                    );
+                    expect(children[0].row.metadata).toMatchObject({
+                      model: "gemini-embedding-2",
+                    });
+                  } else {
+                    expect(children[0].metrics).not.toHaveProperty(
+                      "prompt_tokens",
+                    );
+                    expect(children[0].metrics).not.toHaveProperty("tokens");
+                  }
+                }
                 if (name === "stream" || name === "chat-stream")
                   expect(
                     children[0].metrics?.time_to_first_token,

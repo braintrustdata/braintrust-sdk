@@ -4,7 +4,7 @@
       "callIndex": 0,
       "id": "bd47bc20a9227081",
       "matchKey": "POST generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent",
-      "recordedAt": "2026-09-07T15:40:53.770Z",
+      "recordedAt": "2026-09-09T13:03:25.826Z",
       "request": {
         "body": {
           "kind": "json",
@@ -60,7 +60,7 @@
               }
             ],
             "modelVersion": "gemini-2.5-flash",
-            "responseId": "Bdueap-VHcTe-sAPo_vtwQU",
+            "responseId": "HVmhauqhIcjg_uMP146M8QI",
             "usageMetadata": {
               "candidatesTokenCount": 1,
               "promptTokenCount": 15,
@@ -79,9 +79,9 @@
           "alt-svc": "h3=\":443\"; ma=2592000,h3-29=\":443\"; ma=2592000",
           "content-encoding": "gzip",
           "content-type": "application/json; charset=UTF-8",
-          "date": "Mon, 07 Sep 2026 15:40:53 GMT",
+          "date": "Wed, 09 Sep 2026 13:03:25 GMT",
           "server": "scaffolding on HTTPServer2",
-          "server-timing": "gfet4t7; dur=323",
+          "server-timing": "gfet4t7; dur=336",
           "transfer-encoding": "chunked",
           "vary": "Origin, X-Origin, Referer",
           "x-content-type-options": "nosniff",
@@ -97,7 +97,7 @@
       "callIndex": 1,
       "id": "74e55beb88d16a30",
       "matchKey": "POST generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent",
-      "recordedAt": "2026-09-07T15:40:56.110Z",
+      "recordedAt": "2026-09-09T13:03:28.018Z",
       "request": {
         "body": {
           "contentType": "application/json",
@@ -128,7 +128,7 @@
               }
             ],
             "modelVersion": "gemini-2.5-flash",
-            "responseId": "Btueav3UAZ7djMcPz9KR2Ag",
+            "responseId": "Hlmhao_SB9iV_uMP87O46Qs",
             "usageMetadata": {
               "candidatesTokenCount": 18,
               "promptTokenCount": 271,
@@ -151,9 +151,9 @@
           "alt-svc": "h3=\":443\"; ma=2592000,h3-29=\":443\"; ma=2592000",
           "content-encoding": "gzip",
           "content-type": "application/json; charset=UTF-8",
-          "date": "Mon, 07 Sep 2026 15:40:55 GMT",
+          "date": "Wed, 09 Sep 2026 13:03:27 GMT",
           "server": "scaffolding on HTTPServer2",
-          "server-timing": "gfet4t7; dur=1744",
+          "server-timing": "gfet4t7; dur=1593",
           "transfer-encoding": "chunked",
           "vary": "Origin, X-Origin, Referer",
           "x-content-type-options": "nosniff",
@@ -169,7 +169,7 @@
       "callIndex": 0,
       "id": "9cc41db65a6edc9d",
       "matchKey": "POST generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:streamGenerateContent",
-      "recordedAt": "2026-09-07T15:40:56.465Z",
+      "recordedAt": "2026-09-09T13:03:28.456Z",
       "request": {
         "body": {
           "kind": "json",
@@ -209,8 +209,8 @@
       "response": {
         "body": {
           "chunks": [
-            "data: {\"candidates\":[{\"content\":{\"parts\":[{\"text\":\"One\"}],\"role\":\"model\"},\"index\":0}],\"usageMetadata\":{\"promptTokenCount\":14,\"candidatesTokenCount\":1,\"totalTokenCount\":15,\"promptTokensDetails\":[{\"modality\":\"TEXT\",\"tokenCount\":14}],\"serviceTier\":\"standard\"},\"modelVersion\":\"gemini-2.5-flash\",\"responseId\":\"CNueapXqCePf-sAPvI3DOA\"}",
-            "data: {\"candidates\":[{\"content\":{\"parts\":[{\"text\":\", two, three.\"}],\"role\":\"model\"},\"finishReason\":\"STOP\",\"index\":0}],\"usageMetadata\":{\"promptTokenCount\":14,\"candidatesTokenCount\":6,\"totalTokenCount\":20,\"promptTokensDetails\":[{\"modality\":\"TEXT\",\"tokenCount\":14}],\"serviceTier\":\"standard\"},\"modelVersion\":\"gemini-2.5-flash\",\"responseId\":\"CNueapXqCePf-sAPvI3DOA\"}"
+            "data: {\"candidates\":[{\"content\":{\"parts\":[{\"text\":\"One\"}],\"role\":\"model\"},\"index\":0}],\"usageMetadata\":{\"promptTokenCount\":14,\"candidatesTokenCount\":1,\"totalTokenCount\":15,\"promptTokensDetails\":[{\"modality\":\"TEXT\",\"tokenCount\":14}],\"serviceTier\":\"standard\"},\"modelVersion\":\"gemini-2.5-flash\",\"responseId\":\"IFmhapvoBfW1_PUP95-oyQI\"}",
+            "data: {\"candidates\":[{\"content\":{\"parts\":[{\"text\":\", two, three.\"}],\"role\":\"model\"},\"finishReason\":\"STOP\",\"index\":0}],\"usageMetadata\":{\"promptTokenCount\":14,\"candidatesTokenCount\":6,\"totalTokenCount\":20,\"promptTokensDetails\":[{\"modality\":\"TEXT\",\"tokenCount\":14}],\"serviceTier\":\"standard\"},\"modelVersion\":\"gemini-2.5-flash\",\"responseId\":\"IFmhapvoBfW1_PUP95-oyQI\"}"
           ],
           "kind": "sse"
         },
@@ -218,9 +218,9 @@
           "alt-svc": "h3=\":443\"; ma=2592000,h3-29=\":443\"; ma=2592000",
           "content-disposition": "attachment",
           "content-type": "text/event-stream",
-          "date": "Mon, 07 Sep 2026 15:40:56 GMT",
+          "date": "Wed, 09 Sep 2026 13:03:28 GMT",
           "server": "scaffolding on HTTPServer2",
-          "server-timing": "gfet4t7; dur=294",
+          "server-timing": "gfet4t7; dur=360",
           "transfer-encoding": "chunked",
           "vary": "Origin, X-Origin, Referer",
           "x-content-type-options": "nosniff",
@@ -235,7 +235,7 @@
       "callIndex": 1,
       "id": "68b730f10d23c395",
       "matchKey": "POST generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:streamGenerateContent",
-      "recordedAt": "2026-09-07T15:40:56.802Z",
+      "recordedAt": "2026-09-09T13:03:28.791Z",
       "request": {
         "body": {
           "kind": "json",
@@ -275,7 +275,7 @@
       "response": {
         "body": {
           "chunks": [
-            "data: {\"candidates\":[{\"content\":{\"parts\":[{\"text\":\"Hello.\"}],\"role\":\"model\"},\"finishReason\":\"STOP\",\"index\":0}],\"usageMetadata\":{\"promptTokenCount\":11,\"candidatesTokenCount\":2,\"totalTokenCount\":13,\"promptTokensDetails\":[{\"modality\":\"TEXT\",\"tokenCount\":11}],\"serviceTier\":\"standard\"},\"modelVersion\":\"gemini-2.5-flash\",\"responseId\":\"CNuearirHrT1jMcPzojMuAo\"}"
+            "data: {\"candidates\":[{\"content\":{\"parts\":[{\"text\":\"Hello.\"}],\"role\":\"model\"},\"finishReason\":\"STOP\",\"index\":0}],\"usageMetadata\":{\"promptTokenCount\":11,\"candidatesTokenCount\":2,\"totalTokenCount\":13,\"promptTokensDetails\":[{\"modality\":\"TEXT\",\"tokenCount\":11}],\"serviceTier\":\"standard\"},\"modelVersion\":\"gemini-2.5-flash\",\"responseId\":\"IFmhapXtH7uN_uMP-OyE6Qs\"}"
           ],
           "kind": "sse"
         },
@@ -283,9 +283,9 @@
           "alt-svc": "h3=\":443\"; ma=2592000,h3-29=\":443\"; ma=2592000",
           "content-disposition": "attachment",
           "content-type": "text/event-stream",
-          "date": "Mon, 07 Sep 2026 15:40:56 GMT",
+          "date": "Wed, 09 Sep 2026 13:03:28 GMT",
           "server": "scaffolding on HTTPServer2",
-          "server-timing": "gfet4t7; dur=323",
+          "server-timing": "gfet4t7; dur=321",
           "transfer-encoding": "chunked",
           "vary": "Origin, X-Origin, Referer",
           "x-content-type-options": "nosniff",
@@ -300,7 +300,7 @@
       "callIndex": 2,
       "id": "bfedc32819173f9b",
       "matchKey": "POST generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent",
-      "recordedAt": "2026-09-07T15:40:57.108Z",
+      "recordedAt": "2026-09-09T13:03:29.147Z",
       "request": {
         "body": {
           "kind": "json",
@@ -372,7 +372,7 @@
               }
             ],
             "modelVersion": "gemini-2.5-flash",
-            "responseId": "CNuearriMqzI-sAP0Z_k0A0",
+            "responseId": "IFmhauH1M_Xe_uMP-PzP4Qs",
             "usageMetadata": {
               "candidatesTokenCount": 5,
               "promptTokenCount": 24,
@@ -391,9 +391,9 @@
           "alt-svc": "h3=\":443\"; ma=2592000,h3-29=\":443\"; ma=2592000",
           "content-encoding": "gzip",
           "content-type": "application/json; charset=UTF-8",
-          "date": "Mon, 07 Sep 2026 15:40:57 GMT",
+          "date": "Wed, 09 Sep 2026 13:03:29 GMT",
           "server": "scaffolding on HTTPServer2",
-          "server-timing": "gfet4t7; dur=296",
+          "server-timing": "gfet4t7; dur=346",
           "transfer-encoding": "chunked",
           "vary": "Origin, X-Origin, Referer",
           "x-content-type-options": "nosniff",
@@ -409,7 +409,7 @@
       "callIndex": 2,
       "id": "b8e30c3bc1790633",
       "matchKey": "POST generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:streamGenerateContent",
-      "recordedAt": "2026-09-07T15:40:57.434Z",
+      "recordedAt": "2026-09-09T13:03:29.587Z",
       "request": {
         "body": {
           "kind": "json",
@@ -481,8 +481,8 @@
       "response": {
         "body": {
           "chunks": [
-            "data: {\"candidates\":[{\"content\":{\"parts\":[{\"text\":\"A.\"}],\"role\":\"model\"},\"index\":0}],\"usageMetadata\":{\"promptTokenCount\":38,\"candidatesTokenCount\":2,\"totalTokenCount\":40,\"promptTokensDetails\":[{\"modality\":\"TEXT\",\"tokenCount\":38}],\"serviceTier\":\"standard\"},\"modelVersion\":\"gemini-2.5-flash\",\"responseId\":\"CdueaovyCLHW-sAPns7t4Ac\"}",
-            "data: {\"candidates\":[{\"content\":{\"parts\":[{\"text\":\" D. A.\"}],\"role\":\"model\"},\"finishReason\":\"STOP\",\"index\":0}],\"usageMetadata\":{\"promptTokenCount\":38,\"candidatesTokenCount\":6,\"totalTokenCount\":44,\"promptTokensDetails\":[{\"modality\":\"TEXT\",\"tokenCount\":38}],\"serviceTier\":\"standard\"},\"modelVersion\":\"gemini-2.5-flash\",\"responseId\":\"CdueaovyCLHW-sAPns7t4Ac\"}"
+            "data: {\"candidates\":[{\"content\":{\"parts\":[{\"text\":\"A.\"}],\"role\":\"model\"},\"index\":0}],\"usageMetadata\":{\"promptTokenCount\":38,\"candidatesTokenCount\":2,\"totalTokenCount\":40,\"promptTokensDetails\":[{\"modality\":\"TEXT\",\"tokenCount\":38}],\"serviceTier\":\"standard\"},\"modelVersion\":\"gemini-2.5-flash\",\"responseId\":\"IVmhapqtDZ20_PUP3e6MwQI\"}",
+            "data: {\"candidates\":[{\"content\":{\"parts\":[{\"text\":\" D. A.\"}],\"role\":\"model\"},\"finishReason\":\"STOP\",\"index\":0}],\"usageMetadata\":{\"promptTokenCount\":38,\"candidatesTokenCount\":6,\"totalTokenCount\":44,\"promptTokensDetails\":[{\"modality\":\"TEXT\",\"tokenCount\":38}],\"serviceTier\":\"standard\"},\"modelVersion\":\"gemini-2.5-flash\",\"responseId\":\"IVmhapqtDZ20_PUP3e6MwQI\"}"
           ],
           "kind": "sse"
         },
@@ -490,9 +490,9 @@
           "alt-svc": "h3=\":443\"; ma=2592000,h3-29=\":443\"; ma=2592000",
           "content-disposition": "attachment",
           "content-type": "text/event-stream",
-          "date": "Mon, 07 Sep 2026 15:40:57 GMT",
+          "date": "Wed, 09 Sep 2026 13:03:29 GMT",
           "server": "scaffolding on HTTPServer2",
-          "server-timing": "gfet4t7; dur=272",
+          "server-timing": "gfet4t7; dur=374",
           "transfer-encoding": "chunked",
           "vary": "Origin, X-Origin, Referer",
           "x-content-type-options": "nosniff",
@@ -507,7 +507,7 @@
       "callIndex": 3,
       "id": "4af0eb902906ee7f",
       "matchKey": "POST generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent",
-      "recordedAt": "2026-09-07T15:40:57.832Z",
+      "recordedAt": "2026-09-09T13:03:30.037Z",
       "request": {
         "body": {
           "kind": "json",
@@ -593,7 +593,7 @@
               }
             ],
             "modelVersion": "gemini-2.5-flash",
-            "responseId": "Cdueasm9HMLi-sAPrK7XwA4",
+            "responseId": "IVmhasT-J7a1_uMP_MSP-AI",
             "usageMetadata": {
               "candidatesTokenCount": 15,
               "promptTokenCount": 51,
@@ -612,9 +612,9 @@
           "alt-svc": "h3=\":443\"; ma=2592000,h3-29=\":443\"; ma=2592000",
           "content-encoding": "gzip",
           "content-type": "application/json; charset=UTF-8",
-          "date": "Mon, 07 Sep 2026 15:40:57 GMT",
+          "date": "Wed, 09 Sep 2026 13:03:30 GMT",
           "server": "scaffolding on HTTPServer2",
-          "server-timing": "gfet4t7; dur=388",
+          "server-timing": "gfet4t7; dur=439",
           "transfer-encoding": "chunked",
           "vary": "Origin, X-Origin, Referer",
           "x-content-type-options": "nosniff",
@@ -630,7 +630,7 @@
       "callIndex": 0,
       "id": "6d554d2dcae5f704",
       "matchKey": "POST generativelanguage.googleapis.com/v1beta/models/gemini-embedding-001:embedContent",
-      "recordedAt": "2026-09-07T15:40:57.937Z",
+      "recordedAt": "2026-09-09T13:03:30.207Z",
       "request": {
         "body": {
           "kind": "json",
@@ -672,9 +672,9 @@
           "alt-svc": "h3=\":443\"; ma=2592000,h3-29=\":443\"; ma=2592000",
           "content-encoding": "gzip",
           "content-type": "application/json; charset=UTF-8",
-          "date": "Mon, 07 Sep 2026 15:40:57 GMT",
+          "date": "Wed, 09 Sep 2026 13:03:30 GMT",
           "server": "scaffolding on HTTPServer2",
-          "server-timing": "gfet4t7; dur=96",
+          "server-timing": "gfet4t7; dur=160",
           "transfer-encoding": "chunked",
           "vary": "Origin, X-Origin, Referer",
           "x-content-type-options": "nosniff",
@@ -689,7 +689,7 @@
       "callIndex": 0,
       "id": "720a28fc31a343f4",
       "matchKey": "POST generativelanguage.googleapis.com/v1beta/models/gemini-embedding-001:batchEmbedContents",
-      "recordedAt": "2026-09-07T15:40:58.079Z",
+      "recordedAt": "2026-09-09T13:03:30.401Z",
       "request": {
         "body": {
           "kind": "json",
@@ -762,9 +762,175 @@
           "alt-svc": "h3=\":443\"; ma=2592000,h3-29=\":443\"; ma=2592000",
           "content-encoding": "gzip",
           "content-type": "application/json; charset=UTF-8",
-          "date": "Mon, 07 Sep 2026 15:40:58 GMT",
+          "date": "Wed, 09 Sep 2026 13:03:30 GMT",
           "server": "scaffolding on HTTPServer2",
-          "server-timing": "gfet4t7; dur=134",
+          "server-timing": "gfet4t7; dur=185",
+          "transfer-encoding": "chunked",
+          "vary": "Origin, X-Origin, Referer",
+          "x-content-type-options": "nosniff",
+          "x-frame-options": "SAMEORIGIN",
+          "x-xss-protection": "0"
+        },
+        "status": 200,
+        "statusText": "OK"
+      }
+    },
+    {
+      "callIndex": 0,
+      "id": "c77e0a37fb1efb15",
+      "matchKey": "POST generativelanguage.googleapis.com/v1beta/models/gemini-embedding-2:embedContent",
+      "recordedAt": "2026-09-09T13:03:30.606Z",
+      "request": {
+        "body": {
+          "kind": "json",
+          "value": {
+            "content": {
+              "parts": [
+                {
+                  "text": "Braintrust tracing"
+                }
+              ],
+              "role": "user"
+            },
+            "outputDimensionality": 32
+          }
+        },
+        "headers": {},
+        "method": "POST",
+        "url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-embedding-2:embedContent"
+      },
+      "response": {
+        "body": {
+          "kind": "json",
+          "value": {
+            "embedding": {
+              "values": [
+                0.08071038, 0.28012815, 0.018841615, 0.009562744, 0.069406606,
+                0.017814213, -0.06958059, 0.04539254, -0.06323545, -0.31819236,
+                -0.054078095, -0.060959093, 0.08010079, -0.025305122,
+                -0.124555446, -0.02710189, 0.3289592, 0.1555856, -0.1358607,
+                -0.0497794, 0.015734533, 0.043512933, -0.048559673, 0.16208965,
+                -0.028266538, 0.12007465, 0.092058346, 0.018703327, -0.0165567,
+                0.74543446, 0.005825368, -0.056472614
+              ]
+            },
+            "usageMetadata": {
+              "promptTokenCount": 3,
+              "promptTokenDetails": [
+                {
+                  "modality": "TEXT",
+                  "tokenCount": 3
+                }
+              ]
+            }
+          }
+        },
+        "headers": {
+          "alt-svc": "h3=\":443\"; ma=2592000,h3-29=\":443\"; ma=2592000",
+          "content-encoding": "gzip",
+          "content-type": "application/json; charset=UTF-8",
+          "date": "Wed, 09 Sep 2026 13:03:30 GMT",
+          "server": "scaffolding on HTTPServer2",
+          "server-timing": "gfet4t7; dur=197",
+          "transfer-encoding": "chunked",
+          "vary": "Origin, X-Origin, Referer",
+          "x-content-type-options": "nosniff",
+          "x-frame-options": "SAMEORIGIN",
+          "x-xss-protection": "0"
+        },
+        "status": 200,
+        "statusText": "OK"
+      }
+    },
+    {
+      "callIndex": 0,
+      "id": "ef5ffb07b6161518",
+      "matchKey": "POST generativelanguage.googleapis.com/v1beta/models/gemini-embedding-2:batchEmbedContents",
+      "recordedAt": "2026-09-09T13:03:30.847Z",
+      "request": {
+        "body": {
+          "kind": "json",
+          "value": {
+            "requests": [
+              {
+                "content": {
+                  "parts": [
+                    {
+                      "text": "Hello"
+                    }
+                  ],
+                  "role": "user"
+                },
+                "model": "models/gemini-embedding-2",
+                "outputDimensionality": 32
+              },
+              {
+                "content": {
+                  "parts": [
+                    {
+                      "text": "World"
+                    }
+                  ],
+                  "role": "user"
+                },
+                "model": "models/gemini-embedding-2",
+                "outputDimensionality": 32
+              }
+            ]
+          }
+        },
+        "headers": {},
+        "method": "POST",
+        "url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-embedding-2:batchEmbedContents"
+      },
+      "response": {
+        "body": {
+          "kind": "json",
+          "value": {
+            "embeddings": [
+              {
+                "values": [
+                  -0.11603819, 0.09284151, 0.122977436, -0.021155909,
+                  -0.055655893, 0.024145145, 0.0007600952, 0.28668827,
+                  -0.07061079, -0.40605548, -0.09001498, 0.0023387196,
+                  -0.045679457, 0.023464516, 0.14354193, -0.04467839,
+                  0.18447505, -0.014900755, -0.09428771, -0.10732758,
+                  -0.033918656, 0.027843911, -0.062508196, 0.10233333,
+                  -0.033707816, 0.16881108, 0.018857155, -0.014355644,
+                  -0.18191175, 0.7331039, 0.0118450485, -0.03773947
+                ]
+              },
+              {
+                "values": [
+                  0.0009886308, 0.10176596, 0.07442452, -0.15019299,
+                  0.034036934, -0.036901105, -0.106107704, -0.014735982,
+                  -0.049352076, -0.396558, -0.13163109, 0.070870355,
+                  -0.039462797, 0.12061502, -0.021321777, -0.06480662,
+                  0.044602804, 0.14338993, -0.0570384, -0.017953409,
+                  0.0139030935, -0.10412871, -0.108817734, 0.06702684,
+                  0.15305057, -0.03723775, -0.07113043, 0.056832295,
+                  -0.12032641, 0.79097956, 0.033592917, -0.1299795
+                ]
+              }
+            ],
+            "usageMetadata": {
+              "promptTokenCount": 2,
+              "promptTokenDetails": [
+                {
+                  "modality": "TEXT",
+                  "tokenCount": 2
+                }
+              ]
+            }
+          }
+        },
+        "headers": {
+          "alt-svc": "h3=\":443\"; ma=2592000,h3-29=\":443\"; ma=2592000",
+          "content-encoding": "gzip",
+          "content-type": "application/json; charset=UTF-8",
+          "date": "Wed, 09 Sep 2026 13:03:30 GMT",
+          "server": "scaffolding on HTTPServer2",
+          "server-timing": "gfet4t7; dur=233",
           "transfer-encoding": "chunked",
           "vary": "Origin, X-Origin, Referer",
           "x-content-type-options": "nosniff",
@@ -779,7 +945,7 @@
       "callIndex": 0,
       "id": "36e7d43fefe939f0",
       "matchKey": "POST generativelanguage.googleapis.com/v1beta/models/braintrust-nonexistent-model:generateContent",
-      "recordedAt": "2026-09-07T15:40:58.138Z",
+      "recordedAt": "2026-09-09T13:03:30.933Z",
       "request": {
         "body": {
           "kind": "json",
@@ -817,9 +983,9 @@
           "alt-svc": "h3=\":443\"; ma=2592000,h3-29=\":443\"; ma=2592000",
           "content-encoding": "gzip",
           "content-type": "application/json; charset=UTF-8",
-          "date": "Mon, 07 Sep 2026 15:40:58 GMT",
+          "date": "Wed, 09 Sep 2026 13:03:30 GMT",
           "server": "scaffolding on HTTPServer2",
-          "server-timing": "gfet4t7; dur=50",
+          "server-timing": "gfet4t7; dur=77",
           "transfer-encoding": "chunked",
           "vary": "Origin, X-Origin, Referer",
           "x-content-type-options": "nosniff",

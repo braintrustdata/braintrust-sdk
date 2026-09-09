@@ -252,8 +252,31 @@ function interceptCall<
           } else if ("response" in value) {
             finish(() => logResponse(span, value.response));
           } else {
+            const metrics: Record<string, number> = {};
+            const promptTokens = value.usageMetadata?.promptTokenCount;
+            if (
+              typeof promptTokens === "number" &&
+              Number.isFinite(promptTokens) &&
+              promptTokens >= 0
+            ) {
+              metrics.prompt_tokens = promptTokens;
+              metrics.tokens = promptTokens;
+            }
+            for (const detail of value.usageMetadata?.promptTokenDetails ??
+              []) {
+              if (
+                detail.modality === "AUDIO" &&
+                typeof detail.tokenCount === "number" &&
+                Number.isFinite(detail.tokenCount) &&
+                detail.tokenCount >= 0
+              ) {
+                metrics.prompt_audio_tokens =
+                  (metrics.prompt_audio_tokens ?? 0) + detail.tokenCount;
+              }
+            }
             finish(() =>
               span.log({
+                metrics,
                 output: {
                   count: value.embeddings?.length ?? (value.embedding ? 1 : 0),
                 },

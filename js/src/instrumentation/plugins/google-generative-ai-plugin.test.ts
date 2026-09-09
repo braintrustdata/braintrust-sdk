@@ -158,6 +158,84 @@ describe("Google Generative AI instrumentation", () => {
     expect(spans[0]).not.toHaveProperty("metrics." + "prompt_tokens");
   });
 
+  it.each([0, 3])(
+    "captures reported embedding usage of %s tokens",
+    async (promptTokenCount) => {
+      await channels.embedContent.invoke(
+        async () => ({
+          embedding: { values: [0.1] },
+          usageMetadata: { promptTokenCount },
+        }),
+        { model: "models/embedding" },
+        ["hello"],
+        {},
+      );
+      const spans = await logger.drain();
+      expect(spans[0]).toMatchObject({
+        output: { count: 1 },
+        metrics: { prompt_tokens: promptTokenCount, tokens: promptTokenCount },
+      });
+      expect(spans[0]).not.toHaveProperty("metrics.completion_tokens");
+    },
+  );
+
+  it("captures batch embedding usage once, including audio input tokens", async () => {
+    await channels.batchEmbedContents.invoke(
+      async () => ({
+        embeddings: [{ values: [0.1] }, { values: [0.2] }],
+        usageMetadata: {
+          promptTokenCount: 12,
+          promptTokenDetails: [
+            { modality: "TEXT", tokenCount: 2 },
+            { modality: "AUDIO", tokenCount: 6 },
+            { modality: "AUDIO", tokenCount: 4 },
+          ],
+        },
+      }),
+      { model: "models/embedding" },
+      [
+        {
+          requests: [
+            { content: { parts: [{ text: "one" }] } },
+            { content: { parts: [{ text: "two" }] } },
+          ],
+        },
+      ],
+      {},
+    );
+    const spans = await logger.drain();
+    expect(spans).toHaveLength(1);
+    expect(spans[0]).toMatchObject({
+      output: { count: 2 },
+      metrics: { prompt_tokens: 12, tokens: 12, prompt_audio_tokens: 10 },
+    });
+    expect(spans[0]).not.toHaveProperty("metrics.completion_tokens");
+  });
+
+  it.each([-1, NaN, Infinity])(
+    "omits invalid embedding usage %s",
+    async (promptTokenCount) => {
+      await channels.embedContent.invoke(
+        async () => ({
+          embedding: { values: [0.1] },
+          usageMetadata: {
+            promptTokenCount,
+            promptTokenDetails: [
+              { modality: "AUDIO", tokenCount: promptTokenCount },
+            ],
+          },
+        }),
+        { model: "models/embedding" },
+        ["hello"],
+        {},
+      );
+      const spans = await logger.drain();
+      expect(spans[0]).not.toHaveProperty("metrics.prompt_tokens");
+      expect(spans[0]).not.toHaveProperty("metrics.tokens");
+      expect(spans[0]).not.toHaveProperty("metrics.prompt_audio_tokens");
+    },
+  );
+
   it("finishes response-only streams and preserves their aggregate and iterator identities", async () => {
     const response = Promise.resolve({
       candidates: [{ content: { parts: [{ text: "hello" }] } }],
