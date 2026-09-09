@@ -1,4 +1,4 @@
-import { runMain } from "../../helpers/provider-runtime.mjs";
+import { runMain } from "../../helpers/scenario-runtime";
 import { runScenario } from "./scenario.impl.mjs";
 
 const packageName =
@@ -7,5 +7,5 @@ const packageName =
 
 runMain(async () => {
   const sdk = await import(packageName);
-  await runScenario(sdk, false);
+  await runScenario(sdk, true);
 });
