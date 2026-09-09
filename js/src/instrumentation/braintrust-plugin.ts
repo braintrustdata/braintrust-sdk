@@ -7,6 +7,7 @@ import { ClaudeAgentSDKPlugin } from "./plugins/claude-agent-sdk-plugin";
 import { CloudflareThinkPlugin } from "./plugins/cloudflare-think-plugin";
 import { CursorSDKPlugin } from "./plugins/cursor-sdk-plugin";
 import { OpenAIAgentsPlugin } from "./plugins/openai-agents-plugin";
+import { GoogleGenerativeAIPlugin } from "./plugins/google-generative-ai-plugin";
 import { GoogleGenAIPlugin } from "./plugins/google-genai-plugin";
 import { HuggingFacePlugin } from "./plugins/huggingface-plugin";
 import { HuggingFaceTransformersPlugin } from "./plugins/huggingface-transformers-plugin";
@@ -64,6 +65,7 @@ export class BraintrustPlugin extends BasePlugin {
   private cloudflareThinkPlugin: CloudflareThinkPlugin | null = null;
   private cursorSDKPlugin: CursorSDKPlugin | null = null;
   private openAIAgentsPlugin: OpenAIAgentsPlugin | null = null;
+  private googleGenerativeAIPlugin: GoogleGenerativeAIPlugin | null = null;
   private googleGenAIPlugin: GoogleGenAIPlugin | null = null;
   private huggingFacePlugin: HuggingFacePlugin | null = null;
   private huggingFaceTransformersPlugin: HuggingFaceTransformersPlugin | null =
@@ -143,6 +145,11 @@ export class BraintrustPlugin extends BasePlugin {
     }
 
     // Enable Google GenAI integration (default: true)
+    if (integrations.googleGenerativeAI !== false) {
+      this.googleGenerativeAIPlugin = new GoogleGenerativeAIPlugin();
+      this.googleGenerativeAIPlugin.enable();
+    }
+
     // Support both 'googleGenAI' and legacy 'google' config keys
     if (integrations.googleGenAI !== false && integrations.google !== false) {
       this.googleGenAIPlugin = new GoogleGenAIPlugin();
@@ -306,6 +313,10 @@ export class BraintrustPlugin extends BasePlugin {
       this.openAIAgentsPlugin = null;
     }
 
+    if (this.googleGenerativeAIPlugin) {
+      this.googleGenerativeAIPlugin.disable();
+      this.googleGenerativeAIPlugin = null;
+    }
     if (this.googleGenAIPlugin) {
       this.googleGenAIPlugin.disable();
       this.googleGenAIPlugin = null;

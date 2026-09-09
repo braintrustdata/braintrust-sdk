@@ -17,6 +17,7 @@ import { flueConfigs } from "./flue";
 import { genkitConfigs } from "./genkit";
 import { gitHubCopilotConfigs } from "./github-copilot";
 import { googleADKConfigs } from "./google-adk";
+import { googleGenerativeAIConfigs } from "./google-generative-ai";
 import { googleGenAIConfigs } from "./google-genai";
 import { groqConfigs } from "./groq";
 import { huggingFaceConfigs } from "./huggingface";
@@ -76,6 +77,10 @@ const defaultInstrumentationConfigGroups: readonly InstrumentationConfigGroup[] 
     {
       integrations: ["openAIAgents"],
       configs: openAIAgentsCoreConfigs,
+    },
+    {
+      integrations: ["googleGenerativeAI"],
+      configs: googleGenerativeAIConfigs,
     },
     {
       integrations: ["google", "googleGenAI"],
