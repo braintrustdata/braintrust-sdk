@@ -55,6 +55,8 @@ Each scenario runs the SDK in a subprocess against a mock Braintrust server and 
 
 Provider e2e tests must aim to exercise actual models with real, valid input data. Populate replay cassettes by recording actual provider responses. Do not substitute fabricated model responses or synthetic provider servers for this coverage. For multimodal scenarios, use valid image, audio, video, and document files. See the [e2e testing skill](.agents/skills/e2e-tests/SKILL.md) for recording guidance.
 
+For real-provider instrumentation tests and e2e recordings, default to cheap models that support the behavior under test, unless the user explicitly requests otherwise. Keep prompts, output limits, and media duration small while preserving meaningful coverage.
+
 ```bash
 pnpm run test:e2e                 # Run all e2e scenarios (from repo root)
 pnpm run test:e2e:update          # Update e2e snapshots without re-recording cassettes
