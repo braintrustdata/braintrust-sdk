@@ -746,7 +746,7 @@ describe("inject / extract / round-trip", () => {
         expect(BAGGAGE_HEADER in carrier).toBe(false);
         expect(warnSpy).toHaveBeenCalledWith(
           "[braintrust]",
-          expect.stringContaining("without a braintrust.parent"),
+          expect.stringContaining("without braintrust.parent"),
         );
       } finally {
         resetDebugLoggerForTests();

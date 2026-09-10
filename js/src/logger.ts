@@ -8471,10 +8471,9 @@ export class SpanImpl implements Span {
         debugLogger
           .forState(this._state)
           .warn(
-            "Injecting trace context without a braintrust.parent; the receiver " +
-              "cannot route the trace and will start a fresh local span instead. " +
-              "The parent object id has not resolved yet (it resolves asynchronously " +
-              "after init); await the experiment or logger before injecting.",
+            "Injecting trace context without braintrust.parent because the span's " +
+              "destination is not available yet. The receiver will start a new " +
+              "local trace instead of continuing this one.",
           );
       }
       _injectIntoCarrier(resolvedCarrier, {
