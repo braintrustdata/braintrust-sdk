@@ -53,6 +53,8 @@ pnpm run test:checks              # Hermetic tests (core + vitest wrapper)
 
 Each scenario runs the SDK in a subprocess against a mock Braintrust server and snapshots the results. No API keys required for replay; recording needs provider keys.
 
+For real-provider instrumentation tests and e2e recordings, default to cheap models that support the behavior under test, unless the user explicitly requests otherwise. Keep prompts, output limits, and media duration small while preserving meaningful coverage.
+
 ```bash
 pnpm run test:e2e                 # Run all e2e scenarios (from repo root)
 pnpm run test:e2e:update          # Update e2e snapshots without re-recording cassettes

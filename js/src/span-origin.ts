@@ -42,6 +42,7 @@ export const INSTRUMENTATION_NAMES = {
   PI_CODING_AGENT: "pi-coding-agent",
   STRANDS_AGENT_SDK: "strands-agent-sdk",
   VOYAGEAI: "voyageai",
+  ELEVENLABS: "elevenlabs",
 } as const;
 
 export type SpanInstrumentationName =
