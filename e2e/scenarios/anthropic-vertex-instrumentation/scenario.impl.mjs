@@ -20,7 +20,8 @@ async function runAnthropicVertexInstrumentationScenario(options) {
     authClient,
     projectId: replay
       ? "cassette-project"
-      : process.env.ANTHROPIC_VERTEX_PROJECT_ID,
+      : (process.env.VERTEX_PROJECT_ID ??
+        process.env.ANTHROPIC_VERTEX_PROJECT_ID),
     region: process.env.CLOUD_ML_REGION || "global",
     baseURL: process.env.ANTHROPIC_VERTEX_BASE_URL,
     maxRetries: 0,
