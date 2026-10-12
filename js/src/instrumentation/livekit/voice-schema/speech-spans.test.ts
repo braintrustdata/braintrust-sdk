@@ -27,13 +27,27 @@ describe.each(["cascaded", "realtime"])("%s example", (name) => {
 
   const call = rows.find((row) => row.span_parents === null);
   const callInfo = voiceCall.parse(call?.metadata?.["voice.call"]);
+  const recordings = z
+    .array(
+      z.object({
+        id: z.string(),
+        timeline: z.object({
+          origin_unix_ms: z.number(),
+          recording_start_offset_ms: z.number(),
+        }),
+      }),
+    )
+    .parse(call?.metadata?.["audio.recordings"]);
+  const segmentStart = new Map(
+    recordings.map((r) => [r.id, r.timeline.recording_start_offset_ms]),
+  );
+  const toCallMs = (recordingId: string, offset: number) =>
+    (segmentStart.get(recordingId) ?? NaN) + offset;
 
   test("the call span declares its pipeline and clock", () => {
     expect(callInfo.pipeline).toBe(name);
-    const [recording] = z
-      .array(z.object({ timeline: z.object({ origin_unix_ms: z.number() }) }))
-      .parse(call?.metadata?.["audio.recordings"]);
-    expect(recording.timeline.origin_unix_ms).toBe(callInfo.origin_unix_ms);
+    for (const recording of recordings)
+      expect(recording.timeline.origin_unix_ms).toBe(callInfo.origin_unix_ms);
   });
 
   test("speech links resolve to spans of the right kind", () => {
@@ -62,11 +76,13 @@ describe.each(["cascaded", "realtime"])("%s example", (name) => {
   test("speech spans run from the first to the last audio fragment", () => {
     for (const span of speech) {
       const selections = span.metadata["audio.selections"] ?? [];
+      const first = selections[0];
+      const last = selections[selections.length - 1];
       expect(span.metrics.start * 1000 - callInfo.origin_unix_ms).toBeCloseTo(
-        selections[0].start_offset_ms,
+        toCallMs(first.recording_id, first.start_offset_ms),
       );
       expect(span.metrics.end * 1000 - callInfo.origin_unix_ms).toBeCloseTo(
-        selections[selections.length - 1].end_offset_ms,
+        toCallMs(last.recording_id, last.end_offset_ms),
       );
     }
     expect(

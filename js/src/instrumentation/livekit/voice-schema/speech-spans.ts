@@ -1,12 +1,14 @@
 import { z } from "zod/v3";
 
 const callMs = z.number().nonnegative();
+const durationMs = z.number().nonnegative();
+const segmentMs = z.number().nonnegative();
 
 const selection = z.object({
   recording_span_id: z.string(),
   recording_id: z.string(),
-  start_offset_ms: callMs,
-  end_offset_ms: callMs,
+  start_offset_ms: segmentMs,
+  end_offset_ms: segmentMs,
   channel_index: z.union([z.literal(0), z.literal(1)]),
 });
 
@@ -32,7 +34,7 @@ export const voiceSpeech = z
     produced_by: z.string().optional(),
     interrupted_by: z.string().optional(),
     played_ms: z.number().positive().optional(),
-    provider_played_ms: callMs.optional(),
+    provider_played_ms: durationMs.optional(),
     end_of_turn_ms: callMs.optional(),
     transcript: z
       .object({
