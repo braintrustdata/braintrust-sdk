@@ -54,7 +54,7 @@
         }
       ],
       "voice.timeline_version": 1,
-      "pipeline": "cascaded"
+      "voice.pipeline": "cascaded"
     }
   },
   {
@@ -384,7 +384,7 @@
         {
           "seq": 0,
           "at_ms": 300,
-          "basis": "audio",
+          "basis": "local",
           "kind": "speech_start",
           "speaker": "user",
           "utterance_id": "u1"
@@ -392,7 +392,7 @@
         {
           "seq": 1,
           "at_ms": 2900,
-          "basis": "audio",
+          "basis": "local",
           "kind": "speech_end",
           "speaker": "user",
           "utterance_id": "u1"
@@ -413,11 +413,19 @@
           "utterance_id": "u1",
           "final": true,
           "text": "Hi, can I move my Thursday cleaning to Friday morning?",
-          "message_id": "item_u1",
           "source": "stt"
         },
         {
           "seq": 4,
+          "at_ms": 3450,
+          "basis": "local",
+          "kind": "message",
+          "speaker": "user",
+          "message_id": "item_u1",
+          "utterance_ids": ["u1"]
+        },
+        {
+          "seq": 5,
           "at_ms": 3450,
           "basis": "local",
           "kind": "response_start",
@@ -426,7 +434,7 @@
           "in_reply_to": ["u1"]
         },
         {
-          "seq": 5,
+          "seq": 6,
           "at_ms": 4100,
           "basis": "local",
           "kind": "tool_call",
@@ -436,7 +444,7 @@
           "span_id": "tool-1"
         },
         {
-          "seq": 6,
+          "seq": 7,
           "at_ms": 4600,
           "basis": "local",
           "kind": "tool_result",
@@ -445,7 +453,7 @@
           "outcome": "ok"
         },
         {
-          "seq": 7,
+          "seq": 8,
           "at_ms": 4600,
           "basis": "local",
           "kind": "response_start",
@@ -454,43 +462,51 @@
           "in_reply_to": ["u1"]
         },
         {
-          "seq": 8,
+          "seq": 9,
           "at_ms": 5300,
           "basis": "audio",
           "kind": "speech_start",
           "speaker": "agent",
-          "utterance_id": "a1",
+          "utterance_id": "speech_1/0",
           "response_id": "r2"
         },
         {
-          "seq": 9,
+          "seq": 10,
           "at_ms": 7600,
-          "basis": "audio",
+          "basis": "local",
           "kind": "speech_start",
           "speaker": "user",
           "utterance_id": "u2"
         },
         {
-          "seq": 10,
+          "seq": 11,
           "at_ms": 7900,
           "basis": "audio",
           "kind": "speech_end",
           "speaker": "agent",
-          "utterance_id": "a1",
+          "utterance_id": "speech_1/0",
           "interrupted": true,
           "played_ms": 2600
         },
         {
-          "seq": 11,
+          "seq": 12,
           "at_ms": 7900,
           "basis": "local",
           "kind": "transcript",
           "speaker": "agent",
-          "utterance_id": "a1",
+          "utterance_id": "speech_1/0",
           "final": true,
           "text": "I have nine thirty or eleven on Fri",
-          "message_id": "item_a1",
           "source": "playout"
+        },
+        {
+          "seq": 13,
+          "at_ms": 7900,
+          "basis": "local",
+          "kind": "message",
+          "speaker": "agent",
+          "message_id": "item_a1",
+          "utterance_ids": ["speech_1/0"]
         }
       ]
     }
@@ -516,34 +532,42 @@
       },
       "voice.events": [
         {
-          "seq": 12,
-          "at_ms": 8500,
-          "basis": "audio",
-          "kind": "speech_end",
-          "speaker": "user",
-          "utterance_id": "u2"
-        },
-        {
-          "seq": 13,
-          "at_ms": 8600,
+          "seq": 14,
+          "at_ms": 8520,
           "basis": "local",
           "kind": "transcript",
           "speaker": "user",
           "utterance_id": "u2",
           "final": true,
           "text": "Nine thirty works.",
-          "message_id": "item_u2",
           "source": "stt"
         },
         {
-          "seq": 14,
+          "seq": 15,
+          "at_ms": 8500,
+          "basis": "local",
+          "kind": "speech_end",
+          "speaker": "user",
+          "utterance_id": "u2"
+        },
+        {
+          "seq": 16,
           "at_ms": 8700,
           "basis": "local",
           "kind": "end_of_turn",
           "utterance_ids": ["u2"]
         },
         {
-          "seq": 15,
+          "seq": 17,
+          "at_ms": 8700,
+          "basis": "local",
+          "kind": "message",
+          "speaker": "user",
+          "message_id": "item_u2",
+          "utterance_ids": ["u2"]
+        },
+        {
+          "seq": 18,
           "at_ms": 8700,
           "basis": "local",
           "kind": "response_start",
@@ -552,7 +576,7 @@
           "in_reply_to": ["u2"]
         },
         {
-          "seq": 16,
+          "seq": 19,
           "at_ms": 9000,
           "basis": "local",
           "kind": "tool_call",
@@ -562,7 +586,7 @@
           "span_id": "tool-2"
         },
         {
-          "seq": 17,
+          "seq": 20,
           "at_ms": 9400,
           "basis": "local",
           "kind": "tool_result",
@@ -571,7 +595,7 @@
           "outcome": "ok"
         },
         {
-          "seq": 18,
+          "seq": 21,
           "at_ms": 9400,
           "basis": "local",
           "kind": "response_start",
@@ -580,38 +604,46 @@
           "in_reply_to": ["u2"]
         },
         {
-          "seq": 19,
+          "seq": 22,
           "at_ms": 9900,
           "basis": "audio",
           "kind": "speech_start",
           "speaker": "agent",
-          "utterance_id": "a2",
+          "utterance_id": "speech_2/0",
           "response_id": "r4"
         },
         {
-          "seq": 20,
+          "seq": 23,
           "at_ms": 12600,
           "basis": "audio",
           "kind": "speech_end",
           "speaker": "agent",
-          "utterance_id": "a2",
+          "utterance_id": "speech_2/0",
           "interrupted": false,
           "played_ms": 2700
         },
         {
-          "seq": 21,
+          "seq": 24,
           "at_ms": 12600,
           "basis": "local",
           "kind": "transcript",
           "speaker": "agent",
-          "utterance_id": "a2",
+          "utterance_id": "speech_2/0",
           "final": true,
           "text": "Done — you're booked Friday at nine thirty.",
-          "message_id": "item_a2",
           "source": "playout"
         },
         {
-          "seq": 22,
+          "seq": 25,
+          "at_ms": 12600,
+          "basis": "local",
+          "kind": "message",
+          "speaker": "agent",
+          "message_id": "item_a2",
+          "utterance_ids": ["speech_2/0"]
+        },
+        {
+          "seq": 26,
           "at_ms": 13000,
           "basis": "local",
           "kind": "call_end",

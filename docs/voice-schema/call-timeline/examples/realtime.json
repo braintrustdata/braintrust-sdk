@@ -54,7 +54,7 @@
         }
       ],
       "voice.timeline_version": 1,
-      "pipeline": "realtime"
+      "voice.pipeline": "realtime"
     }
   },
   {
@@ -437,7 +437,7 @@
         {
           "seq": 10,
           "at_ms": 7600,
-          "basis": "provider",
+          "basis": "local",
           "kind": "truncate",
           "utterance_id": "item_a1",
           "audio_end_ms": 2600
@@ -485,7 +485,7 @@
           "final": true,
           "text": "I have nine thirty or eleven on Fri",
           "message_id": "item_a1",
-          "source": "provider"
+          "source": "playout"
         },
         {
           "seq": 13,
@@ -568,7 +568,7 @@
           "final": true,
           "text": "Done — you're booked Friday at nine thirty.",
           "message_id": "item_a2",
-          "source": "provider"
+          "source": "playout"
         },
         {
           "seq": 22,

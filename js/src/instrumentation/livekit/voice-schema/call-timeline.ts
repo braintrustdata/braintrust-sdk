@@ -33,6 +33,13 @@ const transcript = base.extend({
   source: z.enum(["stt", "provider", "playout"]),
 });
 
+const message = base.extend({
+  kind: z.literal("message"),
+  speaker,
+  message_id: z.string().min(1),
+  utterance_ids: z.array(z.string().min(1)).min(1),
+});
+
 const endOfTurn = base.extend({
   kind: z.literal("end_of_turn"),
   utterance_ids: z.array(z.string().min(1)).min(1),
@@ -69,7 +76,13 @@ const truncate = base.extend({
 const missing = base.extend({
   kind: z.literal("missing"),
   utterance_id: z.string().min(1).optional(),
-  evidence: z.enum(["transcript", "speech_end", "audio", "tool_result"]),
+  evidence: z.enum([
+    "transcript",
+    "speech_end",
+    "audio",
+    "tool_result",
+    "timeline",
+  ]),
   reason: z.string().min(1),
 });
 
@@ -82,6 +95,7 @@ export const voiceEventSchema = z.discriminatedUnion("kind", [
   speechStart,
   speechEnd,
   transcript,
+  message,
   endOfTurn,
   responseStart,
   toolCall,
@@ -95,6 +109,12 @@ export const timelineChunkSchema = z.object({
   call_span_id: z.string().min(1),
   chunk_index: z.number().int().nonnegative(),
   final: z.boolean(),
+});
+
+export const callSpanMetadataSchema = z.object({
+  "voice.timeline_version": z.literal(1),
+  "voice.pipeline": z.enum(["cascaded", "realtime", "half_cascade"]),
+  "voice.timeline_origin_unix_ms": z.number().optional(),
 });
 
 export const timelineRowMetadataSchema = z.object({
