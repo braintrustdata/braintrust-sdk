@@ -54,8 +54,7 @@
         }
       ],
       "voice.timeline_version": 1,
-      "voice.pipeline": "realtime",
-      "voice.server_vad_silence_ms": 500
+      "voice.pipeline": "realtime"
     }
   },
   {
@@ -193,8 +192,8 @@
       "type": "llm"
     },
     "metrics": {
-      "start": 1791830008.6,
-      "end": 1791830008.9
+      "start": 1791830009.0,
+      "end": 1791830009.3
     },
     "input": [
       {
@@ -247,8 +246,8 @@
       "type": "tool"
     },
     "metrics": {
-      "start": 1791830008.9,
-      "end": 1791830009.3
+      "start": 1791830009.3,
+      "end": 1791830009.7
     },
     "input": {
       "appointment_id": "apt_481",
@@ -273,7 +272,7 @@
       "type": "llm"
     },
     "metrics": {
-      "start": 1791830009.3,
+      "start": 1791830009.7,
       "end": 1791830012.5
     },
     "input": [
@@ -356,7 +355,7 @@
         },
         {
           "seq": 1,
-          "at_ms": 2900,
+          "at_ms": 3400,
           "basis": "local",
           "kind": "speech_end",
           "speaker": "user",
@@ -507,7 +506,7 @@
         },
         {
           "seq": 15,
-          "at_ms": 8500,
+          "at_ms": 9000,
           "basis": "local",
           "kind": "speech_end",
           "speaker": "user",
@@ -515,14 +514,14 @@
         },
         {
           "seq": 16,
-          "at_ms": 8600,
+          "at_ms": 9000,
           "basis": "local",
           "kind": "end_of_turn",
           "utterance_ids": ["u2"]
         },
         {
           "seq": 17,
-          "at_ms": 8600,
+          "at_ms": 9000,
           "basis": "local",
           "kind": "message",
           "speaker": "user",
@@ -531,7 +530,7 @@
         },
         {
           "seq": 18,
-          "at_ms": 8600,
+          "at_ms": 9000,
           "basis": "local",
           "kind": "response_start",
           "response_id": "speech_3",
@@ -540,7 +539,7 @@
         },
         {
           "seq": 19,
-          "at_ms": 8900,
+          "at_ms": 9300,
           "basis": "local",
           "kind": "tool_call",
           "response_id": "speech_3",
@@ -550,7 +549,7 @@
         },
         {
           "seq": 20,
-          "at_ms": 9300,
+          "at_ms": 9700,
           "basis": "local",
           "kind": "tool_result",
           "tool_call_id": "call_2",
@@ -559,7 +558,7 @@
         },
         {
           "seq": 21,
-          "at_ms": 9300,
+          "at_ms": 9700,
           "basis": "local",
           "kind": "response_start",
           "response_id": "speech_4",

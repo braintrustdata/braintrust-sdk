@@ -115,8 +115,8 @@ tool_call.span_id / tool_result.span_id -> tool row;  tool row "gen_ai.tool.call
 
 <!-- prettier-ignore -->
 ```jsonc
-// realtime: call span adds "voice.server_vad_silence_ms": 500
-{ "seq": 1, "at_ms": 2900, "basis": "local", "kind": "speech_end", "speaker": "user", "utterance_id": "u1" }, // receipt 3400 - 500
+// realtime: call span { "voice.timeline_version": 1, "voice.pipeline": "realtime" }; no silence value was given
+{ "seq": 1, "at_ms": 3400, "basis": "local", "kind": "speech_end", "speaker": "user", "utterance_id": "u1" }, // receipt, incl. 500 ms padding
 { "seq": 2, "at_ms": 3600, "basis": "local", "kind": "end_of_turn", "utterance_ids": ["u1"] }, // generation entry, not a commit
 { "seq": 3, "at_ms": 3600, "basis": "local", "kind": "message", "speaker": "user", "message_id": "item_u1", "utterance_ids": ["u1"] },
 { "seq": 4, "at_ms": 3600, "basis": "local", "kind": "response_start", "response_id": "speech_1", "span_id": "rt-1", "in_reply_to": ["u1"] },
@@ -131,21 +131,21 @@ tool_call.span_id / tool_result.span_id -> tool row;  tool row "gen_ai.tool.call
 { "seq": 12, "at_ms": 7900, "basis": "local", "kind": "truncate", "utterance_id": "speech_2/0", "audio_end_ms": 2900 }, // realtime only; = played_ms
 { "seq": 13, "at_ms": 7900, "basis": "local", "kind": "transcript", "speaker": "agent", "utterance_id": "speech_2/0", "final": true,
   "text": "I have nine thirty or eleven on Fri", "source": "playout" },
-{ "seq": 17, "at_ms": 8600, "basis": "local", "kind": "message", "speaker": "user", "message_id": "item_u2", "utterance_ids": ["u2"] }, // no transcript
+{ "seq": 17, "at_ms": 9000, "basis": "local", "kind": "message", "speaker": "user", "message_id": "item_u2", "utterance_ids": ["u2"] }, // no transcript
 { "seq": 26, "at_ms": 13000, "basis": "local", "kind": "missing", "utterance_id": "u2", "evidence": "transcript",
   "reason": "input_transcription_not_received" } // replaces the cascaded seq 14 transcript
 ```
 
 Cascaded vs realtime: what changes in the payload
 
-|                          | Cascaded                                 | Realtime                                                                                   |
-| ------------------------ | ---------------------------------------- | ------------------------------------------------------------------------------------------ |
-| Call span                | `voice.pipeline: "cascaded"`             | `"realtime"`, plus `voice.server_vad_silence_ms` when the integration is given it          |
-| Caller transcript        | `source: "stt"`, before `response_start` | `source: "provider"` with `message_id`; may arrive after `tool_call`, or never (`missing`) |
-| `end_of_turn.at_ms`      | turn detector resolve time (3400)        | entry of the answering generation (3600)                                                   |
-| Caller `message`         | at the user commit                       | at generation entry, even without a transcript (`item_u2`)                                 |
-| Interrupted agent speech | `speech_end` with `played_ms` only       | same, plus a `truncate` marker equal to `played_ms` (LiveKit)                              |
-| Step rows                | `llm_response` + `tts` rows              | `llm_response` rows only (`contrib.livekit.response_id` = provider response id)            |
+|                          | Cascaded                                 | Realtime                                                                                               |
+| ------------------------ | ---------------------------------------- | ------------------------------------------------------------------------------------------------------ |
+| Call span                | `voice.pipeline: "cascaded"`             | `"realtime"`; `voice.server_vad_silence_ms` only when the integration is given it (not in the example) |
+| Caller transcript        | `source: "stt"`, before `response_start` | `source: "provider"` with `message_id`; may arrive after `tool_call`, or never (`missing`)             |
+| `end_of_turn.at_ms`      | turn detector resolve time (3400)        | entry of the answering generation (3600)                                                               |
+| Caller `message`         | at the user commit                       | at generation entry, even without a transcript (`item_u2`)                                             |
+| Interrupted agent speech | `speech_end` with `played_ms` only       | same, plus a `truncate` marker equal to `played_ms` (LiveKit)                                          |
+| Step rows                | `llm_response` + `tts` rows              | `llm_response` rows only (`contrib.livekit.response_id` = provider response id)                        |
 
 Implemented: zod types (`js/src/instrumentation/livekit/voice-schema/call-timeline.ts`), examples, test. Sketch: LiveKit/Pipecat emission. Lingua mapping: implemented in the companion Lingua PR (`specs/voice-schema-call-timeline.md`, branch `kevchoi/voice-schema-call-timeline`).
 
@@ -380,17 +380,17 @@ livekit.agent_session            audio.recordings: call-0000 (13 s); voice.timel
 
 Concrete differences, same audio:
 
-|                                                | Cascaded                                                                                                   | Realtime                                                                                                                                                                                     |
-| ---------------------------------------------- | ---------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Caller utterance ids                           | `u1`, `u2`                                                                                                 | `u1`, `u2`; `message` maps `u1` → `item_u1` at 3600 (generation entry)                                                                                                                       |
-| Caller transcript of turn 1                    | `stt` at 3450; `message` links `item_u1` at commit                                                         | `provider` at 4300 with `message_id: item_u1`, after `tool_call` at 4100                                                                                                                     |
-| Turn-1 latency, caller end → first agent audio | 2900 → 5300 = 2400 ms: 500 ms end-of-turn wait, 50 ms STT, 650 ms LLM, 500 ms tool, 500 ms LLM, 200 ms TTS | 2900 → 5000 = 2100 ms: 700 ms to generation entry (`end_of_turn` at 3600; server-VAD silence and commit are not separable in LiveKit), 500 ms to the tool call, 500 ms tool, 400 ms to audio |
-| Agent utterance ids                            | `speech_2/0`, `speech_4/0`; `message` links `item_a1`, `item_a2`                                           | same handle-based ids; `message` links the realtime output items `item_a1`, `item_a2`                                                                                                        |
-| Barge-in                                       | agent `speech_end` 7900, `played_ms` 2600                                                                  | `speech_end` 7900 with `played_ms` 2900, and a `truncate` marker at 7900 with the same 2900                                                                                                  |
-| Out-of-order evidence                          | `u2` STT final arrives at 8520, before the VAD stop is emitted; `speech_end` (seq 15) is dated 8500        | caller `speech_end` is dated receipt 3400 − 500 ms server-VAD silence = 2900                                                                                                                 |
-| Caller's barge-in text                         | `stt` "Nine thirty works."                                                                                 | none: `message` `item_u2` at 8600 but `missing{evidence: transcript}`; the `rt-3` input user content is `""`                                                                                 |
-| Agent text actually said                       | `playout` "…on Fri"; `llm-2` output holds the planned sentence                                             | `playout` "…on Fri"; `rt-2` output already truncated                                                                                                                                         |
-| STT/TTS steps                                  | `tts-1`, `tts-2`                                                                                           | none                                                                                                                                                                                         |
+|                                                | Cascaded                                                                                                   | Realtime                                                                                                                                                                                             |
+| ---------------------------------------------- | ---------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Caller utterance ids                           | `u1`, `u2`                                                                                                 | `u1`, `u2`; `message` maps `u1` → `item_u1` at 3600 (generation entry)                                                                                                                               |
+| Caller transcript of turn 1                    | `stt` at 3450; `message` links `item_u1` at commit                                                         | `provider` at 4300 with `message_id: item_u1`, after `tool_call` at 4100                                                                                                                             |
+| Turn-1 latency, caller end → first agent audio | 2900 → 5300 = 2400 ms: 500 ms end-of-turn wait, 50 ms STT, 650 ms LLM, 500 ms tool, 500 ms LLM, 200 ms TTS | 3400 → 5000 = 1600 ms measured from the padded end (2100 ms from the audible end at 2900): 200 ms to generation entry (`end_of_turn` at 3600), 500 ms to the tool call, 500 ms tool, 400 ms to audio |
+| Agent utterance ids                            | `speech_2/0`, `speech_4/0`; `message` links `item_a1`, `item_a2`                                           | same handle-based ids; `message` links the realtime output items `item_a1`, `item_a2`                                                                                                                |
+| Barge-in                                       | agent `speech_end` 7900, `played_ms` 2600                                                                  | `speech_end` 7900 with `played_ms` 2900, and a `truncate` marker at 7900 with the same 2900                                                                                                          |
+| Out-of-order evidence                          | `u2` STT final arrives at 8520, before the VAD stop is emitted; `speech_end` (seq 15) is dated 8500        | caller `speech_end` is the receipt time (3400, 9000) and includes the 500 ms server-VAD padding, because no silence value was given                                                                  |
+| Caller's barge-in text                         | `stt` "Nine thirty works."                                                                                 | none: `message` `item_u2` at 9000 but `missing{evidence: transcript}`; the `rt-3` input user content is `""`                                                                                         |
+| Agent text actually said                       | `playout` "…on Fri"; `llm-2` output holds the planned sentence                                             | `playout` "…on Fri"; `rt-2` output already truncated                                                                                                                                                 |
+| STT/TTS steps                                  | `tts-1`, `tts-2`                                                                                           | none                                                                                                                                                                                                 |
 
 ## Customer usefulness
 
