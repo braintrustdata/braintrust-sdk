@@ -36,10 +36,60 @@ test("exports only intentional extension types", () => {
   expectTypeOf<TemplateRendererPlugin>().toBeObject();
   expectTypeOf<LangChainCallbackHandlerOptions>().toBeObject();
   expectTypeOf(BraintrustLangChainCallbackHandler).toBeConstructibleWith();
-  expectTypeOf<
-    EvalTask<unknown, unknown, unknown, void, never>
-  >().toBeFunction();
+  expectTypeOf<EvalTask<unknown, unknown, unknown, void>>().toBeFunction();
   expectTypeOf<EvalScorer<unknown, unknown, unknown>>().toBeFunction();
+});
+
+test("does not expose deprecated tools or evaluation parameters", () => {
+  expect(publicExports).not.toHaveProperty("loadParameters");
+  const project = publicExports.projects.create({ name: "test-project" });
+  expect(project).not.toHaveProperty("tools");
+  expect(project).not.toHaveProperty("parameters");
+
+  if (false) {
+    // @ts-expect-error Saved configurations are no longer supported.
+    publicExports.loadParameters;
+    // @ts-expect-error Saved tools are no longer supported.
+    project.tools;
+    // @ts-expect-error Configuration builders are no longer supported.
+    project.parameters;
+
+    const evaluator = {
+      data: [{ input: 1 }],
+      task: (input: number) => input,
+      scores: [],
+    };
+    publicExports.Eval("test", {
+      ...evaluator,
+      // @ts-expect-error Local parameter schemas are no longer supported.
+      parameters: {},
+    });
+    publicExports.Eval("test", evaluator, {
+      // @ts-expect-error Parameter overrides are no longer supported.
+      parameters: {},
+    });
+    publicExports.Eval("test", {
+      ...evaluator,
+      task: (input, hooks) => {
+        // @ts-expect-error Tasks no longer receive parameters.
+        hooks.parameters;
+        return input;
+      },
+    });
+    project.prompts.create({
+      name: "test-prompt",
+      model: "test-model",
+      messages: [],
+      // @ts-expect-error Prompts accept inline provider tools, not saved tools.
+      tools: [{ type: "function", id: "saved-tool" }],
+    });
+    publicExports.invoke({
+      globalFunction: "test",
+      input: {},
+      // @ts-expect-error Deprecated function kinds are no longer supported.
+      functionType: "tool",
+    });
+  }
 });
 
 test("does not expose runtime schemas or implementation helpers", () => {

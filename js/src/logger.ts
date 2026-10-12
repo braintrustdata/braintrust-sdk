@@ -145,39 +145,6 @@ export type DatasetRestoreResult = {
   rows_deleted: number;
 };
 
-const parametersRowSchema = z.object({
-  id: z.string().uuid(),
-  _xact_id: z.string(),
-  project_id: z.string().uuid(),
-  name: z.string(),
-  slug: z.string(),
-  description: z.union([z.string(), z.null()]).optional(),
-  function_type: z.literal("parameters"),
-  function_data: z.object({
-    type: z.literal("parameters"),
-    data: z.record(z.unknown()).optional(),
-    __schema: z.record(z.unknown()),
-  }),
-  metadata: z
-    .union([z.object({}).partial().passthrough(), z.null()])
-    .optional(),
-});
-type ParametersRow = {
-  id: string;
-  _xact_id: string;
-  project_id: string;
-  name: string;
-  slug: string;
-  description?: string | null;
-  function_type: "parameters";
-  function_data: {
-    type: "parameters";
-    data?: Record<string, unknown>;
-    __schema: Record<string, unknown>;
-  };
-  metadata?: Record<string, unknown> | null;
-};
-
 import { waitUntil } from "@vercel/functions";
 import {
   parseTemplateFormat,
@@ -192,17 +159,9 @@ import {
   devNullWritableStream,
 } from "./functions/stream";
 import iso, { IsoAsyncLocalStorage } from "./isomorph";
-import { createCacheLayers } from "./prompt-cache/cache-config";
-import {
-  PromptCache,
-  type PromptDiskCacheEntry,
-  type PromptMemoryCacheEntry,
-} from "./prompt-cache/prompt-cache";
-import {
-  ParametersCache,
-  type ParametersDiskCacheEntry,
-  type ParametersMemoryCacheEntry,
-} from "./prompt-cache/parameters-cache";
+import { createPromptCache } from "./prompt-cache/cache-config";
+import type { PromptCache } from "./prompt-cache/prompt-cache";
+
 import { LRUCache } from "./lru-cache";
 import {
   addAzureBlobHeaders,
@@ -216,7 +175,6 @@ import {
 import { lintTemplate as _lintMustacheTemplate } from "./template/mustache-utils";
 import { prettifyXact } from "../util/index";
 import { SpanCache, CachedSpan } from "./span-cache";
-import type { EvalParameters, InferParameters } from "./eval-parameters";
 import {
   detectSpanOriginEnvironment,
   getSpanInstrumentationName,
@@ -785,11 +743,6 @@ type ResolvedLoaderLoginOptions = Required<
     existingState?: BraintrustState;
   };
 
-type LoaderCacheViews = {
-  promptCache: PromptCache;
-  parametersCache: ParametersCache;
-};
-
 type LoaderRequestState = Pick<BraintrustState, "appUrl" | "orgId" | "apiConn">;
 
 // proxyUrl may point at the universal proxy (`{apiUrl}/v1/proxy`) for
@@ -833,7 +786,6 @@ export class BraintrustState {
   private _proxyConn: HTTPConnection | null = null;
 
   public promptCache: PromptCache;
-  public parametersCache: ParametersCache;
   public spanCache: SpanCache;
   private _idGenerator: IDGenerator | null = null;
   private _contextManager: ContextManager | null = null;
@@ -886,34 +838,7 @@ export class BraintrustState {
 
     this.resetLoginInfo();
 
-    const { memoryCache, diskCache } = createCacheLayers<
-      PromptMemoryCacheEntry,
-      PromptDiskCacheEntry
-    >({
-      memoryMaxEnvVar: "BRAINTRUST_PROMPT_CACHE_MEMORY_MAX",
-      diskCacheDirEnvVar: "BRAINTRUST_PROMPT_CACHE_DIR",
-      diskMaxEnvVar: "BRAINTRUST_PROMPT_CACHE_DISK_MAX",
-      getDefaultDiskCacheDir: () =>
-        `${iso.getEnv("HOME") ?? iso.homedir!()}/.braintrust/prompt_cache`,
-    });
-    this.promptCache = new PromptCache({ memoryCache, diskCache });
-
-    const {
-      memoryCache: parametersMemoryCache,
-      diskCache: parametersDiskCache,
-    } = createCacheLayers<ParametersMemoryCacheEntry, ParametersDiskCacheEntry>(
-      {
-        memoryMaxEnvVar: "BRAINTRUST_PARAMETERS_CACHE_MEMORY_MAX",
-        diskCacheDirEnvVar: "BRAINTRUST_PARAMETERS_CACHE_DIR",
-        diskMaxEnvVar: "BRAINTRUST_PARAMETERS_CACHE_DISK_MAX",
-        getDefaultDiskCacheDir: () =>
-          `${iso.getEnv("HOME") ?? iso.homedir!()}/.braintrust/parameters_cache`,
-      },
-    );
-    this.parametersCache = new ParametersCache({
-      memoryCache: parametersMemoryCache,
-      diskCache: parametersDiskCache,
-    });
+    this.promptCache = createPromptCache();
 
     this.spanCache = new SpanCache({ disabled: loginParams.disableSpanCache });
     this.spanOriginEnvironment = detectSpanOriginEnvironment();
@@ -1025,10 +950,10 @@ export class BraintrustState {
   }
 
   /** @internal */
-  public _internalGetLoaderCacheViews(
+  public _internalGetPromptCache(
     loginOptions: ResolvedLoaderLoginOptions,
     requestState?: LoaderRequestState,
-  ): LoaderCacheViews {
+  ): PromptCache {
     const expectedResolvedOrgIdentity =
       requestState?.orgId && requestState.appUrl
         ? JSON.stringify([
@@ -1038,16 +963,10 @@ export class BraintrustState {
           ])
         : undefined;
 
-    return {
-      promptCache: this.promptCache.withNamespace(
-        loginOptions.credentialCacheNamespace,
-        expectedResolvedOrgIdentity,
-      ),
-      parametersCache: this.parametersCache.withNamespace(
-        loginOptions.credentialCacheNamespace,
-        expectedResolvedOrgIdentity,
-      ),
-    };
+    return this.promptCache.withNamespace(
+      loginOptions.credentialCacheNamespace,
+      expectedResolvedOrgIdentity,
+    );
   }
 
   /** @internal */
@@ -4054,17 +3973,11 @@ export type DatasetRef = {
   id: string;
 } & DatasetSelection;
 
-export interface ParametersRef {
-  id: string;
-  version?: string;
-}
-
 export type InitOptions<IsOpen extends boolean> = FullLoginOptions & {
   experiment?: string;
   description?: string;
   dataset?: AnyDataset | DatasetRef;
   _internal_btql?: Record<string, unknown>;
-  parameters?: ParametersRef | RemoteEvalParameters<boolean, boolean>;
   update?: boolean;
   baseExperiment?: string;
   isPublic?: boolean;
@@ -4144,7 +4057,6 @@ export function init<IsOpen extends boolean = false>(
     description,
     dataset,
     _internal_btql,
-    parameters,
     baseExperiment,
     isPublic,
     open,
@@ -4290,18 +4202,6 @@ export function init<IsOpen extends boolean = false>(
         args["internal_metadata"] = {
           dataset_filter: datasetFilter,
         };
-      }
-
-      if (parameters !== undefined) {
-        if (RemoteEvalParameters.isParameters(parameters)) {
-          args["parameters_id"] = parameters.id;
-          args["parameters_version"] = parameters.version;
-        } else {
-          args["parameters_id"] = parameters.id;
-          if (parameters.version !== undefined) {
-            args["parameters_version"] = parameters.version;
-          }
-        }
       }
 
       if (isPublic !== undefined) {
@@ -4918,99 +4818,6 @@ export type LoadPromptOptions = FullLoginOptions & {
   state?: BraintrustState;
 };
 
-type LoadParametersBaseOptions = FullLoginOptions & {
-  state?: BraintrustState;
-};
-
-export type LoadParametersByIdOptions = LoadParametersBaseOptions & {
-  id: string;
-  version?: string;
-};
-
-export type LoadParametersByIdWithEnvOptions = LoadParametersBaseOptions & {
-  id: string;
-  environment: string;
-  version?: string;
-};
-
-export type LoadParametersByProjectNameOptions = LoadParametersBaseOptions & {
-  projectName: string;
-  slug: string;
-  version?: string;
-};
-
-export type LoadParametersByProjectNameWithEnvOptions =
-  LoadParametersBaseOptions & {
-    projectName: string;
-    slug: string;
-    environment: string;
-    version?: string;
-  };
-
-export type LoadParametersByProjectIdOptions = LoadParametersBaseOptions & {
-  projectId: string;
-  slug: string;
-  version?: string;
-};
-
-export type LoadParametersByProjectIdWithEnvOptions =
-  LoadParametersBaseOptions & {
-    projectId: string;
-    slug: string;
-    environment: string;
-    version?: string;
-  };
-
-export type LoadParametersOptions =
-  | LoadParametersByIdOptions
-  | LoadParametersByIdWithEnvOptions
-  | LoadParametersByProjectNameOptions
-  | LoadParametersByProjectNameWithEnvOptions
-  | LoadParametersByProjectIdOptions
-  | LoadParametersByProjectIdWithEnvOptions;
-
-type LoadParametersImplementationOptions = LoadParametersBaseOptions & {
-  projectName?: string;
-  projectId?: string;
-  slug?: string;
-  version?: string;
-  id?: string;
-  environment?: string;
-};
-
-type LoaderRequestResult<T> =
-  | ({ ok: true; response: T } & LoaderCacheViews)
-  | ({ ok: false; error: unknown } & LoaderCacheViews);
-
-async function runCredentialScopedLoaderRequest<T>(
-  state: BraintrustState,
-  loginOptions: Pick<
-    FullLoginOptions,
-    "apiKey" | "appUrl" | "orgName" | "fetch" | "forceLogin"
-  >,
-  request: (requestState: LoaderRequestState) => Promise<T>,
-): Promise<LoaderRequestResult<T>> {
-  const resolvedLoginOptions =
-    await state._internalResolveLoaderLoginOptions(loginOptions);
-  let cacheViews = state._internalGetLoaderCacheViews(resolvedLoginOptions);
-
-  try {
-    const requestState =
-      await state._internalGetLoaderState(resolvedLoginOptions);
-    cacheViews = state._internalGetLoaderCacheViews(
-      resolvedLoginOptions,
-      requestState,
-    );
-    return {
-      ok: true,
-      response: await request(requestState),
-      ...cacheViews,
-    };
-  } catch (error) {
-    return { ok: false, error, ...cacheViews };
-  }
-}
-
 /**
  * Load a prompt from the specified project.
  *
@@ -5069,34 +4876,39 @@ export async function loadPrompt({
   }
 
   const state = stateArg ?? _globalState;
-  const result = await runCredentialScopedLoaderRequest(
-    state,
-    { orgName, apiKey, appUrl, fetch, forceLogin },
-    async (requestState) => {
-      let response;
-      if (id) {
-        // Load prompt by ID using the /v1/prompt/{id} endpoint
-        response = await requestState
-          .apiConn()
-          .get_json(`v1/prompt/${id}`, versionOrEnvironment);
-        // Wrap single prompt response in objects array to match list API format
-        if (response) {
-          response = { objects: [response] };
-        }
-      } else {
-        response = await requestState.apiConn().get_json("v1/prompt", {
-          project_name: projectName,
-          project_id: projectId,
-          slug,
-          ...versionOrEnvironment,
-        });
+  const resolvedLoginOptions = await state._internalResolveLoaderLoginOptions({
+    orgName,
+    apiKey,
+    appUrl,
+    fetch,
+    forceLogin,
+  });
+  let promptCache = state._internalGetPromptCache(resolvedLoginOptions);
+  let response;
+  try {
+    const requestState =
+      await state._internalGetLoaderState(resolvedLoginOptions);
+    promptCache = state._internalGetPromptCache(
+      resolvedLoginOptions,
+      requestState,
+    );
+    if (id) {
+      // Wrap the single prompt response to match the list API format.
+      response = await requestState
+        .apiConn()
+        .get_json(`v1/prompt/${id}`, versionOrEnvironment);
+      if (response) {
+        response = { objects: [response] };
       }
-      return response;
-    },
-  );
-  const { promptCache } = result;
-  if (!result.ok) {
-    const e = result.error;
+    } else {
+      response = await requestState.apiConn().get_json("v1/prompt", {
+        project_name: projectName,
+        project_id: projectId,
+        slug,
+        ...versionOrEnvironment,
+      });
+    }
+  } catch (e) {
     if (!isLoaderCacheFallbackError(e)) {
       throw e;
     }
@@ -5133,8 +4945,6 @@ export async function loadPrompt({
     }
     return prompt;
   }
-  const { response } = result;
-
   if (!("objects" in response) || response.objects.length === 0) {
     if (id) {
       throw new Error(`Prompt with id ${id} not found.`);
@@ -5172,186 +4982,6 @@ export async function loadPrompt({
     debugLogger.forState(state).warn("Failed to set prompt in cache:", e);
   }
   return prompt;
-}
-
-/**
- * Load parameters from the specified project.
- *
- * @param options Options for configuring loadParameters().
- * @param options.projectName The name of the project to load the parameters from. Must specify at least one of `projectName` or `projectId`.
- * @param options.projectId The id of the project to load the parameters from. This takes precedence over `projectName` if specified.
- * @param options.slug The slug of the parameters to load.
- * @param options.version An optional version of the parameters (to read). If not specified, the latest version will be used.
- * @param options.environment Fetch the version of the parameters assigned to the specified environment (e.g. "production", "staging"). If both `version` and `environment` are provided, `version` takes precedence.
- * @param options.id The id of specific parameters to load. If specified, this takes precedence over all other parameters (project and slug).
- * @param options.appUrl The URL of the Braintrust App. Defaults to https://www.braintrust.dev.
- * @param options.apiKey The API key to use for this request, independently of any existing global login. If the parameter is not specified, will use an existing login or try the `BRAINTRUST_API_KEY` environment variable. In Node.js, if that is unset, will try the nearest `.env.braintrust` file in the current working directory or parent directories.
- * @param options.orgName (Optional) The name of a specific organization to connect to. This is useful if you belong to multiple.
- * @returns The parameters object.
- * @throws If the parameters are not found.
- * @throws If multiple parameters are found with the same slug in the same project (this should never happen).
- *
- * @example
- * ```typescript
- * const params = await loadParameters({
- *  projectName: "My Project",
- *  slug: "my-parameters",
- * });
- * ```
- */
-export function loadParameters<S extends EvalParameters = EvalParameters>(
-  options: LoadParametersByProjectNameOptions,
-): Promise<RemoteEvalParameters<true, true, InferParameters<S>>>;
-export function loadParameters<S extends EvalParameters = EvalParameters>(
-  options: LoadParametersByProjectNameWithEnvOptions,
-): Promise<RemoteEvalParameters<true, true, InferParameters<S>>>;
-export function loadParameters<S extends EvalParameters = EvalParameters>(
-  options: LoadParametersByProjectIdOptions,
-): Promise<RemoteEvalParameters<true, true, InferParameters<S>>>;
-export function loadParameters<S extends EvalParameters = EvalParameters>(
-  options: LoadParametersByProjectIdWithEnvOptions,
-): Promise<RemoteEvalParameters<true, true, InferParameters<S>>>;
-export function loadParameters<S extends EvalParameters = EvalParameters>(
-  options: LoadParametersByIdOptions,
-): Promise<RemoteEvalParameters<true, true, InferParameters<S>>>;
-export function loadParameters<S extends EvalParameters = EvalParameters>(
-  options: LoadParametersByIdWithEnvOptions,
-): Promise<RemoteEvalParameters<true, true, InferParameters<S>>>;
-export async function loadParameters<
-  S extends EvalParameters = EvalParameters,
->({
-  projectName,
-  projectId,
-  slug,
-  version,
-  environment,
-  id,
-  appUrl,
-  apiKey,
-  orgName,
-  fetch,
-  forceLogin,
-  state: stateArg,
-}: LoadParametersImplementationOptions): Promise<
-  RemoteEvalParameters<true, true, InferParameters<S>>
-> {
-  const versionOrEnvironment = version
-    ? { version }
-    : environment
-      ? { environment }
-      : {};
-  if (id) {
-    // When loading by ID, we don't need project or slug
-  } else if (isEmpty(projectName) && isEmpty(projectId)) {
-    throw new Error("Must specify either projectName or projectId");
-  } else if (isEmpty(slug)) {
-    throw new Error("Must specify slug");
-  }
-
-  const state = stateArg ?? _globalState;
-  const result = await runCredentialScopedLoaderRequest(
-    state,
-    { orgName, apiKey, appUrl, fetch, forceLogin },
-    async (requestState) => {
-      let response;
-      if (id) {
-        response = await requestState.apiConn().get_json(`v1/function/${id}`, {
-          ...versionOrEnvironment,
-        });
-        if (response) {
-          response = { objects: [response] };
-        }
-      } else {
-        response = await requestState.apiConn().get_json("v1/function", {
-          project_name: projectName,
-          project_id: projectId,
-          slug,
-          function_type: "parameters",
-          ...versionOrEnvironment,
-        });
-      }
-      return response;
-    },
-  );
-  const { parametersCache } = result;
-  if (!result.ok) {
-    const e = result.error;
-    if (!isLoaderCacheFallbackError(e)) {
-      throw e;
-    }
-    if (version || environment) {
-      throw new Error(`Parameters not found with specified parameters: ${e}`);
-    }
-
-    debugLogger
-      .forState(state)
-      .warn("Failed to load parameters, attempting to fall back to cache:", e);
-    let parameters;
-    if (id) {
-      parameters = await parametersCache.get({ id });
-      if (!parameters) {
-        throw new Error(
-          `Parameters with id ${id} not found (not found on server or in local cache): ${e}`,
-        );
-      }
-    } else {
-      parameters = await parametersCache.get({
-        slug,
-        projectId,
-        projectName,
-        version: version ?? "latest",
-      });
-      if (!parameters) {
-        throw new Error(
-          `Parameters ${slug} (version ${version ?? "latest"}) not found in ${[
-            projectName ?? projectId,
-          ]} (not found on server or in local cache): ${e}`,
-        );
-      }
-    }
-    // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
-    return parameters as RemoteEvalParameters<true, true, InferParameters<S>>;
-  }
-  const { response } = result;
-
-  if (!("objects" in response) || response.objects.length === 0) {
-    if (id) {
-      throw new Error(`Parameters with id ${id} not found.`);
-    } else {
-      throw new Error(
-        `Parameters ${slug} not found in ${[projectName ?? projectId]}`,
-      );
-    }
-  } else if (response.objects.length > 1) {
-    if (id) {
-      throw new Error(
-        `Multiple parameters found with id ${id}. This should never happen.`,
-      );
-    } else {
-      throw new Error(
-        `Multiple parameters found with slug ${slug} in project ${
-          projectName ?? projectId
-        }. This should never happen.`,
-      );
-    }
-  }
-
-  const metadata = parametersRowSchema.parse(response["objects"][0]);
-  const parameters = new RemoteEvalParameters(metadata);
-  try {
-    if (id) {
-      await parametersCache.set({ id }, parameters);
-    } else if (slug) {
-      await parametersCache.set(
-        { slug, projectId, projectName, version: version ?? "latest" },
-        parameters,
-      );
-    }
-  } catch (e) {
-    debugLogger.forState(state).warn("Failed to set parameters in cache:", e);
-  }
-  // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
-  return parameters as RemoteEvalParameters<true, true, InferParameters<S>>;
 }
 
 /**
@@ -9513,99 +9143,6 @@ export class Prompt<
       },
       {},
       false,
-    );
-  }
-}
-
-export interface SerializedParameters {
-  metadata: ParametersRow;
-}
-
-export let serializeParametersForCache: (
-  parameters: RemoteEvalParameters,
-) => SerializedParameters;
-
-export class RemoteEvalParameters<
-  HasId extends boolean = true,
-  HasVersion extends boolean = true,
-  T extends Record<string, unknown> = Record<string, unknown>,
-> {
-  private readonly __braintrust_parameters_marker = true;
-
-  constructor(private metadata: ParametersRow) {
-    void this.__braintrust_parameters_marker;
-  }
-
-  public get id(): HasId extends true ? string : string | undefined {
-    // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
-    return this.metadata.id as HasId extends true ? string : string | undefined;
-  }
-
-  public get projectId(): string | undefined {
-    return this.metadata.project_id;
-  }
-
-  public get name(): string {
-    return this.metadata.name;
-  }
-
-  public get slug(): string {
-    return this.metadata.slug;
-  }
-
-  public get version(): HasVersion extends true
-    ? TransactionId
-    : TransactionId | undefined {
-    // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
-    return this.metadata[TRANSACTION_ID_FIELD] as HasVersion extends true
-      ? TransactionId
-      : TransactionId | undefined;
-  }
-
-  public get schema(): Record<string, unknown> {
-    return this.metadata.function_data.__schema;
-  }
-
-  public get data(): T {
-    // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
-    return (this.metadata.function_data.data ?? {}) as T;
-  }
-
-  static {
-    serializeParametersForCache = (parameters) => ({
-      metadata: parameters.metadata,
-    });
-  }
-
-  public validate(data: unknown): boolean {
-    if (typeof data !== "object" || data === null) {
-      return false;
-    }
-    const schemaProps = this.schema.properties;
-    if (typeof schemaProps !== "object" || schemaProps === null) {
-      return true;
-    }
-    for (const key of Object.keys(schemaProps)) {
-      if (!(key in data)) {
-        const required = Array.isArray(this.schema.required)
-          ? this.schema.required
-          : [];
-        if (required.includes(key)) {
-          return false;
-        }
-      }
-    }
-    return true;
-  }
-
-  public static isParameters(
-    x: unknown,
-  ): x is RemoteEvalParameters<boolean, boolean, Record<string, unknown>> {
-    return (
-      typeof x === "object" &&
-      x !== null &&
-      "__braintrust_parameters_marker" in x &&
-      x.__braintrust_parameters_marker === true
     );
   }
 }

@@ -1,3 +1,4 @@
+import assert from "node:assert/strict";
 import {
   BatchScorer,
   BatchTask,
@@ -23,11 +24,13 @@ async function main() {
     number,
     number,
     number,
-    { testRunId: string; kind: string },
-    Record<string, never>
+    { testRunId: string; kind: string }
   >({
     batchSize: 2,
     async submit(items) {
+      for (const item of items) {
+        assert.equal("parameters" in item, false);
+      }
       const id = `task-${jobs.size + 1}`;
       jobs.set(id, items);
       return { id };

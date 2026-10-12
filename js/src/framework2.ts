@@ -7,11 +7,10 @@ import { Project as projectSchema } from "./sdk-schemas";
 import type {
   FunctionTypeEnum as FunctionType,
   IfExists,
-  SavedFunctionId,
-  PromptBlockData,
+  ChatCompletionMessageParam,
+  ModelParams,
   PromptData,
   ToolFunctionDefinition,
-  ExtendedSavedFunctionId,
 } from "./sdk-types";
 import { loadPrettyXact, TransactionId } from "../util/index";
 import {
@@ -21,26 +20,12 @@ import {
   PromptRowWithId,
 } from "./logger";
 import type { BaseFnOpts, GenericFunction } from "./framework-types";
-import type { EvalParameters } from "./eval-parameters";
-import {
-  promptDefinitionToPromptData,
-  type PromptDefinition,
-} from "./prompt-schemas";
-import { zodToJsonSchema } from "./zod/utils";
-type ParametersSchema = {
-  type: "object";
-  properties: Record<string, Record<string, unknown>>;
-  required?: string[];
-  additionalProperties?: boolean;
-};
 
 // Safe access to __filename (only exists in Node.js CJS)
 const currentFilename =
   typeof __filename !== "undefined" ? __filename : "unknown";
 
-type NameOrId = { name: string } | { id: string };
-
-type CreateProjectOpts = NameOrId;
+type CreateProjectOpts = { name: string } | { id: string };
 class ProjectBuilder {
   create(opts: CreateProjectOpts) {
     return new Project(opts);
@@ -51,9 +36,7 @@ export const projects = new ProjectBuilder();
 class Project {
   public readonly name?: string;
   public readonly id?: string;
-  public tools: ToolBuilder;
   public prompts: PromptBuilder;
-  public parameters: ParametersBuilder;
   public scorers: ScorerBuilder;
   public classifiers: ClassifierBuilder;
 
@@ -66,15 +49,12 @@ class Project {
     GenericFunction<any, any>
   >[] = [];
   private _publishablePrompts: CodePrompt[] = [];
-  private _publishableParameters: CodeParameters[] = [];
 
   constructor(args: CreateProjectOpts) {
     _initializeSpanContext();
     this.name = "name" in args ? args.name : undefined;
     this.id = "id" in args ? args.id : undefined;
-    this.tools = new ToolBuilder(this);
     this.prompts = new PromptBuilder(this);
-    this.parameters = new ParametersBuilder(this);
     this.scorers = new ScorerBuilder(this);
     this.classifiers = new ClassifierBuilder(this);
   }
@@ -83,16 +63,6 @@ class Project {
     this._publishablePrompts.push(prompt);
     if (globalThis._lazy_load) {
       globalThis._evals.prompts.push(prompt);
-    }
-  }
-
-  public addParameters(parameters: CodeParameters) {
-    this._publishableParameters.push(parameters);
-    if (globalThis._lazy_load) {
-      if (globalThis._evals.parameters == null)
-        globalThis._evals.parameters = [];
-
-      globalThis._evals.parameters.push(parameters);
     }
   }
 
@@ -119,7 +89,6 @@ class Project {
       return;
     }
     await login();
-    const projectMap = new ProjectNameIdMap();
     const functionDefinitions: PromptFunctionEvent[] = [];
     if (this._publishableCodeFunctions.length > 0) {
       // eslint-disable-next-line no-restricted-properties -- preserving intentional console usage.
@@ -128,86 +97,23 @@ class Project {
       );
     }
     if (this._publishablePrompts.length > 0) {
+      const projectId =
+        this.id ??
+        z.object({ project: projectSchema }).parse(
+          await _internalGetGlobalState()
+            .appConn()
+            .post_json("api/project/register", {
+              project_name: this.name,
+            }),
+        ).project.id;
       for (const prompt of this._publishablePrompts) {
-        const functionDefinition =
-          await prompt.toFunctionDefinition(projectMap);
-        functionDefinitions.push(functionDefinition);
+        functionDefinitions.push(prompt.toFunctionDefinition(projectId));
       }
     }
 
     await _internalGetGlobalState().apiConn().post_json("insert-functions", {
       functions: functionDefinitions,
     });
-  }
-}
-
-class ToolBuilder {
-  private taskCounter = 0;
-  constructor(private readonly project: Project) {}
-
-  public create<
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    TParams extends { _output: any; _input: any; _def: any },
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    TReturns extends { _output: any; _input: any; _def: any },
-    THandler extends GenericFunction<TParams["_output"], TReturns["_output"]>,
-  >(
-    opts: Partial<BaseFnOpts> & {
-      handler: THandler;
-      parameters: TParams;
-      returns: TReturns;
-    },
-  ): CodeFunction<TParams["_output"], TReturns["_output"], THandler>;
-
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  public create<THandler extends GenericFunction<any, any>>(
-    opts: Partial<BaseFnOpts> & {
-      handler: THandler;
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      parameters?: any;
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      returns?: any;
-    }, // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  ): CodeFunction<any, any, THandler>;
-
-  // This type definition is just a catch all so that the implementation can be
-  // less specific than the two more specific declarations above.
-  public create(
-    opts: Partial<BaseFnOpts> & {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      handler: GenericFunction<any, any>;
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      parameters?: any;
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      returns?: any;
-    },
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  ): CodeFunction<any, any, any> {
-    this.taskCounter++;
-    opts = opts ?? {};
-
-    const { handler, name, slug, parameters, returns, ...rest } = opts;
-    let resolvedName = name ?? handler.name;
-
-    if (resolvedName.trim().length === 0) {
-      resolvedName = `Tool ${iso.basename(currentFilename)} ${this.taskCounter}`;
-    }
-
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const tool: CodeFunction<any, any, any> = new CodeFunction(this.project, {
-      handler,
-      name: resolvedName,
-      slug: slug ?? slugify(resolvedName, { lower: true, strict: true }),
-      type: "tool",
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/consistent-type-assertions
-      parameters: parameters as any,
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/consistent-type-assertions
-      returns: returns as any,
-      ...rest,
-    });
-
-    this.project.addCodeFunction(tool);
-    return tool;
   }
 }
 
@@ -250,35 +156,17 @@ class ScorerBuilder {
       });
       this.project.addCodeFunction(scorer);
     } else {
-      const promptBlock: PromptBlockData =
-        "messages" in opts
-          ? {
-              type: "chat",
-              messages: opts.messages,
-            }
-          : {
-              type: "completion",
-              content: opts.prompt,
-            };
       const promptData: PromptData = {
-        prompt: promptBlock,
-        options: {
-          model: opts.model,
-          params: opts.params,
-        },
+        ...promptDefinitionToPromptData(opts),
         parser: {
           type: "llm_classifier",
           use_cot: opts.useCot,
           choice_scores: opts.choiceScores,
         },
-        ...(opts.templateFormat
-          ? { template_format: opts.templateFormat }
-          : {}),
       };
       const codePrompt = new CodePrompt(
         this.project,
         promptData,
-        [],
         {
           ...opts,
           name: resolvedName,
@@ -304,7 +192,7 @@ class ClassifierBuilder {
       Exact<Params, ScorerArgs<Output, Input>>,
       Returns
     >,
-  >(opts: ClassifierOpts<Output, Input, Params, Returns, Fn>) {
+  >(opts: CodeOpts<Exact<Params, ScorerArgs<Output, Input>>, Returns, Fn>) {
     this.taskCounter++;
 
     let resolvedName = opts.name ?? opts.handler.name;
@@ -329,25 +217,23 @@ class ClassifierBuilder {
   }
 }
 
-type Schema<Input, Output> = Partial<{
-  parameters: z.ZodSchema<Input>;
-  returns: z.ZodSchema<Output>;
-}>;
-
 type CodeOpts<
   Params,
   Returns,
   Fn extends GenericFunction<Params, Returns>,
 > = Partial<BaseFnOpts> & {
   handler: Fn;
-  metadata?: Record<string, unknown>;
-} & Schema<Params, Returns>;
+  parameters?: z.ZodSchema<Params>;
+  returns?: z.ZodSchema<Returns>;
+};
 
 type ScorerPromptOpts = Partial<BaseFnOpts> &
-  PromptOpts<false, false, false, false> & {
+  PromptDefinition & {
+    name: string;
+    id?: string;
+    version?: TransactionId;
     useCot: boolean;
     choiceScores: Record<string, number>;
-    metadata?: Record<string, unknown>;
   };
 
 // A more correct ScorerArgs than that in core/js/src/score.ts.
@@ -365,7 +251,7 @@ type Exact<T, Shape> = T extends Shape
     : never
   : never;
 
-type ScorerOptsUnion<
+type ScorerOpts<
   Output,
   Input,
   Params,
@@ -374,26 +260,6 @@ type ScorerOptsUnion<
 > =
   | CodeOpts<Exact<Params, ScorerArgs<Output, Input>>, Returns, Fn>
   | ScorerPromptOpts;
-
-type ScorerOpts<
-  Output,
-  Input,
-  Params,
-  Returns,
-  Fn extends GenericFunction<Exact<Params, ScorerArgs<Output, Input>>, Returns>,
-> = ScorerOptsUnion<Output, Input, Params, Returns, Fn> & {
-  metadata?: Record<string, unknown>;
-};
-
-type ClassifierOpts<
-  Output,
-  Input,
-  Params,
-  Returns,
-  Fn extends GenericFunction<Exact<Params, ScorerArgs<Output, Input>>, Returns>,
-> = CodeOpts<Exact<Params, ScorerArgs<Output, Input>>, Returns, Fn> & {
-  metadata?: Record<string, unknown>;
-};
 
 export class CodeFunction<
   Input,
@@ -447,17 +313,6 @@ export class CodeFunction<
   }
 }
 
-type GenericCodeFunction = CodeFunction<
-  // This has to be marked as any because we want to support arrays of
-  // functions that return different things.
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  any,
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  any,
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  GenericFunction<any, any>
->;
-
 export class CodePrompt {
   public readonly project: Project;
   public readonly name: string;
@@ -467,7 +322,6 @@ export class CodePrompt {
   public readonly description?: string;
   public readonly id?: string;
   public readonly functionType?: FunctionType;
-  public readonly toolFunctions: (SavedFunctionId | GenericCodeFunction)[];
   public readonly tags?: string[];
   public readonly metadata?: Record<string, unknown>;
   public readonly environmentSlugs?: string[];
@@ -475,10 +329,11 @@ export class CodePrompt {
   constructor(
     project: Project,
     prompt: PromptData,
-    toolFunctions: (SavedFunctionId | GenericCodeFunction)[],
-    opts: Omit<PromptOpts<false, false, false, false>, "name" | "slug"> & {
+    opts: Partial<BaseFnOpts> & {
       name: string;
       slug: string;
+      id?: string;
+      environments?: string[];
     },
     functionType?: FunctionType,
   ) {
@@ -486,7 +341,6 @@ export class CodePrompt {
     this.name = opts.name;
     this.slug = opts.slug;
     this.prompt = prompt;
-    this.toolFunctions = toolFunctions;
     this.ifExists = opts.ifExists;
     this.description = opts.description;
     this.id = opts.id;
@@ -496,35 +350,9 @@ export class CodePrompt {
     this.environmentSlugs = opts.environments;
   }
 
-  async toFunctionDefinition(
-    projectNameToId: ProjectNameIdMap,
-  ): Promise<PromptFunctionEvent> {
-    const prompt_data = {
-      ...this.prompt,
-    };
-    if (this.toolFunctions.length > 0) {
-      const resolvableToolFunctions: ExtendedSavedFunctionId[] =
-        await Promise.all(
-          this.toolFunctions.map(async (fn) => {
-            if ("slug" in fn) {
-              return {
-                type: "slug",
-                project_id: await projectNameToId.resolve(fn.project),
-                slug: fn.slug,
-              };
-            } else {
-              return fn;
-            }
-          }),
-        );
-
-      // This is a hack because these will be resolved on the server side.
-      prompt_data.tool_functions =
-        // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
-        resolvableToolFunctions as SavedFunctionId[];
-    }
+  toFunctionDefinition(projectId: string): PromptFunctionEvent {
     return {
-      project_id: await projectNameToId.resolve(this.project),
+      project_id: projectId,
       name: this.name,
       slug: this.slug,
       description: this.description ?? "",
@@ -532,7 +360,7 @@ export class CodePrompt {
         type: "prompt",
       },
       function_type: this.functionType,
-      prompt_data,
+      prompt_data: this.prompt,
       if_exists: this.ifExists,
       tags: this.tags,
       metadata: this.metadata,
@@ -544,34 +372,27 @@ export class CodePrompt {
   }
 }
 
-interface PromptId {
-  id: string;
-}
-
-interface PromptVersion {
-  version: TransactionId;
-}
-
-interface PromptTools {
-  tools: (GenericCodeFunction | SavedFunctionId | ToolFunctionDefinition)[];
-}
-
-interface PromptNoTrace {
-  noTrace: boolean;
-}
+type PromptDefinition = (
+  | { prompt: string }
+  | { messages: ChatCompletionMessageParam[] }
+) & {
+  model: string;
+  params?: ModelParams;
+  templateFormat?: "mustache" | "nunjucks" | "none";
+  environments?: string[];
+};
 
 type PromptOpts<
   HasId extends boolean,
   HasVersion extends boolean,
-  HasTools extends boolean = true,
-  HasNoTrace extends boolean = true,
-> = (Partial<Omit<BaseFnOpts, "name">> & { name: string }) &
-  (HasId extends true ? PromptId : Partial<PromptId>) &
-  (HasVersion extends true ? PromptVersion : Partial<PromptVersion>) &
-  // eslint-disable-next-line @typescript-eslint/no-empty-object-type
-  (HasTools extends true ? Partial<PromptTools> : {}) &
-  // eslint-disable-next-line @typescript-eslint/no-empty-object-type
-  (HasNoTrace extends true ? Partial<PromptNoTrace> : {}) &
+> = Partial<BaseFnOpts> & {
+  name: string;
+  tools?: ToolFunctionDefinition[];
+  noTrace?: boolean;
+} & (HasId extends true ? { id: string } : { id?: string }) &
+  (HasVersion extends true
+    ? { version: TransactionId }
+    : { version?: TransactionId }) &
   PromptDefinition;
 
 class PromptBuilder {
@@ -581,22 +402,12 @@ class PromptBuilder {
     HasId extends boolean = false,
     HasVersion extends boolean = false,
   >(opts: PromptOpts<HasId, HasVersion>): Prompt<HasId, HasVersion> {
-    const toolFunctions: (SavedFunctionId | GenericCodeFunction)[] = [];
-    const rawTools: ToolFunctionDefinition[] = [];
-
-    for (const tool of opts.tools ?? []) {
-      if (tool instanceof CodeFunction) {
-        toolFunctions.push(tool);
-      } else if ("type" in tool && !("function" in tool)) {
-        toolFunctions.push(tool);
-      } else {
-        rawTools.push(tool);
-      }
-    }
-
     const slug = opts.slug ?? slugify(opts.name, { lower: true, strict: true });
 
-    const promptData: PromptData = promptDefinitionToPromptData(opts, rawTools);
+    const promptData: PromptData = promptDefinitionToPromptData(
+      opts,
+      opts.tools,
+    );
 
     // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
     const promptRow: PromptRowWithId<HasId, HasVersion> = {
@@ -615,7 +426,7 @@ class PromptBuilder {
       opts.noTrace ?? false,
     );
 
-    const codePrompt = new CodePrompt(this.project, promptData, toolFunctions, {
+    const codePrompt = new CodePrompt(this.project, promptData, {
       ...opts,
       slug,
     });
@@ -625,157 +436,9 @@ class PromptBuilder {
   }
 }
 
-interface ParametersOpts<S extends EvalParameters> {
-  name: string;
-  slug?: string;
-  description?: string;
-  schema: S;
-  ifExists?: IfExists;
-  metadata?: Record<string, unknown>;
-}
-
-export class CodeParameters {
-  public readonly project: Project;
-  public readonly name: string;
-  public readonly slug: string;
-  public readonly description?: string;
-  public readonly schema: EvalParameters;
-  public readonly ifExists?: IfExists;
-  public readonly metadata?: Record<string, unknown>;
-
-  constructor(
-    project: Project,
-    opts: {
-      name: string;
-      slug: string;
-      description?: string;
-      schema: EvalParameters;
-      ifExists?: IfExists;
-      metadata?: Record<string, unknown>;
-    },
-  ) {
-    this.project = project;
-    this.name = opts.name;
-    this.slug = opts.slug;
-    this.description = opts.description;
-    this.schema = opts.schema;
-    this.ifExists = opts.ifExists;
-    this.metadata = opts.metadata;
-  }
-
-  async toFunctionDefinition(
-    projectNameToId: ProjectNameIdMap,
-  ): Promise<ParametersFunctionEvent> {
-    const schema = serializeEvalParameterstoParametersSchema(this.schema);
-    return {
-      project_id: await projectNameToId.resolve(this.project),
-      name: this.name,
-      slug: this.slug,
-      description: this.description ?? "",
-      function_type: "parameters",
-      function_data: {
-        type: "parameters",
-        data: getDefaultDataFromParametersSchema(schema),
-        __schema: schema,
-      },
-      if_exists: this.ifExists,
-      metadata: this.metadata,
-    };
-  }
-}
-
-class ParametersBuilder {
-  constructor(private readonly project: Project) {}
-
-  public create<S extends EvalParameters>(opts: ParametersOpts<S>): S {
-    const slug = opts.slug ?? slugify(opts.name, { lower: true, strict: true });
-
-    const codeParameters = new CodeParameters(this.project, {
-      name: opts.name,
-      slug,
-      description: opts.description,
-      schema: opts.schema,
-      ifExists: opts.ifExists,
-      metadata: opts.metadata,
-    });
-
-    this.project.addParameters(codeParameters);
-
-    return opts.schema;
-  }
-}
-
-function serializeEvalParameterstoParametersSchema(
-  parameters: EvalParameters,
-): ParametersSchema {
-  const properties: Record<string, Record<string, unknown>> = {};
-  const required: string[] = [];
-
-  for (const [name, value] of Object.entries(parameters)) {
-    if ("type" in value && value.type === "prompt") {
-      const defaultPromptData = value.default
-        ? promptDefinitionToPromptData(value.default)
-        : undefined;
-
-      properties[name] = {
-        type: "object",
-        "x-bt-type": "prompt",
-        ...(value.description ? { description: value.description } : {}),
-        ...(defaultPromptData ? { default: defaultPromptData } : {}),
-      };
-
-      if (!defaultPromptData) {
-        required.push(name);
-      }
-    } else if ("type" in value && value.type === "model") {
-      properties[name] = {
-        type: "string",
-        "x-bt-type": "model",
-        ...(value.description ? { description: value.description } : {}),
-        ...("default" in value ? { default: value.default } : {}),
-      };
-
-      if (!("default" in value)) {
-        required.push(name);
-      }
-    } else {
-      // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
-      const schemaObj = zodToJsonSchema(value as z.ZodType) as Record<
-        string,
-        unknown
-      >;
-
-      properties[name] = schemaObj;
-
-      if (!("default" in schemaObj)) {
-        required.push(name);
-      }
-    }
-  }
-
-  return {
-    type: "object",
-    properties,
-    ...(required.length > 0 ? { required } : {}),
-    additionalProperties: true,
-  };
-}
-
-function getDefaultDataFromParametersSchema(
-  schema: ParametersSchema,
-): Record<string, unknown> {
-  return Object.fromEntries(
-    Object.entries(schema.properties).flatMap(([name, value]) => {
-      if (!("default" in value)) {
-        return [];
-      }
-
-      return [[name, value.default]];
-    }),
-  );
-}
-
-interface FunctionEventBase {
+interface PromptFunctionEvent {
+  prompt_data: PromptData;
+  function_data: { type: "prompt" };
   project_id: string;
   slug: string;
   name: string;
@@ -787,65 +450,33 @@ interface FunctionEventBase {
   environments?: { slug: string }[];
 }
 
-interface PromptFunctionEvent extends FunctionEventBase {
-  prompt_data: PromptData;
-  function_data: { type: "prompt" };
-}
+function promptDefinitionToPromptData(
+  promptDefinition: PromptDefinition,
+  rawTools?: ToolFunctionDefinition[],
+): PromptData {
+  const promptBlock: PromptData["prompt"] =
+    "messages" in promptDefinition
+      ? {
+          type: "chat",
+          messages: promptDefinition.messages,
+          tools:
+            rawTools && rawTools.length > 0
+              ? JSON.stringify(rawTools)
+              : undefined,
+        }
+      : {
+          type: "completion",
+          content: promptDefinition.prompt,
+        };
 
-interface ParametersFunctionEvent extends FunctionEventBase {
-  function_type: "parameters";
-  function_data: {
-    type: "parameters";
-    data: Record<string, unknown>;
-    __schema: ParametersSchema;
+  return {
+    prompt: promptBlock,
+    options: {
+      model: promptDefinition.model,
+      params: promptDefinition.params,
+    },
+    ...(promptDefinition.templateFormat
+      ? { template_format: promptDefinition.templateFormat }
+      : {}),
   };
-}
-
-class ProjectNameIdMap {
-  private nameToId: Record<string, string> = {};
-  private idToName: Record<string, string> = {};
-
-  async getId(projectName: string): Promise<string> {
-    if (!(projectName in this.nameToId)) {
-      const response = await _internalGetGlobalState()
-        .appConn()
-        .post_json("api/project/register", {
-          project_name: projectName,
-        });
-
-      const result = z
-        .object({
-          project: projectSchema,
-        })
-        .parse(response);
-
-      const projectId = result.project.id;
-
-      this.nameToId[projectName] = projectId;
-      this.idToName[projectId] = projectName;
-    }
-    return this.nameToId[projectName];
-  }
-
-  async getName(projectId: string): Promise<string> {
-    if (!(projectId in this.idToName)) {
-      const response = await _internalGetGlobalState()
-        .appConn()
-        .post_json("api/project/get", {
-          id: projectId,
-        });
-      const result = z.array(projectSchema).nonempty().parse(response);
-      const projectName = result[0].name;
-      this.idToName[projectId] = projectName;
-      this.nameToId[projectName] = projectId;
-    }
-    return this.idToName[projectId];
-  }
-
-  async resolve(project: Project): Promise<string> {
-    if (project.id) {
-      return project.id;
-    }
-    return this.getId(project.name!);
-  }
 }

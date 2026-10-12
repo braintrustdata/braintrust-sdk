@@ -6,20 +6,24 @@ import type * as SDK from "./sdk-types";
 import type * as schemas from "./sdk-schemas";
 
 // Backend definitions are compatibility fixtures, never production dependencies.
+// Function contracts intentionally exclude the deprecated tool and parameters kinds.
 test("SDK-owned contracts remain compatible with the backend", () => {
   expectTypeOf<SDK.IfExists>().toEqualTypeOf<Backend.IfExistsType>();
   expectTypeOf<SDK.GitMetadataSettings>().toEqualTypeOf<Backend.GitMetadataSettingsType>();
   expectTypeOf<SDK.ObjectReference>().toEqualTypeOf<Backend.ObjectReferenceType>();
   expectTypeOf<SDK.RepoInfo>().toEqualTypeOf<Backend.RepoInfoType>();
-  expectTypeOf<SDK.SSEProgressEventData>().toEqualTypeOf<Backend.SSEProgressEventDataType>();
-  expectTypeOf<SDK.FunctionObjectType>().toEqualTypeOf<Backend.FunctionObjectTypeType>();
+  expectTypeOf<SDK.SSEProgressEventData>().toExtend<Backend.SSEProgressEventDataType>();
+  expectTypeOf<SDK.FunctionObjectType>().toEqualTypeOf<
+    Exclude<Backend.FunctionObjectTypeType, "tool" | "parameters">
+  >();
   expectTypeOf<
     Exclude<SDK.SSEProgressEventData["origin"], undefined>
   >().toEqualTypeOf<Backend.ObjectReferenceNullishType>();
   expectTypeOf<SDK.FunctionFormat>().toEqualTypeOf<Backend.FunctionFormatType>();
   expectTypeOf<SDK.FunctionOutputType>().toEqualTypeOf<Backend.FunctionOutputTypeType>();
-  expectTypeOf<SDK.FunctionTypeEnum>().toEqualTypeOf<Backend.FunctionTypeEnumType>();
-  expectTypeOf<SDK.SavedFunctionId>().toEqualTypeOf<Backend.SavedFunctionIdType>();
+  expectTypeOf<SDK.FunctionTypeEnum>().toEqualTypeOf<
+    Exclude<Backend.FunctionTypeEnumType, "tool" | "parameters">
+  >();
   expectTypeOf<SDK.PromptBlockData>().toEqualTypeOf<Backend.PromptBlockDataType>();
   expectTypeOf<SDK.ChatCompletionMessageParam>().toEqualTypeOf<Backend.ChatCompletionMessageParamType>();
   expectTypeOf<SDK.ChatCompletionContentPartText>().toEqualTypeOf<Backend.ChatCompletionContentPartTextType>();
@@ -30,7 +34,9 @@ test("SDK-owned contracts remain compatible with the backend", () => {
   expectTypeOf<SDK.ChatCompletionContentPartFileFile>().toEqualTypeOf<Backend.ChatCompletionContentPartFileFileType>();
   expectTypeOf<SDK.ChatCompletionMessageToolCall>().toEqualTypeOf<Backend.ChatCompletionMessageToolCallType>();
   expectTypeOf<SDK.ChatCompletionMessageReasoning>().toEqualTypeOf<Backend.ChatCompletionMessageReasoningType>();
-  expectTypeOf<SDK.PromptData>().branded.toEqualTypeOf<Backend.PromptDataType>();
+  expectTypeOf<SDK.PromptData>().branded.toEqualTypeOf<
+    Omit<Backend.PromptDataType, "tool_functions">
+  >();
   expectTypeOf<
     Exclude<SDK.PromptData["prompt"], undefined>
   >().toEqualTypeOf<Backend.PromptBlockDataNullishType>();
@@ -44,7 +50,6 @@ test("SDK-owned contracts remain compatible with the backend", () => {
   expectTypeOf<SDK.PromptParserNullish>().toEqualTypeOf<Backend.PromptParserNullishType>();
   expectTypeOf<SDK.PreprocessorId>().toEqualTypeOf<Backend.PreprocessorIdType>();
   expectTypeOf<SDK.ToolFunctionDefinition>().toEqualTypeOf<Backend.ToolFunctionDefinitionType>();
-  expectTypeOf<SDK.ExtendedSavedFunctionId>().toEqualTypeOf<Backend.ExtendedSavedFunctionIdType>();
   expectTypeOf<SDK.AttachmentReference>().toEqualTypeOf<Backend.AttachmentReferenceType>();
   expectTypeOf<SDK.BraintrustAttachmentReference>().toEqualTypeOf<Backend.BraintrustAttachmentReferenceType>();
   expectTypeOf<SDK.ExternalAttachmentReference>().toEqualTypeOf<Backend.ExternalAttachmentReferenceType>();
@@ -53,11 +58,16 @@ test("SDK-owned contracts remain compatible with the backend", () => {
   expectTypeOf<SDK.UploadStatus>().toEqualTypeOf<Backend.UploadStatusType>();
   expectTypeOf<SDK.ChatCompletionOpenAIMessageParam>().toEqualTypeOf<Backend.ChatCompletionOpenAIMessageParamType>();
   expectTypeOf<SDK.DatasetSnapshot>().toEqualTypeOf<Backend.DatasetSnapshotType>();
-  expectTypeOf<SDK.PromptData | null>().branded.toEqualTypeOf<Backend.PromptDataNullishType>();
-  expectTypeOf<SDK.FunctionTypeEnum | null>().toEqualTypeOf<Backend.FunctionTypeEnumNullishType>();
-  expectTypeOf<SDK.PromptSessionEvent>().toEqualTypeOf<Backend.PromptSessionEventType>();
-  expectTypeOf<SDK.InvokeFunction>().branded.toEqualTypeOf<Backend.InvokeFunctionType>();
-  expectTypeOf<SDK.FunctionId>().branded.toEqualTypeOf<Backend.FunctionIdType>();
+  expectTypeOf<SDK.PromptData | null>().branded.toEqualTypeOf<Omit<
+    Backend.PromptDataType,
+    "tool_functions"
+  > | null>();
+  expectTypeOf<SDK.FunctionTypeEnum | null>().toEqualTypeOf<
+    Exclude<Backend.FunctionTypeEnumNullishType, "tool" | "parameters">
+  >();
+  expectTypeOf<SDK.PromptSessionEvent>().toExtend<Backend.PromptSessionEventType>();
+  expectTypeOf<SDK.InvokeFunction>().toExtend<Backend.InvokeFunctionType>();
+  expectTypeOf<SDK.FunctionId>().toExtend<Backend.FunctionIdType>();
   expectTypeOf<SDK.InvokeParent>().toEqualTypeOf<Backend.InvokeParentType>();
   expectTypeOf<SDK.StreamingMode>().toEqualTypeOf<Backend.StreamingModeType>();
   expectTypeOf<SDK.CallEvent>().toEqualTypeOf<Backend.CallEventType>();
@@ -67,10 +77,10 @@ test("SDK-owned contracts remain compatible with the backend", () => {
 });
 
 test("runtime validators accept and return compatible types", () => {
-  expectTypeOf<z.input<typeof schemas.PromptData>>().toEqualTypeOf<
+  expectTypeOf<z.input<typeof schemas.PromptData>>().toExtend<
     z.input<typeof backendSchemas.PromptData>
   >();
-  expectTypeOf<z.output<typeof schemas.PromptData>>().toEqualTypeOf<
+  expectTypeOf<z.output<typeof schemas.PromptData>>().toExtend<
     z.output<typeof backendSchemas.PromptData>
   >();
   expectTypeOf<z.input<typeof schemas.ObjectReference>>().toEqualTypeOf<
@@ -79,10 +89,10 @@ test("runtime validators accept and return compatible types", () => {
   expectTypeOf<z.output<typeof schemas.ObjectReference>>().toEqualTypeOf<
     z.output<typeof backendSchemas.ObjectReference>
   >();
-  expectTypeOf<z.input<typeof schemas.Project>>().toEqualTypeOf<
+  expectTypeOf<z.input<typeof schemas.Project>>().toExtend<
     z.input<typeof backendSchemas.Project>
   >();
-  expectTypeOf<z.output<typeof schemas.Project>>().toEqualTypeOf<
+  expectTypeOf<z.output<typeof schemas.Project>>().toExtend<
     z.output<typeof backendSchemas.Project>
   >();
   expectTypeOf<z.input<typeof schemas.AttachmentReference>>().toEqualTypeOf<
@@ -147,16 +157,16 @@ test("runtime validators accept and return compatible types", () => {
   expectTypeOf<z.output<typeof schemas.DatasetSnapshot>>().toEqualTypeOf<
     z.output<typeof backendSchemas.DatasetSnapshot>
   >();
-  expectTypeOf<z.input<typeof schemas.Prompt>>().toEqualTypeOf<
+  expectTypeOf<z.input<typeof schemas.Prompt>>().toExtend<
     z.input<typeof backendSchemas.Prompt>
   >();
-  expectTypeOf<z.output<typeof schemas.Prompt>>().toEqualTypeOf<
+  expectTypeOf<z.output<typeof schemas.Prompt>>().toExtend<
     z.output<typeof backendSchemas.Prompt>
   >();
-  expectTypeOf<z.input<typeof schemas.FunctionId>>().toEqualTypeOf<
+  expectTypeOf<z.input<typeof schemas.FunctionId>>().toExtend<
     z.input<typeof backendSchemas.FunctionId>
   >();
-  expectTypeOf<z.output<typeof schemas.FunctionId>>().toEqualTypeOf<
+  expectTypeOf<z.output<typeof schemas.FunctionId>>().toExtend<
     z.output<typeof backendSchemas.FunctionId>
   >();
   expectTypeOf<z.input<typeof schemas.CallEvent>>().toEqualTypeOf<
@@ -171,10 +181,22 @@ test("runtime validators accept and return compatible types", () => {
   expectTypeOf<z.output<typeof schemas.SSEConsoleEventData>>().toEqualTypeOf<
     z.output<typeof backendSchemas.SSEConsoleEventData>
   >();
-  expectTypeOf<z.input<typeof schemas.SSEProgressEventData>>().toEqualTypeOf<
+  expectTypeOf<z.input<typeof schemas.SSEProgressEventData>>().toExtend<
     z.input<typeof backendSchemas.SSEProgressEventData>
   >();
-  expectTypeOf<z.output<typeof schemas.SSEProgressEventData>>().toEqualTypeOf<
+  expectTypeOf<z.output<typeof schemas.SSEProgressEventData>>().toExtend<
     z.output<typeof backendSchemas.SSEProgressEventData>
   >();
+});
+
+test("SDK validators match the supported function contracts", () => {
+  expectTypeOf<
+    z.output<typeof schemas.PromptData>
+  >().toExtend<SDK.PromptData>();
+  expectTypeOf<
+    z.output<typeof schemas.FunctionId>
+  >().toExtend<SDK.FunctionId>();
+  expectTypeOf<
+    z.output<typeof schemas.SSEProgressEventData>
+  >().toEqualTypeOf<SDK.SSEProgressEventData>();
 });

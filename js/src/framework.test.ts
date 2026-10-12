@@ -15,6 +15,7 @@ import {
 } from "./framework";
 import {
   _exportsForTestingOnly,
+  _internalGetGlobalState,
   BraintrustState,
   initLogger,
   TestBackgroundLogger,
@@ -53,7 +54,6 @@ test("meta (write) is passed to task", async () => {
     },
     new NoopProgressReporter(),
     undefined,
-    undefined,
     true,
   );
 
@@ -89,7 +89,6 @@ test("metadata (read/write) is passed to task", async () => {
       scores: [],
     },
     new NoopProgressReporter(),
-    undefined,
     undefined,
     true,
   );
@@ -128,7 +127,6 @@ test("expected (read/write) is passed to task", async () => {
       scores: [],
     },
     new NoopProgressReporter(),
-    undefined,
     undefined,
     true,
   );
@@ -170,7 +168,6 @@ test("EvalCase id and tags are passed to scorers", async () => {
       ],
     },
     new NoopProgressReporter(),
-    undefined,
     undefined,
     true,
   );
@@ -564,7 +561,6 @@ describe("runEvaluator", () => {
         },
         new NoopProgressReporter(),
         undefined,
-        undefined,
         true,
       ),
     ).rejects.toThrow("Encountered 1 unhandled task errors");
@@ -749,7 +745,6 @@ test("trialIndex is passed to task", async () => {
     },
     new NoopProgressReporter(),
     undefined,
-    undefined,
     true,
   );
 
@@ -789,7 +784,6 @@ test("trialIndex with multiple inputs", async () => {
       trialCount: 2,
     },
     new NoopProgressReporter(),
-    undefined,
     undefined,
     true,
   );
@@ -835,7 +829,6 @@ test("per-input trialCount overrides global trialCount", async () => {
     },
     new NoopProgressReporter(),
     undefined,
-    undefined,
     true,
   );
 
@@ -880,7 +873,6 @@ test("per-input trialCount works without global trialCount", async () => {
       scores: [],
     },
     new NoopProgressReporter(),
-    undefined,
     undefined,
     true,
   );
@@ -1047,7 +1039,6 @@ test("runEvaluator forwards baseExperimentId to summary", async () => {
     },
     new NoopProgressReporter(),
     undefined,
-    undefined,
     true,
   );
 
@@ -1089,7 +1080,6 @@ test("runEvaluator forwards persisted baseExperimentName id to summary", async (
     },
     new NoopProgressReporter(),
     undefined,
-    undefined,
     true,
   );
 
@@ -1129,7 +1119,6 @@ test("tags can be appended and logged to root span", async () => {
       summarizeScores: false,
     },
     new NoopProgressReporter(),
-    undefined,
     undefined,
     true,
   );
@@ -1178,7 +1167,6 @@ test.each([
     },
     new NoopProgressReporter(),
     undefined,
-    undefined,
     true,
   );
   expect(result.results[0].tags).toEqual(expectedTags);
@@ -1217,7 +1205,6 @@ test("tags are persisted with a failing scorer", async () => {
     },
     new NoopProgressReporter(),
     undefined,
-    undefined,
     true,
   );
   expect(result.results[0].tags).toEqual(expectedTags);
@@ -1248,7 +1235,6 @@ test("tags remain empty when not set", async () => {
       summarizeScores: false,
     },
     new NoopProgressReporter(),
-    undefined,
     undefined,
     true,
   );
@@ -1282,7 +1268,6 @@ test("scorer spans have purpose='scorer' attribute", async () => {
       ],
     },
     new NoopProgressReporter(),
-    undefined,
     undefined,
     true,
   );
@@ -1320,59 +1305,173 @@ import { z } from "zod/v3";
 import { projects, CodePrompt } from "./framework2";
 
 describe("framework2 metadata support", () => {
+  test("publishing resolves the project once for prompts and scorers", async () => {
+    await _exportsForTestingOnly.simulateLoginForTests();
+    const project = projects.create({ name: "test-project" });
+    const projectId = "00000000-0000-4000-8000-000000000001";
+    project.prompts.create({
+      name: "completion",
+      model: "test-model",
+      prompt: "Hello {{name}}",
+      templateFormat: "nunjucks",
+      params: { temperature: 0.5 },
+    });
+    project.scorers.create({
+      name: "quality",
+      model: "test-model",
+      messages: [{ role: "user", content: "Rate {{output}}" }],
+      templateFormat: "mustache",
+      useCot: true,
+      choiceScores: { good: 1, bad: 0 },
+    });
+    const register = vi
+      .spyOn(_internalGetGlobalState().appConn(), "post_json")
+      .mockResolvedValue({
+        project: { id: projectId, org_id: projectId, name: "test-project" },
+      });
+    const insert = vi
+      .spyOn(_internalGetGlobalState().apiConn(), "post_json")
+      .mockResolvedValue({});
+    try {
+      await project.publish();
+      expect(register).toHaveBeenCalledExactlyOnceWith("api/project/register", {
+        project_name: "test-project",
+      });
+      expect(insert).toHaveBeenCalledExactlyOnceWith("insert-functions", {
+        functions: [
+          expect.objectContaining({
+            project_id: projectId,
+            prompt_data: {
+              prompt: { type: "completion", content: "Hello {{name}}" },
+              options: { model: "test-model", params: { temperature: 0.5 } },
+              template_format: "nunjucks",
+            },
+          }),
+          expect.objectContaining({
+            project_id: projectId,
+            function_type: "scorer",
+            prompt_data: {
+              prompt: {
+                type: "chat",
+                messages: [{ role: "user", content: "Rate {{output}}" }],
+              },
+              options: { model: "test-model" },
+              template_format: "mustache",
+              parser: {
+                type: "llm_classifier",
+                use_cot: true,
+                choice_scores: { good: 1, bad: 0 },
+              },
+            },
+          }),
+        ],
+      });
+    } finally {
+      register.mockRestore();
+      insert.mockRestore();
+    }
+  });
+
+  test("inline provider tools are built and published with prompts", async () => {
+    await _exportsForTestingOnly.simulateLoginForTests();
+    const project = projects.create({ id: "project-123" });
+    const tools = [
+      {
+        type: "function" as const,
+        function: {
+          name: "weather",
+          parameters: {
+            type: "object",
+            properties: { city: { type: "string" } },
+          },
+        },
+      },
+    ];
+    const prompt = project.prompts.create({
+      name: "weather-prompt",
+      model: "test-model",
+      messages: [{ role: "user", content: "Weather in {{city}}?" }],
+      tools,
+    });
+    expect(prompt.build({ city: "Paris" }).tools).toEqual(tools);
+    const insert = vi
+      .spyOn(_internalGetGlobalState().apiConn(), "post_json")
+      .mockResolvedValue({});
+    try {
+      await project.publish();
+      expect(insert).toHaveBeenCalledWith("insert-functions", {
+        functions: [
+          expect.objectContaining({
+            prompt_data: expect.objectContaining({
+              prompt: expect.objectContaining({ tools: JSON.stringify(tools) }),
+            }),
+          }),
+        ],
+      });
+      const definition = insert.mock.calls[0][1] as {
+        functions: { prompt_data: object }[];
+      };
+      expect(definition.functions[0].prompt_data).not.toHaveProperty(
+        "tool_functions",
+      );
+    } finally {
+      insert.mockRestore();
+    }
+  });
+
   describe("CodeFunction metadata", () => {
-    test("tool stores metadata correctly", () => {
+    test("classifier stores metadata correctly", () => {
       const project = projects.create({ name: "test-project" });
       const metadata = { version: "1.0", author: "test" };
 
-      const tool = project.tools.create({
-        handler: (x: number) => x * 2,
-        name: "test-tool",
-        parameters: z.object({ x: z.number() }),
+      const classifier = project.classifiers.create({
+        handler: ({ output }: { output: number }) => output * 2,
+        name: "test-classifier",
+        parameters: z.object({ output: z.number() }),
         metadata,
       });
 
-      expect(tool.metadata).toEqual(metadata);
-      expect(tool.name).toBe("test-tool");
-      expect(tool.slug).toBe("test-tool");
+      expect(classifier.metadata).toEqual(metadata);
+      expect(classifier.name).toBe("test-classifier");
+      expect(classifier.slug).toBe("test-classifier");
     });
 
-    test("tool works without metadata", () => {
+    test("classifier works without metadata", () => {
       const project = projects.create({ name: "test-project" });
 
-      const tool = project.tools.create({
-        handler: (x: number) => x * 2,
-        name: "test-tool",
-        parameters: z.object({ x: z.number() }),
+      const classifier = project.classifiers.create({
+        handler: ({ output }: { output: number }) => output * 2,
+        name: "test-classifier",
+        parameters: z.object({ output: z.number() }),
       });
 
-      expect(tool.metadata).toBeUndefined();
+      expect(classifier.metadata).toBeUndefined();
     });
 
-    test("tool stores tags correctly", () => {
+    test("classifier stores tags correctly", () => {
       const project = projects.create({ name: "test-project" });
       const tags = ["ci", "sdk"];
 
-      const tool = project.tools.create({
-        handler: (x: number) => x * 2,
-        name: "test-tool",
-        parameters: z.object({ x: z.number() }),
+      const classifier = project.classifiers.create({
+        handler: ({ output }: { output: number }) => output * 2,
+        name: "test-classifier",
+        parameters: z.object({ output: z.number() }),
         tags,
       });
 
-      expect(tool.tags).toEqual(tags);
+      expect(classifier.tags).toEqual(tags);
     });
 
-    test("tool works without tags", () => {
+    test("classifier works without tags", () => {
       const project = projects.create({ name: "test-project" });
 
-      const tool = project.tools.create({
-        handler: (x: number) => x * 2,
-        name: "test-tool",
-        parameters: z.object({ x: z.number() }),
+      const classifier = project.classifiers.create({
+        handler: ({ output }: { output: number }) => output * 2,
+        name: "test-classifier",
+        parameters: z.object({ output: z.number() }),
       });
 
-      expect(tool.tags).toBeUndefined();
+      expect(classifier.tags).toBeUndefined();
     });
 
     test("classifier registers as a code function", () => {
@@ -1466,7 +1565,7 @@ describe("framework2 metadata support", () => {
       expect(prompts[0].metadata).toBeUndefined();
     });
 
-    test("toFunctionDefinition includes metadata when present", async () => {
+    test("toFunctionDefinition includes metadata when present", () => {
       const project = projects.create({ name: "test-project" });
       const metadata = { version: "2.0", tag: "production" };
 
@@ -1476,28 +1575,21 @@ describe("framework2 metadata support", () => {
           prompt: { type: "completion", content: "Hello {{name}}" },
           options: { model: "gpt-4" },
         },
-        [],
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         {
           name: "test-prompt",
           slug: "test-prompt",
           metadata,
-        } as any,
+        },
       );
 
-      const mockProjectMap = {
-        resolve: vi.fn().mockResolvedValue("project-123"),
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      } as any;
-
-      const funcDef = await codePrompt.toFunctionDefinition(mockProjectMap);
+      const funcDef = codePrompt.toFunctionDefinition("project-123");
 
       expect(funcDef.metadata).toEqual(metadata);
       expect(funcDef.name).toBe("test-prompt");
       expect(funcDef.project_id).toBe("project-123");
     });
 
-    test("toFunctionDefinition excludes metadata when undefined", async () => {
+    test("toFunctionDefinition excludes metadata when undefined", () => {
       const project = projects.create({ name: "test-project" });
 
       const codePrompt = new CodePrompt(
@@ -1506,22 +1598,15 @@ describe("framework2 metadata support", () => {
           prompt: { type: "completion", content: "Hello {{name}}" },
           options: { model: "gpt-4" },
         },
-        [],
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        { name: "test-prompt", slug: "test-prompt" } as any,
+        { name: "test-prompt", slug: "test-prompt" },
       );
 
-      const mockProjectMap = {
-        resolve: vi.fn().mockResolvedValue("project-123"),
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      } as any;
-
-      const funcDef = await codePrompt.toFunctionDefinition(mockProjectMap);
+      const funcDef = codePrompt.toFunctionDefinition("project-123");
 
       expect(funcDef.metadata).toBeUndefined();
     });
 
-    test("toFunctionDefinition includes environments for single environment", async () => {
+    test("toFunctionDefinition includes environments for single environment", () => {
       const project = projects.create({ name: "test-project" });
 
       const codePrompt = new CodePrompt(
@@ -1530,26 +1615,19 @@ describe("framework2 metadata support", () => {
           prompt: { type: "completion", content: "Hello {{name}}" },
           options: { model: "gpt-4" },
         },
-        [],
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         {
           name: "test-prompt",
           slug: "test-prompt",
           environments: ["production"],
-        } as any,
+        },
       );
 
-      const mockProjectMap = {
-        resolve: vi.fn().mockResolvedValue("project-123"),
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      } as any;
-
-      const funcDef = await codePrompt.toFunctionDefinition(mockProjectMap);
+      const funcDef = codePrompt.toFunctionDefinition("project-123");
 
       expect(funcDef.environments).toEqual([{ slug: "production" }]);
     });
 
-    test("toFunctionDefinition includes environments for multiple environments", async () => {
+    test("toFunctionDefinition includes environments for multiple environments", () => {
       const project = projects.create({ name: "test-project" });
 
       const codePrompt = new CodePrompt(
@@ -1558,21 +1636,14 @@ describe("framework2 metadata support", () => {
           prompt: { type: "completion", content: "Hello {{name}}" },
           options: { model: "gpt-4" },
         },
-        [],
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         {
           name: "test-prompt",
           slug: "test-prompt",
           environments: ["staging", "production"],
-        } as any,
+        },
       );
 
-      const mockProjectMap = {
-        resolve: vi.fn().mockResolvedValue("project-123"),
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      } as any;
-
-      const funcDef = await codePrompt.toFunctionDefinition(mockProjectMap);
+      const funcDef = codePrompt.toFunctionDefinition("project-123");
 
       expect(funcDef.environments).toEqual([
         { slug: "staging" },
@@ -1580,7 +1651,7 @@ describe("framework2 metadata support", () => {
       ]);
     });
 
-    test("toFunctionDefinition excludes environments when undefined", async () => {
+    test("toFunctionDefinition excludes environments when undefined", () => {
       const project = projects.create({ name: "test-project" });
 
       const codePrompt = new CodePrompt(
@@ -1589,17 +1660,10 @@ describe("framework2 metadata support", () => {
           prompt: { type: "completion", content: "Hello {{name}}" },
           options: { model: "gpt-4" },
         },
-        [],
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        { name: "test-prompt", slug: "test-prompt" } as any,
+        { name: "test-prompt", slug: "test-prompt" },
       );
 
-      const mockProjectMap = {
-        resolve: vi.fn().mockResolvedValue("project-123"),
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      } as any;
-
-      const funcDef = await codePrompt.toFunctionDefinition(mockProjectMap);
+      const funcDef = codePrompt.toFunctionDefinition("project-123");
 
       expect(funcDef.environments).toBeUndefined();
     });
@@ -1623,7 +1687,7 @@ describe("framework2 metadata support", () => {
       expect(prompts[0].tags).toEqual(tags);
     });
 
-    test("toFunctionDefinition includes tags when present", async () => {
+    test("toFunctionDefinition includes tags when present", () => {
       const project = projects.create({ name: "test-project" });
       const tags = ["ci", "production"];
 
@@ -1633,24 +1697,17 @@ describe("framework2 metadata support", () => {
           prompt: { type: "completion", content: "Hello {{name}}" },
           options: { model: "gpt-4" },
         },
-        [],
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        { name: "test-prompt", slug: "test-prompt", tags } as any,
+        { name: "test-prompt", slug: "test-prompt", tags },
       );
 
-      const mockProjectMap = {
-        resolve: vi.fn().mockResolvedValue("project-123"),
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      } as any;
-
-      const funcDef = await codePrompt.toFunctionDefinition(mockProjectMap);
+      const funcDef = codePrompt.toFunctionDefinition("project-123");
 
       expect(funcDef.tags).toEqual(tags);
       expect(funcDef.name).toBe("test-prompt");
       expect(funcDef.project_id).toBe("project-123");
     });
 
-    test("toFunctionDefinition excludes tags when undefined", async () => {
+    test("toFunctionDefinition excludes tags when undefined", () => {
       const project = projects.create({ name: "test-project" });
 
       const codePrompt = new CodePrompt(
@@ -1659,138 +1716,12 @@ describe("framework2 metadata support", () => {
           prompt: { type: "completion", content: "Hello {{name}}" },
           options: { model: "gpt-4" },
         },
-        [],
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        { name: "test-prompt", slug: "test-prompt" } as any,
+        { name: "test-prompt", slug: "test-prompt" },
       );
 
-      const mockProjectMap = {
-        resolve: vi.fn().mockResolvedValue("project-123"),
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      } as any;
-
-      const funcDef = await codePrompt.toFunctionDefinition(mockProjectMap);
+      const funcDef = codePrompt.toFunctionDefinition("project-123");
 
       expect(funcDef.tags).toBeUndefined();
-    });
-  });
-
-  describe("CodeParameters defaults", () => {
-    test("toFunctionDefinition initializes data with schema defaults", async () => {
-      const project = projects.create({ name: "test-project" });
-      project.parameters.create({
-        name: "test-parameters",
-        schema: {
-          title: z.string().default("default-title"),
-          numSamples: z.number().default(10),
-          enabled: z.boolean().default(true),
-          tags: z.array(z.string()).default(["default-tag"]),
-          config: z
-            .object({
-              retryCount: z.number(),
-              strategy: z.string(),
-            })
-            .default({
-              retryCount: 3,
-              strategy: "balanced",
-            }),
-          datasetName: z.string(),
-          main: {
-            type: "prompt",
-            default: {
-              messages: [{ role: "user", content: "{{input}}" }],
-              model: "gpt-4",
-            },
-          },
-          model: {
-            type: "model",
-            default: "gpt-5-mini",
-          },
-        },
-      });
-
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const parameters = (project as any)._publishableParameters;
-      expect(parameters).toHaveLength(1);
-
-      const mockProjectMap = {
-        resolve: vi.fn().mockResolvedValue("project-123"),
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      } as any;
-
-      const funcDef = await parameters[0].toFunctionDefinition(mockProjectMap);
-
-      expect(funcDef.function_data.type).toBe("parameters");
-      expect(funcDef.function_data.data).toMatchObject({
-        title: "default-title",
-        numSamples: 10,
-        enabled: true,
-        tags: ["default-tag"],
-        config: {
-          retryCount: 3,
-          strategy: "balanced",
-        },
-        main: {
-          prompt: {
-            type: "chat",
-            messages: [{ role: "user", content: "{{input}}" }],
-          },
-          options: {
-            model: "gpt-4",
-          },
-        },
-        model: "gpt-5-mini",
-      });
-      expect(funcDef.function_data.__schema.properties.model).toMatchObject({
-        type: "string",
-        "x-bt-type": "model",
-        default: "gpt-5-mini",
-      });
-      expect(funcDef.function_data.data).not.toHaveProperty("datasetName");
-    });
-
-    test("toFunctionDefinition does not initialize data when schema has no defaults", async () => {
-      const project = projects.create({ name: "test-project" });
-      project.parameters.create({
-        name: "test-parameters-no-defaults",
-        schema: {
-          title: z.string(),
-          numSamples: z.number(),
-          enabled: z.boolean(),
-          tags: z.array(z.string()),
-          config: z.object({
-            retryCount: z.number(),
-            strategy: z.string(),
-          }),
-          main: {
-            type: "prompt",
-          },
-          model: {
-            type: "model",
-          },
-        },
-      });
-
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const parameters = (project as any)._publishableParameters;
-      expect(parameters).toHaveLength(1);
-
-      const mockProjectMap = {
-        resolve: vi.fn().mockResolvedValue("project-123"),
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      } as any;
-
-      const funcDef = await parameters[0].toFunctionDefinition(mockProjectMap);
-
-      expect(funcDef.function_data.type).toBe("parameters");
-      expect(funcDef.function_data.data).toEqual({});
-      expect(funcDef.function_data.data).not.toHaveProperty("title");
-      expect(funcDef.function_data.data).not.toHaveProperty("numSamples");
-      expect(funcDef.function_data.data).not.toHaveProperty("enabled");
-      expect(funcDef.function_data.data).not.toHaveProperty("tags");
-      expect(funcDef.function_data.data).not.toHaveProperty("config");
-      expect(funcDef.function_data.data).not.toHaveProperty("main");
-      expect(funcDef.function_data.data).not.toHaveProperty("model");
     });
   });
 

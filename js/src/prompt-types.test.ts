@@ -8,10 +8,9 @@ import {
   type DefaultPromptArgs,
   type PromptRowWithId,
 } from "./logger";
-import type { CodeParameters, CodePrompt } from "./framework2";
+import type { CodePrompt } from "./framework2";
 import type {
   AnyModelParamsType,
-  FunctionDataType,
   PromptDataType,
   PromptType,
 } from "./generated_plain_types";
@@ -85,9 +84,10 @@ test("compiled prompts preserve provider parameter types and compatibility", () 
 test("prompt metadata preserves required and optional identifiers", () => {
   type Metadata = Omit<
     PromptType,
-    "log_id" | "org_id" | "project_id" | "id" | "_xact_id"
+    "log_id" | "org_id" | "project_id" | "id" | "_xact_id" | "function_type"
   > & {
     project_id?: string;
+    function_type?: Exclude<PromptType["function_type"], "tool" | "parameters">;
   };
   type RequiredRow = Metadata & { id: string; _xact_id: string };
   type OptionalRow = Metadata & { id?: string; _xact_id?: string };
@@ -114,22 +114,10 @@ test("prompt metadata preserves required and optional identifiers", () => {
 
 test("function definitions expose only the variant each builder produces", () => {
   type PromptEvent = Awaited<ReturnType<CodePrompt["toFunctionDefinition"]>>;
-  type ParametersEvent = Awaited<
-    ReturnType<CodeParameters["toFunctionDefinition"]>
-  >;
   expectTypeOf<PromptEvent["function_data"]>().toEqualTypeOf<{
     type: "prompt";
   }>();
-  expectTypeOf<
-    PromptEvent["prompt_data"]
-  >().branded.toEqualTypeOf<PromptDataType>();
-  expectTypeOf<
-    ParametersEvent["function_data"]["type"]
-  >().toEqualTypeOf<"parameters">();
-  expectTypeOf<
-    ParametersEvent["function_type"]
-  >().toEqualTypeOf<"parameters">();
-  expectTypeOf<ParametersEvent["function_data"]>().toMatchTypeOf<
-    Extract<FunctionDataType, { type: "parameters" }>
+  expectTypeOf<PromptEvent["prompt_data"]>().branded.toEqualTypeOf<
+    Omit<PromptDataType, "tool_functions">
   >();
 });

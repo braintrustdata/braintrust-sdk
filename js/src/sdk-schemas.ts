@@ -53,13 +53,11 @@ const FunctionTypeEnum = z.enum([
   "llm",
   "scorer",
   "task",
-  "tool",
   "custom_view",
   "preprocessor",
   "facet",
   "classifier",
   "tag",
-  "parameters",
   "sandbox",
 ]);
 
@@ -365,7 +363,6 @@ export const PromptData = z
     options: PromptOptionsNullish,
     parser: PromptParserNullish,
     preprocessor: PreprocessorId,
-    tool_functions: z.union([z.array(SavedFunctionId), z.null()]),
     template_format: z.union([
       z.enum(["mustache", "nunjucks", "none"]),
       z.null(),
@@ -442,7 +439,6 @@ export const FunctionId = z.union([
 
 const FunctionObjectType = z.enum([
   "prompt",
-  "tool",
   "scorer",
   "task",
   "workflow",
@@ -450,7 +446,6 @@ const FunctionObjectType = z.enum([
   "preprocessor",
   "facet",
   "classifier",
-  "parameters",
   "sandbox",
 ]);
 

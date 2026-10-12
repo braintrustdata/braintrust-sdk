@@ -37,7 +37,6 @@ export {
   injectTraceContext,
   initDataset,
   initLogger,
-  loadParameters,
   loadPrompt,
   logError,
   login,

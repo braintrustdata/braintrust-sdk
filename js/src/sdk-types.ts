@@ -97,25 +97,12 @@ export type FunctionTypeEnum =
   | "llm"
   | "scorer"
   | "task"
-  | "tool"
   | "custom_view"
   | "preprocessor"
   | "facet"
   | "classifier"
   | "tag"
-  | "parameters"
   | "sandbox";
-export type SavedFunctionId =
-  | {
-      type: "function";
-      id: string;
-      version?: string | undefined;
-    }
-  | {
-      type: "global";
-      name: string;
-      function_type: FunctionTypeEnum;
-    };
 export type CallEvent =
   | {
       id?: string | undefined;
@@ -276,14 +263,6 @@ export type RepoInfo = {
   commit_time?: string | null;
   git_diff?: string | null;
 } | null;
-export type ExtendedSavedFunctionId =
-  | SavedFunctionId
-  | {
-      type: "slug";
-      project_id: string;
-      slug: string;
-    };
-// Keep provider fields visible to editor completion while accepting custom options.
 export type ModelParams =
   | {
       use_cache?: boolean;
@@ -400,7 +379,6 @@ export interface PromptData {
   options?: PromptOptionsNullish;
   parser?: PromptParserNullish;
   preprocessor?: PreprocessorId;
-  tool_functions?: Array<SavedFunctionId> | null;
   template_format?: ("mustache" | "nunjucks" | "none") | null;
   mcp?: {} | null;
   origin?: {
@@ -450,7 +428,6 @@ export type FunctionId =
     };
 export type FunctionObjectType =
   | "prompt"
-  | "tool"
   | "scorer"
   | "task"
   | "workflow"
@@ -458,7 +435,6 @@ export type FunctionObjectType =
   | "preprocessor"
   | "facet"
   | "classifier"
-  | "parameters"
   | "sandbox";
 export type FunctionOutputType =
   | "completion"
