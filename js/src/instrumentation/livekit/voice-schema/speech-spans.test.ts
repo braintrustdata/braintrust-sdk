@@ -106,3 +106,26 @@ test("agent speech that played nothing is not a speech span", () => {
     }).success,
   ).toBe(false);
 });
+
+test("agent spoken text must come from playout-synchronized text", () => {
+  const span = {
+    span_id: "s",
+    span_parents: ["t"],
+    span_attributes: { name: "speech", type: "task" },
+    metrics: { start: 1, end: 2 },
+    output: { text: "I have", planned_text: "I have nine thirty." },
+    metadata: {
+      "voice.speech": {
+        speaker: "agent",
+        turn_id: "t",
+        state: "interrupted",
+        timing_source: "playout",
+        played_ms: 500,
+        transcript: { source: "model_output", final: true },
+      },
+    },
+  };
+  expect(speechSpan.safeParse(span).success).toBe(false);
+  const { text: _text, ...planned } = span.output;
+  expect(speechSpan.safeParse({ ...span, output: planned }).success).toBe(true);
+});

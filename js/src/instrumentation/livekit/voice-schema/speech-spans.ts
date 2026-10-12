@@ -93,6 +93,17 @@ export const speechSpan = z
     }),
   })
   .superRefine((span, ctx) => {
+    const speech = span.metadata["voice.speech"];
+    if (
+      speech.speaker === "agent" &&
+      span.output?.text !== undefined &&
+      speech.transcript?.source !== "playback_sync"
+    )
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "agent output.text must be playout-synchronized text",
+        path: ["metadata", "voice.speech", "transcript", "source"],
+      });
     if (
       span.metadata["voice.speech"].timing_source === "audio_samples" &&
       !span.metadata["audio.selections"]

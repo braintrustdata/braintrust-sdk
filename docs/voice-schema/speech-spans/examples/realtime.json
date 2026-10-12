@@ -272,7 +272,7 @@
     "output": [
       {
         "role": "assistant",
-        "content": "I have nine thirty or eleven on Fri"
+        "content": "I have nine thirty or eleven on Friday. Which would you like?"
       }
     ],
     "metadata": {
@@ -309,7 +309,7 @@
         "played_ms": 2900,
         "provider_played_ms": 2600,
         "transcript": {
-          "source": "model_output",
+          "source": "playback_sync",
           "final": true
         }
       },
@@ -598,7 +598,7 @@
         "produced_by": "r4",
         "played_ms": 2800,
         "transcript": {
-          "source": "model_output",
+          "source": "playback_sync",
           "final": true
         }
       },
