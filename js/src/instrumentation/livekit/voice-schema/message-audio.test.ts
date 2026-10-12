@@ -71,7 +71,7 @@ describe.each(["cascaded", "realtime"])("message-audio %s example", (name) => {
       }
     }
     for (const [id, message] of messages) {
-      if (message.produced_by_span_id !== undefined)
+      if (message.committed && message.produced_by_span_id !== undefined)
         expect(
           llmSpanMetadataSchema.parse(
             spans.get(message.produced_by_span_id)?.metadata,

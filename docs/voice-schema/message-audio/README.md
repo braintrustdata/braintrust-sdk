@@ -6,22 +6,164 @@ This option anchors voice evidence on conversation messages. Every user or assis
 
 It is one of three alternatives, along with `speech-spans` and `call-timeline`. The whole-call recording (`@braintrust/audio`, `audio.recordings`) is shared and unchanged.
 
-**Implemented:** zod schemas in `js/src/instrumentation/livekit/voice-schema/message-audio.ts`, two example traces in `examples/`, and a test that validates them and their cross-references. **Implemented in the companion Lingua PR:** the Lingua mapping, built from `specs/voice-schema-message-audio.md` with fixtures from these examples. **Sketched:** all integration capture. No integration emits these keys yet.
+**Implemented:** zod schemas in `js/src/instrumentation/livekit/voice-schema/message-audio.ts`, two example traces in `examples/`, and a test that validates them and their cross-references. **Implemented in the companion Lingua PR:** the Lingua mapping (`specs/voice-schema-message-audio.md`), with fixtures built from these examples. **Sketch:** all integration capture (LiveKit and Pipecat). No integration emits these keys yet.
 
 ## Customer problem
 
 A customer reading a voice call wants the transcript they already know, the messages, with a play button that plays exactly that sentence. They also want to know whether the text is what was actually said or heard. The current traces put speech on span names (`user_turn`, `livekit.agent_speaking`) and vendor keys (`contrib.livekit.interrupted`). Lingua then has to guess which LLM step a stretch of audio belongs to (#486 `trajectory/voice.rs` links by start time). That guess is weakest exactly where customers look: barge-in, split user turns, and realtime calls whose transcripts arrive late.
 
+## Schema at a glance
+
+Evidence lives in one place: a `voice.messages` map on the call span, keyed by conversation message id. LLM spans point into it by id. There are no speech spans and no voice events.
+
+<!-- prettier-ignore -->
+```ts
+// Call span (root): span_attributes = { type: "task", name: "livekit.agent_session" | "pipecat.pipeline" }
+type CallRow = {
+  input?: { audio: Record<RecordingId, Attachment> }      // shared @braintrust/audio; one attachment per ready segment
+  metadata: {
+    "audio.recordings"?: AudioRecording[]                  // shared, unchanged; absent only when recording is disabled
+    "voice.origin_unix_ms": number                         // required; unix ms; call ms 0; = recordings[].timeline.origin_unix_ms
+    "voice.messages": Record<MessageId, VoiceMessage>      // required, even with content capture off
+  }
+}
+type AudioRecording = {                                    // shared, abridged; one per segment
+  id: RecordingId; state: "pending" | "ready" | "omitted"; reason?: string
+  attachment?: { span_id: string; ref: string }            // ready only; ref = "/input/audio/<id>"
+  timeline: { origin_unix_ms: number; recording_start_offset_ms: number; basis: string } // unix ms; call ms
+}
+// No "audio.selections" key on turn spans: each message carries its own selections.
+type Selection = {
+  recording_span_id: string                                // span_id of the call span
+  recording_id: RecordingId                                // audio.recordings[].id (the segment)
+  start_offset_ms: number; end_offset_ms: number           // segment ms: call ms − recording_start_offset_ms
+  channel_index: 0 | 1                                     // 0 = user (caller), 1 = assistant (agent)
+}
+type VoiceMessage = {
+  role: "user" | "assistant"
+  seq: number                                              // int ≥ 0; creation order; unique per call; gaps allowed
+  committed: boolean                                       // entered the agent's chat context
+  state: "complete" | "interrupted" | "unplayed" | "open"  // interrupted, unplayed: assistant only
+  text?: string                                            // present iff text_status is final | partial
+  text_status: "final" | "partial" | "missing" | "not_captured"
+  text_source?: "stt" | "realtime_input_transcription" | "tts_input" | "playout_aligned" | "realtime_output_transcript"
+  generated_text?: string                                  // assistant; full generated text, only when ≠ text
+  start_ms?: number; end_ms?: number                       // call ms; outer bounds of audible speech
+  timing_source?: "vad_events" | "provider_events" | "local_receipt" | "playout_events"
+  end_of_turn_ms?: number                                  // user; call ms; agent committed the user's turn
+  transcript_final_ms?: number                             // user; call ms; final transcript arrived
+  interrupted_at_ms?: number                               // assistant; call ms; required when state = "interrupted"
+  provider_audio_end_ms?: number                           // assistant, realtime; ms from the item's own audio start
+  selections: Selection[]                                  // full array; [] while pending or when audio is omitted
+  produced_by_span_id?: string                             // assistant; span_id of the LLM span that generated it
+  turn_span_id?: string                                    // debug only; span_id of a turn span; Lingua ignores
+  source_ids?: Record<string, string>                      // debug only; native ids; Lingua ignores
+}
+// LLM span: span_attributes.type = "llm" (LiveKit name "llm_response"); one per LLM call or realtime response
+type LlmRow = {
+  input?: Message[]                                        // with content capture: one message per context item, same order
+  metadata: {
+    "voice.context_message_ids"?: (MessageId | null)[]     // expected on every voice LLM span; null = input that is not an item
+    "voice.output_message_id"?: MessageId                  // assistant message it produced; set when that item commits
+  }
+}
+// Tool span: span_attributes.type = "tool"; existing keys, unchanged
+type ToolRow = { metadata: { "gen_ai.tool.call.id": string; "contrib.livekit.request_span_id"?: string } } // LiveKit; span_id of the calling LLM span
+```
+
+**Time.**
+
+- `*_ms` on a message is call ms: ms since `voice.origin_unix_ms`, on the recording clock. Selection offsets are segment ms; add the segment's `recording_start_offset_ms` to get call ms. `provider_audio_end_ms` is ms from the item's own audio start.
+- `metrics.start`/`metrics.end` on every span are unix seconds (span clock). No voice field uses them; Lingua uses LLM span start only to pick the first span that heard a user message.
+- User bounds come from VAD (cascaded) or local receipt of provider speech events (LiveKit realtime); assistant bounds come from local playout. `timing_source` names the basis.
+
+**Relationships.**
+
+```text
+VoiceMessage id (map key)   = LiveKit chat item id | speech_<id> (no item) | vad_<seq> (uncommitted user) | Pipecat msg_<uuid>
+assistant.produced_by_span_id  -> LLM span_id        <- LLM voice.output_message_id (back-link, committed messages)
+user message "heard by"        <- first LLM span whose voice.context_message_ids contains its id (Lingua infers)
+tool call, tool output items  =  their own ids in voice.context_message_ids;  tool span contrib.livekit.request_span_id -> LLM span_id
+selections[].recording_span_id -> call span_id;  selections[].recording_id -> audio.recordings[].id
+```
+
+**Scenario excerpt.** From [`examples/cascaded.json`](examples/cascaded.json). Abridged: `turn_span_id` and `source_ids` are dropped, and `selections` keep only offsets and channel (`recording_span_id: "c-root"`, `recording_id: "call-0000"` throughout).
+
+<!-- prettier-ignore -->
+```jsonc
+// c-root.metadata: "voice.origin_unix_ms": 1791830000000, "voice.messages": {
+"item_u1": { "role": "user", "seq": 0, "committed": true, "state": "complete",
+  "text": "Hi, can I move my Thursday cleaning to Friday morning?", "text_status": "final", "text_source": "stt",
+  "start_ms": 300, "end_ms": 2900, "timing_source": "vad_events", "end_of_turn_ms": 3400, "transcript_final_ms": 3450,
+  "selections": [{ "start_offset_ms": 300, "end_offset_ms": 1250, "channel_index": 0 },
+                 { "start_offset_ms": 1650, "end_offset_ms": 2900, "channel_index": 0 }] },  // one message, two VAD fragments
+"item_a1": { "role": "assistant", "seq": 2, "committed": true, "state": "interrupted",
+  "text": "I have nine thirty or eleven on Fri", "text_status": "final", "text_source": "playout_aligned",
+  "generated_text": "I have nine thirty or eleven on Friday. Which would you like?",
+  "start_ms": 5300, "end_ms": 7900, "timing_source": "playout_events", "interrupted_at_ms": 7900,
+  "selections": [{ "start_offset_ms": 5300, "end_offset_ms": 7900, "channel_index": 1 }],
+  "produced_by_span_id": "c-llm2" },
+"item_u2": { "role": "user", "seq": 3, "committed": true, "state": "complete",          // the barge-in
+  "text": "Nine thirty works.", "text_status": "final", "text_source": "stt",
+  "start_ms": 7600, "end_ms": 8500, "timing_source": "vad_events", "end_of_turn_ms": 8900, "transcript_final_ms": 8950 }
+// c-llm1.metadata: "voice.context_message_ids": ["lk.agent_task.instructions", "item_u1"]      -> heard item_u1
+// c-tool1 (find_slots).metadata: "gen_ai.tool.call.id": "call_find", "contrib.livekit.request_span_id": "c-llm1"
+// c-llm2.metadata: "voice.context_message_ids": ["lk.agent_task.instructions", "item_u1", "item_fc1", "item_fco1"],
+//                  "voice.output_message_id": "item_a1"
+```
+
+The same call from [`examples/realtime.json`](examples/realtime.json), abridged the same way (`recording_span_id: "r-root"`); `// RT:` marks a difference from cascaded.
+
+<!-- prettier-ignore -->
+```jsonc
+// r-root.metadata: "voice.origin_unix_ms": 1791830000000, "voice.messages": {
+"item_rt_u1": { "role": "user", "seq": 0, "committed": true, "state": "complete",
+  "text": "Hi, can I move my Thursday cleaning to Friday morning?", "text_status": "final",
+  "text_source": "realtime_input_transcription",          // RT: provider side transcription
+  "start_ms": 300, "end_ms": 3400,                        // RT: receipt of input_speech_stopped, incl. server-VAD silence
+  "timing_source": "local_receipt", "end_of_turn_ms": 3600, // RT: generation start for r-llm1, no commit event
+  "transcript_final_ms": 4300,                            // RT: after r-llm1 called find_slots at 4100
+  "selections": [{ "start_offset_ms": 300, "end_offset_ms": 3400, "channel_index": 0 }] },
+"item_rt_a1": { "role": "assistant", "seq": 2, "committed": true, "state": "interrupted",
+  "text": "I have nine thirty or eleven on Fri", "text_status": "final", "text_source": "playout_aligned",
+  "generated_text": "I have nine thirty or eleven on Friday. Which would you like?", // RT: item output transcript
+  "start_ms": 5000, "end_ms": 7900, "timing_source": "playout_events", "interrupted_at_ms": 7900,
+  "provider_audio_end_ms": 2900,                          // RT only: truncate sent, = 7900 − 5000
+  "selections": [{ "start_offset_ms": 5000, "end_offset_ms": 7900, "channel_index": 1 }],
+  "produced_by_span_id": "r-llm2" },
+"item_rt_u2": { "role": "user", "seq": 3, "committed": true, "state": "complete",
+  "text_status": "missing", "text_source": "realtime_input_transcription", // RT: transcript never arrived, no "text"
+  "start_ms": 7600, "end_ms": 9000, "timing_source": "local_receipt", "end_of_turn_ms": 9050 }
+// r-llm1.metadata: "voice.context_message_ids": ["item_rt_u1"]   // RT: no instructions entry; input [{"role": "user", "content": ""}]
+// r-tool1 (find_slots).metadata: "gen_ai.tool.call.id": "call_find", "contrib.livekit.request_span_id": "r-llm1"
+// r-llm2.metadata: "voice.context_message_ids": ["item_rt_u1", "item_rt_fc1", "item_rt_fco1"], "voice.output_message_id": "item_rt_a1"
+```
+
+Cascaded vs realtime: what changes in the payload
+
+| Payload                             | Cascaded                                                                          | Realtime                                                                                                  |
+| ----------------------------------- | --------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------- |
+| User `text_source`, `timing_source` | `stt`, `vad_events`                                                               | `realtime_input_transcription`, `local_receipt`                                                           |
+| User timing (turn 1)                | `end_ms` 2900, `end_of_turn_ms` 3400, `transcript_final_ms` 3450 (before the LLM) | `end_ms` 3400 (includes silence), `end_of_turn_ms` 3600, `transcript_final_ms` 4300 (after the tool call) |
+| Barge-in user text                  | `"Nine thirty works."`, `final`                                                   | no `text`, `text_status: "missing"`; audio and bounds still present                                       |
+| Interrupted assistant               | `interrupted_at_ms` 7900; `generated_text` = TTS input                            | adds `provider_audio_end_ms` 2900; `generated_text` = item output transcript                              |
+| LLM `voice.context_message_ids`     | starts with `"lk.agent_task.instructions"`                                        | no instructions entry; one `llm` span per realtime response, no STT/TTS spans                             |
+| `turn_span_id`                      | set (`user_turn`/`assistant_turn` spans)                                          | absent                                                                                                    |
+
+Implemented: zod types (`js/src/instrumentation/livekit/voice-schema/message-audio.ts`), examples, test. Sketch: LiveKit/Pipecat emission. Lingua mapping: implemented in the companion Lingua PR (`specs/voice-schema-message-audio.md`, branch `kevchoi/voice-schema-message-audio`).
+
 ## Contract
 
-Three locations, all in span `metadata`. The call span is the span that logs `audio.recordings`: `livekit.agent_session` in LiveKit and `pipecat.pipeline` in Pipecat.
+**Implemented** (zod, examples, test). Three locations, all in span `metadata`. The call span is the span that logs `audio.recordings`: `livekit.agent_session` in LiveKit and `pipecat.pipeline` in Pipecat.
+
+The shared recording layer is unchanged: `input.audio` and `audio.recordings` on the call span. This option does **not** write `audio.selections` on turn spans; each message carries its own `selections`.
 
 ### Call span
 
-| Key                    | Type                               | Req.     | Meaning                                                                                                                                                       |
-| ---------------------- | ---------------------------------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `voice.origin_unix_ms` | number                             | required | Origin of the call clock. Equals `audio.recordings[*].timeline.origin_unix_ms` when audio is recorded, and is still present when recording is off or omitted. |
-| `voice.messages`       | `Record<message_id, VoiceMessage>` | required | One entry per spoken or heard message. See [Writing entries](#writing-entries). Written whether or not content capture is on.                                 |
+| Key                    | Type                               | Req.     | Meaning                                                                                                                                                                                                                                                                                                                        |
+| ---------------------- | ---------------------------------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `voice.origin_unix_ms` | number                             | required | Unix ms. Origin of the call clock (call ms 0). The integration writes the same value it passes as the recordings' `timeline.origin_unix_ms`, and writes it even when recording is off or omitted. A recording descriptor whose origin differs is the unknown-clock-offset case (see [Edge cases](#edge-cases-and-weaknesses)). |
+| `voice.messages`       | `Record<message_id, VoiceMessage>` | required | One entry per spoken or heard message. See [Writing entries](#writing-entries). Written whether or not content capture is on.                                                                                                                                                                                                  |
 
 ### `VoiceMessage`
 
@@ -43,8 +185,8 @@ All `*_ms` fields are **call ms**: milliseconds since `voice.origin_unix_ms` on 
 | `transcript_final_ms`   | number                                                                                              | optional | User only: when the final STT result arrived (LiveKit `user_input_transcribed` with `isFinal`, realtime `input_audio_transcription_completed` with `isFinal`, Pipecat finalized `TranscriptionFrame`). It may be later than `end_of_turn_ms` when endpointing fires before STT finalizes.                                                                                                                                                                                                                                                                                                                             |
 | `interrupted_at_ms`     | number                                                                                              | optional | Assistant only, required when `state` is `interrupted`: where local playout stopped.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
 | `provider_audio_end_ms` | number                                                                                              | optional | Assistant realtime only: the `audio_end_ms` **sent to the provider** in a truncate, relative to the item's own audio start. LiveKit computes it from the same local playback position, so there it equals `interrupted_at_ms − start_ms`, except that a non-finite playback position is clamped to 0. Only integrations that observe the provider independently (Pipecat) can show a real disagreement between the provider and local playout.                                                                                                                                                                        |
-| `selections`            | `Selection[]`                                                                                       | required | `@braintrust/audio` selections (segment-local ms, `recording_span_id` = call span), always the full current array. Empty while segments are pending or when audio is omitted.                                                                                                                                                                                                                                                                                                                                                                                                                                         |
-| `produced_by_span_id`   | string                                                                                              | optional | Assistant only: the LLM span that generated the message.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| `selections`            | `Selection[]`                                                                                       | required | `@braintrust/audio` selections, always the full current array. `recording_span_id` is the call span's `span_id`; `recording_id` is the segment's `audio.recordings[].id`; `start_offset_ms`/`end_offset_ms` are ms from that segment's start (call ms − `recording_start_offset_ms`); `channel_index` is 0 for the user and 1 for the assistant. Empty while segments are pending or when audio is omitted.                                                                                                                                                                                                           |
+| `produced_by_span_id`   | string                                                                                              | optional | Assistant only: the `span_id` of the LLM span that generated the message.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
 | `turn_span_id`          | string                                                                                              | optional | The turn span, if the integration emits one. Debugging aid only; Lingua ignores it.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
 | `source_ids`            | `Record<string,string>`                                                                             | optional | Native ids, for example `livekit.item_id`, `livekit.speech_id`, `openai.item_id`, `openai.response_id`, `pipecat.context_id`. Debugging aid only; Lingua ignores it.                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
 
@@ -53,7 +195,7 @@ All `*_ms` fields are **call ms**: milliseconds since `voice.origin_unix_ms` on 
 | Key                         | Type                 | Req.                                       | Meaning                                                                                                                                                                                                                                                                                                                                                                                                                                          |
 | --------------------------- | -------------------- | ------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `voice.context_message_ids` | `(string \| null)[]` | optional, expected on every voice LLM span | The model's context items in order: each item's id, or `null` for an input that is not a context item (for example a Pipecat system prompt passed outside the context). LiveKit cascaded instructions are a real item (`lk.agent_task.instructions`); LiveKit realtime instructions are not listed. Captured whether or not content capture is on. When content is captured, `input` has exactly one message per context item in the same order. |
-| `voice.output_message_id`   | string               | optional                                   | The message this call produced, if it produced spoken text. It must equal that message's `produced_by_span_id` back-link.                                                                                                                                                                                                                                                                                                                        |
+| `voice.output_message_id`   | string               | optional                                   | The message this call produced, if it produced spoken text. Set when that message's item commits, so only committed messages have it. When set, that message's `produced_by_span_id` must be this span. Uncommitted assistant speech (cancelled, or played without an item) may have `produced_by_span_id` with no back-link.                                                                                                                    |
 
 ### Why a metadata map and not message content parts
 
@@ -65,7 +207,7 @@ We considered adding an `audio_ref` part to Lingua `UserContentPart` and `Assist
 4. **Header-only reads.** Lingua builds `voice_calls` from span headers (`SpanContext.voice`) without payloads. Metadata keys on the allow-list keep that true; content parts would force payload fetches.
 5. **Content capture off.** With capture off the map still carries timing, state and audio; only `text` is dropped.
 
-## Writing entries
+### Writing entries
 
 Braintrust merges span `metadata` across logs with `mergeDicts`. Objects deep-merge; arrays and scalars are replaced; keys cannot be deleted. The contract depends on that:
 
@@ -84,28 +226,14 @@ Braintrust merges span `metadata` across logs with `mergeDicts`. Objects deep-me
 - **Never write optional fields as `null`.** An absent field is simply not in the entry. A field that later disappears can't be removed by merge, so the accumulator must not emit a field it may need to retract (for example, write `text` only once it is final or partial, never speculatively).
 - **Lingua validates only the merged row**, the final state of the call span's metadata. Individual writes are not validated.
 
-## IDs and relationships
-
-- **Message id:**
-  - LiveKit: the `ChatMessage.id` (`item_…`). In realtime this is the provider's conversation item id.
-  - Pipecat: no native id; the integration mints one (see [Pipecat ids](#pipecat-ids)).
-  - Minted only by the integration:
-    - the LiveKit `speech_id` itself (already unique and prefixed `speech_`, from `shortuuid("speech_")` in `SpeechHandle`) for assistant speech that never got an item;
-    - `vad_<seq>` for uncommitted user speech.
-- **User message → LLM step:** the first LLM span whose `voice.context_message_ids` contains the message id ("heard by"), inferred by Lingua.
-- **Assistant message → LLM step:** `produced_by_span_id`, mirrored by `voice.output_message_id` on that span.
-- **Message → audio:** `selections`, on channel 0 for the user and channel 1 for the assistant.
-- **Message → tools:** indirect. A tool call is a separate context entry with its own id in `voice.context_message_ids`. Tool spans keep their existing `gen_ai.tool.call.id` and `contrib.livekit.request_span_id` links.
-- **Turn spans:** optional. Lingua does not need them.
-
-## Message grain
+### Message grain
 
 - **User message:** takes **every** VAD interval that ended after the previous user commit and before its own commit, excluding intervals already written as uncommitted. LiveKit and Pipecat merge speech fragments separated by short pauses into one item, so one user message can have several `selections` ranges. `start_ms`/`end_ms` are the outer bounds.
 - **Assistant message:** takes only its own speech's playout interval, the audio played for that `SpeechHandle` (LiveKit) or TTS context (Pipecat), not the whole agent turn. A turn with a tool filler and a later answer yields two assistant messages.
 
 `examples/cascaded.json` shows a merged fragment: `item_u1` has two ranges, 300–1250 and 1650–2900, because the caller paused for 400 ms after "Hi,".
 
-## Assistant spoken text
+### Assistant spoken text
 
 The same rule applies in cascaded and realtime pipelines:
 
@@ -120,7 +248,7 @@ The same rule applies in cascaded and realtime pipelines:
 
 All examples use `playout_aligned`; none show the fallback.
 
-## Uncommitted user speech
+### Uncommitted user speech
 
 A VAD interval becomes an uncommitted entry only when all of these hold:
 
@@ -139,7 +267,7 @@ Sources the MVP uses:
 | Pipecat cascaded | `UserStartedSpeakingFrame` / `UserStoppedSpeakingFrame` (already handled by the observer)                                              | none observed                                                                 | user aggregator push                                                                                        |
 | Pipecat realtime | **dropped in the MVP**: speech the provider never commits has no item and no guaranteed provider event pairing in the realtime service | —                                                                             | —                                                                                                           |
 
-## Tool-only and cancelled speech
+### Tool-only and cancelled speech
 
 LiveKit creates a new `SpeechHandle` for each reply, including each reply after a tool call. An LLM step that only calls a tool therefore gets a speech record with no generated text and no audio.
 
@@ -148,12 +276,29 @@ LiveKit creates a new `SpeechHandle` for each reply, including each reply after 
 - **`interrupted`:** speech that played some audio before stopping.
 - **Committed or not:** assistant speech that never entered the chat context is `committed: false`. That covers cancelled speech (`unplayed` or `interrupted`) and played audio with no forwarded text (`complete` or `interrupted`). LiveKit adds an interrupted reply with text to the context, so that one is `committed: true`.
 
+## IDs and relationships
+
+- **Message id:**
+  - LiveKit: the `ChatMessage.id` (`item_…`). In realtime this is the provider's conversation item id.
+  - Pipecat: no native id; the integration mints one (see [Pipecat ids](#pipecat-ids)).
+  - Minted only by the integration:
+    - the LiveKit `speech_id` itself (already unique and prefixed `speech_`, from `shortuuid("speech_")` in `SpeechHandle`) for assistant speech that never got an item;
+    - `vad_<seq>` for uncommitted user speech.
+- **User message → LLM step:** the first LLM span whose `voice.context_message_ids` contains the message id ("heard by"), inferred by Lingua.
+- **Assistant message → LLM step:** `produced_by_span_id` (the LLM span's `span_id`), mirrored by `voice.output_message_id` on that span once the message commits.
+- **Message → audio:** `selections`, on channel 0 for the user and channel 1 for the assistant.
+- **Message → tools:** indirect. A tool call is a separate context entry with its own id in `voice.context_message_ids`. Tool spans keep their existing `gen_ai.tool.call.id` and `contrib.livekit.request_span_id` links.
+- **Turn spans:** optional. Lingua does not need them.
+
 ## Timing semantics
+
+**Implemented** in the examples and zod (types only; the zod schema does not check clocks).
 
 - `start_ms`/`end_ms` and `selections` describe the same audible intervals.
   - **Selections:** what playback uses. They are clipped to ready segments and are empty if audio is unavailable.
   - **`start_ms`/`end_ms`:** survive audio loss.
 - **User bounds:** VAD or provider speech events, mapped to call ms by `event_time_unix_ms - voice.origin_unix_ms`. That mapping is arrival time, not sample time; `timing_source` says which. Only `provider_events` carries the provider's own audio ms.
+- **Selection offsets:** segment ms, not call ms. Call ms = `recording_start_offset_ms` of the selection's recording + offset. In the examples the single segment starts at 0, so they coincide.
 - **Assistant bounds:** local playout (`playbackStarted`/`playbackProgressed`/`playbackFinished`), not generation. Generation timing stays on LLM and TTS spans.
 - **Derived values, computed by the app and stored by neither the SDK nor Lingua:**
   - **Response latency:** next assistant `start_ms` − user `end_of_turn_ms`.
@@ -162,7 +307,9 @@ LiveKit creates a new `SpeechHandle` for each reply, including each reply after 
   - **Overlap:** any intersection of a user and an assistant interval.
   - **Transcript after reply:** `transcript_final_ms` later than the start of the LLM step that heard the message.
 
-## What integrations capture and when
+## What integrations capture, and when
+
+**Sketch.** No integration emits these keys yet.
 
 ### LiveKit (JS)
 
@@ -270,7 +417,9 @@ Pipecat context messages are plain dicts with no id.
 - **Context rewrites** (truncation, summarization, `set_messages`): the list is re-mapped by an **in-memory** hash of each message's role and content. The hash is never logged. Unmatched messages get new ids.
 - **Duplicates:** messages with identical role and content map in order.
 
-## What Lingua records vs infers
+## What Lingua records versus infers
+
+**Implemented** in the companion Lingua PR.
 
 - **Records as logged:** every `VoiceMessage` field except `turn_span_id` and `source_ids`, which are intentionally omitted from the Trajectory. Times are converted to wall-clock `DateTime` with `voice.origin_unix_ms`. `provider_audio_end_ms` stays as a number.
 - **Infers:**
@@ -286,6 +435,8 @@ Pipecat context messages are plain dicts with no id.
 
 ## Trajectory and app mapping
 
+**Implemented** in the companion Lingua PR (Trajectory types and builder). App changes are not implemented.
+
 See `specs/voice-schema-message-audio.md` in Lingua. In short, `VoiceCall` gains `messages?: VoiceMessage[]` (see the Lingua PR for exact types), and `speech` becomes a derived view:
 
 - `Speech.id` = message id
@@ -300,70 +451,13 @@ In the app:
 - **#22036 play-from-message:** can look up a message by id rather than by step, so a user message gets a play button even when two messages share a step.
 - **Thread view:** can show "heard as" versus "generated" text and missing-transcript badges from `text_status`.
 
-## Worked example
+## Worked example (cascaded vs realtime)
+
+**Implemented** as `examples/{cascaded,realtime}.json`, validated by the test.
 
 `examples/cascaded.json` and `examples/realtime.json` encode the shared scenario (`notes/scenario.md`: dental-clinic reschedule with a `find_slots` → `reschedule` tool chain and a barge-in). One deviation: the realtime second turn uses the same 500 ms server-VAD silence as the first, so `input_speech_stopped` arrives at 9000 and `reschedule` is called at 9150 rather than the scenario's 8900.
 
-Abridged cascaded `voice.messages` on `c-root`:
-
-```json
-{
-  "item_u1": {
-    "role": "user",
-    "seq": 0,
-    "committed": true,
-    "state": "complete",
-    "text": "Hi, can I move my Thursday cleaning to Friday morning?",
-    "text_status": "final",
-    "text_source": "stt",
-    "start_ms": 300,
-    "end_ms": 2900,
-    "end_of_turn_ms": 3400,
-    "transcript_final_ms": 3450,
-    "selections": [
-      {
-        "recording_span_id": "c-root",
-        "recording_id": "call-0000",
-        "start_offset_ms": 300,
-        "end_offset_ms": 1250,
-        "channel_index": 0
-      },
-      {
-        "recording_span_id": "c-root",
-        "recording_id": "call-0000",
-        "start_offset_ms": 1650,
-        "end_offset_ms": 2900,
-        "channel_index": 0
-      }
-    ]
-  },
-  "item_a1": {
-    "role": "assistant",
-    "seq": 2,
-    "committed": true,
-    "state": "interrupted",
-    "text": "I have nine thirty or eleven on Fri",
-    "text_source": "playout_aligned",
-    "text_status": "final",
-    "generated_text": "I have nine thirty or eleven on Friday. Which would you like?",
-    "start_ms": 5300,
-    "end_ms": 7900,
-    "interrupted_at_ms": 7900,
-    "produced_by_span_id": "c-llm2",
-    "selections": [
-      {
-        "recording_span_id": "c-root",
-        "recording_id": "call-0000",
-        "start_offset_ms": 5300,
-        "end_offset_ms": 7900,
-        "channel_index": 1
-      }
-    ]
-  }
-}
-```
-
-`c-llm2.metadata` has `"voice.context_message_ids": ["lk.agent_task.instructions", "item_u1", "item_fc1", "item_fco1"]` and `"voice.output_message_id": "item_a1"`.
+The [Schema at a glance](#schema-at-a-glance) excerpts show the user turn, the `find_slots` link, the barge-in and the missing realtime transcript. The full list of differences:
 
 | What differs in realtime (`r-root`) | Cascaded                                                                               | Realtime                                                                                                                                                                                                                                                     |
 | ----------------------------------- | -------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
