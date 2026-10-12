@@ -32,7 +32,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
-      - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.10
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
       - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
         with:
           node-version-file: .tool-versions
@@ -57,6 +57,11 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ github.token }}
         run: pnpm exec changeset version
+      - name: Read release version
+        id: release_version
+        run: |
+          release_version="$(node -p "require('./js/package.json').version")"
+          echo "version=$release_version" >> "$GITHUB_OUTPUT"
       - name: Create release commit
         id: release_commit
         run: |
@@ -88,9 +93,43 @@ jobs:
         if: steps.release_commit.outputs.has_changes == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
+          SOURCE_MAIN_SHA: ${{ steps.source.outputs.main_sha }}
         run: |
+          node <<'NODE' > release-packages.md
+          const { execFileSync } = require("node:child_process");
+          const fs = require("node:fs");
+          const paths = execFileSync(
+            "git",
+            ["diff", "--name-only", process.env.SOURCE_MAIN_SHA, "HEAD", "--", "**/package.json", "package.json"],
+            { encoding: "utf8" },
+          )
+            .trim()
+            .split("\n")
+            .filter(Boolean);
+          const packages = paths
+            .map((path) => ({ path, manifest: JSON.parse(fs.readFileSync(path, "utf8")) }))
+            .filter(({ path, manifest }) => {
+              const previous = JSON.parse(
+                execFileSync("git", ["show", `${process.env.SOURCE_MAIN_SHA}:${path}`], { encoding: "utf8" }),
+              );
+              return manifest.version !== previous.version;
+            })
+            .map(({ manifest }) => `- \`${manifest.name}\`: \`${manifest.version}\``)
+            .sort();
+
+          if (packages.length === 0) {
+            throw new Error("No package version changes found for the release PR.");
+          }
+
+          process.stdout.write(`${packages.join("\n")}\n`);
+          NODE
+
           {
             echo "Prepares a release by updating package versions, changelogs, and consumed changeset files."
+            echo
+            echo "## Packages"
+            echo
+            cat release-packages.md
             echo
             echo "Source-main-sha: ${{ steps.source.outputs.main_sha }}"
           } > release-pr-body.md
@@ -98,7 +137,7 @@ jobs:
           pr_url="$(gh pr create \
             --base main \
             --head "${{ steps.source.outputs.prepare_branch }}" \
-            --title "chore: Prepare release (${{ steps.source.outputs.short_main_sha }})" \
+            --title "chore: Prepare release v${{ steps.release_version.outputs.version }} (${{ steps.source.outputs.short_main_sha }})" \
             --body-file release-pr-body.md)"
 
           {

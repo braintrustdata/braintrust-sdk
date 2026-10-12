@@ -479,6 +479,16 @@
                     },
                     "idempotency_key": {
                       "type": "string"
+                    },
+                    "triggered_xact_id": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "number"
+                        }
+                      ]
                     }
                   },
                   "required": ["scope"]
@@ -2037,7 +2047,12 @@
           },
           "secret_category": {
             "type": "string",
-            "enum": ["env_var", "ai_provider", "sandbox_provider"],
+            "enum": [
+              "env_var",
+              "ai_provider",
+              "sandbox_provider",
+              "automation_integration"
+            ],
             "default": "env_var",
             "description": "The category of the secret: env_var for regular environment variables, ai_provider for AI provider API keys"
           }
@@ -4472,6 +4487,36 @@
                           }
                         },
                         "required": ["type", "workspace_id", "channel"]
+                      },
+                      {
+                        "type": "object",
+                        "properties": {
+                          "type": {
+                            "type": "string",
+                            "enum": ["pagerduty"],
+                            "description": "The type of action to take"
+                          },
+                          "routing_key_secret_name": {
+                            "type": "string",
+                            "format": "uuid",
+                            "description": "The data-plane secret containing the PagerDuty routing key"
+                          },
+                          "severity": {
+                            "type": "string",
+                            "enum": ["critical", "error", "warning", "info"]
+                          },
+                          "formatting_prompt": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 10000,
+                            "description": "Instructions for Loop to format content sent to this destination"
+                          }
+                        },
+                        "required": [
+                          "type",
+                          "routing_key_secret_name",
+                          "severity"
+                        ]
                       }
                     ],
                     "description": "The action to take when the automation rule is triggered"
@@ -4596,6 +4641,11 @@
                           "service_account_email": {
                             "type": "string",
                             "description": "The GCP service account email to impersonate"
+                          },
+                          "credential_name": {
+                            "type": "string",
+                            "minLength": 1,
+                            "description": "The name of a Google workload identity federation credential configured in this organization's AI providers. Supported data planes can use it regardless of hosting environment. If omitted, the data plane's GCP identity is used."
                           }
                         },
                         "required": ["type", "service_account_email"]
@@ -4759,6 +4809,36 @@
                           }
                         },
                         "required": ["type", "workspace_id", "channel"]
+                      },
+                      {
+                        "type": "object",
+                        "properties": {
+                          "type": {
+                            "type": "string",
+                            "enum": ["pagerduty"],
+                            "description": "The type of action to take"
+                          },
+                          "routing_key_secret_name": {
+                            "type": "string",
+                            "format": "uuid",
+                            "description": "The data-plane secret containing the PagerDuty routing key"
+                          },
+                          "severity": {
+                            "type": "string",
+                            "enum": ["critical", "error", "warning", "info"]
+                          },
+                          "formatting_prompt": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 10000,
+                            "description": "Instructions for Loop to format content sent to this destination"
+                          }
+                        },
+                        "required": [
+                          "type",
+                          "routing_key_secret_name",
+                          "severity"
+                        ]
                       }
                     ],
                     "description": "The action to take when the automation rule is triggered"
@@ -4835,7 +4915,6 @@
               "type": "string",
               "format": "uuid"
             },
-            "maxItems": 10000,
             "description": "Sorted ids of active projects in this project group"
           }
         },
@@ -7685,11 +7764,13 @@
               },
               "harness": {
                 "type": "string",
-                "enum": ["native", "codex", "claude-code"]
+                "enum": ["codex", "native", "claude-code"],
+                "description": "Required when saving a Loop automation. Currently only Codex is supported."
               },
               "model": {
                 "type": "string",
-                "minLength": 1
+                "minLength": 1,
+                "description": "Required when saving a Loop automation."
               },
               "endpoint_name": {
                 "type": "string",
@@ -7764,6 +7845,32 @@
                     }
                   },
                   "required": ["type", "workspace_id", "channel"]
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string",
+                      "enum": ["pagerduty"],
+                      "description": "The type of action to take"
+                    },
+                    "routing_key_secret_name": {
+                      "type": "string",
+                      "format": "uuid",
+                      "description": "The data-plane secret containing the PagerDuty routing key"
+                    },
+                    "severity": {
+                      "type": "string",
+                      "enum": ["critical", "error", "warning", "info"]
+                    },
+                    "formatting_prompt": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 10000,
+                      "description": "Instructions for Loop to format content sent to this destination"
+                    }
+                  },
+                  "required": ["type", "routing_key_secret_name", "severity"]
                 }
               ],
               "description": "A delivery action available to an automation"

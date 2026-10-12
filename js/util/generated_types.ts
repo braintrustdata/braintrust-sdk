@@ -1,4 +1,4 @@
-// Auto-generated file (content hash 7351b6dec8a2d13b) -- do not modify
+// Auto-generated file (content hash 387034529ea006a9) -- do not modify
 
 import { z } from "zod/v3";
 
@@ -206,6 +206,7 @@ export const AsyncScoringControl = z.union([
             z.object({ type: z.literal("trace") }),
           ]),
           idempotency_key: z.string().optional(),
+          triggered_xact_id: z.union([z.string(), z.number()]).optional(),
         }),
       )
       .min(1),
@@ -752,7 +753,12 @@ export const EnvVar = z.object({
   preview_secret: z.union([z.string(), z.null()]).optional(),
   secret_type: z.union([z.string(), z.null()]).optional(),
   secret_category: z
-    .enum(["env_var", "ai_provider", "sandbox_provider"])
+    .enum([
+      "env_var",
+      "ai_provider",
+      "sandbox_provider",
+      "automation_integration",
+    ])
     .optional()
     .default("env_var"),
 });
@@ -1742,7 +1748,7 @@ export const WindowedAutomationConfig = z.object({
       include_trigger_input: z.boolean().optional().default(false),
       agent_slug: z.string().min(1),
       auto_approve_tools: z.array(z.string().min(1)).optional().default([]),
-      harness: z.enum(["native", "codex", "claude-code"]).optional(),
+      harness: z.enum(["codex", "native", "claude-code"]).optional(),
       model: z.string().min(1).optional(),
       endpoint_name: z.string().min(1).optional(),
       reasoning_effort: z
@@ -1763,6 +1769,12 @@ export const WindowedAutomationConfig = z.object({
           workspace_id: z.string(),
           channel: z.string(),
           message_template: z.string().optional(),
+          formatting_prompt: z.string().min(1).max(10000).optional(),
+        }),
+        z.object({
+          type: z.literal("pagerduty"),
+          routing_key_secret_name: z.string().uuid(),
+          severity: z.enum(["critical", "error", "warning", "info"]),
           formatting_prompt: z.string().min(1).max(10000).optional(),
         }),
       ]),
@@ -1867,6 +1879,12 @@ export const ProjectAutomation = z.object({
           message_template: z.string().optional(),
           formatting_prompt: z.string().min(1).max(10000).optional(),
         }),
+        z.object({
+          type: z.literal("pagerduty"),
+          routing_key_secret_name: z.string().uuid(),
+          severity: z.enum(["critical", "error", "warning", "info"]),
+          formatting_prompt: z.string().min(1).max(10000).optional(),
+        }),
       ]),
     }),
     z.object({
@@ -1890,6 +1908,7 @@ export const ProjectAutomation = z.object({
         z.object({
           type: z.literal("gcp_service_account"),
           service_account_email: z.string(),
+          credential_name: z.string().min(1).optional(),
         }),
       ]),
       batch_size: z.union([z.number(), z.null()]).optional(),
@@ -1931,6 +1950,12 @@ export const ProjectAutomation = z.object({
           message_template: z.string().optional(),
           formatting_prompt: z.string().min(1).max(10000).optional(),
         }),
+        z.object({
+          type: z.literal("pagerduty"),
+          routing_key_secret_name: z.string().uuid(),
+          severity: z.enum(["critical", "error", "warning", "info"]),
+          formatting_prompt: z.string().min(1).max(10000).optional(),
+        }),
       ]),
     }),
     WindowedAutomationConfig,
@@ -1948,7 +1973,7 @@ export const ProjectGroup = z.object({
   name: z.string(),
   description: z.union([z.string(), z.null()]).optional(),
   deleted_at: z.union([z.string(), z.null()]).optional(),
-  member_projects: z.array(z.string().uuid()).max(10000),
+  member_projects: z.array(z.string().uuid()),
 });
 export type ProjectGroupType = z.infer<typeof ProjectGroup>;
 export const ProjectLogsEvent = z.object({
