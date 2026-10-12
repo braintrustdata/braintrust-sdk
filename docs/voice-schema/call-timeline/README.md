@@ -14,7 +14,7 @@ In this option, integrations log what they observe during a call as an append-on
 - the two example traces (`examples/`)
 - a test that parses them and checks versioning, `seq`, start/end pairing and utterance references
 
-**Sketched only:** LiveKit and Pipecat capture, and the Lingua mapping. The Lingua side is in the companion Lingua PR (`specs/voice-schema-call-timeline.md`).
+**Implemented in the companion Lingua PR:** the Lingua mapping, built from `specs/voice-schema-call-timeline.md` with fixtures from these examples. **Sketched only:** LiveKit and Pipecat capture.
 
 ## Customer problem
 
@@ -278,7 +278,7 @@ Concrete differences, same audio:
 1. Lock the schema in `call-timeline.ts`, including `basis`, flush and retry, and the transcript-attachment rule.
 2. LiveKit: add `timeline.ts` and the VAD hooks (`onStartOfSpeech` / `onEndOfSpeech`). Emit from `onEndOfTurn`, the `RealtimeObserver` listeners, `playback.ts` `settle`, `_conversationItemAdded`, and `onStart`/`onEnd` for `llm_response` and `function_tool`. Set `voice.timeline_version` and `voice.pipeline` at `_startImpl`. Keep existing spans and selections during the transition.
 3. At close, emit `missing` events, then `call_end`, and flush the `final` chunk.
-4. Lingua: implement `specs/voice-schema-call-timeline.md`.
+4. Lingua: the builder exists in the companion PR; extend it with the app allow-list keys after #486 is rebased.
 5. Pipecat: port `timeline.ts` to the Python voice package following the table above.
 
 ## Open questions
