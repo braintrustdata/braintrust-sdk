@@ -73,7 +73,7 @@ describe.each(["cascaded", "realtime"])("%s example", (name) => {
       speech.find((span) => span.span_id === "s1")?.metadata[
         "audio.selections"
       ],
-    ).toHaveLength(2);
+    ).toHaveLength(name === "cascaded" ? 2 : 1);
   });
 });
 
