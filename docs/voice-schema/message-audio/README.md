@@ -6,7 +6,7 @@ This option anchors voice evidence on conversation messages. Every user or assis
 
 It is one of three alternatives, along with `speech-spans` and `call-timeline`. The whole-call recording (`@braintrust/audio`, `audio.recordings`) is shared and unchanged.
 
-**Implemented:** zod schemas in `js/src/instrumentation/livekit/voice-schema/message-audio.ts`, two example traces in `examples/`, and a test that validates them and their cross-references. **Sketched:** all integration capture and the Lingua mapping. No integration emits these keys yet.
+**Implemented:** zod schemas in `js/src/instrumentation/livekit/voice-schema/message-audio.ts`, two example traces in `examples/`, and a test that validates them and their cross-references. **Implemented in the companion Lingua PR:** the Lingua mapping, built from `specs/voice-schema-message-audio.md` with fixtures from these examples. **Sketched:** all integration capture. No integration emits these keys yet.
 
 ## Customer problem
 
