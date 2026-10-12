@@ -2,7 +2,7 @@
 
 > AI-created or modified and not human-reviewed in its current form; treat this artifact as provisional. Updated 2026-10-12.
 
-This option logs each utterance as its own `speech` span with framework-neutral metadata. It keeps the shared whole-call recording, `audio.recordings` and `audio.selections`. It changes how speech is identified: Lingua reads `metadata["voice.speech"]` instead of LiveKit span names and `contrib.livekit.*` keys. Turn spans, LLM spans and tool spans stay as they are.
+This option logs each utterance as its own `speech` span with framework-neutral metadata. It keeps the shared whole-call recording, `audio.recordings` and `audio.selections`. It changes how speech is identified: Lingua reads `metadata["voice.speech"]` and `metadata["voice.call"]` instead of LiveKit span names and `contrib.livekit.*` keys. Turn spans, LLM spans and tool spans stay as they are.
 
 **Status:**
 
@@ -25,18 +25,23 @@ They also need to see where the trace lacks evidence. Today Lingua finds speech 
 
 ## Contract
 
-Every time is in **call ms**: milliseconds since the recording's `timeline.origin_unix_ms`, on the recording clock. A span's `metrics.start` and `metrics.end` are Unix seconds on the same clock: `(origin_unix_ms + call_ms) / 1000`.
+### Clock
+
+- **Call ms** are milliseconds since `voice.call.origin_unix_ms`.
+- **Recording alignment:** when audio is captured, `origin_unix_ms` equals the recording's `timeline.origin_unix_ms`, so call ms are also recording-timeline ms.
+- **Span times:** a span's `metrics.start` and `metrics.end` are Unix seconds on the same clock: `(origin_unix_ms + call_ms) / 1000`.
 
 ### Call span
 
-This is the root span: LiveKit `livekit.agent_session`, Pipecat `pipecat.pipeline`.
+This is the root span: LiveKit `livekit.agent_session`, Pipecat `pipecat.pipeline`. Lingua finds the call through `voice.call`, so a call without audio still has speech.
 
-| Field                              | Type                                         | Required               | Meaning                                                                                                               |
-| ---------------------------------- | -------------------------------------------- | ---------------------- | --------------------------------------------------------------------------------------------------------------------- |
-| `input.audio[<recording id>]`      | attachment                                   | When audio is captured | Unchanged (`@braintrust/audio`).                                                                                      |
-| `metadata["audio.recordings"]`     | descriptor[]                                 | When audio is captured | Unchanged. Channel 0 is the caller, channel 1 the agent.                                                              |
-| `metadata["voice.call"].framework` | `"livekit" \| "pipecat"`                     | Yes                    | The integration that emitted the call.                                                                                |
-| `metadata["voice.call"].pipeline`  | `"cascaded" \| "realtime" \| "half_cascade"` | Yes                    | Tells readers which speech evidence to expect. `half_cascade` is a realtime model with text output plus separate TTS. |
+| Field                          | Type                                         | Required               | Meaning                                                                                                               |
+| ------------------------------ | -------------------------------------------- | ---------------------- | --------------------------------------------------------------------------------------------------------------------- |
+| `input.audio[<recording id>]`  | attachment                                   | When audio is captured | Unchanged (`@braintrust/audio`).                                                                                      |
+| `metadata["audio.recordings"]` | descriptor[]                                 | When audio is captured | Unchanged. Channel 0 is the caller, channel 1 the agent.                                                              |
+| `voice.call.framework`         | `"livekit" \| "pipecat"`                     | Yes                    | The integration that emitted the call.                                                                                |
+| `voice.call.pipeline`          | `"cascaded" \| "realtime" \| "half_cascade"` | Yes                    | Tells readers which speech evidence to expect. `half_cascade` is a realtime model with text output plus separate TTS. |
+| `voice.call.origin_unix_ms`    | Unix ms                                      | Yes                    | The clock for every call-ms field. Logged at session start, whether or not audio is captured.                         |
 
 ### Turn spans
 
@@ -45,67 +50,110 @@ This is the root span: LiveKit `livekit.agent_session`, Pipecat `pipecat.pipelin
 - `turn.id` is the turn span's own `span_id`.
 - On an assistant turn, `turn.reply_to` is the user turn it answers.
 
-A speech span is a direct child of its turn. In this option turns group speech and steps; they don't carry speech semantics themselves.
+Both integrations emit these names; Pipecat's turn spans already use them on `delner/pipecat-voice-recording`. In this option turns group speech and steps; they don't carry speech semantics themselves.
 
 ### Speech span
 
 Each utterance gets one span with `span_attributes: {type: "task", name: "speech"}`. The name stays fixed; Lingua recognizes the span by `voice.speech`, not by name.
 
-| Field                                  | Type                                                                                    | Required                      | Meaning                                                                                                                                                                                                        |
-| -------------------------------------- | --------------------------------------------------------------------------------------- | ----------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `metrics.start` / `metrics.end`        | Unix s                                                                                  | Yes                           | When the utterance's audio started and ended on the recording clock.                                                                                                                                           |
-| `metadata["audio.selections"]`         | Selection[]                                                                             | When audio is captured        | Unchanged shape. One channel: 0 for user speech, 1 for agent speech.                                                                                                                                           |
-| `voice.speech.speaker`                 | `"user" \| "agent"`                                                                     | Yes                           | Who spoke.                                                                                                                                                                                                     |
-| `voice.speech.turn_id`                 | span id                                                                                 | No                            | The owning turn span, which is also the parent.                                                                                                                                                                |
-| `voice.speech.state`                   | `"complete" \| "interrupted" \| "incomplete" \| "ignored"`                              | Yes                           | `interrupted` means agent playout was cut short. `incomplete` means the call or process ended mid-utterance. `ignored` means user speech the agent heard but did not answer (backchannel, false interruption). |
-| `voice.speech.timing_source`           | `"audio_samples" \| "vad" \| "provider_vad" \| "playout" \| "span_clock"`               | Yes                           | The evidence behind `metrics.start` and `metrics.end`. `span_clock` means a guess from local spans.                                                                                                            |
-| `voice.speech.heard_by`                | span id[]                                                                               | User only, optional           | The LLM spans whose input first contained this utterance.                                                                                                                                                      |
-| `voice.speech.produced_by`             | span id                                                                                 | Agent only, optional          | The LLM span that generated the spoken text.                                                                                                                                                                   |
-| `voice.speech.interrupted_by`          | span id                                                                                 | Agent only, optional          | The user speech span that cut this one off. Requires `state: "interrupted"`.                                                                                                                                   |
-| `voice.speech.played_ms`               | ms                                                                                      | Agent only, optional          | Audio actually played locally before the end.                                                                                                                                                                  |
-| `voice.speech.provider_played_ms`      | ms                                                                                      | Agent realtime only, optional | What the provider was told had played (`conversation.item.truncate` `audio_end_ms`).                                                                                                                           |
-| `voice.speech.end_of_turn_ms`          | call ms                                                                                 | User only, optional           | When the agent decided the user had finished.                                                                                                                                                                  |
-| `voice.speech.transcript.source`       | `"stt" \| "provider_transcription" \| "tts_input" \| "model_output" \| "playback_sync"` | With `transcript`             | Where the text came from.                                                                                                                                                                                      |
-| `voice.speech.transcript.final`        | boolean                                                                                 | With `transcript`             | `false` when only partial text arrived before the span ended.                                                                                                                                                  |
-| `voice.speech.transcript.available_ms` | call ms                                                                                 | No                            | When the text became available. In realtime this is often after the response started.                                                                                                                          |
-| `voice.speech.transcript.confidence`   | 0–1                                                                                     | No                            | STT confidence, if the provider reports one.                                                                                                                                                                   |
-| `output.text`                          | string                                                                                  | Content capture only          | The best transcript of what was actually said.                                                                                                                                                                 |
-| `output.planned_text`                  | string                                                                                  | Content capture only          | Agent text that was generated but not fully spoken.                                                                                                                                                            |
+**Utterance grain:**
+
+| Speaker                                                    | One speech span per…                                                                                                | How fragments are kept                                                                             |
+| ---------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------- |
+| User                                                       | Turn: everything the user said that the turn detector grouped into one user turn                                    | Each VAD fragment becomes one `audio.selections` range on that span.                               |
+| User, not part of a turn (backchannel, false interruption) | Ignored utterance                                                                                                   | One span with `state: "ignored"`.                                                                  |
+| Agent                                                      | Playout of one speech handle: LiveKit `SpeechHandle`, Pipecat `BotStartedSpeakingFrame` → `BotStoppedSpeakingFrame` | Pause and resume after a false interruption stays one span, with one selection per played stretch. |
+
+The grain matters because a cascaded call can produce several speaking fragments per user turn. Integrations must not emit one span per fragment.
+
+An interrupted speech handle that played no audio produces no speech span; its text remains on the LLM span. So `played_ms` is always positive when present.
+
+**Fields:**
+
+| Field                                  | Type                                                                                    | Required                                  | Meaning                                                                                                                                                                                              |
+| -------------------------------------- | --------------------------------------------------------------------------------------- | ----------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `span_parents`                         | `[span id]`                                                                             | Yes                                       | The owning turn span. Ignored speech has the call span as its parent.                                                                                                                                |
+| `metrics.start` / `metrics.end`        | Unix s                                                                                  | Yes                                       | The utterance bounds. With selections: first selection start to last selection end.                                                                                                                  |
+| `metadata["audio.selections"]`         | Selection[]                                                                             | When audio is captured for that utterance | Unchanged shape. One channel: 0 for user speech, 1 for agent speech. One range per fragment or played stretch, in order.                                                                             |
+| `voice.speech.speaker`                 | `"user" \| "agent"`                                                                     | Yes                                       | Who spoke.                                                                                                                                                                                           |
+| `voice.speech.turn_id`                 | span id                                                                                 | When the parent is a turn                 | The owning turn span. Omitted for ignored speech.                                                                                                                                                    |
+| `voice.speech.state`                   | `"complete" \| "interrupted" \| "incomplete" \| "ignored"`                              | Yes                                       | `interrupted` means agent playout was cut short after some audio played. `incomplete` means the call or process ended mid-utterance. `ignored` means user speech the agent heard but did not answer. |
+| `voice.speech.timing_source`           | See below                                                                               | Yes                                       | The evidence behind `metrics.start`/`metrics.end`.                                                                                                                                                   |
+| `voice.speech.heard_by`                | span id[]                                                                               | User only, optional                       | The LLM spans whose input first contained this utterance.                                                                                                                                            |
+| `voice.speech.produced_by`             | span id                                                                                 | Agent only, optional                      | The LLM span that generated the spoken text.                                                                                                                                                         |
+| `voice.speech.interrupted_by`          | span id                                                                                 | Agent only, optional                      | The user speech span that cut this one off. Requires `state: "interrupted"`.                                                                                                                         |
+| `voice.speech.played_ms`               | ms > 0                                                                                  | Agent only, optional                      | Audio actually played locally: bytes written to the output transport divided by its byte rate, or the framework's playback position.                                                                 |
+| `voice.speech.provider_played_ms`      | ms                                                                                      | Agent realtime only, optional             | What the provider was told had played (`conversation.item.truncate` `audio_end_ms`).                                                                                                                 |
+| `voice.speech.end_of_turn_ms`          | call ms                                                                                 | User only, optional                       | When the agent decided the user had finished.                                                                                                                                                        |
+| `voice.speech.transcript.source`       | `"stt" \| "provider_transcription" \| "tts_input" \| "model_output" \| "playback_sync"` | With `transcript`                         | Where the text came from.                                                                                                                                                                            |
+| `voice.speech.transcript.final`        | boolean                                                                                 | With `transcript`                         | `false` when only partial text arrived before the span was written.                                                                                                                                  |
+| `voice.speech.transcript.available_ms` | call ms                                                                                 | No                                        | When the text became available. In realtime this is often after the response started.                                                                                                                |
+| `voice.speech.transcript.confidence`   | 0–1                                                                                     | No                                        | STT confidence, if the provider reports one.                                                                                                                                                         |
+| `output.text`                          | string                                                                                  | No                                        | The best transcript of what was actually said. Absent without a transcript or with content capture off.                                                                                              |
+| `output.planned_text`                  | string                                                                                  | No                                        | Agent text that was generated but not fully spoken.                                                                                                                                                  |
+
+**`timing_source` values:**
+
+| Value           | Meaning                                                                                                                        |
+| --------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| `audio_samples` | Bounds measured on captured audio samples. Requires `audio.selections`.                                                        |
+| `vad`           | Local VAD or turn-detector events (LiveKit `user_speaking`, Pipecat `UserStarted/StoppedSpeakingFrame`).                       |
+| `provider_vad`  | Realtime provider speech events, converted to call ms (below).                                                                 |
+| `playout`       | Local output-transport playout: LiveKit playback events, Pipecat output audio write timestamps.                                |
+| `span_clock`    | Local span times that could not be aligned to any of the above, including provider offsets with an unknown input-buffer start. |
+
+When audio is not captured, `audio.selections` is absent and `timing_source` must not be `audio_samples`. Selections never extend outside the span bounds.
+
+**Converting realtime provider offsets to call ms.** Providers report `audio_start_ms`/`audio_end_ms` relative to the start of the audio the integration streamed to them. The conversion is:
+
+- call ms = `input_start_call_ms` + provider ms, where `input_start_call_ms` is the call ms at which the integration began appending input audio, on the recording clock.
+- If that start is unknown (for example after a reconnect), use local span times and `timing_source: span_clock`.
 
 **Absence rules:**
 
 - An omitted field means "not observed". Integrations never write `null` or placeholder text.
-- With no transcript, both `transcript` and `output` are absent.
+- With no transcript, both `transcript` and `output.text` are absent.
 - When content capture is off, `output` is absent but `transcript.source` stays, so readers know a transcript existed.
+
+### Creating and updating speech spans
+
+- **Creation:** integrations buffer an utterance and create its span when it ends. They pass explicit start and end times and the parent turn (or the call span for ignored speech). This avoids open spans for speech that turns out to be ignored or to merge into a turn.
+- **Late links:** `heard_by` and `interrupted_by` may be known only after the end.
+  - Recommended: delay the end write until the first LLM span of the reply starts, up to a timeout (for example 2 s). Then most utterances need a single write.
+  - Otherwise: write again later.
+- **Every write carries the complete current `voice.speech` object.** Braintrust merges metadata objects but replaces arrays, so a partial write would drop earlier links.
 
 ### IDs and relationships
 
 ```text
-call span ──audio.recordings──► recording segments
+call span (voice.call) ──audio.recordings──► recording segments
  ├─ user_turn (turn.id = own span_id)
- │   └─ speech {speaker:user, turn_id, heard_by:[llm span ids]} ──audio.selections──► channel 0
- └─ assistant_turn (turn.reply_to = user_turn)
-     ├─ llm_response ◄──produced_by── speech {speaker:agent, interrupted_by:user speech}
-     ├─ <tool span> (tool_call_id)
-     └─ speech ──audio.selections──► channel 1
+ │   └─ speech {speaker:user, turn_id, heard_by:[llm span ids]} ──audio.selections (1+ fragments)──► channel 0
+ ├─ assistant_turn (turn.reply_to = user_turn)
+ │   ├─ llm_response ◄──produced_by── speech {speaker:agent, interrupted_by:user speech}
+ │   ├─ <tool span> (tool_call_id)
+ │   └─ speech ──audio.selections──► channel 1
+ └─ speech {speaker:user, state:ignored}          (no turn_id)
 ```
 
-- All links are `span_id`s in the same trace; Lingua maps them to row ids.
-- A link may name a span that ends later than the speech span. Integrations update the earlier span with a merge write; see "late links" below.
+- All links are Braintrust `span_id`s in the same trace; Lingua maps them to row ids.
+- Framework ids (LiveKit `speech_id`, Pipecat TTS `context_id`) are only used inside the integration to find those spans.
 
 ## What each integration captures and when
 
-| Value                  | LiveKit cascaded (JS)                                                                              | LiveKit realtime (JS)                                                  | Pipecat cascaded (Python)                                                            | Pipecat realtime (Python)                       |
-| ---------------------- | -------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------- | ------------------------------------------------------------------------------------ | ----------------------------------------------- |
-| User speech start/end  | Native `user_speaking` span, clipped to captured input samples at its end (`processor.ts` `onEnd`) | Realtime `input_speech_started`/`stopped` (`realtime.ts` turn tracker) | `UserStartedSpeakingFrame`/`UserStoppedSpeakingFrame`                                | Same frames, or the service's server-VAD events |
-| `end_of_turn_ms`       | `AgentActivity.onEndOfTurn` (`EndOfTurnInfo`)                                                      | Commit of the input buffer (server VAD)                                | Turn analyzer stop (`UserStoppedSpeakingFrame` after the end-of-turn decision)       | Server VAD commit                               |
-| User transcript        | `user_turn` transcript plus `transcription_delay` → `available_ms`                                 | `InputTranscriptionCompleted` → `provider_transcription`               | `TranscriptionFrame` (`finalized`)                                                   | The service's input transcription frames        |
-| `heard_by`             | The `llm_node` started under the `agent_turn` whose `turn.reply_to` is this turn                   | The `realtime_inference` started after the commit                      | The `llm_response` opened by the next `LLMContextFrame` that contains the transcript | The response span after the commit              |
-| Agent speech start/end | Native `agent_speaking`, placed by `playbackProgressed`/`playbackFinished`                         | Same                                                                   | `BotStartedSpeakingFrame`/`BotStoppedSpeakingFrame` at the output transport          | Same                                            |
-| `produced_by`          | The `llm_node` with the same `contrib.livekit.speech_id`                                           | The `realtime_inference` with the same `speech_id`/`response_id`       | The `llm_response` whose TTS `context_id` matches                                    | The response that emitted the audio             |
-| `state`, `played_ms`   | `playbackFinished.interrupted`, `playbackPosition`                                                 | Same, plus `provider_played_ms` from the truncate call                 | `InterruptionFrame` while the bot is speaking; position from bot-speaking frames     | Same, plus truncation from the service          |
-| `interrupted_by`       | The user speech span active when playout stopped                                                   | Same                                                                   | Same                                                                                 | Same                                            |
-| Agent text             | `synchronizedTranscript` → `playback_sync`; `tts` input → `planned_text`                           | Response transcript → `model_output`                                   | `TTSTextFrame`s observed while speaking → `playback_sync`                            | The service's text frames → `model_output`      |
+| Value                               | LiveKit cascaded (JS)                                                            | LiveKit realtime (JS)                                            | Pipecat cascaded (Python)                                                                               | Pipecat realtime (Python)                                        |
+| ----------------------------------- | -------------------------------------------------------------------------------- | ---------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------- |
+| Hook                                | `LiveKitSpanProcessor` (`processor.ts`) plus playback hooks                      | Same plus `realtime.ts` session events                           | A `BaseObserver` added to the `PipelineTask`                                                            | Same                                                             |
+| User fragments (`audio.selections`) | Each native `user_speaking` span, clipped to captured input samples              | Realtime `input_speech_started`/`stopped`                        | `UserStartedSpeakingFrame` → `UserStoppedSpeakingFrame` (or VAD frames)                                 | Service speech events converted to call ms, else the same frames |
+| User span created                   | When the `user_turn` closes: first fragment start to last fragment end           | When the SDK-built turn closes                                   | When the turn analyzer ends the user turn                                                               | Same                                                             |
+| `end_of_turn_ms`                    | `AgentActivity.onEndOfTurn` (`EndOfTurnInfo`)                                    | Commit of the input buffer (server VAD)                          | Turn analyzer stop                                                                                      | Server VAD commit                                                |
+| User transcript                     | `user_turn` transcript; `transcription_delay` → `available_ms`                   | `InputTranscriptionCompleted` → `provider_transcription`         | `TranscriptionFrame` (`finalized`)                                                                      | The service's input transcription frames                         |
+| `heard_by`                          | The `llm_node` started under the `agent_turn` whose `turn.reply_to` is this turn | The `realtime_inference` started after the commit                | The `llm_response` opened by the next `LLMContextFrame` containing the transcript                       | The response span after the commit                               |
+| Agent playout (`audio.selections`)  | `playbackStarted`/`playbackProgressed`/`playbackFinished` per `SpeechHandle`     | Same                                                             | Output-transport audio-write timestamps between `BotStartedSpeakingFrame` and `BotStoppedSpeakingFrame` | Same                                                             |
+| `produced_by`                       | The `llm_node` with the same `speech_id`                                         | The `realtime_inference` with the same `speech_id`/`response_id` | The `llm_response` whose TTS `context_id` matches                                                       | The response that emitted the audio                              |
+| `state`, `played_ms`                | `playbackFinished.interrupted`, `playbackPosition`                               | Same, plus `provider_played_ms` from the truncate call           | `InterruptionFrame` while speaking; bytes written to the output transport                               | Same, plus the service's truncation                              |
+| `interrupted_by`                    | The user speech whose fragment was active when playout stopped                   | Same                                                             | Same                                                                                                    | Same                                                             |
+| Agent text                          | `synchronizedTranscript` → `playback_sync`; `tts` input → `planned_text`         | Response transcript → `model_output`                             | `TTSTextFrame`s written while speaking → `playback_sync`                                                | The service's text frames → `model_output`                       |
 
 ## What Lingua records and what it infers
 
@@ -113,37 +161,48 @@ call span ──audio.recordings──► recording segments
 
 - the speaker, state, timing source and transcript source;
 - `interrupted_by`;
-- `end_of_turn_time` (origin + `end_of_turn_ms`);
+- `end_of_turn_time` (`voice.call.origin_unix_ms` + `end_of_turn_ms`);
+- `start_time` and `end_time` (the span bounds);
 - the selections;
 - `step_ids`, taken from `produced_by` for agent speech and `heard_by` for user speech.
 
 **Inferred:**
 
 - `Speech.interrupted` (true when `state` is `interrupted`, false for other agent speech);
-- the call each speech belongs to (nearest ancestor with recordings);
-- speech order (by audio start), and overlap from the selections;
+- the call each speech belongs to (the nearest ancestor with `voice.call` or recordings; the parent may be a turn or the call);
+- speech order (by audio start, else span start), and overlap from the selections;
 - `step_ids` falling back to the turn span and its step children when no link was logged.
 
 Latency is not stored. The app computes it from `end_of_turn_time`, step times and the next agent speech start.
 
-**Compatibility:** traces with no `voice.speech` keep #486's name-based behaviour unchanged.
+**Rollout precedence:**
+
+- `voice.speech` replaces the LiveKit name rules per trace and speaker. If a trace has any user speech span, LiveKit `user_turn` speech is skipped for that trace, and the same holds for agents.
+- So an integration can move one speaker at a time.
+- Traces with no `voice.speech` keep #486's behaviour unchanged.
 
 ## Trajectory and app mapping
 
-`Trajectory.voice_calls[].speech[]` gains five optional fields:
+`Trajectory.voice_calls[].speech[]` gains seven optional fields:
 
 - `state`
 - `interrupted_by`
 - `transcript_source`
 - `timing_source`
 - `end_of_turn_time`
+- `start_time`
+- `end_time`
 
-The existing fields keep their meaning, so #22034 and #22036 work unchanged:
+A `VoiceCall` may have no recordings when audio capture was off.
+
+The existing fields keep their meaning, so #22034 and #22036 work unchanged when there is audio:
 
 - **Voice bar:** windows come from `selections`.
 - **Thread view:** clicking a window or "Play from this message" resolves `step_ids` to a turn's `request_id`, `work[].id` or `response_id`.
 
-The new fields allow, without further schema work:
+Without audio, the voice bar has nothing to play. A timeline would use `start_time`/`end_time`.
+
+The new fields allow:
 
 - an "interrupted by …" marker;
 - a "no transcript" badge when `transcript_source` is absent;
@@ -152,57 +211,66 @@ The new fields allow, without further schema work:
 
 ## Worked example
 
-`examples/cascaded.json` and `examples/realtime.json` encode the same fictional call: a booking change with `find_slots`, then a barge-in, then `reschedule`. Times are call ms.
+`examples/cascaded.json` and `examples/realtime.json` encode the same fictional call: a booking change with `find_slots`, then a barge-in, then `reschedule`, with a backchannel near the end. Times are call ms.
 
-|                                 | Cascaded                                                                                                            | Realtime                                                                                                                                              |
-| ------------------------------- | ------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Steps under `assistant_turn` 1  | `l1` llm (tool call) → `find_slots` → `l2` llm → `tts`                                                              | `r1` realtime response (tool call) → `find_slots` → `r2` response with audio                                                                          |
-| User speech `s1`                | `timing_source: vad`; `transcript {stt, available_ms: 3450, confidence: 0.94}`; `heard_by: [l1]`                    | `timing_source: provider_vad`; `transcript {provider_transcription, available_ms: 4300}`, which arrived after the tool call at 4100; `heard_by: [r1]` |
-| Agent speech `s2`               | 5300–7900; `played_ms: 2600`; `produced_by: l2`; `output.text` is what was spoken, `planned_text` the full sentence | 5000–7900; `played_ms: 2900` but `provider_played_ms: 2600`, because the local output buffer kept playing for 300 ms after the truncate               |
-| Barge-in `s3`                   | `stt` transcript "Nine thirty works."                                                                               | No transcript: `transcript` and `output` are absent, which the voice view can show as missing                                                         |
-| End of turn → first agent audio | 3400 → 5300 (1.9 s), split across STT, LLM, tool and TTS spans                                                      | 3400 → 5000 (1.6 s), with no STT or TTS spans to split it                                                                                             |
+|                                 | Cascaded                                                                                                                                   | Realtime                                                                                                                                                              |
+| ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Steps under `assistant_turn` 1  | `l1` llm (tool call) → `find_slots` → `l2` llm → `tts`                                                                                     | `r1` realtime response (tool call) → `find_slots` → `r2` response with audio                                                                                          |
+| User speech `s1`                | Two fragments (300–700 "Hi,", 1000–2900); `timing_source: vad`; `transcript {stt, available_ms: 3450, confidence: 0.94}`; `heard_by: [l1]` | Same fragments; `timing_source: provider_vad`; `transcript {provider_transcription, available_ms: 4300}`, which arrived after the tool call at 4100; `heard_by: [r1]` |
+| Agent speech `s2`               | 5300–7900; `played_ms: 2600`; `produced_by: l2`; `output.text` is what was spoken, `planned_text` the full sentence                        | 5000–7900; `played_ms: 2900` but `provider_played_ms: 2600`, because the local output buffer kept playing for 300 ms after the truncate                               |
+| Barge-in `s3`                   | `stt` transcript "Nine thirty works."                                                                                                      | No transcript: `transcript` and `output` are absent, which the voice view can show as missing                                                                         |
+| Backchannel `s5` (10600–10900)  | `state: ignored`, parent is the call span, transcript "Mm-hm."                                                                             | `state: ignored`, no transcript                                                                                                                                       |
+| End of turn → first agent audio | 3400 → 5300 (1.9 s), split across STT, LLM, tool and TTS spans                                                                             | 3400 → 5000 (1.6 s), with no STT or TTS spans to split it                                                                                                             |
 
-Lingua output for both files is checked in the companion PR's fixtures.
+The companion PR checks Lingua's output for both files, plus a cascaded copy with no audio, in its fixtures.
 
 The realtime fixture shows one weakness. Because user turn 2 has no transcript, Lingua's turn builder merges both exchanges into one Trajectory turn. `voice_calls` is still correct, but the thread view shows one long turn.
 
 ## Customer usefulness
 
-| Question                      | How well this option answers it                                                                                                                       |
-| ----------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
-| What was said                 | Good. One span per utterance, with text and its provenance. Planned and spoken agent text are kept apart.                                             |
-| Play matching audio           | Good. Each speech span has exact selections.                                                                                                          |
-| Diagnose delays               | Partial. End of turn and audio start are explicit, but the pipeline breakdown still comes from LLM, TTS and STT spans, and realtime has no breakdown. |
-| Interruptions and overlap     | Good. `state`, `interrupted_by`, `played_ms` and `provider_played_ms` are explicit; overlap shows in the selections.                                  |
-| Follow tools                  | Indirect. Speech links to LLM steps, and tools sit beside them in the turn. Nothing says that a tool ran while the user was waiting in silence.       |
-| Missing or uncertain evidence | Good per utterance: `timing_source`, transcript `final`/`source`, and absent fields. There is no call-level summary of gaps.                          |
+| Question                      | How well this option answers it                                                                                                                               |
+| ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| What was said                 | Good. One span per utterance, with text and its provenance. Planned and spoken agent text are kept apart.                                                     |
+| Play matching audio           | Good. Each speech span has exact selections, one per fragment.                                                                                                |
+| Diagnose delays               | Partial. End of turn and audio start are explicit, but the pipeline breakdown still comes from LLM, TTS and STT spans, and realtime has no breakdown.         |
+| Interruptions and overlap     | Good. `state`, `interrupted_by`, `played_ms` and `provider_played_ms` are explicit; overlap shows in the selections; backchannels are kept as ignored speech. |
+| Follow tools                  | Indirect. Speech links to LLM steps, and tools sit beside them in the turn. Nothing says that a tool ran while the user was waiting in silence.               |
+| Missing or uncertain evidence | Good per utterance: `timing_source`, transcript `final`/`source`, and absent fields. There is no call-level summary of gaps.                                  |
 
 ## Edge cases and weaknesses
 
 - **Barge-in truncation.** Covered by `played_ms` and `planned_text`. The thread still shows the LLM's full planned answer as the turn response, because Lingua's `response_text` comes from the LLM span.
+- **Interrupted before any audio.** No speech span is written. The voice view then cannot show that the agent tried to speak; only the LLM span shows it.
 - **Overlap.** Two speech spans overlap in time; the app already prefers the later-starting window (#22036).
-- **Late or missing realtime transcripts.** The integration must update `output` and `transcript` after the span ends, or leave them absent. A missing transcript splits turns badly (above). A fix would let a user speech with `heard_by` start a new turn without text; that is sketched, not implemented.
-- **Failed or omitted segments.** Selections only point at ready segments, so the speech keeps its timing but has no playable audio. Lingua still lists it, with empty `selections`.
-- **Unknown clock offset.** If the recording started late or the origin is wrong, every speech span is wrong by the same amount, and nothing in this option detects it. `timing_source: span_clock` marks only spans that were never aligned to audio.
+- **Late or missing realtime transcripts.** Covered by the full-object rewrite above, or the transcript stays absent.
+  - A missing transcript splits turns badly (above).
+  - A fix would let user speech with `heard_by` start a new turn without text. That is sketched, not implemented.
+- **Failed or omitted segments.** Selections only point at ready segments. The speech keeps its span bounds (`start_time`/`end_time`) but has no playable audio.
+- **Audio capture off.** The call still exists through `voice.call`, and speech has bounds but no selections. Pipecat and LiveKit must still log `voice.call.origin_unix_ms`.
+- **Unknown clock offset.** If the recording started late or the origin is wrong, every speech span is wrong by the same amount, and nothing in this option detects it. `timing_source: span_clock` marks only spans that were never aligned.
 - **Call in progress.** Speech whose call row isn't logged yet is skipped (#486 behaviour). `incomplete` is set only at shutdown.
 - **Content capture off.** Text disappears but every link and timing field stays.
 - **Tool cancelled by interruption.** The tool span has the error. The speech has no direct link to it; readers infer it from the turn.
 - **Agent handoff.** Speech stays under the turn of the agent that spoke. `voice.call` has no field for the active agent; it would have to come from turn or agent metadata.
-- **Late links.** `heard_by` and `interrupted_by` are known only after the speech span ends. Integrations need a second, merge `log()` on an already-ended span, which Braintrust allows but which costs one extra row write per utterance.
 - **Strict enums.** Lingua rejects unknown `state`, `timing_source` and `transcript.source` values (the whole `voice.speech` key fails). New values need a Lingua release first.
 
 ## Implementation starting point
 
 1. **LiveKit (`js/src/instrumentation/livekit/processor.ts`):**
-   - Rename the exported `livekit.user_speaking`/`livekit.agent_speaking` operations to `speech`, and log `voice.speech` at `onEnd` from the data already tracked (`speakingByTurn`, playback events, `EndOfTurnInfo`).
-   - Log `voice.call` on `agent_session` start.
-   - Add `heard_by` when an `llm_node`/`realtime_inference` span starts under a turn with `turn.reply_to`.
-2. **Realtime (`realtime.ts`):** create user speech spans for SDK-built turns. Today only the turn is created and `user_speaking` is re-parented under it.
-3. **Pipecat (`sdk-python/py/src/braintrust/integrations/pipecat`, `delner/pipecat-voice-recording`):** emit `speech` spans from the speaking and bot-speaking frames listed above.
-4. **Lingua:** done in the companion PR. Then add `voice.speech` to `TRAJECTORY_METADATA_FIELDS` after #486 is rebased onto main.
+   - Log `voice.call` (including `origin_unix_ms`) on `agent_session` start, even with audio off.
+   - Stop exporting `livekit.user_speaking`/`livekit.agent_speaking` as rows. Instead collect their intervals per turn (`speakingByTurn`) and per `SpeechHandle`.
+   - When the user turn closes or playout finishes, create one `speech` span with explicit times, merged selections and `voice.speech`.
+   - Add `heard_by` by waiting for the first `llm_node`/`realtime_inference` under the replying turn.
+2. **Realtime (`realtime.ts`):** build the user speech span from the SDK-built turn's fragments. Convert provider offsets with the input-start call ms.
+3. **Pipecat (`sdk-python/py/src/braintrust/integrations/pipecat` on `delner/pipecat-voice-recording`):**
+   - Add a `BaseObserver` to the `PipelineTask`.
+   - Keep `user_turn`/`assistant_turn` names.
+   - Timestamp output-transport audio writes for agent playout and `played_ms`.
+   - Emit `speech` spans and the links as Braintrust span ids.
+4. **Lingua:** done in the companion PR. Then add `voice.speech` and `voice.call` to `TRAJECTORY_METADATA_FIELDS` after #486 is rebased onto main.
 
 ## Open questions
 
-- Should user speech that LiveKit merges into one turn (pause ≤ `maxPauseMs`) be one speech span or several? This draft logs one per VAD segment.
-- Should `ignored` speech create a Trajectory turn?
-- Is a per-utterance late write acceptable for the ingestion volume of long calls?
+- Should `ignored` speech create a Trajectory turn, or only appear in `voice_calls`?
+- Is the timeout for delaying the end write (2 s here) right for slow LLM starts, given the second write it otherwise costs?
+- Should an interrupted speech handle that played nothing leave a zero-length marker so the voice view can show the attempt?

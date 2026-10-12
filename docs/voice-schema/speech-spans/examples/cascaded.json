@@ -25,7 +25,8 @@
     "metadata": {
       "voice.call": {
         "framework": "livekit",
-        "pipeline": "cascaded"
+        "pipeline": "cascaded",
+        "origin_unix_ms": 1791830000000
       },
       "audio.recordings": [
         {
@@ -118,6 +119,13 @@
           "recording_span_id": "call",
           "recording_id": "call-0000",
           "start_offset_ms": 300,
+          "end_offset_ms": 700,
+          "channel_index": 0
+        },
+        {
+          "recording_span_id": "call",
+          "recording_id": "call-0000",
+          "start_offset_ms": 1000,
           "end_offset_ms": 2900,
           "channel_index": 0
         }
@@ -657,6 +665,45 @@
           "start_offset_ms": 9900,
           "end_offset_ms": 12600,
           "channel_index": 1
+        }
+      ]
+    }
+  },
+  {
+    "id": "r-s5",
+    "span_id": "s5",
+    "root_span_id": "call",
+    "span_parents": ["call"],
+    "span_attributes": {
+      "name": "speech",
+      "type": "task"
+    },
+    "metrics": {
+      "start": 1791830010.6,
+      "end": 1791830010.9
+    },
+    "output": {
+      "text": "Mm-hm."
+    },
+    "metadata": {
+      "voice.speech": {
+        "speaker": "user",
+        "state": "ignored",
+        "timing_source": "vad",
+        "transcript": {
+          "source": "stt",
+          "final": true,
+          "available_ms": 11000,
+          "confidence": 0.71
+        }
+      },
+      "audio.selections": [
+        {
+          "recording_span_id": "call",
+          "recording_id": "call-0000",
+          "start_offset_ms": 10600,
+          "end_offset_ms": 10900,
+          "channel_index": 0
         }
       ]
     }

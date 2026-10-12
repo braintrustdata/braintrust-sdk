@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import { describe, expect, test } from "vitest";
 import { z } from "zod/v3";
-import { speechSpan, voiceCall } from "./speech-spans";
+import { speechSpan, voiceCall, voiceSpeech } from "./speech-spans";
 
 type Row = {
   span_id: string;
@@ -25,16 +25,23 @@ describe.each(["cascaded", "realtime"])("%s example", (name) => {
     .filter((row) => row.metadata?.["voice.speech"])
     .map((row) => speechSpan.parse(row));
 
-  test("the call span declares its pipeline", () => {
-    const call = rows.find((row) => row.span_parents === null);
-    expect(voiceCall.parse(call?.metadata?.["voice.call"]).pipeline).toBe(name);
+  const call = rows.find((row) => row.span_parents === null);
+  const callInfo = voiceCall.parse(call?.metadata?.["voice.call"]);
+
+  test("the call span declares its pipeline and clock", () => {
+    expect(callInfo.pipeline).toBe(name);
+    const [recording] = z
+      .array(z.object({ timeline: z.object({ origin_unix_ms: z.number() }) }))
+      .parse(call?.metadata?.["audio.recordings"]);
+    expect(recording.timeline.origin_unix_ms).toBe(callInfo.origin_unix_ms);
   });
 
   test("speech links resolve to spans of the right kind", () => {
-    expect(speech).toHaveLength(4);
+    expect(speech).toHaveLength(5);
     for (const span of speech) {
       const voice = span.metadata["voice.speech"];
-      if (voice.turn_id) expect(span.span_parents).toEqual([voice.turn_id]);
+      expect(span.span_parents).toEqual([voice.turn_id ?? call?.span_id]);
+      if (voice.state === "ignored") expect(voice.turn_id).toBeUndefined();
       for (const id of voice.heard_by ?? [])
         expect(byId.get(id)?.span_attributes.type).toBe("llm");
       if (voice.produced_by)
@@ -52,23 +59,50 @@ describe.each(["cascaded", "realtime"])("%s example", (name) => {
     }
   });
 
-  test("speech span times match their audio selections", () => {
-    const [recording] = z
-      .array(z.object({ timeline: z.object({ origin_unix_ms: z.number() }) }))
-      .parse(
-        rows.find((row) => row.span_parents === null)?.metadata?.[
-          "audio.recordings"
-        ],
-      );
-    const origin = recording.timeline.origin_unix_ms;
+  test("speech spans run from the first to the last audio fragment", () => {
     for (const span of speech) {
-      const [selection] = span.metadata["audio.selections"] ?? [];
-      expect(span.metrics.start * 1000 - origin).toBeCloseTo(
-        selection.start_offset_ms,
+      const selections = span.metadata["audio.selections"] ?? [];
+      expect(span.metrics.start * 1000 - callInfo.origin_unix_ms).toBeCloseTo(
+        selections[0].start_offset_ms,
       );
-      expect(span.metrics.end * 1000 - origin).toBeCloseTo(
-        selection.end_offset_ms,
+      expect(span.metrics.end * 1000 - callInfo.origin_unix_ms).toBeCloseTo(
+        selections[selections.length - 1].end_offset_ms,
       );
     }
+    expect(
+      speech.find((span) => span.span_id === "s1")?.metadata[
+        "audio.selections"
+      ],
+    ).toHaveLength(2);
   });
+});
+
+test("speech without audio cannot claim audio sample timing", () => {
+  const span = {
+    span_id: "s",
+    span_parents: ["call"],
+    span_attributes: { name: "speech", type: "task" },
+    metrics: { start: 1, end: 2 },
+    metadata: {
+      "voice.speech": {
+        speaker: "user",
+        state: "ignored",
+        timing_source: "audio_samples",
+      },
+    },
+  };
+  expect(speechSpan.safeParse(span).success).toBe(false);
+  span.metadata["voice.speech"].timing_source = "vad";
+  expect(speechSpan.safeParse(span).success).toBe(true);
+});
+
+test("agent speech that played nothing is not a speech span", () => {
+  expect(
+    voiceSpeech.safeParse({
+      speaker: "agent",
+      state: "interrupted",
+      timing_source: "playout",
+      played_ms: 0,
+    }).success,
+  ).toBe(false);
 });

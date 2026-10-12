@@ -13,6 +13,7 @@ const selection = z.object({
 export const voiceCall = z.object({
   framework: z.enum(["livekit", "pipecat"]),
   pipeline: z.enum(["cascaded", "realtime", "half_cascade"]),
+  origin_unix_ms: z.number().nonnegative(),
 });
 
 export const voiceSpeech = z
@@ -30,7 +31,7 @@ export const voiceSpeech = z
     heard_by: z.array(z.string()).optional(),
     produced_by: z.string().optional(),
     interrupted_by: z.string().optional(),
-    played_ms: callMs.optional(),
+    played_ms: z.number().positive().optional(),
     provider_played_ms: callMs.optional(),
     end_of_turn_ms: callMs.optional(),
     transcript: z
@@ -71,22 +72,37 @@ export const voiceSpeech = z
       });
   });
 
-export const speechSpan = z.object({
-  span_id: z.string(),
-  span_parents: z.array(z.string()).length(1),
-  span_attributes: z.object({
-    name: z.literal("speech"),
-    type: z.literal("task"),
-  }),
-  metrics: z.object({ start: z.number(), end: z.number() }),
-  output: z
-    .object({ text: z.string(), planned_text: z.string().optional() })
-    .optional(),
-  metadata: z.object({
-    "voice.speech": voiceSpeech,
-    "audio.selections": z.array(selection).optional(),
-  }),
-});
+export const speechSpan = z
+  .object({
+    span_id: z.string(),
+    span_parents: z.array(z.string()).length(1),
+    span_attributes: z.object({
+      name: z.literal("speech"),
+      type: z.literal("task"),
+    }),
+    metrics: z.object({ start: z.number(), end: z.number() }),
+    output: z
+      .object({
+        text: z.string().optional(),
+        planned_text: z.string().optional(),
+      })
+      .optional(),
+    metadata: z.object({
+      "voice.speech": voiceSpeech,
+      "audio.selections": z.array(selection).min(1).optional(),
+    }),
+  })
+  .superRefine((span, ctx) => {
+    if (
+      span.metadata["voice.speech"].timing_source === "audio_samples" &&
+      !span.metadata["audio.selections"]
+    )
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "audio_samples timing requires audio.selections",
+        path: ["metadata", "voice.speech", "timing_source"],
+      });
+  });
 
 export type VoiceSpeech = z.infer<typeof voiceSpeech>;
 export type SpeechSpan = z.infer<typeof speechSpan>;
