@@ -72,6 +72,13 @@
               "recording_span_id": "c-root",
               "recording_id": "call-0000",
               "start_offset_ms": 300,
+              "end_offset_ms": 1250,
+              "channel_index": 0
+            },
+            {
+              "recording_span_id": "c-root",
+              "recording_id": "call-0000",
+              "start_offset_ms": 1650,
               "end_offset_ms": 2900,
               "channel_index": 0
             }

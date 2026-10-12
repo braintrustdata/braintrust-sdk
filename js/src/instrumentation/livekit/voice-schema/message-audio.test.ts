@@ -45,6 +45,18 @@ describe.each(["cascaded", "realtime"])("message-audio %s example", (name) => {
     }
   });
 
+  it("uses outer bounds of all selections", () => {
+    for (const [, message] of messages) {
+      if (!message.selections.length) continue;
+      expect(
+        Math.min(...message.selections.map((s) => s.start_offset_ms)),
+      ).toBe(message.start_ms);
+      expect(Math.max(...message.selections.map((s) => s.end_offset_ms))).toBe(
+        message.end_ms,
+      );
+    }
+  });
+
   it("links LLM spans to messages by id", () => {
     for (const row of rows.filter((r) => r.span_attributes.type === "llm")) {
       const voice = llmSpanMetadataSchema.parse(row.metadata);
@@ -81,26 +93,61 @@ describe("message-audio schema", () => {
   const base = {
     role: "user",
     seq: 0,
-    committed: false,
+    committed: true,
     state: "complete",
     text_status: "final",
-    text: "mm-hmm",
+    text: "Nine thirty works.",
     selections: [],
   };
+  const parses = (value: object) => voiceMessageSchema.safeParse(value).success;
 
-  it("accepts an uncommitted backchannel", () => {
-    expect(voiceMessageSchema.safeParse(base).success).toBe(true);
+  it("accepts uncommitted speech without text", () => {
+    const { text: _text, ...rest } = base;
+    expect(
+      parses({
+        ...rest,
+        committed: false,
+        text_status: "missing",
+        text_source: "stt",
+      }),
+    ).toBe(true);
+  });
+
+  it("rejects uncommitted speech with text", () => {
+    expect(parses({ ...base, committed: false })).toBe(false);
+  });
+
+  it("accepts an expected source when the transcript is missing", () => {
+    const { text: _text, ...rest } = base;
+    expect(
+      parses({
+        ...rest,
+        text_status: "missing",
+        text_source: "realtime_input_transcription",
+      }),
+    ).toBe(true);
   });
 
   it("rejects text when the transcript is missing", () => {
+    expect(parses({ ...base, text_status: "missing" })).toBe(false);
+  });
+
+  it("accepts unplayed assistant speech that never got an item", () => {
     expect(
-      voiceMessageSchema.safeParse({ ...base, text_status: "missing" }).success,
-    ).toBe(false);
+      parses({
+        ...base,
+        role: "assistant",
+        state: "unplayed",
+        text_status: "final",
+        text_source: "tts_input",
+        text: "Let me check.",
+      }),
+    ).toBe(true);
   });
 
   it("rejects user audio on the agent channel", () => {
     expect(
-      voiceMessageSchema.safeParse({
+      parses({
         ...base,
         selections: [
           {
@@ -111,17 +158,13 @@ describe("message-audio schema", () => {
             channel_index: 1,
           },
         ],
-      }).success,
+      }),
     ).toBe(false);
   });
 
   it("requires an interruption point on interrupted agent speech", () => {
-    expect(
-      voiceMessageSchema.safeParse({
-        ...base,
-        role: "assistant",
-        state: "interrupted",
-      }).success,
-    ).toBe(false);
+    expect(parses({ ...base, role: "assistant", state: "interrupted" })).toBe(
+      false,
+    );
   });
 });

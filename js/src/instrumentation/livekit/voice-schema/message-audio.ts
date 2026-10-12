@@ -61,6 +61,13 @@ export const voiceMessageSchema = z
       message.end_ms < message.start_ms
     )
       issue("end_ms must not precede start_ms");
+    if (
+      !message.committed &&
+      (message.role !== "user" ||
+        message.state !== "complete" ||
+        message.text !== undefined)
+    )
+      issue("uncommitted entries are complete user speech without text");
     const channel = message.role === "user" ? 0 : 1;
     if (message.selections.some((s) => s.channel_index !== channel))
       issue(`${message.role} selections must use channel ${channel}`);
