@@ -169,10 +169,27 @@ describe("message-audio schema", () => {
     ).toBe(false);
   });
 
-  it("rejects uncommitted assistant speech that completed", () => {
-    expect(parses({ ...base, role: "assistant", committed: false })).toBe(
-      false,
-    );
+  it("accepts played assistant speech that never got an item", () => {
+    const { text: _text, ...rest } = base;
+    expect(
+      parses({
+        ...rest,
+        role: "assistant",
+        committed: false,
+        text_status: "missing",
+        start_ms: 100,
+        end_ms: 200,
+        selections: [
+          {
+            recording_span_id: "root",
+            recording_id: "call-0000",
+            start_offset_ms: 100,
+            end_offset_ms: 200,
+            channel_index: 1,
+          },
+        ],
+      }),
+    ).toBe(true);
   });
 
   it("rejects user audio on the agent channel", () => {

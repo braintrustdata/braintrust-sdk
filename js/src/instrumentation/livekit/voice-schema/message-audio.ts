@@ -66,19 +66,12 @@ export const voiceMessageSchema = z
       message.end_ms < message.start_ms
     )
       issue("end_ms must not precede start_ms");
-    if (!message.committed) {
-      if (
-        message.role === "user" &&
-        (message.state !== "complete" || message.text !== undefined)
-      )
-        issue("uncommitted user speech is complete and has no text");
-      if (
-        message.role === "assistant" &&
-        message.state !== "unplayed" &&
-        message.state !== "interrupted"
-      )
-        issue("uncommitted assistant speech is unplayed or interrupted");
-    }
+    if (
+      !message.committed &&
+      message.role === "user" &&
+      (message.state !== "complete" || message.text !== undefined)
+    )
+      issue("uncommitted user speech is complete and has no text");
     if (
       message.role === "assistant" &&
       message.state === "open" &&
