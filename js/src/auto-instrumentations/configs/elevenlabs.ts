@@ -19,7 +19,6 @@ export const elevenLabsConfigs: InstrumentationConfig[] = [
     functionQuery: {
       className: "TextToSpeechClient",
       methodName,
-      kind: "Async" as const,
     },
   })),
   {
@@ -32,7 +31,6 @@ export const elevenLabsConfigs: InstrumentationConfig[] = [
     functionQuery: {
       className: "SpeechToTextClient",
       methodName: "convert",
-      kind: "Async",
     },
   },
 ];

@@ -14,7 +14,7 @@ import { fileURLToPath } from "node:url";
 import { runInNewContext } from "node:vm";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import {
-  create,
+  InstrumentationMatcher,
   type InstrumentationConfig,
 } from "../../src/auto-instrumentations/orchestrion-js";
 import {
@@ -73,7 +73,9 @@ function transformTestCode(
   moduleType: "esm" | "cjs" = "esm",
   astQuery?: string,
 ) {
-  const matcher = create([testConfig(functionQuery, astQuery)]);
+  const matcher = new InstrumentationMatcher([
+    testConfig(functionQuery, astQuery),
+  ]);
   const transformer = matcher.getTransformer("test-sdk", "1.0.0", "index.mjs");
 
   expect(transformer).toBeDefined();
@@ -160,7 +162,7 @@ describe("Orchestrion Transformation Tests", () => {
   describe("internal transformer query surface", () => {
     it("supports class method configs", () => {
       const result = transformTestCode(
-        { className: "Client", methodName: "create", kind: "Async" },
+        { className: "Client", methodName: "create" },
         `
           export class Client {
             async create(input) {
@@ -176,7 +178,7 @@ describe("Orchestrion Transformation Tests", () => {
 
     it("supports method-only configs", () => {
       const result = transformTestCode(
-        { methodName: "create", kind: "Async" },
+        { methodName: "create" },
         `
           export const client = {
             create: async function (input) {
@@ -192,7 +194,7 @@ describe("Orchestrion Transformation Tests", () => {
 
     it("supports function declaration configs", () => {
       const result = transformTestCode(
-        { functionName: "query", kind: "Sync" },
+        { functionName: "query" },
         `
           export function query(input) {
             return input;
@@ -206,7 +208,7 @@ describe("Orchestrion Transformation Tests", () => {
 
     it("ignores malformed global hook entries at runtime", () => {
       const result = transformTestCode(
-        { functionName: "query", kind: "Sync" },
+        { functionName: "query" },
         `
           let calls = 0;
           function query(input) {
@@ -247,7 +249,7 @@ describe("Orchestrion Transformation Tests", () => {
 
     it("supports export-alias function configs", () => {
       const result = transformTestCode(
-        { functionName: "query", kind: "Sync", isExportAlias: true },
+        { functionName: "query", isExportAlias: true },
         `
           function queryImpl(input) {
             return input;
@@ -265,7 +267,6 @@ describe("Orchestrion Transformation Tests", () => {
         {
           className: "Client",
           methodName: "create",
-          kind: "Async",
           isExportAlias: true,
         },
         `
@@ -284,7 +285,7 @@ describe("Orchestrion Transformation Tests", () => {
 
     it("supports private class method configs", () => {
       const result = transformTestCode(
-        { className: "Client", privateMethodName: "create", kind: "Async" },
+        { className: "Client", privateMethodName: "create" },
         `
           class Client {
             async #create(input) {
@@ -306,7 +307,7 @@ describe("Orchestrion Transformation Tests", () => {
 
     it("supports object/property configs", () => {
       const result = transformTestCode(
-        { objectName: "this", propertyName: "create", kind: "Async" },
+        { objectName: "this", propertyName: "create" },
         `
           function Client() {
             this.create = async () => {
@@ -324,7 +325,7 @@ describe("Orchestrion Transformation Tests", () => {
 
     it("supports callback configs", () => {
       const result = transformTestCode(
-        { functionName: "request", kind: "Callback" },
+        { functionName: "request" },
         `
           export function request(input, callback) {
             callback(null, input);
@@ -338,7 +339,7 @@ describe("Orchestrion Transformation Tests", () => {
 
     it("supports raw AST query configs", () => {
       const result = transformTestCode(
-        { kind: "Async" },
+        {},
         `
           export async function request(input) {
             return input;
@@ -354,7 +355,7 @@ describe("Orchestrion Transformation Tests", () => {
 
     it("supports index selection", () => {
       const result = transformTestCode(
-        { methodName: "create", kind: "Async", index: 1 },
+        { methodName: "create", index: 1 },
         `
           export const first = {
             create: async function firstCreate() {
@@ -377,13 +378,13 @@ describe("Orchestrion Transformation Tests", () => {
     });
 
     it("injects one shared global hook lookup for multiple channels", () => {
-      const matcher = create([
+      const matcher = new InstrumentationMatcher([
         {
-          ...testConfig({ functionName: "first", kind: "Sync" }),
+          ...testConfig({ functionName: "first" }),
           channelName: "first",
         },
         {
-          ...testConfig({ functionName: "second", kind: "Async" }),
+          ...testConfig({ functionName: "second" }),
           channelName: "second",
         },
       ]);
@@ -421,7 +422,7 @@ describe("Orchestrion Transformation Tests", () => {
 
     it("generates source maps", () => {
       const result = transformTestCode(
-        { functionName: "query", kind: "Sync" },
+        { functionName: "query" },
         `
           export function query(input) {
             return input;
@@ -438,7 +439,7 @@ describe("Orchestrion Transformation Tests", () => {
 
     it("observes hooks registered after the transformed module loads", () => {
       const result = transformTestCode(
-        { functionName: "query", kind: "Sync" },
+        { functionName: "query" },
         `
           function query(input) {
             return input;
@@ -472,7 +473,7 @@ describe("Orchestrion Transformation Tests", () => {
 
     it("invokes generic interceptors with receiver, arguments, and version metadata", () => {
       const result = transformTestCode(
-        { className: "Client", methodName: "query", kind: "Sync" },
+        { className: "Client", methodName: "query" },
         `
           class Client {
             constructor(prefix) {
@@ -519,7 +520,7 @@ describe("Orchestrion Transformation Tests", () => {
 
     it("supports asynchronous invocation interceptors", async () => {
       const result = transformTestCode(
-        { functionName: "query", kind: "Async" },
+        { functionName: "query" },
         `
           async function query(input) {
             await Promise.resolve();
@@ -548,7 +549,7 @@ describe("Orchestrion Transformation Tests", () => {
 
     it("supports callback invocation interceptors", () => {
       const result = transformTestCode(
-        { functionName: "query", kind: "Callback", callbackIndex: 1 },
+        { functionName: "query" },
         `
           function query(input, callback) {
             callback(null, input);

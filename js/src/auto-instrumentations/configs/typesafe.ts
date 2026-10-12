@@ -14,6 +14,5 @@ export const typeSafeConfigs: InstrumentationConfig[] = [
   functionQuery: {
     className: "TypeSafeClient",
     methodName: "systemOne",
-    kind: "Async" as const,
   },
 }));

@@ -14,7 +14,6 @@ export const piCodingAgentConfigs: InstrumentationConfig[] = [
     functionQuery: {
       className: "AgentSession",
       methodName: "prompt",
-      kind: "Async",
     },
   },
 ];

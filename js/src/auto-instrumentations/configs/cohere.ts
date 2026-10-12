@@ -12,7 +12,6 @@ export const cohereConfigs: InstrumentationConfig[] = [
     functionQuery: {
       className: "CohereClient",
       methodName: "chat",
-      kind: "Async",
     },
   },
   {
@@ -25,7 +24,6 @@ export const cohereConfigs: InstrumentationConfig[] = [
     functionQuery: {
       className: "V2",
       methodName: "chat",
-      kind: "Async",
     },
   },
   {
@@ -38,7 +36,6 @@ export const cohereConfigs: InstrumentationConfig[] = [
     functionQuery: {
       className: "V2Client",
       methodName: "chat",
-      kind: "Async",
     },
   },
   {
@@ -51,7 +48,6 @@ export const cohereConfigs: InstrumentationConfig[] = [
     functionQuery: {
       className: "CohereClient",
       methodName: "chat",
-      kind: "Async",
     },
   },
   {
@@ -64,7 +60,6 @@ export const cohereConfigs: InstrumentationConfig[] = [
     functionQuery: {
       className: "V2Client",
       methodName: "chat",
-      kind: "Async",
     },
   },
   {
@@ -77,7 +72,6 @@ export const cohereConfigs: InstrumentationConfig[] = [
     functionQuery: {
       className: "CohereClient",
       methodName: "chatStream",
-      kind: "Async",
     },
   },
   {
@@ -90,7 +84,6 @@ export const cohereConfigs: InstrumentationConfig[] = [
     functionQuery: {
       className: "V2",
       methodName: "chatStream",
-      kind: "Async",
     },
   },
   {
@@ -103,7 +96,6 @@ export const cohereConfigs: InstrumentationConfig[] = [
     functionQuery: {
       className: "V2Client",
       methodName: "chatStream",
-      kind: "Async",
     },
   },
   {
@@ -116,7 +108,6 @@ export const cohereConfigs: InstrumentationConfig[] = [
     functionQuery: {
       className: "CohereClient",
       methodName: "chatStream",
-      kind: "Async",
     },
   },
   {
@@ -129,7 +120,6 @@ export const cohereConfigs: InstrumentationConfig[] = [
     functionQuery: {
       className: "V2Client",
       methodName: "chatStream",
-      kind: "Async",
     },
   },
   {
@@ -142,7 +132,6 @@ export const cohereConfigs: InstrumentationConfig[] = [
     functionQuery: {
       className: "CohereClient",
       methodName: "embed",
-      kind: "Async",
     },
   },
   {
@@ -155,7 +144,6 @@ export const cohereConfigs: InstrumentationConfig[] = [
     functionQuery: {
       className: "V2",
       methodName: "embed",
-      kind: "Async",
     },
   },
   {
@@ -168,7 +156,6 @@ export const cohereConfigs: InstrumentationConfig[] = [
     functionQuery: {
       className: "V2Client",
       methodName: "embed",
-      kind: "Async",
     },
   },
   {
@@ -181,7 +168,6 @@ export const cohereConfigs: InstrumentationConfig[] = [
     functionQuery: {
       className: "CohereClient",
       methodName: "embed",
-      kind: "Async",
     },
   },
   {
@@ -194,7 +180,6 @@ export const cohereConfigs: InstrumentationConfig[] = [
     functionQuery: {
       className: "V2Client",
       methodName: "embed",
-      kind: "Async",
     },
   },
   {
@@ -207,7 +192,6 @@ export const cohereConfigs: InstrumentationConfig[] = [
     functionQuery: {
       className: "CohereClient",
       methodName: "rerank",
-      kind: "Async",
     },
   },
   {
@@ -220,7 +204,6 @@ export const cohereConfigs: InstrumentationConfig[] = [
     functionQuery: {
       className: "V2",
       methodName: "rerank",
-      kind: "Async",
     },
   },
   {
@@ -233,7 +216,6 @@ export const cohereConfigs: InstrumentationConfig[] = [
     functionQuery: {
       className: "V2Client",
       methodName: "rerank",
-      kind: "Async",
     },
   },
   {
@@ -246,7 +228,6 @@ export const cohereConfigs: InstrumentationConfig[] = [
     functionQuery: {
       className: "CohereClient",
       methodName: "rerank",
-      kind: "Async",
     },
   },
   {
@@ -259,7 +240,6 @@ export const cohereConfigs: InstrumentationConfig[] = [
     functionQuery: {
       className: "V2Client",
       methodName: "rerank",
-      kind: "Async",
     },
   },
 ];

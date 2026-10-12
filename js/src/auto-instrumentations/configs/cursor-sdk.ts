@@ -17,7 +17,6 @@ export const cursorSDKConfigs: InstrumentationConfig[] =
       functionQuery: {
         className: "Agent",
         methodName: "create",
-        kind: "Async",
       },
     },
     {
@@ -30,7 +29,6 @@ export const cursorSDKConfigs: InstrumentationConfig[] =
       functionQuery: {
         className: "Agent",
         methodName: "resume",
-        kind: "Async",
       },
     },
     {
@@ -43,7 +41,6 @@ export const cursorSDKConfigs: InstrumentationConfig[] =
       functionQuery: {
         className: "Agent",
         methodName: "prompt",
-        kind: "Async",
       },
     },
   ]);

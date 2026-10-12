@@ -3,7 +3,10 @@
  * Patches Module.prototype._compile to transform CommonJS modules at load time.
  */
 
-import { create, type InstrumentationConfig } from "../orchestrion-js";
+import {
+  InstrumentationMatcher,
+  type InstrumentationConfig,
+} from "../orchestrion-js";
 import * as NodeModule from "node:module";
 import { sep } from "node:path";
 import moduleDetailsFromPath from "module-details-from-path";
@@ -22,7 +25,7 @@ export class ModulePatch {
     const modulePrototype = resolveModulePrototype() as any;
 
     this.packages = new Set(instrumentations.map((i) => i.module.name));
-    this.instrumentator = create(instrumentations);
+    this.instrumentator = new InstrumentationMatcher(instrumentations);
     this.modulePrototype = modulePrototype;
     this.originalCompile = modulePrototype._compile;
   }

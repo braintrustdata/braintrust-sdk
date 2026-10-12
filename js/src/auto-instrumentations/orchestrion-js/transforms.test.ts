@@ -1,7 +1,44 @@
 import { describe, expect, it } from "vitest";
+import { newGlobalInvocationHook } from "../../global-instrumentation-hooks";
 import { Transformer } from "./transformer";
 
 describe("orchestrion transforms", () => {
+  it("preserves receiver replacement for raw AST selectors", async () => {
+    const transformer = new Transformer("example", "1.0.0", "index.mjs", [
+      {
+        channelName: "replaceReceiver",
+        module: {
+          name: "example",
+          versionRange: ">=1.0.0",
+          filePath: "index.mjs",
+        },
+        functionQuery: {},
+        astQuery: 'FunctionDeclaration[id.name="request"]',
+      },
+    ]);
+    const transformed = transformer.transform(
+      `export function request(input) { return this.prefix + arguments[0]; }`,
+      "esm",
+    ).code;
+    const module = await import(
+      `data:text/javascript;base64,${Buffer.from(transformed).toString("base64")}`
+    );
+    const remove = newGlobalInvocationHook(
+      "orchestrion:example:replaceReceiver",
+    ).intercept((target, _receiver, args) =>
+      Reflect.apply(target, { prefix: "changed:" }, [
+        String(args[0]).toUpperCase(),
+      ]),
+    );
+    try {
+      expect(module.request.call({ prefix: "original:" }, "input")).toBe(
+        "changed:INPUT",
+      );
+    } finally {
+      remove();
+    }
+  });
+
   it("forwards call arguments for raw AST function selectors", async () => {
     const transformer = new Transformer("example", "1.0.0", "index.mjs", [
       {
@@ -11,7 +48,7 @@ describe("orchestrion transforms", () => {
           versionRange: ">=1.0.0",
           filePath: "index.mjs",
         },
-        functionQuery: { kind: "Async" },
+        functionQuery: {},
         astQuery: 'FunctionDeclaration[id.name="request"][async]',
       },
     ]);
@@ -40,7 +77,6 @@ describe("orchestrion transforms", () => {
         functionQuery: {
           objectName: "this",
           propertyName: "call",
-          kind: "Async",
         },
       },
     ]);

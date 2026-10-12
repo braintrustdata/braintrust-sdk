@@ -27,6 +27,11 @@ Map the change before editing:
 - Inputs are untrusted: treat args, results, events, headers, and metadata as hostile. Prototype pollution is a concrete risk here. Avoid unsafe property access patterns, prototype-sensitive operations, and unnecessary mutation of third-party objects.
 - Support both auto-instrumentation and manual instrumentation. Auto-instrumentation does not cover every environment, loader, or framework.
 - For orchestrion auto-instrumentation, prefer targeting public API functions. Instrumenting internal helpers is more likely to break across library versions.
+- Braintrust's vendored Orchestrion implementation is purely internal to the SDK.
+  Downstream packages must not depend on its APIs, config schema, generated helpers, or compatibility with upstream Orchestrion.
+  Do not expose these internals through SDK entrypoints or public configuration options.
+  Update the transformer and its SDK callers together; remove unused upstream features and compatibility scaffolding.
+  Preserve instrumented application behavior, coordination between SDK copies, and upstream license notices.
 - Keep wrapping and tracing separate, including internal APIs.
   Define typed invocation hooks with `defineInterceptor`; `intercept` and `invoke` only compose and execute wrappers.
   Definitions describe call arguments, return values, and opaque additional data, without span provenance or tracing methods.

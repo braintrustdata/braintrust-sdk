@@ -21,7 +21,6 @@ export const openAIAgentsCoreConfigs: InstrumentationConfig[] =
         functionQuery: {
           className: "MultiTracingProcessor",
           methodName,
-          kind: "Async",
         },
       }),
     ),

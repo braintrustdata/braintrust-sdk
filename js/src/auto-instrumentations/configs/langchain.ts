@@ -15,7 +15,6 @@ export const langchainConfigs: InstrumentationConfig[] = [
     functionQuery: {
       className: "CallbackManager",
       methodName: "configure",
-      kind: "Sync",
     },
   },
   {
@@ -28,7 +27,6 @@ export const langchainConfigs: InstrumentationConfig[] = [
     functionQuery: {
       className: "CallbackManager",
       methodName: "_configureSync",
-      kind: "Sync",
     },
   },
 ];

@@ -11,19 +11,11 @@ import {
   GLOBAL_INSTRUMENTATION_HOOKS_REGISTRY_BRAND,
   GLOBAL_INVOCATION_HOOK_BRAND,
 } from "../../global-instrumentation-hooks";
-import type { FunctionQuery, InstrumentationConfig } from "./types";
+import type { InstrumentationConfig } from "./types";
 
 type AnyNode = any;
-type TransformFn = (
-  state: TransformState,
-  node: AnyNode,
-  parent: AnyNode,
-  ancestry: AnyNode[],
-) => void;
-
 export interface TransformState extends InstrumentationConfig {
   moduleVersion: string;
-  functionQuery: FunctionQuery;
   functionIndex?: number;
 }
 
@@ -38,30 +30,29 @@ function formatChannelGetter(channelName: string): string {
   return `tr_ch_bt$get_${channelName.replace(CHANNEL_REGEX, "_")}`;
 }
 
-export const transforms: Record<string, TransformFn> = {
-  invocationHookDeclaration(state, node) {
-    const {
-      channelName,
-      module: { name },
-    } = state;
-    const channelVariable = formatChannelVariable(channelName);
-    const channelGetter = formatChannelGetter(channelName);
-    const hasSharedHookLookup = node.body.some(
-      (child: AnyNode) =>
-        child.declarations?.[0]?.id?.name === SHARED_HOOK_LOOKUP,
-    );
+function declareInvocationHook(state: TransformState, node: AnyNode): void {
+  const {
+    channelName,
+    module: { name },
+  } = state;
+  const channelVariable = formatChannelVariable(channelName);
+  const channelGetter = formatChannelGetter(channelName);
+  const hasSharedHookLookup = node.body.some(
+    (child: AnyNode) =>
+      child.declarations?.[0]?.id?.name === SHARED_HOOK_LOOKUP,
+  );
 
-    if (
-      node.body.some(
-        (child: AnyNode) => child.declarations?.[0]?.id?.name === channelGetter,
-      )
-    ) {
-      return;
-    }
+  if (
+    node.body.some(
+      (child: AnyNode) => child.declarations?.[0]?.id?.name === channelGetter,
+    )
+  ) {
+    return;
+  }
 
-    const sharedHookLookup = hasSharedHookLookup
-      ? ""
-      : `
+  const sharedHookLookup = hasSharedHookLookup
+    ? ""
+    : `
       const ${SHARED_HOOK_LOOKUP} = (__bt$hookName) => {
         try {
           const __bt$hooks = globalThis[${JSON.stringify(
@@ -92,7 +83,7 @@ export const transforms: Record<string, TransformFn> = {
         }
       };
     `;
-    const code = `
+  const code = `
       ${sharedHookLookup}
       let ${channelVariable};
       const ${channelGetter} = () =>
@@ -101,64 +92,46 @@ export const transforms: Record<string, TransformFn> = {
         );
     `;
 
-    const sharedHookLookupIndex = node.body.findIndex(
-      (child: AnyNode) =>
-        child.declarations?.[0]?.id?.name === SHARED_HOOK_LOOKUP,
-    );
-    const index =
-      sharedHookLookupIndex === -1
-        ? node.body.findIndex(
-            (child: AnyNode) => child.directive === "use strict",
-          )
-        : sharedHookLookupIndex;
-    node.body.splice(index + 1, 0, ...parse(code).body);
-  },
+  const sharedHookLookupIndex = node.body.findIndex(
+    (child: AnyNode) =>
+      child.declarations?.[0]?.id?.name === SHARED_HOOK_LOOKUP,
+  );
+  const index =
+    sharedHookLookupIndex === -1
+      ? node.body.findIndex(
+          (child: AnyNode) => child.directive === "use strict",
+        )
+      : sharedHookLookupIndex;
+  node.body.splice(index + 1, 0, ...parse(code).body);
+}
 
-  invoke: traceAny,
-};
-
-function traceAny(
+export function wrapInvocation(
   state: TransformState,
   node: AnyNode,
-  _parent: AnyNode,
   ancestry: AnyNode[],
 ): void {
   const program = ancestry[ancestry.length - 1];
 
   if (node.type === "ClassDeclaration" || node.type === "ClassExpression") {
-    traceInstanceMethod(state, node, program);
+    wrapInstanceMethod(state, node, program);
   } else {
-    traceFunction(state, node, program);
+    wrapFunction(state, node, program);
   }
 }
 
-function traceFunction(
+function wrapFunction(
   state: TransformState,
   node: AnyNode,
   program: AnyNode,
 ): void {
-  transforms.invocationHookDeclaration(state, program, null, []);
+  declareInvocationHook(state, program);
 
   const isArrowFunction = node.type === "ArrowFunctionExpression";
-
-  const { functionQuery } = state;
-  const methodName =
-    "methodName" in functionQuery ? functionQuery.methodName : undefined;
-  const privateMethodName =
-    "privateMethodName" in functionQuery
-      ? functionQuery.privateMethodName
-      : undefined;
-  const functionName =
-    "functionName" in functionQuery ? functionQuery.functionName : undefined;
-  const isConstructor =
-    methodName === "constructor" ||
-    (!methodName && !privateMethodName && !functionName);
-  const type = isConstructor ? "ArrowFunctionExpression" : "FunctionExpression";
 
   node.body = wrap(
     state,
     {
-      type,
+      type: isArrowFunction ? "ArrowFunctionExpression" : "FunctionExpression",
       params: node.params,
       body: node.body,
       async: node.async,
@@ -186,7 +159,7 @@ function traceFunction(
   wrapSuper(node);
 }
 
-function traceInstanceMethod(
+function wrapInstanceMethod(
   state: TransformState,
   node: AnyNode,
   program: AnyNode,
@@ -206,7 +179,7 @@ function traceInstanceMethod(
 
   let ctor = classBody.body.find(({ kind }: AnyNode) => kind === "constructor");
 
-  transforms.invocationHookDeclaration(state, program, null, []);
+  declareInvocationHook(state, program);
 
   if (!ctor) {
     ctor = (
@@ -249,29 +222,21 @@ function wrap(
   node: AnyNode,
   argsExpression: string,
 ): AnyNode {
-  const wrapper = wrapInvocation(state, argsExpression);
-
-  const block = wrapper.body[0].body;
-  const common = parse(
-    node.type === "ArrowFunctionExpression"
-      ? `
-    const __bt$target = (...__bt$args) => {
-      const __bt$wrapped = () => {};
-      return __bt$wrapped(...__bt$args);
-    };
-  `
-      : `
-    const __bt$target = function (...__bt$args) {
-      const __bt$wrapped = () => {};
-      return __bt$wrapped.apply(this, __bt$args);
-    };
-  `,
-  ).body;
-
-  block.body.unshift(...common);
-
-  (esquery.query(block, "[id.name=__bt$wrapped]")[0] as AnyNode).init = node;
-
+  const wrapper: AnyNode = parse(`
+    function wrapper () {
+      const __bt$target = () => {};
+      const __bt$hook = ${formatChannelGetter(state.channelName)}();
+      if (!__bt$hook) return __bt$target.apply(this, ${argsExpression});
+      return __bt$hook.invoke(
+        __bt$target,
+        this,
+        ${argsExpression},
+        { moduleVersion: ${JSON.stringify(state.moduleVersion)} }
+      );
+    }
+  `).body[0];
+  const block = wrapper.body;
+  block.body[0].declarations[0].init = node;
   return block;
 }
 
@@ -321,25 +286,4 @@ function wrapSuper(node: AnyNode): void {
   if (members.size > 0) {
     node.body.body.unshift(parse("const __bt$super = {}").body[0]);
   }
-}
-
-function wrapInvocation(
-  state: TransformState,
-  argsExpression: string,
-): AnyNode {
-  const { channelName, moduleVersion } = state;
-  const channelGetter = formatChannelGetter(channelName);
-
-  return parse(`
-    function wrapper () {
-      const __bt$hook = ${channelGetter}();
-      if (!__bt$hook) return __bt$target.apply(this, ${argsExpression});
-      return __bt$hook.invoke(
-        __bt$target,
-        this,
-        ${argsExpression},
-        { moduleVersion: ${JSON.stringify(moduleVersion)} }
-      );
-    }
-  `);
 }

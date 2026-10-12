@@ -13,7 +13,6 @@ export const flueConfigs: InstrumentationConfig[] = [
     },
     functionQuery: {
       functionName: "createFlueContext",
-      kind: "Sync",
     },
   },
 ];

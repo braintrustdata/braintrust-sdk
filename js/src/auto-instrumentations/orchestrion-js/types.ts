@@ -18,15 +18,8 @@ export interface TransformOutput {
   map?: string;
 }
 
-/**
- * The kind of function.
- */
-export type FunctionKind = "Sync" | "Async" | "Callback";
-
 interface FunctionQueryBase {
-  kind: FunctionKind;
   index?: number | null;
-  callbackIndex?: number;
 }
 
 /**

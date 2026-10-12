@@ -1,5 +1,5 @@
 import { createUnplugin } from "unplugin";
-import { create, type InstrumentationConfig } from "../orchestrion-js";
+import { InstrumentationMatcher } from "../orchestrion-js";
 import { extname, isAbsolute, join, sep } from "path";
 import { readFileSync } from "fs";
 import { fileURLToPath } from "url";
@@ -9,11 +9,6 @@ import { applySpecialCasePatch } from "../loader/special-case-patches";
 import { getPackageName } from "../loader/get-package-version";
 
 export interface BundlerPluginOptions {
-  /**
-   * Additional instrumentation configs to apply
-   */
-  instrumentations?: InstrumentationConfig[];
-
   /**
    * Whether the transformed source will run in a browser or edge-like
    * environment.
@@ -57,12 +52,12 @@ function getModuleVersion(basedir: string): string | undefined {
 export const unplugin = createUnplugin<BundlerPluginOptions>((options = {}) => {
   const browser =
     options.browser ?? options.useDiagnosticChannelCompatShim ?? false;
-  const allInstrumentations = getDefaultAutoInstrumentationConfigs(
-    options.instrumentations,
-  );
+  const allInstrumentations = getDefaultAutoInstrumentationConfigs();
 
   // Create the code transformer instrumentor
-  const instrumentationMatcher = create(allInstrumentations);
+  const instrumentationMatcher = new InstrumentationMatcher(
+    allInstrumentations,
+  );
 
   return {
     name: "code-transformer",
@@ -125,7 +120,7 @@ export const unplugin = createUnplugin<BundlerPluginOptions>((options = {}) => {
       // against that canonical name so aliased dependencies are instrumented.
       const moduleName =
         getPackageName(moduleDetails.basedir) ?? moduleDetails.name;
-      // Normalize the module path for Windows compatibility (WASM transformer expects forward slashes)
+      // Normalize the module path for Windows compatibility (the matcher expects forward slashes)
       const normalizedModulePath = moduleDetails.path.replace(/\\/g, "/");
       const moduleVersion = getModuleVersion(moduleDetails.basedir);
 

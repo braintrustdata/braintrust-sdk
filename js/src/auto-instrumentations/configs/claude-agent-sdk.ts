@@ -24,7 +24,6 @@ export const claudeAgentSDKConfigs: InstrumentationConfig[] = [
     },
     functionQuery: {
       functionName: "query",
-      kind: "Sync",
     },
   },
   {
@@ -36,7 +35,6 @@ export const claudeAgentSDKConfigs: InstrumentationConfig[] = [
     },
     functionQuery: {
       functionName: "query",
-      kind: "Sync",
       isExportAlias: true,
     },
   },

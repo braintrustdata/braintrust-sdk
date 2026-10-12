@@ -14,7 +14,6 @@ export const openAICodexConfigs: InstrumentationConfig[] = [
     functionQuery: {
       className: "Thread",
       methodName: "run",
-      kind: "Async",
     },
   },
   {
@@ -27,7 +26,6 @@ export const openAICodexConfigs: InstrumentationConfig[] = [
     functionQuery: {
       className: "Thread",
       methodName: "runStreamed",
-      kind: "Async",
     },
   },
 ];

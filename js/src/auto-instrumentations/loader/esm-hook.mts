@@ -6,7 +6,10 @@
 import { readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { extname, sep } from "node:path";
-import { create, type InstrumentationConfig } from "../orchestrion-js";
+import {
+  InstrumentationMatcher,
+  type InstrumentationConfig,
+} from "../orchestrion-js";
 import moduleDetailsFromPath from "module-details-from-path";
 import { getPackageName, getPackageVersion } from "./get-package-version.js";
 import {
@@ -50,7 +53,7 @@ export async function initialize(
 ) {
   // Use the instrumentations passed from the parent via register()
   const configs = data.instrumentations || [];
-  instrumentator = create(configs);
+  instrumentator = new InstrumentationMatcher(configs);
   packages = new Set(configs.map((i) => i.module.name));
 }
 

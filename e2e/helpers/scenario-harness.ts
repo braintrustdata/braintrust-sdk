@@ -27,6 +27,7 @@ import {
   type InstallScenarioDependenciesOptions,
   type InstallScenarioDependenciesResult,
 } from "./scenario-installer";
+import { extractOtelSpans } from "./trace-summary";
 
 type EventPredicate = (event: CapturedLogEvent) => boolean;
 type PayloadPredicate = (payload: CapturedLogPayload) => boolean;
@@ -81,6 +82,8 @@ export interface ScenarioRunContext {
 
 interface ScenarioRunContextRecord {
   forwardToProduction?: boolean;
+  logRootSpanIds: string[];
+  experimentNames: string[];
   entry: string;
   runner: ScenarioRunner;
   scenarioDirName: string;
@@ -332,6 +335,13 @@ const CASSETTE_IGNORED_REQUESTS = [
 function getCassetteEnv(wiring: ActiveCassetteWiring): Record<string, string> {
   const serverUrl = wiring.serverUrl;
   return {
+    // Provider CLIs must connect directly to the local cassette server.
+    HTTP_PROXY: "",
+    HTTPS_PROXY: "",
+    ALL_PROXY: "",
+    http_proxy: "",
+    https_proxy: "",
+    all_proxy: "",
     BRAINTRUST_E2E_CASSETTE_PATH: wiring.cassetteDir,
     BRAINTRUST_E2E_CASSETTE_MODE: wiring.mode,
     BRAINTRUST_E2E_CASSETTE_SERVER_URL: serverUrl,
@@ -843,7 +853,25 @@ export async function withScenarioHarness(
   ): Promise<ScenarioResult> => {
     const result = await run();
     await recordScenarioRunContext({
-      forwardToProduction: optionsForHarness.forwardToProduction,
+      forwardToProduction: prodForwarding !== null,
+      logRootSpanIds: [
+        ...new Set(
+          [
+            ...server.events
+              .filter((event) => !event.experimentId)
+              .map((event) => event.span.rootId),
+            ...server.requests
+              .filter((request) => request.path === "/otel/v1/traces")
+              .flatMap((request) => extractOtelSpans(request.jsonBody))
+              .map((span) => span.traceId),
+          ].filter((id): id is string => typeof id === "string"),
+        ),
+      ],
+      experimentNames: server.experiments
+        .filter((experiment) =>
+          server.events.some((event) => event.experimentId === experiment.id),
+        )
+        .map((experiment) => experiment.name),
       entry: options.entry ?? defaultEntry,
       runner,
       scenarioDirName: path.basename(

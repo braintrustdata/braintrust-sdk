@@ -17,7 +17,6 @@ export const googleGenerativeAIConfigs: InstrumentationConfig[] = [
         ? "ChatSession"
         : "GenerativeModel",
       methodName,
-      kind: "Async" as const,
     },
   })),
 );

@@ -11,7 +11,7 @@ import * as path from "node:path";
 import { fileURLToPath } from "node:url";
 import { SourceMapConsumer } from "source-map";
 import {
-  create,
+  InstrumentationMatcher,
   type InstrumentationConfig,
 } from "../../src/auto-instrumentations/orchestrion-js";
 import { buildTestGlobalHookRuntime } from "./test-global-hook-runtime";
@@ -66,7 +66,7 @@ function runFixture({
   fs.rmSync(runDir, { recursive: true, force: true });
   fs.cpSync(sourceDir, runDir, { recursive: true });
 
-  const matcher = create(configs);
+  const matcher = new InstrumentationMatcher(configs);
   const transformer = matcher.getTransformer(
     TEST_MODULE_NAME,
     TEST_MODULE_VERSION,
@@ -100,19 +100,18 @@ const fixtureCases: UpstreamFixtureCase[] = [
     title: "instruments using a raw AST query selector",
     configs: [
       {
-        ...config("fetch_ast_query", { kind: "Async" }),
+        ...config("fetch_ast_query", {}),
         astQuery: 'FunctionDeclaration[id.name="fetch"][async]',
       },
     ],
   },
   {
     name: "arguments_mutation",
-    title: "supports argument mutation from tracing-channel subscribers",
+    title: "supports argument mutation from invocation interceptors",
     configs: [
-      config("fetch_simple", { functionName: "fetch_simple", kind: "Sync" }),
+      config("fetch_simple", { functionName: "fetch_simple" }),
       config("fetch.complex", {
         functionName: "fetch_complex",
-        kind: "Sync",
       }),
     ],
   },
@@ -123,7 +122,6 @@ const fixtureCases: UpstreamFixtureCase[] = [
       config("Undici:fetch", {
         className: "Undici",
         methodName: "fetch",
-        kind: "Async",
       }),
     ],
   },
@@ -134,25 +132,24 @@ const fixtureCases: UpstreamFixtureCase[] = [
       config("Undici:fetch", {
         className: "Undici",
         methodName: "fetch",
-        kind: "Async",
       }),
     ],
   },
   {
     name: "decl_cjs",
     title: "instruments async function declarations in CJS",
-    configs: [config("fetch.decl", { functionName: "fetch", kind: "Async" })],
+    configs: [config("fetch.decl", { functionName: "fetch" })],
   },
   {
     name: "decl_mjs",
     title: "instruments async function declarations in ESM",
-    configs: [config("fetch_decl", { functionName: "fetch", kind: "Async" })],
+    configs: [config("fetch_decl", { functionName: "fetch" })],
     mjs: true,
   },
   {
     name: "decl_mjs_mismatched_type",
-    title: "instruments promise-returning function declarations as async spans",
-    configs: [config("fetch_decl", { functionName: "fetch", kind: "Async" })],
+    title: "preserves promises returned by synchronous function declarations",
+    configs: [config("fetch_decl", { functionName: "fetch" })],
     mjs: true,
   },
   {
@@ -161,7 +158,6 @@ const fixtureCases: UpstreamFixtureCase[] = [
     configs: [
       config("fetch_alias", {
         functionName: "fetchAliased",
-        kind: "Async",
         isExportAlias: true,
       }),
     ],
@@ -174,7 +170,6 @@ const fixtureCases: UpstreamFixtureCase[] = [
       config("Undici:fetch", {
         className: "Undici",
         methodName: "fetch",
-        kind: "Async",
         isExportAlias: true,
       }),
     ],
@@ -187,7 +182,6 @@ const fixtureCases: UpstreamFixtureCase[] = [
       config("Undici:fetch", {
         className: "Undici",
         methodName: "fetch",
-        kind: "Async",
         isExportAlias: true,
       }),
     ],
@@ -200,7 +194,6 @@ const fixtureCases: UpstreamFixtureCase[] = [
       config("Undici:fetch", {
         className: "Undici",
         methodName: "fetch",
-        kind: "Async",
         isExportAlias: true,
       }),
     ],
@@ -213,7 +206,6 @@ const fixtureCases: UpstreamFixtureCase[] = [
       config("Undici:fetch", {
         className: "Undici",
         methodName: "fetch",
-        kind: "Async",
         isExportAlias: true,
       }),
     ],
@@ -226,7 +218,6 @@ const fixtureCases: UpstreamFixtureCase[] = [
       config("Undici:fetch", {
         className: "Undici",
         methodName: "fetch",
-        kind: "Async",
         isExportAlias: true,
       }),
     ],
@@ -239,7 +230,6 @@ const fixtureCases: UpstreamFixtureCase[] = [
       config("Undici_fetch", {
         className: "Undici",
         methodName: "fetch",
-        kind: "Async",
         index: 2,
       }),
     ],
@@ -251,7 +241,6 @@ const fixtureCases: UpstreamFixtureCase[] = [
       config("Base_fetch", {
         className: "Base",
         methodName: "fetch",
-        kind: "Async",
       }),
     ],
   },
@@ -262,7 +251,6 @@ const fixtureCases: UpstreamFixtureCase[] = [
       config("register", {
         className: "Server",
         methodName: "register",
-        kind: "Sync",
       }),
     ],
   },
@@ -273,12 +261,10 @@ const fixtureCases: UpstreamFixtureCase[] = [
       config("Undici_fetch1", {
         className: "Undici",
         methodName: "fetch1",
-        kind: "Async",
       }),
       config("Undici_fetch2", {
         className: "Undici",
         methodName: "fetch2",
-        kind: "Async",
       }),
     ],
   },
@@ -289,19 +275,18 @@ const fixtureCases: UpstreamFixtureCase[] = [
       config("Undici_fetch", {
         className: "Undici",
         methodName: "fetch",
-        kind: "Async",
       }),
     ],
   },
   {
     name: "nested_functions",
     title: "instruments nested sync function declarations",
-    configs: [config("nested_fn", { functionName: "addHook", kind: "Sync" })],
+    configs: [config("nested_fn", { functionName: "addHook" })],
   },
   {
     name: "object_method_cjs",
     title: "instruments object methods with method-only configs",
-    configs: [config("Undici_fetch", { methodName: "fetch", kind: "Async" })],
+    configs: [config("Undici_fetch", { methodName: "fetch" })],
   },
   {
     name: "object_property_this_cjs",
@@ -310,7 +295,6 @@ const fixtureCases: UpstreamFixtureCase[] = [
       config("Connection_query", {
         objectName: "this",
         propertyName: "_query",
-        kind: "Async",
       }),
     ],
   },
@@ -321,16 +305,13 @@ const fixtureCases: UpstreamFixtureCase[] = [
       config("conn_query", {
         objectName: "conn",
         propertyName: "query",
-        kind: "Async",
       }),
     ],
   },
   {
     name: "promise_subclass",
     title: "preserves Promise subclass return values",
-    configs: [
-      config("fetch_subclass", { functionName: "fetch", kind: "Async" }),
-    ],
+    configs: [config("fetch_subclass", { functionName: "fetch" })],
   },
   {
     name: "private_method_cjs",
@@ -339,33 +320,26 @@ const fixtureCases: UpstreamFixtureCase[] = [
       config("TestClass:testMe", {
         className: "TestClass",
         privateMethodName: "testMe",
-        kind: "Async",
       }),
     ],
   },
   {
     name: "callback_cjs",
     title: "instruments callback-style functions",
-    configs: [config("fetch.cb", { functionName: "fetch", kind: "Callback" })],
+    configs: [config("fetch.cb", { functionName: "fetch" })],
   },
   {
     name: "windows_path",
     title: "matches Windows-style transformed file paths",
     configs: [
-      config(
-        "fetch_decl",
-        { functionName: "fetch", kind: "Async" },
-        WINDOWS_MODULE_PATH,
-      ),
+      config("fetch_decl", { functionName: "fetch" }, WINDOWS_MODULE_PATH),
     ],
     transformerFilePath: "lib\\index.mjs",
   },
   {
     name: "wrap_promise_non_promise",
-    title: "handles non-Promise returns from Async configs",
-    configs: [
-      config("fetch_nonpromise", { functionName: "fetch", kind: "Async" }),
-    ],
+    title: "preserves non-Promise return values",
+    configs: [config("fetch_nonpromise", { functionName: "fetch" })],
   },
 ];
 
@@ -400,8 +374,8 @@ describe("Orchestrion-JS upstream-derived behavior", () => {
       "module.exports = { fetch };",
     ].join("\n");
 
-    const matcher = create([
-      config("fetch", { functionName: "fetch", kind: "Async" }),
+    const matcher = new InstrumentationMatcher([
+      config("fetch", { functionName: "fetch" }),
     ]);
     const transformer = matcher.getTransformer(
       TEST_MODULE_NAME,
@@ -424,8 +398,8 @@ describe("Orchestrion-JS upstream-derived behavior", () => {
       "module.exports = { fetch };",
     ].join("\n");
 
-    const matcher = create([
-      config("fetch_sm", { functionName: "fetch", kind: "Async" }),
+    const matcher = new InstrumentationMatcher([
+      config("fetch_sm", { functionName: "fetch" }),
     ]);
     const transformer = matcher.getTransformer(
       TEST_MODULE_NAME,

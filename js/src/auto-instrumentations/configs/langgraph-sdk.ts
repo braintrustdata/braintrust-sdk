@@ -16,7 +16,6 @@ export const langGraphSDKConfigs: InstrumentationConfig[] = [
     functionQuery: {
       className: "RunsClient",
       methodName,
-      kind: methodName === "stream" ? ("Sync" as const) : ("Async" as const),
     },
   })),
 );

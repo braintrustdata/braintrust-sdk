@@ -56,8 +56,4 @@ export class InstrumentationMatcher {
 
     return this.transformers[id];
   }
-
-  free(): void {
-    this.transformers = {};
-  }
 }

@@ -14,7 +14,6 @@ export const cloudflareThinkConfigs: InstrumentationConfig[] = [
     functionQuery: {
       className: "Think",
       methodName: "_runInferenceLoop",
-      kind: "Async",
     },
   },
 ];

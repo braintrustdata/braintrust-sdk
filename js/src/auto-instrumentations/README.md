@@ -19,7 +19,6 @@ const config = {
   functionQuery: {
     className: "Completions",
     methodName: "create",
-    kind: "Async",
   },
 };
 ```
@@ -38,7 +37,9 @@ same identifier.
 Generated wrappers lazily look up invocation hooks in `globalThis.__braintrust_invocation_hooks_v2`.
 They pass the original target, receiver, complete arguments, and module version to `invoke`.
 They do not emit tracing events, create spans, or select tracing operators.
-Legacy `functionQuery.kind` and `callbackIndex` fields remain accepted for source compatibility but do not select runtime tracing behavior.
+The transformer and config schema are SDK internals, with no upstream or downstream compatibility contract.
+Configs only select functions; interceptors own synchronous, asynchronous, and callback behavior.
+Bundler plugins use the SDK's built-in configs and do not accept raw Orchestrion configs.
 
 Calls run normally before a hook is registered.
 Lookup retries until registration succeeds, then caches the hook.

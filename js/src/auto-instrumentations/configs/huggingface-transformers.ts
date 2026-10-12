@@ -45,7 +45,6 @@ export const huggingFaceTransformersConfigs: InstrumentationConfig[] =
       },
       functionQuery: {
         functionName: "pipeline",
-        kind: "Async",
       },
     },
     ...pipelineClasses.map((className) => ({
@@ -58,7 +57,6 @@ export const huggingFaceTransformersConfigs: InstrumentationConfig[] =
       functionQuery: {
         className,
         methodName: "_call",
-        kind: "Async" as const,
       },
     })),
   ]);

@@ -112,7 +112,6 @@ export default defineConfig([
   },
   {
     entry: [
-      "src/auto-instrumentations/index.ts",
       "src/auto-instrumentations/loader/cjs-patch.ts",
       "src/auto-instrumentations/loader/get-package-version.ts",
       "src/auto-instrumentations/bundler/vite.ts",

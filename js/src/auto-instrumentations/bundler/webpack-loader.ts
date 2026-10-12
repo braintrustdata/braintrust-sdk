@@ -21,7 +21,7 @@
  * ```
  */
 
-import { create } from "../orchestrion-js";
+import { InstrumentationMatcher } from "../orchestrion-js";
 import { extname, join, sep } from "path";
 import { readFileSync } from "fs";
 import moduleDetailsFromPath from "module-details-from-path";
@@ -47,19 +47,16 @@ function getModuleVersion(basedir: string): string | undefined {
   return undefined;
 }
 
-type Matcher = ReturnType<typeof create>;
 type ModuleType = "esm" | "cjs";
 
 // Matcher cache keyed by config hash for cache invalidation.
-const matcherCache = new Map<string, Matcher>();
+const matcherCache = new Map<string, InstrumentationMatcher>();
 
 /**
  * Get or create a matcher instance, caching by config hash
  */
-function getMatcher(options: BundlerPluginOptions): Matcher {
-  const allInstrumentations = getDefaultAutoInstrumentationConfigs(
-    options.instrumentations,
-  );
+function getMatcher(): InstrumentationMatcher {
+  const allInstrumentations = getDefaultAutoInstrumentationConfigs();
   const configHash = JSON.stringify({ allInstrumentations });
 
   if (matcherCache.has(configHash)) {
@@ -72,15 +69,10 @@ function getMatcher(options: BundlerPluginOptions): Matcher {
     }
   }
 
-  const matcher = create(allInstrumentations);
+  const matcher = new InstrumentationMatcher(allInstrumentations);
   matcherCache.set(configHash, matcher);
   return matcher;
 }
-
-// Cleanup on process exit
-process.on("exit", () => {
-  matcherCache.clear();
-});
 
 /**
  * Webpack loader that instruments JavaScript code using code-transformer.
@@ -122,7 +114,7 @@ function codeTransformerLoader(
 
   const moduleName =
     getPackageName(moduleDetails.basedir) ?? moduleDetails.name;
-  // Normalize the module path for Windows compatibility (WASM transformer expects forward slashes)
+  // Normalize the module path for Windows compatibility (the matcher expects forward slashes)
   const normalizedModulePath = moduleDetails.path.replace(/\\/g, "/");
 
   const patched = applySpecialCasePatch({
@@ -141,7 +133,7 @@ function codeTransformerLoader(
     return callback(null, code, inputSourceMap);
   }
 
-  const matcher = getMatcher(options);
+  const matcher = getMatcher();
   const transformer = matcher.getTransformer(
     moduleName,
     moduleVersion,

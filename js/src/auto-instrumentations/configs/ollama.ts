@@ -24,7 +24,6 @@ export const ollamaConfigs: InstrumentationConfig[] = [
       functionQuery: {
         className: "Ollama",
         methodName,
-        kind: "Async" as const,
       },
     })),
   ),

@@ -11,7 +11,6 @@ export const openRouterAgentConfigs: InstrumentationConfig[] = [
     },
     functionQuery: {
       functionName: "callModel",
-      kind: "Sync",
     },
   },
 ];

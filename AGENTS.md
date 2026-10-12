@@ -31,6 +31,12 @@ Keep public exports minimal. Generally, export only the requested runtime APIs a
 
 ## Instrumentation
 
+Our vendored Orchestrion implementation is purely internal to the Braintrust SDK.
+Downstream packages must not depend on its APIs, config schema, generated helpers, or compatibility with upstream Orchestrion.
+Do not expose these internals through SDK entrypoints or public configuration options.
+Change the transformer and its SDK callers together, and remove unused upstream features instead of retaining compatibility scaffolding.
+Preserve instrumented application behavior, coordination between SDK copies, and upstream license notices.
+
 Use the normal Orchestrion config plus plugin/channel path by default. Special-case source patches should be rare exceptions only when the target SDK cannot be instrumented through the standard transformer path, and the reason should be documented next to the patch.
 
 API wrapping and span instrumentation are separate concepts.

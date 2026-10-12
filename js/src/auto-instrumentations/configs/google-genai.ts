@@ -25,7 +25,6 @@ export const googleGenAIConfigs: InstrumentationConfig[] = [
     functionQuery: {
       className: "Models",
       methodName: "generateContentInternal",
-      kind: "Async",
     },
   },
 
@@ -41,7 +40,6 @@ export const googleGenAIConfigs: InstrumentationConfig[] = [
     functionQuery: {
       className: "Models",
       methodName: "generateContentStreamInternal",
-      kind: "Async",
     },
   },
 
@@ -56,7 +54,6 @@ export const googleGenAIConfigs: InstrumentationConfig[] = [
     functionQuery: {
       objectName: "this",
       propertyName: "generateImages",
-      kind: "Async",
     },
   },
 
@@ -71,7 +68,6 @@ export const googleGenAIConfigs: InstrumentationConfig[] = [
     functionQuery: {
       objectName: "this",
       propertyName: "editImage",
-      kind: "Async",
     },
   },
 
@@ -88,7 +84,6 @@ export const googleGenAIConfigs: InstrumentationConfig[] = [
     functionQuery: {
       objectName: "this",
       propertyName: "generateVideos",
-      kind: "Async",
     },
   },
 
@@ -103,7 +98,6 @@ export const googleGenAIConfigs: InstrumentationConfig[] = [
     functionQuery: {
       className: "Models",
       methodName: "embedContent",
-      kind: "Async",
     },
   },
 
@@ -119,7 +113,6 @@ export const googleGenAIConfigs: InstrumentationConfig[] = [
     functionQuery: {
       className: "Models",
       methodName: "embedContentInternal",
-      kind: "Async",
     },
   },
 
@@ -135,7 +128,6 @@ export const googleGenAIConfigs: InstrumentationConfig[] = [
     functionQuery: {
       className: "HttpResponse",
       methodName: "json",
-      kind: "Async",
     },
   },
 
@@ -150,7 +142,6 @@ export const googleGenAIConfigs: InstrumentationConfig[] = [
     functionQuery: {
       className: "BaseInteractions",
       methodName: "create",
-      kind: "Async",
     },
   },
 ];

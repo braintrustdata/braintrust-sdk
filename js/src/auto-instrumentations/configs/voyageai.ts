@@ -42,7 +42,6 @@ export const voyageAIConfigs: InstrumentationConfig[] = [
         functionQuery: {
           className: "VoyageAIClient",
           methodName,
-          kind: "Async" as const,
         },
       }),
     ),

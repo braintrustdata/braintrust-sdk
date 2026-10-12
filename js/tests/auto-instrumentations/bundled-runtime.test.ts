@@ -300,28 +300,11 @@ describe("Bundled Runtime", () => {
     },
   );
 
-  it("applies custom instrumentation configs passed to the plugin", async () => {
+  it("leaves unconfigured dependencies uninstrumented", async () => {
     const events = recordChannel("orchestrion:custom-sdk:process");
     const bundled = await bundle(
       "esbuild",
       path.join(fixturesDir, "custom-sdk-app.mjs"),
-      {
-        instrumentations: [
-          {
-            channelName: "process",
-            module: {
-              name: "custom-sdk",
-              versionRange: ">=1.0.0",
-              filePath: "index.mjs",
-            },
-            functionQuery: {
-              className: "CustomAPI",
-              methodName: "process",
-              kind: "Async",
-            },
-          },
-        ],
-      },
     );
     const api = new bundled.CustomAPI(async (params: { data: string }) => ({
       processed: params.data,
@@ -330,7 +313,6 @@ describe("Bundled Runtime", () => {
     await expect(api.process({ data: "test" })).resolves.toEqual({
       processed: "test",
     });
-    expect(eventTypes(events)).toEqual(PROMISE_LIFECYCLE);
-    expect(events[0].context.arguments[0]).toEqual({ data: "test" });
+    expect(events).toEqual([]);
   });
 });

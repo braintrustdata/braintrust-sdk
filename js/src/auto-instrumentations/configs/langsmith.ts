@@ -11,7 +11,6 @@ export const langSmithConfigs: InstrumentationConfig[] = [
       functionQuery: {
         className: "Client",
         methodName: "createRun",
-        kind: "Async" as const,
       },
     },
     {
@@ -20,7 +19,6 @@ export const langSmithConfigs: InstrumentationConfig[] = [
       functionQuery: {
         className: "Client",
         methodName: "updateRun",
-        kind: "Async" as const,
       },
     },
     {
@@ -29,7 +27,6 @@ export const langSmithConfigs: InstrumentationConfig[] = [
       functionQuery: {
         className: "Client",
         methodName: "batchIngestRuns",
-        kind: "Async" as const,
       },
     },
   ]),

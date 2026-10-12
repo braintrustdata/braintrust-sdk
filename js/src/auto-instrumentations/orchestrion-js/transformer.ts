@@ -7,7 +7,7 @@ import { generate } from "astring";
 import esquery from "esquery";
 import { parse } from "meriyah";
 import { SourceMapGenerator } from "source-map";
-import { transforms, type TransformState } from "./transforms";
+import { wrapInvocation, type TransformState } from "./transforms";
 import type {
   FunctionQuery,
   InstrumentationConfig,
@@ -42,7 +42,7 @@ export class Transformer {
   }
 
   /**
-   * Instruments `code` by injecting global tracing hooks around the
+   * Instruments `code` by injecting global invocation hooks around the
    * target functions defined by this transformer's configs.
    */
   transform(code: string | Buffer, moduleType: ModuleType): TransformOutput {
@@ -90,10 +90,14 @@ export class Transformer {
         functionQuery: resolvedFunctionQuery,
       };
 
-      esquery.traverse(ast, esquery.parse(query), (...args: any[]) => {
-        injectionCount++;
-        this.visit(state, ...args);
-      });
+      esquery.traverse(
+        ast,
+        esquery.parse(query),
+        (node: AnyNode, _parent: AnyNode, ancestry: AnyNode[]) => {
+          injectionCount++;
+          this.visit(state, node, ancestry);
+        },
+      );
     }
 
     if (injectionCount === 0 && this.configs.length > 0) {
@@ -135,15 +139,15 @@ export class Transformer {
     return { code };
   }
 
-  free(): void {}
-
-  private visit(state: TransformState, ...args: any[]): void {
-    const transform = transforms.invoke;
-    const { index = 0 } = state.functionQuery as any;
-    const [node] = args;
+  private visit(
+    state: TransformState,
+    node: AnyNode,
+    ancestry: AnyNode[],
+  ): void {
+    const { index = 0 } = state.functionQuery;
     const type = node.init?.type || node.type;
 
-    // Class nodes are visited for traceInstanceMethod, but index matching only
+    // Class nodes are visited for wrapInstanceMethod, but index matching only
     // counts function nodes.
     if (type !== "ClassDeclaration" && type !== "ClassExpression") {
       if (node.type === "VariableDeclarator") {
@@ -158,7 +162,7 @@ export class Transformer {
       }
     }
 
-    (transform as (...args: any[]) => void)(state, ...args);
+    wrapInvocation(state, node, ancestry);
   }
 
   private collectExportAliases(ast: AnyNode): ExportAliases {

@@ -18,7 +18,6 @@ export const cloudflareAIChatConfigs: InstrumentationConfig[] = [
     functionQuery: {
       className: "AIChatAgent",
       methodName: "_runExclusiveChatTurn",
-      kind: "Async",
     },
   },
 ];

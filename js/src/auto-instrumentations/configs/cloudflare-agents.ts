@@ -14,7 +14,6 @@ export const cloudflareAgentsConfigs: InstrumentationConfig[] = [
     functionQuery: {
       className: "Agent",
       methodName: "runAgentTool",
-      kind: "Async",
     },
   },
 ];
