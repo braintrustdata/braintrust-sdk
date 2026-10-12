@@ -1,4 +1,4 @@
-import { expect, test, describe, beforeEach, afterEach } from "vitest";
+import { expect, test, describe, beforeEach, afterEach, vi } from "vitest";
 import {
   _exportsForTestingOnly,
   initLogger,
@@ -7,20 +7,27 @@ import {
   setMaskingFunction,
 } from "./logger";
 import { configureNode } from "./node/config";
+import { setSpanCustomizers } from "./span-customizer";
+import {
+  INSTRUMENTATION_NAMES,
+  withSpanInstrumentationName,
+} from "./span-origin";
 
 configureNode();
 
 describe("masking functionality", () => {
   let memoryLogger: any;
 
-  beforeEach(() => {
-    _exportsForTestingOnly.simulateLoginForTests();
+  beforeEach(async () => {
+    await _exportsForTestingOnly.simulateLoginForTests();
     memoryLogger = _exportsForTestingOnly.useTestBackgroundLogger();
   });
 
   afterEach(() => {
+    setSpanCustomizers([]);
     setMaskingFunction(null); // Clear masking function
     _exportsForTestingOnly.clearTestBackgroundLogger();
+    vi.restoreAllMocks();
   });
 
   test("basic masking with logger", async () => {
@@ -413,7 +420,7 @@ describe("masking functionality", () => {
 
     expect(events).toHaveLength(2);
 
-    // First event should be masked (masking was applied at flush time)
+    // Disabling before flush also affects previously queued records.
     expect(events[0].input).toEqual({ password: "visible1" });
     // Second event should not be masked
     expect(events[1].input).toEqual({ password: "visible2" });
@@ -478,151 +485,138 @@ describe("masking functionality", () => {
     expect(event.input.normal_number).toBe(123);
   });
 
-  test("masking function with error", async () => {
-    const brokenMaskingFunction = (data: any): any => {
-      if (typeof data === "object" && data !== null) {
-        if (data.password) {
-          // Simulate an error when trying to mask a sensitive field
-          throw new Error(
-            "Cannot mask sensitive field 'password' - internal masking error",
-          );
-        }
-        if (data.accuracy !== undefined) {
-          // Trigger error for scores field
-          throw new TypeError("Cannot process numeric score");
-        }
-
-        const masked: any = Array.isArray(data) ? [] : {};
-        for (const [key, value] of Object.entries(data)) {
-          if (key === "secret" && typeof value === "string") {
-            // Another type of error
-            1 / 0; // This will be Infinity, not an error
-            throw new Error("Division by zero error");
-          } else if (key === "complex" && Array.isArray(value)) {
-            // Try to access non-existent index
-            const item = value[100];
-            if (!item) {
-              throw new RangeError("Index out of bounds");
-            }
-          } else if (typeof value === "object") {
-            masked[key] = brokenMaskingFunction(value);
-          } else {
-            masked[key] = value;
-          }
-        }
-        return masked;
-      }
-      return data;
-    };
-
-    setMaskingFunction(brokenMaskingFunction);
+  test("masking failures redact fields without leaking exception details", async () => {
+    setMaskingFunction((data) => {
+      if (data === "safe output") return data;
+      throw new TypeError("private exception detail");
+    });
 
     const logger = initLogger({
       projectName: "test",
       projectId: "test-project-id",
     });
-
-    // Test various error scenarios
     logger.log({
-      input: { query: "login", password: "secret123" },
-      output: { status: "success" },
-      metadata: { safe: "no-error" },
+      input: { password: "private input" },
+      output: "safe output",
+      expected: "private expected",
+      metadata: { token: "private metadata" },
+      scores: { accuracy: 0.85 },
+      metrics: { accuracy: 0.95 },
+      error: "existing application error",
     });
 
-    logger.log({
-      input: { data: "safe", secret: "will-cause-error" },
-      output: { result: "ok" },
-    });
-
-    logger.log({
-      input: { complex: ["a", "b"], other: "data" },
-      expected: { values: ["x", "y", "z"] },
-    });
-
-    await memoryLogger.flush();
-    const events = await memoryLogger.drain();
-
-    expect(events).toHaveLength(3);
-
-    // First event - error when masking input.password
-    const event1 = events[0];
-    expect(event1.input).toBe("ERROR: Failed to mask field 'input' - Error");
-    expect(event1.output).toEqual({ status: "success" });
-    expect(event1.metadata).toEqual({ safe: "no-error" });
-
-    // Second event - error when masking input.secret
-    const event2 = events[1];
-    expect(event2.input).toBe("ERROR: Failed to mask field 'input' - Error");
-    expect(event2.output).toEqual({ result: "ok" });
-
-    // Third event - error when masking input.complex
-    const event3 = events[2];
-    expect(event3.input).toBe(
-      "ERROR: Failed to mask field 'input' - RangeError",
-    );
-    expect(event3.expected).toEqual({ values: ["x", "y", "z"] });
-
-    // Test with a score that triggers an error
-    logger.log({
-      input: { data: "test" },
-      scores: { accuracy: 0.95 }, // Will trigger error
-    });
-
-    await memoryLogger.flush();
-    const events2 = await memoryLogger.drain();
-
-    // Should include the new event
-    expect(events2).toHaveLength(1);
-    const scoreEvent = events2[0];
-
-    // Scores should be dropped and error should be logged
-    expect(scoreEvent.scores).toBeUndefined();
-    expect(scoreEvent.error).toBe(
-      "ERROR: Failed to mask field 'scores' - TypeError",
-    );
-
-    // Test with metrics that triggers an error
-    logger.log({
-      input: { data: "test2" },
-      output: "result2",
-      metrics: { accuracy: 0.95 }, // Will trigger error
-    });
-
-    await memoryLogger.flush();
-    const events3 = await memoryLogger.drain();
-
-    expect(events3).toHaveLength(1);
-    const metricsEvent = events3[0];
-
-    // Metrics should be dropped and error should be logged
-    expect(metricsEvent.metrics).toBeUndefined();
-    expect(metricsEvent.error).toBe(
-      "ERROR: Failed to mask field 'metrics' - TypeError",
-    );
-
-    // Test with both scores and metrics failing
-    logger.log({
-      input: { data: "test3" },
-      output: "result3",
-      scores: { accuracy: 0.85 }, // Will trigger error
-      metrics: { accuracy: 0.95 }, // Will also trigger error
-    });
-
-    await memoryLogger.flush();
-    const events4 = await memoryLogger.drain();
-
-    expect(events4).toHaveLength(1);
-    const bothEvent = events4[0];
-
-    // Both should be dropped and errors should be concatenated
-    expect(bothEvent.scores).toBeUndefined();
-    expect(bothEvent.metrics).toBeUndefined();
-    expect(bothEvent.error).toContain(
-      "ERROR: Failed to mask field 'scores' - TypeError",
-    );
-    expect(bothEvent.error).toContain(
-      "ERROR: Failed to mask field 'metrics' - TypeError",
-    );
-    expect(bothEvent.error).toContain("; "); // Check that errors are joined
+    const [event] = await memoryLogger.drain();
+    expect(event.input).toEqual(expect.any(String));
+    expect(event.expected).toEqual(expect.any(String));
+    expect(event.metadata).toEqual({ error: expect.any(String) });
+    expect(event.output).toBe("safe output");
+    expect(event.scores).toBeUndefined();
+    expect(event.metrics).toBeUndefined();
+    expect(event.error).toContain("existing application error");
+    expect(event.error).toContain("scores");
+    expect(event.error).toContain("metrics");
+    expect(JSON.stringify(event)).not.toContain("private");
   });
+
+  test("late masking sees merged fields on manual spans", async () => {
+    const logger = initLogger({
+      projectName: "test",
+      projectId: "test-project-id",
+    });
+    const span = logger.startSpan({
+      name: "manual",
+      event: { metadata: { password: "private" } },
+    });
+    span.log({ metadata: { redact: true } });
+    span.end();
+
+    setMaskingFunction((data) => {
+      if (data && typeof data === "object" && "redact" in data) {
+        return { ...data, password: "redacted" };
+      }
+      return data;
+    });
+
+    expect(await memoryLogger.drain()).toEqual([
+      expect.objectContaining({
+        id: span.id,
+        project_id: "test-project-id",
+        metadata: { password: "redacted", redact: true },
+      }),
+    ]);
+  });
+
+  test("dropped customizer records never reach masking or merge into successful records", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    setSpanCustomizers([
+      {
+        onSpanExport(data) {
+          if (data.output === "private") throw new Error("private failure");
+          return data;
+        },
+      },
+    ]);
+    const mask = vi.fn((data: unknown) => (data === "safe" ? "masked" : data));
+    setMaskingFunction(mask);
+    const span = initLogger({
+      projectName: "test",
+      projectId: "test-project-id",
+    }).startSpan({ name: "manual" });
+    span.log({ output: "private", metadata: { secret: "private" } });
+    span.log({ output: "safe" });
+    span.end();
+
+    const events = await memoryLogger.drain();
+    expect(events).toEqual([
+      expect.objectContaining({ id: span.id, output: "masked" }),
+    ]);
+    expect(JSON.stringify(events)).not.toContain("private");
+    expect(JSON.stringify(mask.mock.calls)).not.toContain("private");
+  });
+
+  test.each(["manual", "instrumented"])(
+    "masking runs after %s span customizers and can be replaced or disabled independently",
+    async (origin) => {
+      setSpanCustomizers([
+        {
+          onSpanExport(data) {
+            if (typeof data.output === "string") data.output += ":customized";
+            return data;
+          },
+        },
+      ]);
+      const logger = initLogger({
+        projectName: "test",
+        projectId: "test-project-id",
+      });
+      const logOutput = () => {
+        const span = logger.startSpan(
+          origin === "instrumented"
+            ? withSpanInstrumentationName(
+                { name: "provider" },
+                INSTRUMENTATION_NAMES.OPENAI,
+              )
+            : { name: "manual" },
+        );
+        span.log({ output: "private" });
+        span.end();
+      };
+      setMaskingFunction((data) =>
+        typeof data === "string" ? `${data}:obsolete` : data,
+      );
+      setMaskingFunction((data) =>
+        data === "private:customized" ? "redacted" : data,
+      );
+      logOutput();
+      expect(await memoryLogger.drain()).toEqual([
+        expect.objectContaining({ output: "redacted" }),
+      ]);
+
+      setMaskingFunction(null);
+      logOutput();
+      expect(await memoryLogger.drain()).toEqual([
+        expect.objectContaining({ output: "private:customized" }),
+      ]);
+    },
+  );
 });

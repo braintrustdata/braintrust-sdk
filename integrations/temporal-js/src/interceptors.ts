@@ -70,6 +70,7 @@ class BraintrustActivityInterceptor implements ActivityInboundCallsInterceptor {
       getWorkflowTraceContext(runId) ?? deserializeTraceContext(input.headers);
 
     const span = braintrust.startSpan({
+      [Symbol.for("braintrust.spanInstrumentationName")]: "temporal",
       name: `temporal.activity.${info.activityType}`,
       spanAttributes: { type: "task" },
       parent,

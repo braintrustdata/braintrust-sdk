@@ -62,6 +62,7 @@ export type AsyncScoringControl =
               type: "trace";
             };
         idempotency_key?: string | undefined;
+        triggered_xact_id?: string | number | undefined;
       }>;
     }
   | {
@@ -180,9 +181,17 @@ export interface ChatCompletionContentPartFileWithTitle {
   type: "file";
   cache_control?: CacheControl | undefined;
 }
+export interface ChatCompletionContentPartInputAudioWithTitle {
+  input_audio: { data: string; format: "wav" | "mp3" };
+  type: "input_audio";
+  cache_control?:
+    | { type: "ephemeral"; ttl?: "5m" | "1h" | undefined }
+    | undefined;
+}
 export type ChatCompletionContentPart =
   | ChatCompletionContentPartText
   | ChatCompletionContentPartImageWithTitle
+  | ChatCompletionContentPartInputAudioWithTitle
   | ChatCompletionContentPartFileWithTitle;
 export interface ChatCompletionContentPartText {
   text: string;
@@ -314,6 +323,7 @@ export type ModelParams =
           };
       n?: number;
       stop?: Array<string>;
+      chat_template_kwargs?: { enable_thinking?: boolean; [key: string]: any };
       reasoning_effort?: "none" | "minimal" | "low" | "medium" | "high";
       verbosity?: "low" | "medium" | "high";
       [key: string]: any;

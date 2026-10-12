@@ -383,7 +383,6 @@ class FlueObserveBridge {
       safeLog(state.span, {
         ...(event.isError ? { error: toLoggedError(event.error) } : {}),
         metadata: {
-          ...state.metadata,
           ...extractEventMetadata(event),
           ...(event.isError !== undefined
             ? { "flue.is_error": event.isError }
@@ -441,7 +440,6 @@ class FlueObserveBridge {
     const output =
       operationOutput(event) ?? outputFromAgentTurn(state.latestAgentOutput);
     const metadata = {
-      ...state.metadata,
       ...extractEventMetadata(event),
       ...(event.isError !== undefined
         ? { "flue.is_error": event.isError }
@@ -490,7 +488,6 @@ class FlueObserveBridge {
       ...(provider ? { "flue.provider": provider } : {}),
       ...(event.purpose ? { "flue.turn_purpose": event.purpose } : {}),
       ...(reasoning ? { reasoning } : {}),
-      ...turnInput.metadata,
     };
     const parent = this.parentSpanForTurn(event);
     const span = startFlueSpan(parent, {
@@ -499,7 +496,7 @@ class FlueObserveBridge {
       startTime: eventTime(event.timestamp),
       event: {
         input: turnInput.messages,
-        metadata,
+        metadata: { ...metadata, ...turnInput.metadata },
       },
     });
 
@@ -526,7 +523,6 @@ class FlueObserveBridge {
     const output = event.response?.output;
     const error = event.response?.error;
     const metadata = {
-      ...state.metadata,
       ...extractEventMetadata(event),
       ...(api ? { "flue.api": api } : {}),
       ...(model ? { model, "flue.model": model } : {}),
@@ -593,7 +589,6 @@ class FlueObserveBridge {
     const output = flueToolOutput(event);
     const error = flueToolError(event);
     const metadata = {
-      ...state.metadata,
       ...extractEventMetadata(event),
       ...(event.toolName ? { "flue.tool_name": event.toolName } : {}),
       "flue.tool_call_id": event.toolCallId,
@@ -649,7 +644,6 @@ class FlueObserveBridge {
         ? { error: toLoggedError(event.errorInfo ?? event.result) }
         : {}),
       metadata: {
-        ...state.metadata,
         ...extractEventMetadata(event),
         ...(event.agent ? { "flue.agent": event.agent } : {}),
         ...(event.isError !== undefined
@@ -696,7 +690,6 @@ class FlueObserveBridge {
     const state =
       this.compactionsByKey.get(key) ?? this.startSyntheticCompaction(event);
     const metadata = {
-      ...state.metadata,
       ...extractEventMetadata(event),
       ...(event.usage ? { "flue.usage": event.usage } : {}),
     };
@@ -889,7 +882,6 @@ class FlueObserveBridge {
         index === turnEntries.length - 1 &&
         operationOutput !== undefined;
       safeLog(state.span, {
-        metadata: state.metadata,
         metrics: metricsFromUsage(usage),
         ...(shouldLogOperationOutput ? { output: operationOutput } : {}),
       });
@@ -918,7 +910,6 @@ class FlueObserveBridge {
         continue;
       }
       safeLog(state.span, {
-        metadata: state.metadata,
         metrics: durationMetrics(event.durationMs),
         output: { completed: true },
       });
@@ -958,10 +949,7 @@ class FlueObserveBridge {
       if (!stateMatchesRun(state, event.runId)) {
         continue;
       }
-      safeLog(state.span, {
-        metadata: state.metadata,
-        output: { completed: true },
-      });
+      safeLog(state.span, { output: { completed: true } });
       safeEnd(state.span, endTime);
       this.compactionsByKey.delete(key);
     }
@@ -970,12 +958,9 @@ class FlueObserveBridge {
       if (!stateMatchesRun(state, event.runId)) {
         continue;
       }
-      safeLog(state.span, {
-        metadata: state.metadata,
-        ...(state.metadata["flue.operation"] === "compact"
-          ? { output: { completed: true } }
-          : {}),
-      });
+      if (state.metadata["flue.operation"] === "compact") {
+        safeLog(state.span, { output: { completed: true } });
+      }
       safeEnd(state.span, endTime);
       this.operationsById.delete(key);
     }

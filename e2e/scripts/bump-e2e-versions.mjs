@@ -20,7 +20,9 @@ const INSTALL_SECRET_ENV_VARS = [
   "BRAINTRUST_API_KEY",
   "CO_API_KEY",
   "COHERE_API_KEY",
+  "ELEVENLABS_API_KEY",
   "CURSOR_API_KEY",
+  "DEEPSEEK_API_KEY",
   "GEMINI_API_KEY",
   "GH_TOKEN",
   "GITHUB_TOKEN",
@@ -31,6 +33,7 @@ const INSTALL_SECRET_ENV_VARS = [
   "MISTRAL_API_KEY",
   "OPENAI_API_KEY",
   "OPENROUTER_API_KEY",
+  "TYPESAFE_API_KEY",
 ];
 
 const rawArgs = process.argv.slice(2).filter((arg) => arg !== "--");

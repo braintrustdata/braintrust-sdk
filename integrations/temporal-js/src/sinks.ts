@@ -42,6 +42,7 @@ export function createBraintrustSinks(): InjectedSinks<BraintrustSinks> {
           workflowSpanId?: string,
         ) => {
           const span = braintrust.startSpan({
+            [Symbol.for("braintrust.spanInstrumentationName")]: "temporal",
             name: `temporal.workflow.${info.workflowType}`,
             spanAttributes: { type: "task" },
             parent: parentContext,

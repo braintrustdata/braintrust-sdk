@@ -11,6 +11,8 @@ describe("package exports", () => {
       [
         ".",
         "./apply-auto-instrumentation",
+        "./custom-views",
+        "./preprocessors",
         "./edge-light",
         "./esbuild",
         "./hook.mjs",

@@ -5,6 +5,1987 @@
       "type": "task",
       "children": [
         {
+          "name": "ai-sdk-direct-model-generate-operation",
+          "children": [
+            {
+              "name": "doGenerate",
+              "type": "llm",
+              "children": [],
+              "input": {
+                "maxOutputTokens": 24,
+                "prompt": [
+                  {
+                    "content": [
+                      {
+                        "text": "Reply with the single token PARIS and no punctuation.",
+                        "type": "text"
+                      }
+                    ],
+                    "role": "user"
+                  }
+                ],
+                "temperature": 0
+              },
+              "output": {
+                "content": [
+                  {
+                    "providerMetadata": {
+                      "openai": {
+                        "itemId": "<itemId:2>"
+                      }
+                    },
+                    "text": "PARIS",
+                    "type": "text"
+                  }
+                ],
+                "finishReason": {
+                  "unified": "stop"
+                },
+                "providerMetadata": {
+                  "openai": {
+                    "responseId": "<responseId:1>",
+                    "serviceTier": "default"
+                  }
+                },
+                "response": {
+                  "body": "<omitted>",
+                  "modelId": "gpt-4o-mini-2024-07-18",
+                  "timestamp": "<timestamp>"
+                },
+                "usage": {
+                  "inputTokens": {
+                    "cacheRead": 0,
+                    "noCache": 18,
+                    "total": 18
+                  },
+                  "outputTokens": {
+                    "reasoning": 0,
+                    "text": 3,
+                    "total": 3
+                  },
+                  "raw": {
+                    "input_tokens": 18,
+                    "input_tokens_details": {
+                      "cached_tokens": 0
+                    },
+                    "output_tokens": 3,
+                    "output_tokens_details": {
+                      "reasoning_tokens": 0
+                    }
+                  }
+                },
+                "warnings": []
+              },
+              "metadata": {
+                "braintrust": {
+                  "integration_name": "ai-sdk",
+                  "sdk_language": "typescript"
+                },
+                "finish_reason": {
+                  "unified": "stop"
+                },
+                "model": "gpt-4o-mini-2024-07-18",
+                "provider": "openai.responses"
+              },
+              "metrics": {
+                "completion_reasoning_tokens": 0,
+                "completion_tokens": 3,
+                "prompt_cached_tokens": 0,
+                "prompt_tokens": 18,
+                "reasoning_tokens": 0,
+                "tokens": 21
+              }
+            }
+          ],
+          "metadata": {
+            "operation": "direct-model-generate",
+            "testRunId": "<run:1>"
+          }
+        },
+        {
+          "name": "ai-sdk-wrapped-model-generate-operation",
+          "children": [
+            {
+              "name": "generateText",
+              "type": "function",
+              "children": [
+                {
+                  "name": "doGenerate",
+                  "type": "llm",
+                  "children": [],
+                  "input": {
+                    "maxOutputTokens": 24,
+                    "messages": [
+                      {
+                        "content": "Reply with the single token PARIS and no punctuation.",
+                        "role": "user"
+                      }
+                    ],
+                    "model": {
+                      "modelId": "gpt-4o-mini-2024-07-18",
+                      "provider": "openai.responses"
+                    },
+                    "temperature": 0
+                  },
+                  "output": {
+                    "content": [
+                      {
+                        "providerMetadata": {
+                          "openai": {
+                            "itemId": "<itemId:2>"
+                          }
+                        },
+                        "text": "PARIS",
+                        "type": "text"
+                      }
+                    ],
+                    "finishReason": "stop",
+                    "providerMetadata": {
+                      "openai": {
+                        "responseId": "<responseId:1>",
+                        "serviceTier": "default"
+                      }
+                    },
+                    "response": {},
+                    "usage": {
+                      "inputTokenDetails": {
+                        "cacheReadTokens": 0,
+                        "noCacheTokens": 18
+                      },
+                      "inputTokens": 18,
+                      "outputTokenDetails": {
+                        "reasoningTokens": 0,
+                        "textTokens": 3
+                      },
+                      "outputTokens": 3,
+                      "raw": {
+                        "input_tokens": 18,
+                        "input_tokens_details": {
+                          "cached_tokens": 0
+                        },
+                        "output_tokens": 3,
+                        "output_tokens_details": {
+                          "reasoning_tokens": 0
+                        }
+                      },
+                      "totalTokens": 21
+                    }
+                  },
+                  "metadata": {
+                    "braintrust": {
+                      "integration_name": "ai-sdk",
+                      "sdk_language": "typescript"
+                    },
+                    "model": "gpt-4o-mini-2024-07-18",
+                    "provider": "openai.responses"
+                  },
+                  "metrics": {
+                    "completion_tokens": 3,
+                    "prompt_cached_tokens": 0,
+                    "prompt_tokens": 18,
+                    "tokens": 21
+                  }
+                }
+              ],
+              "input": {
+                "maxOutputTokens": 24,
+                "maxRetries": 2,
+                "messages": [
+                  {
+                    "content": "Reply with the single token PARIS and no punctuation.",
+                    "role": "user"
+                  }
+                ],
+                "model": {
+                  "modelId": "gpt-4o-mini-2024-07-18",
+                  "provider": "openai.responses"
+                },
+                "temperature": 0
+              },
+              "output": {
+                "content": [
+                  {
+                    "providerMetadata": {
+                      "openai": {
+                        "itemId": "<itemId:2>"
+                      }
+                    },
+                    "text": "PARIS",
+                    "type": "text"
+                  }
+                ],
+                "finishReason": "stop",
+                "providerMetadata": {
+                  "openai": {
+                    "responseId": "<responseId:3>",
+                    "serviceTier": "default"
+                  }
+                },
+                "response": {
+                  "messages": [
+                    {
+                      "content": [
+                        {
+                          "providerOptions": {
+                            "openai": {
+                              "itemId": "<itemId:2>"
+                            }
+                          },
+                          "text": "PARIS",
+                          "type": "text"
+                        }
+                      ],
+                      "role": "assistant"
+                    }
+                  ],
+                  "modelId": "gpt-4o-mini-2024-07-18",
+                  "timestamp": "<timestamp>"
+                },
+                "responseMessages": "<omitted>",
+                "steps": [
+                  {
+                    "callId": "<callId:1>",
+                    "content": [
+                      {
+                        "providerMetadata": {
+                          "openai": {
+                            "itemId": "<itemId:2>"
+                          }
+                        },
+                        "text": "PARIS",
+                        "type": "text"
+                      }
+                    ],
+                    "finishReason": "stop",
+                    "model": {
+                      "modelId": "gpt-4o-mini-2024-07-18",
+                      "provider": "openai.responses"
+                    },
+                    "providerMetadata": {
+                      "openai": {
+                        "responseId": "<responseId:3>",
+                        "serviceTier": "default"
+                      }
+                    },
+                    "response": {
+                      "messages": [
+                        {
+                          "content": [
+                            {
+                              "providerOptions": {
+                                "openai": {
+                                  "itemId": "<itemId:2>"
+                                }
+                              },
+                              "text": "PARIS",
+                              "type": "text"
+                            }
+                          ],
+                          "role": "assistant"
+                        }
+                      ],
+                      "modelId": "gpt-4o-mini-2024-07-18",
+                      "timestamp": "<timestamp>"
+                    },
+                    "runtimeContext": {},
+                    "stepNumber": 0,
+                    "toolsContext": {},
+                    "usage": {
+                      "inputTokenDetails": {
+                        "cacheReadTokens": 0,
+                        "noCacheTokens": 18
+                      },
+                      "inputTokens": 18,
+                      "outputTokenDetails": {
+                        "reasoningTokens": 0,
+                        "textTokens": 3
+                      },
+                      "outputTokens": 3,
+                      "raw": {
+                        "input_tokens": 18,
+                        "input_tokens_details": {
+                          "cached_tokens": 0
+                        },
+                        "output_tokens": 3,
+                        "output_tokens_details": {
+                          "reasoning_tokens": 0
+                        }
+                      },
+                      "totalTokens": 21
+                    },
+                    "warnings": []
+                  }
+                ],
+                "text": "PARIS",
+                "toolCalls": [],
+                "toolResults": [],
+                "totalUsage": {
+                  "inputTokenDetails": {
+                    "cacheReadTokens": 0,
+                    "noCacheTokens": 18
+                  },
+                  "inputTokens": 18,
+                  "outputTokenDetails": {
+                    "reasoningTokens": 0,
+                    "textTokens": 3
+                  },
+                  "outputTokens": 3,
+                  "totalTokens": 21
+                },
+                "usage": {
+                  "inputTokenDetails": {
+                    "cacheReadTokens": 0,
+                    "noCacheTokens": 18
+                  },
+                  "inputTokens": 18,
+                  "outputTokenDetails": {
+                    "reasoningTokens": 0,
+                    "textTokens": 3
+                  },
+                  "outputTokens": 3,
+                  "totalTokens": 21
+                },
+                "warnings": []
+              },
+              "metadata": {
+                "braintrust": {
+                  "integration_name": "ai-sdk",
+                  "sdk_language": "typescript"
+                },
+                "model": "gpt-4o-mini-2024-07-18",
+                "provider": "openai.responses"
+              }
+            },
+            {
+              "name": "doGenerate",
+              "type": "llm",
+              "children": [],
+              "input": {
+                "maxOutputTokens": 24,
+                "prompt": [
+                  {
+                    "content": [
+                      {
+                        "text": "Reply with the single token PARIS and no punctuation.",
+                        "type": "text"
+                      }
+                    ],
+                    "role": "user"
+                  }
+                ],
+                "temperature": 0,
+                "toolChoice": {
+                  "type": "auto"
+                }
+              },
+              "output": {
+                "content": [
+                  {
+                    "providerMetadata": {
+                      "openai": {
+                        "itemId": "<itemId:2>"
+                      }
+                    },
+                    "text": "PARIS",
+                    "type": "text"
+                  }
+                ],
+                "finishReason": {
+                  "unified": "stop"
+                },
+                "providerMetadata": {
+                  "openai": {
+                    "responseId": "<responseId:1>",
+                    "serviceTier": "default"
+                  }
+                },
+                "response": {
+                  "body": "<omitted>",
+                  "modelId": "gpt-4o-mini-2024-07-18",
+                  "timestamp": "<timestamp>"
+                },
+                "usage": {
+                  "inputTokens": {
+                    "cacheRead": 0,
+                    "noCache": 18,
+                    "total": 18
+                  },
+                  "outputTokens": {
+                    "reasoning": 0,
+                    "text": 3,
+                    "total": 3
+                  },
+                  "raw": {
+                    "input_tokens": 18,
+                    "input_tokens_details": {
+                      "cached_tokens": 0
+                    },
+                    "output_tokens": 3,
+                    "output_tokens_details": {
+                      "reasoning_tokens": 0
+                    }
+                  }
+                },
+                "warnings": []
+              },
+              "metadata": {
+                "braintrust": {
+                  "integration_name": "ai-sdk",
+                  "sdk_language": "typescript"
+                },
+                "finish_reason": {
+                  "unified": "stop"
+                },
+                "model": "gpt-4o-mini-2024-07-18",
+                "provider": "openai.responses"
+              },
+              "metrics": {
+                "completion_reasoning_tokens": 0,
+                "completion_tokens": 3,
+                "prompt_cached_tokens": 0,
+                "prompt_tokens": 18,
+                "reasoning_tokens": 0,
+                "tokens": 21
+              }
+            }
+          ],
+          "metadata": {
+            "operation": "wrapped-model-generate",
+            "testRunId": "<run:1>"
+          }
+        },
+        {
+          "name": "ai-sdk-provider-tool-generateText-operation",
+          "children": [
+            {
+              "name": "generateText",
+              "type": "function",
+              "children": [
+                {
+                  "name": "doGenerate",
+                  "type": "llm",
+                  "children": [],
+                  "input": {
+                    "maxOutputTokens": 128,
+                    "messages": [
+                      {
+                        "content": "Search the web for the official Braintrust website. Reply with its URL only.",
+                        "role": "user"
+                      }
+                    ],
+                    "model": {
+                      "modelId": "gpt-4.1-mini",
+                      "provider": "openai.responses"
+                    },
+                    "tools": [
+                      {
+                        "args": {
+                          "searchContextSize": "low"
+                        },
+                        "name": "web_search",
+                        "type": "provider"
+                      }
+                    ]
+                  },
+                  "output": {
+                    "content": [
+                      {
+                        "input": {},
+                        "providerExecuted": true,
+                        "toolCallId": "<toolCallId:2>",
+                        "toolName": "web_search",
+                        "type": "tool-call"
+                      },
+                      {
+                        "input": {},
+                        "output": {
+                          "action": {
+                            "queries": [
+                              "Search the web for the official Braintrust website. Reply with its URL only."
+                            ],
+                            "query": "Search the web for the official Braintrust website. Reply with its URL only.",
+                            "type": "search"
+                          },
+                          "sources": [
+                            {
+                              "type": "url",
+                              "url": "https://www.braintrust.com/?utm_source=openai"
+                            },
+                            {
+                              "type": "url",
+                              "url": "https://www.braintrust.dev/?utm_source=openai"
+                            },
+                            {
+                              "type": "url",
+                              "url": "https://www.usebraintrust.com/?utm_source=openai"
+                            },
+                            {
+                              "type": "url",
+                              "url": "https://www.usebraintrust.com/about?utm_source=openai"
+                            },
+                            {
+                              "type": "url",
+                              "url": "https://www.usebraintrust.com/for-talent?utm_source=openai"
+                            },
+                            {
+                              "type": "url",
+                              "url": "https://www.braintrustgroup.com/?utm_source=openai"
+                            },
+                            {
+                              "type": "url",
+                              "url": "https://braintrustagency.com/?utm_source=openai"
+                            },
+                            {
+                              "type": "url",
+                              "url": "https://ai.engineer/orgs/braintrust?utm_source=openai"
+                            },
+                            {
+                              "type": "url",
+                              "url": "https://braintrusttutors.com/?utm_source=openai"
+                            },
+                            {
+                              "type": "url",
+                              "url": "https://www.aiexplore.io/explore/braintrust?utm_source=openai"
+                            },
+                            {
+                              "type": "url",
+                              "url": "https://builtin.com/company/braintrust?utm_source=openai"
+                            },
+                            {
+                              "type": "url",
+                              "url": "https://digitalintelligence.review/company/braintrust?utm_source=openai"
+                            }
+                          ]
+                        },
+                        "providerExecuted": true,
+                        "toolCallId": "<toolCallId:2>",
+                        "toolName": "web_search",
+                        "type": "tool-result"
+                      },
+                      {
+                        "providerMetadata": {
+                          "openai": {
+                            "itemId": "<itemId:3>"
+                          }
+                        },
+                        "text": "https://www.usebraintrust.com/ ",
+                        "type": "text"
+                      }
+                    ],
+                    "finishReason": "stop",
+                    "providerMetadata": {
+                      "openai": {
+                        "responseId": "<responseId:1>",
+                        "serviceTier": "auto"
+                      }
+                    },
+                    "response": {},
+                    "usage": {
+                      "inputTokenDetails": {
+                        "cacheReadTokens": 0,
+                        "noCacheTokens": 8517
+                      },
+                      "inputTokens": 8517,
+                      "outputTokenDetails": {
+                        "reasoningTokens": 0,
+                        "textTokens": 9
+                      },
+                      "outputTokens": 9,
+                      "raw": {
+                        "input_tokens": 8517,
+                        "input_tokens_details": {
+                          "cached_tokens": 0
+                        },
+                        "output_tokens": 9,
+                        "output_tokens_details": {
+                          "reasoning_tokens": 0
+                        }
+                      },
+                      "totalTokens": 8526
+                    }
+                  },
+                  "metadata": {
+                    "braintrust": {
+                      "integration_name": "ai-sdk",
+                      "sdk_language": "typescript"
+                    },
+                    "model": "gpt-4.1-mini",
+                    "provider": "openai.responses"
+                  },
+                  "metrics": {
+                    "completion_tokens": 9,
+                    "prompt_cached_tokens": 0,
+                    "prompt_tokens": 8517,
+                    "tokens": 8526
+                  }
+                },
+                {
+                  "name": "web_search",
+                  "type": "tool",
+                  "children": [],
+                  "output": {
+                    "action": {
+                      "queries": [
+                        "Search the web for the official Braintrust website. Reply with its URL only."
+                      ],
+                      "query": "Search the web for the official Braintrust website. Reply with its URL only.",
+                      "type": "search"
+                    },
+                    "sources": [
+                      {
+                        "type": "url",
+                        "url": "https://www.braintrust.com/?utm_source=openai"
+                      },
+                      {
+                        "type": "url",
+                        "url": "https://www.braintrust.dev/?utm_source=openai"
+                      },
+                      {
+                        "type": "url",
+                        "url": "https://www.usebraintrust.com/?utm_source=openai"
+                      },
+                      {
+                        "type": "url",
+                        "url": "https://www.usebraintrust.com/about?utm_source=openai"
+                      },
+                      {
+                        "type": "url",
+                        "url": "https://www.usebraintrust.com/for-talent?utm_source=openai"
+                      },
+                      {
+                        "type": "url",
+                        "url": "https://www.braintrustgroup.com/?utm_source=openai"
+                      },
+                      {
+                        "type": "url",
+                        "url": "https://braintrustagency.com/?utm_source=openai"
+                      },
+                      {
+                        "type": "url",
+                        "url": "https://ai.engineer/orgs/braintrust?utm_source=openai"
+                      },
+                      {
+                        "type": "url",
+                        "url": "https://braintrusttutors.com/?utm_source=openai"
+                      },
+                      {
+                        "type": "url",
+                        "url": "https://www.aiexplore.io/explore/braintrust?utm_source=openai"
+                      },
+                      {
+                        "type": "url",
+                        "url": "https://builtin.com/company/braintrust?utm_source=openai"
+                      },
+                      {
+                        "type": "url",
+                        "url": "https://digitalintelligence.review/company/braintrust?utm_source=openai"
+                      }
+                    ]
+                  },
+                  "metadata": {
+                    "braintrust": {
+                      "integration_name": "ai-sdk",
+                      "sdk_language": "typescript"
+                    },
+                    "providerExecuted": true,
+                    "toolCallId": "<toolCallId:1>",
+                    "toolName": "web_search"
+                  }
+                }
+              ],
+              "input": {
+                "maxOutputTokens": 128,
+                "maxRetries": 2,
+                "messages": [
+                  {
+                    "content": "Search the web for the official Braintrust website. Reply with its URL only.",
+                    "role": "user"
+                  }
+                ],
+                "model": {
+                  "modelId": "gpt-4.1-mini",
+                  "provider": "openai.responses"
+                },
+                "toolChoice": {
+                  "toolName": "web_search",
+                  "type": "tool"
+                },
+                "tools": {
+                  "web_search": {
+                    "args": {
+                      "searchContextSize": "low"
+                    },
+                    "isProviderExecuted": true,
+                    "type": "provider"
+                  }
+                }
+              },
+              "output": {
+                "content": [
+                  {
+                    "input": {},
+                    "providerExecuted": true,
+                    "toolCallId": "<toolCallId:2>",
+                    "toolName": "web_search",
+                    "type": "tool-call"
+                  },
+                  {
+                    "input": {},
+                    "output": {
+                      "action": {
+                        "queries": [
+                          "Search the web for the official Braintrust website. Reply with its URL only."
+                        ],
+                        "query": "Search the web for the official Braintrust website. Reply with its URL only.",
+                        "type": "search"
+                      },
+                      "sources": [
+                        {
+                          "type": "url",
+                          "url": "https://www.braintrust.com/?utm_source=openai"
+                        },
+                        {
+                          "type": "url",
+                          "url": "https://www.braintrust.dev/?utm_source=openai"
+                        },
+                        {
+                          "type": "url",
+                          "url": "https://www.usebraintrust.com/?utm_source=openai"
+                        },
+                        {
+                          "type": "url",
+                          "url": "https://www.usebraintrust.com/about?utm_source=openai"
+                        },
+                        {
+                          "type": "url",
+                          "url": "https://www.usebraintrust.com/for-talent?utm_source=openai"
+                        },
+                        {
+                          "type": "url",
+                          "url": "https://www.braintrustgroup.com/?utm_source=openai"
+                        },
+                        {
+                          "type": "url",
+                          "url": "https://braintrustagency.com/?utm_source=openai"
+                        },
+                        {
+                          "type": "url",
+                          "url": "https://ai.engineer/orgs/braintrust?utm_source=openai"
+                        },
+                        {
+                          "type": "url",
+                          "url": "https://braintrusttutors.com/?utm_source=openai"
+                        },
+                        {
+                          "type": "url",
+                          "url": "https://www.aiexplore.io/explore/braintrust?utm_source=openai"
+                        },
+                        {
+                          "type": "url",
+                          "url": "https://builtin.com/company/braintrust?utm_source=openai"
+                        },
+                        {
+                          "type": "url",
+                          "url": "https://digitalintelligence.review/company/braintrust?utm_source=openai"
+                        }
+                      ]
+                    },
+                    "providerExecuted": true,
+                    "toolCallId": "<toolCallId:2>",
+                    "toolName": "web_search",
+                    "type": "tool-result"
+                  },
+                  {
+                    "providerMetadata": {
+                      "openai": {
+                        "itemId": "<itemId:3>"
+                      }
+                    },
+                    "text": "https://www.usebraintrust.com/ ",
+                    "type": "text"
+                  }
+                ],
+                "finishReason": "stop",
+                "providerMetadata": {
+                  "openai": {
+                    "responseId": "<responseId:4>",
+                    "serviceTier": "auto"
+                  }
+                },
+                "response": {
+                  "messages": [
+                    {
+                      "content": [
+                        {
+                          "input": {},
+                          "providerExecuted": true,
+                          "toolCallId": "<toolCallId:2>",
+                          "toolName": "web_search",
+                          "type": "tool-call"
+                        },
+                        {
+                          "output": {
+                            "type": "json",
+                            "value": {
+                              "action": {
+                                "queries": "[Object]",
+                                "query": "Search the web for the official Braintrust website. Reply with its URL only.",
+                                "type": "search"
+                              },
+                              "sources": [
+                                "[Object]",
+                                "[Object]",
+                                "[Object]",
+                                "[Object]",
+                                "[Object]",
+                                "[Object]",
+                                "[Object]",
+                                "[Object]",
+                                "[Object]",
+                                "[Object]",
+                                "[Object]",
+                                "[Object]"
+                              ]
+                            }
+                          },
+                          "toolCallId": "<toolCallId:2>",
+                          "toolName": "web_search",
+                          "type": "tool-result"
+                        },
+                        {
+                          "providerOptions": {
+                            "openai": {
+                              "itemId": "<itemId:3>"
+                            }
+                          },
+                          "text": "https://www.usebraintrust.com/ ",
+                          "type": "text"
+                        }
+                      ],
+                      "role": "assistant"
+                    }
+                  ],
+                  "modelId": "gpt-4.1-mini-2025-04-14",
+                  "timestamp": "<timestamp>"
+                },
+                "responseMessages": "<omitted>",
+                "steps": [
+                  {
+                    "callId": "<callId:1>",
+                    "content": [
+                      {
+                        "input": {},
+                        "providerExecuted": true,
+                        "toolCallId": "<toolCallId:2>",
+                        "toolName": "web_search",
+                        "type": "tool-call"
+                      },
+                      {
+                        "input": {},
+                        "output": {
+                          "action": {
+                            "queries": [
+                              "Search the web for the official Braintrust website. Reply with its URL only."
+                            ],
+                            "query": "Search the web for the official Braintrust website. Reply with its URL only.",
+                            "type": "search"
+                          },
+                          "sources": [
+                            {
+                              "type": "url",
+                              "url": "https://www.braintrust.com/?utm_source=openai"
+                            },
+                            {
+                              "type": "url",
+                              "url": "https://www.braintrust.dev/?utm_source=openai"
+                            },
+                            {
+                              "type": "url",
+                              "url": "https://www.usebraintrust.com/?utm_source=openai"
+                            },
+                            {
+                              "type": "url",
+                              "url": "https://www.usebraintrust.com/about?utm_source=openai"
+                            },
+                            {
+                              "type": "url",
+                              "url": "https://www.usebraintrust.com/for-talent?utm_source=openai"
+                            },
+                            {
+                              "type": "url",
+                              "url": "https://www.braintrustgroup.com/?utm_source=openai"
+                            },
+                            {
+                              "type": "url",
+                              "url": "https://braintrustagency.com/?utm_source=openai"
+                            },
+                            {
+                              "type": "url",
+                              "url": "https://ai.engineer/orgs/braintrust?utm_source=openai"
+                            },
+                            {
+                              "type": "url",
+                              "url": "https://braintrusttutors.com/?utm_source=openai"
+                            },
+                            {
+                              "type": "url",
+                              "url": "https://www.aiexplore.io/explore/braintrust?utm_source=openai"
+                            },
+                            {
+                              "type": "url",
+                              "url": "https://builtin.com/company/braintrust?utm_source=openai"
+                            },
+                            {
+                              "type": "url",
+                              "url": "https://digitalintelligence.review/company/braintrust?utm_source=openai"
+                            }
+                          ]
+                        },
+                        "providerExecuted": true,
+                        "toolCallId": "<toolCallId:2>",
+                        "toolName": "web_search",
+                        "type": "tool-result"
+                      },
+                      {
+                        "providerMetadata": {
+                          "openai": {
+                            "itemId": "<itemId:3>"
+                          }
+                        },
+                        "text": "https://www.usebraintrust.com/ ",
+                        "type": "text"
+                      }
+                    ],
+                    "finishReason": "stop",
+                    "model": {
+                      "modelId": "gpt-4.1-mini",
+                      "provider": "openai.responses"
+                    },
+                    "providerMetadata": {
+                      "openai": {
+                        "responseId": "<responseId:4>",
+                        "serviceTier": "auto"
+                      }
+                    },
+                    "response": {
+                      "messages": [
+                        {
+                          "content": [
+                            {
+                              "input": {},
+                              "providerExecuted": true,
+                              "toolCallId": "<toolCallId:2>",
+                              "toolName": "web_search",
+                              "type": "tool-call"
+                            },
+                            {
+                              "output": {
+                                "type": "json",
+                                "value": {
+                                  "action": {
+                                    "queries": "[Object]",
+                                    "query": "Search the web for the official Braintrust website. Reply with its URL only.",
+                                    "type": "search"
+                                  },
+                                  "sources": [
+                                    "[Object]",
+                                    "[Object]",
+                                    "[Object]",
+                                    "[Object]",
+                                    "[Object]",
+                                    "[Object]",
+                                    "[Object]",
+                                    "[Object]",
+                                    "[Object]",
+                                    "[Object]",
+                                    "[Object]",
+                                    "[Object]"
+                                  ]
+                                }
+                              },
+                              "toolCallId": "<toolCallId:2>",
+                              "toolName": "web_search",
+                              "type": "tool-result"
+                            },
+                            {
+                              "providerOptions": {
+                                "openai": {
+                                  "itemId": "<itemId:3>"
+                                }
+                              },
+                              "text": "https://www.usebraintrust.com/ ",
+                              "type": "text"
+                            }
+                          ],
+                          "role": "assistant"
+                        }
+                      ],
+                      "modelId": "gpt-4.1-mini-2025-04-14",
+                      "timestamp": "<timestamp>"
+                    },
+                    "runtimeContext": {},
+                    "stepNumber": 0,
+                    "toolsContext": {},
+                    "usage": {
+                      "inputTokenDetails": {
+                        "cacheReadTokens": 0,
+                        "noCacheTokens": 8517
+                      },
+                      "inputTokens": 8517,
+                      "outputTokenDetails": {
+                        "reasoningTokens": 0,
+                        "textTokens": 9
+                      },
+                      "outputTokens": 9,
+                      "raw": {
+                        "input_tokens": 8517,
+                        "input_tokens_details": {
+                          "cached_tokens": 0
+                        },
+                        "output_tokens": 9,
+                        "output_tokens_details": {
+                          "reasoning_tokens": 0
+                        }
+                      },
+                      "totalTokens": 8526
+                    },
+                    "warnings": []
+                  }
+                ],
+                "text": "https://www.usebraintrust.com/ ",
+                "toolCalls": [
+                  {
+                    "input": {},
+                    "providerExecuted": true,
+                    "toolCallId": "<toolCallId:2>",
+                    "toolName": "web_search",
+                    "type": "tool-call"
+                  }
+                ],
+                "toolResults": [
+                  {
+                    "input": {},
+                    "output": {
+                      "action": {
+                        "queries": [
+                          "Search the web for the official Braintrust website. Reply with its URL only."
+                        ],
+                        "query": "Search the web for the official Braintrust website. Reply with its URL only.",
+                        "type": "search"
+                      },
+                      "sources": [
+                        {
+                          "type": "url",
+                          "url": "https://www.braintrust.com/?utm_source=openai"
+                        },
+                        {
+                          "type": "url",
+                          "url": "https://www.braintrust.dev/?utm_source=openai"
+                        },
+                        {
+                          "type": "url",
+                          "url": "https://www.usebraintrust.com/?utm_source=openai"
+                        },
+                        {
+                          "type": "url",
+                          "url": "https://www.usebraintrust.com/about?utm_source=openai"
+                        },
+                        {
+                          "type": "url",
+                          "url": "https://www.usebraintrust.com/for-talent?utm_source=openai"
+                        },
+                        {
+                          "type": "url",
+                          "url": "https://www.braintrustgroup.com/?utm_source=openai"
+                        },
+                        {
+                          "type": "url",
+                          "url": "https://braintrustagency.com/?utm_source=openai"
+                        },
+                        {
+                          "type": "url",
+                          "url": "https://ai.engineer/orgs/braintrust?utm_source=openai"
+                        },
+                        {
+                          "type": "url",
+                          "url": "https://braintrusttutors.com/?utm_source=openai"
+                        },
+                        {
+                          "type": "url",
+                          "url": "https://www.aiexplore.io/explore/braintrust?utm_source=openai"
+                        },
+                        {
+                          "type": "url",
+                          "url": "https://builtin.com/company/braintrust?utm_source=openai"
+                        },
+                        {
+                          "type": "url",
+                          "url": "https://digitalintelligence.review/company/braintrust?utm_source=openai"
+                        }
+                      ]
+                    },
+                    "providerExecuted": true,
+                    "toolCallId": "<toolCallId:2>",
+                    "toolName": "web_search",
+                    "type": "tool-result"
+                  }
+                ],
+                "totalUsage": {
+                  "inputTokenDetails": {
+                    "cacheReadTokens": 0,
+                    "noCacheTokens": 8517
+                  },
+                  "inputTokens": 8517,
+                  "outputTokenDetails": {
+                    "reasoningTokens": 0,
+                    "textTokens": 9
+                  },
+                  "outputTokens": 9,
+                  "totalTokens": 8526
+                },
+                "usage": {
+                  "inputTokenDetails": {
+                    "cacheReadTokens": 0,
+                    "noCacheTokens": 8517
+                  },
+                  "inputTokens": 8517,
+                  "outputTokenDetails": {
+                    "reasoningTokens": 0,
+                    "textTokens": 9
+                  },
+                  "outputTokens": 9,
+                  "totalTokens": 8526
+                },
+                "warnings": []
+              },
+              "metadata": {
+                "braintrust": {
+                  "integration_name": "ai-sdk",
+                  "sdk_language": "typescript"
+                },
+                "model": "gpt-4.1-mini",
+                "provider": "openai.responses"
+              }
+            }
+          ],
+          "metadata": {
+            "operation": "provider-tool-generateText",
+            "testRunId": "<run:1>"
+          }
+        },
+        {
+          "name": "ai-sdk-provider-tool-streamText-operation",
+          "children": [
+            {
+              "name": "streamText",
+              "type": "function",
+              "children": [
+                {
+                  "name": "doStream",
+                  "type": "llm",
+                  "children": [],
+                  "input": {
+                    "maxOutputTokens": 128,
+                    "messages": [
+                      {
+                        "content": "Search the web for the official Braintrust website. Reply with its URL only.",
+                        "role": "user"
+                      }
+                    ],
+                    "model": {
+                      "modelId": "gpt-4.1-mini",
+                      "provider": "openai.responses"
+                    },
+                    "tools": [
+                      {
+                        "args": {
+                          "searchContextSize": "low"
+                        },
+                        "name": "web_search",
+                        "type": "provider"
+                      }
+                    ]
+                  },
+                  "output": {
+                    "content": [
+                      {
+                        "input": {},
+                        "providerExecuted": true,
+                        "toolCallId": "<toolCallId:2>",
+                        "toolName": "web_search",
+                        "type": "tool-call"
+                      },
+                      {
+                        "input": {},
+                        "output": {
+                          "action": {
+                            "queries": [
+                              "Search the web for the official Braintrust website. Reply with its URL only."
+                            ],
+                            "query": "Search the web for the official Braintrust website. Reply with its URL only.",
+                            "type": "search"
+                          },
+                          "sources": [
+                            {
+                              "type": "url",
+                              "url": "https://www.braintrust.com/?utm_source=openai"
+                            },
+                            {
+                              "type": "url",
+                              "url": "https://www.braintrust.dev/?utm_source=openai"
+                            },
+                            {
+                              "type": "url",
+                              "url": "https://www.usebraintrust.com/?utm_source=openai"
+                            },
+                            {
+                              "type": "url",
+                              "url": "https://www.usebraintrust.com/about?utm_source=openai"
+                            },
+                            {
+                              "type": "url",
+                              "url": "https://www.braintrustgroup.com/?utm_source=openai"
+                            },
+                            {
+                              "type": "url",
+                              "url": "https://braintrustagency.com/?utm_source=openai"
+                            },
+                            {
+                              "type": "url",
+                              "url": "https://ai.engineer/orgs/braintrust?utm_source=openai"
+                            },
+                            {
+                              "type": "url",
+                              "url": "https://braintrusttutors.com/?utm_source=openai"
+                            },
+                            {
+                              "type": "url",
+                              "url": "https://www.aiexplore.io/explore/braintrust?utm_source=openai"
+                            },
+                            {
+                              "type": "url",
+                              "url": "https://builtin.com/company/braintrust?utm_source=openai"
+                            },
+                            {
+                              "type": "url",
+                              "url": "https://digitalintelligence.review/company/braintrust?utm_source=openai"
+                            },
+                            {
+                              "type": "url",
+                              "url": "https://enterpriseleague.com/company/braintrust?utm_source=openai"
+                            }
+                          ]
+                        },
+                        "providerExecuted": true,
+                        "toolCallId": "<toolCallId:2>",
+                        "toolName": "web_search",
+                        "type": "tool-result"
+                      },
+                      {
+                        "providerMetadata": {
+                          "openai": {
+                            "itemId": "<itemId:3>"
+                          }
+                        },
+                        "text": "https://www.usebraintrust.com ",
+                        "type": "text"
+                      }
+                    ],
+                    "finishReason": "stop",
+                    "providerMetadata": {
+                      "openai": {
+                        "responseId": "<responseId:1>",
+                        "serviceTier": "auto"
+                      }
+                    },
+                    "response": {},
+                    "usage": {
+                      "inputTokenDetails": {
+                        "cacheReadTokens": 0,
+                        "noCacheTokens": 8517
+                      },
+                      "inputTokens": 8517,
+                      "outputTokenDetails": {
+                        "reasoningTokens": 0,
+                        "textTokens": 8
+                      },
+                      "outputTokens": 8,
+                      "raw": {
+                        "input_tokens": 8517,
+                        "input_tokens_details": {
+                          "cached_tokens": 0
+                        },
+                        "output_tokens": 8,
+                        "output_tokens_details": {
+                          "reasoning_tokens": 0
+                        }
+                      },
+                      "totalTokens": 8525
+                    }
+                  },
+                  "metadata": {
+                    "braintrust": {
+                      "integration_name": "ai-sdk",
+                      "sdk_language": "typescript"
+                    },
+                    "model": "gpt-4.1-mini",
+                    "provider": "openai.responses"
+                  },
+                  "metrics": {
+                    "completion_tokens": 8,
+                    "prompt_cached_tokens": 0,
+                    "prompt_tokens": 8517,
+                    "tokens": 8525
+                  }
+                },
+                {
+                  "name": "web_search",
+                  "type": "tool",
+                  "children": [],
+                  "output": {
+                    "action": {
+                      "queries": [
+                        "Search the web for the official Braintrust website. Reply with its URL only."
+                      ],
+                      "query": "Search the web for the official Braintrust website. Reply with its URL only.",
+                      "type": "search"
+                    },
+                    "sources": [
+                      {
+                        "type": "url",
+                        "url": "https://www.braintrust.com/?utm_source=openai"
+                      },
+                      {
+                        "type": "url",
+                        "url": "https://www.braintrust.dev/?utm_source=openai"
+                      },
+                      {
+                        "type": "url",
+                        "url": "https://www.usebraintrust.com/?utm_source=openai"
+                      },
+                      {
+                        "type": "url",
+                        "url": "https://www.usebraintrust.com/about?utm_source=openai"
+                      },
+                      {
+                        "type": "url",
+                        "url": "https://www.braintrustgroup.com/?utm_source=openai"
+                      },
+                      {
+                        "type": "url",
+                        "url": "https://braintrustagency.com/?utm_source=openai"
+                      },
+                      {
+                        "type": "url",
+                        "url": "https://ai.engineer/orgs/braintrust?utm_source=openai"
+                      },
+                      {
+                        "type": "url",
+                        "url": "https://braintrusttutors.com/?utm_source=openai"
+                      },
+                      {
+                        "type": "url",
+                        "url": "https://www.aiexplore.io/explore/braintrust?utm_source=openai"
+                      },
+                      {
+                        "type": "url",
+                        "url": "https://builtin.com/company/braintrust?utm_source=openai"
+                      },
+                      {
+                        "type": "url",
+                        "url": "https://digitalintelligence.review/company/braintrust?utm_source=openai"
+                      },
+                      {
+                        "type": "url",
+                        "url": "https://enterpriseleague.com/company/braintrust?utm_source=openai"
+                      }
+                    ]
+                  },
+                  "metadata": {
+                    "braintrust": {
+                      "integration_name": "ai-sdk",
+                      "sdk_language": "typescript"
+                    },
+                    "providerExecuted": true,
+                    "toolCallId": "<toolCallId:1>",
+                    "toolName": "web_search"
+                  }
+                }
+              ],
+              "input": {
+                "maxOutputTokens": 128,
+                "maxRetries": 2,
+                "messages": [
+                  {
+                    "content": "Search the web for the official Braintrust website. Reply with its URL only.",
+                    "role": "user"
+                  }
+                ],
+                "model": {
+                  "modelId": "gpt-4.1-mini",
+                  "provider": "openai.responses"
+                },
+                "toolChoice": {
+                  "toolName": "web_search",
+                  "type": "tool"
+                },
+                "tools": {
+                  "web_search": {
+                    "args": {
+                      "searchContextSize": "low"
+                    },
+                    "isProviderExecuted": true,
+                    "type": "provider"
+                  }
+                }
+              },
+              "output": {
+                "content": [
+                  {
+                    "input": {},
+                    "providerExecuted": true,
+                    "toolCallId": "<toolCallId:2>",
+                    "toolName": "web_search",
+                    "type": "tool-call"
+                  },
+                  {
+                    "input": {},
+                    "output": {
+                      "action": {
+                        "queries": [
+                          "Search the web for the official Braintrust website. Reply with its URL only."
+                        ],
+                        "query": "Search the web for the official Braintrust website. Reply with its URL only.",
+                        "type": "search"
+                      },
+                      "sources": [
+                        {
+                          "type": "url",
+                          "url": "https://www.braintrust.com/?utm_source=openai"
+                        },
+                        {
+                          "type": "url",
+                          "url": "https://www.braintrust.dev/?utm_source=openai"
+                        },
+                        {
+                          "type": "url",
+                          "url": "https://www.usebraintrust.com/?utm_source=openai"
+                        },
+                        {
+                          "type": "url",
+                          "url": "https://www.usebraintrust.com/about?utm_source=openai"
+                        },
+                        {
+                          "type": "url",
+                          "url": "https://www.braintrustgroup.com/?utm_source=openai"
+                        },
+                        {
+                          "type": "url",
+                          "url": "https://braintrustagency.com/?utm_source=openai"
+                        },
+                        {
+                          "type": "url",
+                          "url": "https://ai.engineer/orgs/braintrust?utm_source=openai"
+                        },
+                        {
+                          "type": "url",
+                          "url": "https://braintrusttutors.com/?utm_source=openai"
+                        },
+                        {
+                          "type": "url",
+                          "url": "https://www.aiexplore.io/explore/braintrust?utm_source=openai"
+                        },
+                        {
+                          "type": "url",
+                          "url": "https://builtin.com/company/braintrust?utm_source=openai"
+                        },
+                        {
+                          "type": "url",
+                          "url": "https://digitalintelligence.review/company/braintrust?utm_source=openai"
+                        },
+                        {
+                          "type": "url",
+                          "url": "https://enterpriseleague.com/company/braintrust?utm_source=openai"
+                        }
+                      ]
+                    },
+                    "providerExecuted": true,
+                    "toolCallId": "<toolCallId:2>",
+                    "toolName": "web_search",
+                    "type": "tool-result"
+                  },
+                  {
+                    "providerMetadata": {
+                      "openai": {
+                        "itemId": "<itemId:3>"
+                      }
+                    },
+                    "text": "https://www.usebraintrust.com ",
+                    "type": "text"
+                  }
+                ],
+                "finishReason": "stop",
+                "providerMetadata": {
+                  "openai": {
+                    "responseId": "<responseId:4>",
+                    "serviceTier": "auto"
+                  }
+                },
+                "response": {
+                  "messages": [
+                    {
+                      "content": [
+                        {
+                          "input": {},
+                          "providerExecuted": true,
+                          "toolCallId": "<toolCallId:2>",
+                          "toolName": "web_search",
+                          "type": "tool-call"
+                        },
+                        {
+                          "output": {
+                            "type": "json",
+                            "value": {
+                              "action": {
+                                "queries": "[Object]",
+                                "query": "Search the web for the official Braintrust website. Reply with its URL only.",
+                                "type": "search"
+                              },
+                              "sources": [
+                                "[Object]",
+                                "[Object]",
+                                "[Object]",
+                                "[Object]",
+                                "[Object]",
+                                "[Object]",
+                                "[Object]",
+                                "[Object]",
+                                "[Object]",
+                                "[Object]",
+                                "[Object]",
+                                "[Object]"
+                              ]
+                            }
+                          },
+                          "toolCallId": "<toolCallId:2>",
+                          "toolName": "web_search",
+                          "type": "tool-result"
+                        },
+                        {
+                          "providerOptions": {
+                            "openai": {
+                              "itemId": "<itemId:3>"
+                            }
+                          },
+                          "text": "https://www.usebraintrust.com ",
+                          "type": "text"
+                        }
+                      ],
+                      "role": "assistant"
+                    }
+                  ],
+                  "modelId": "gpt-4.1-mini-2025-04-14",
+                  "timestamp": "<timestamp>"
+                },
+                "responseMessages": "<omitted>",
+                "steps": [
+                  {
+                    "callId": "<callId:1>",
+                    "content": [
+                      {
+                        "input": {},
+                        "providerExecuted": true,
+                        "toolCallId": "<toolCallId:2>",
+                        "toolName": "web_search",
+                        "type": "tool-call"
+                      },
+                      {
+                        "input": {},
+                        "output": {
+                          "action": {
+                            "queries": [
+                              "Search the web for the official Braintrust website. Reply with its URL only."
+                            ],
+                            "query": "Search the web for the official Braintrust website. Reply with its URL only.",
+                            "type": "search"
+                          },
+                          "sources": [
+                            {
+                              "type": "url",
+                              "url": "https://www.braintrust.com/?utm_source=openai"
+                            },
+                            {
+                              "type": "url",
+                              "url": "https://www.braintrust.dev/?utm_source=openai"
+                            },
+                            {
+                              "type": "url",
+                              "url": "https://www.usebraintrust.com/?utm_source=openai"
+                            },
+                            {
+                              "type": "url",
+                              "url": "https://www.usebraintrust.com/about?utm_source=openai"
+                            },
+                            {
+                              "type": "url",
+                              "url": "https://www.braintrustgroup.com/?utm_source=openai"
+                            },
+                            {
+                              "type": "url",
+                              "url": "https://braintrustagency.com/?utm_source=openai"
+                            },
+                            {
+                              "type": "url",
+                              "url": "https://ai.engineer/orgs/braintrust?utm_source=openai"
+                            },
+                            {
+                              "type": "url",
+                              "url": "https://braintrusttutors.com/?utm_source=openai"
+                            },
+                            {
+                              "type": "url",
+                              "url": "https://www.aiexplore.io/explore/braintrust?utm_source=openai"
+                            },
+                            {
+                              "type": "url",
+                              "url": "https://builtin.com/company/braintrust?utm_source=openai"
+                            },
+                            {
+                              "type": "url",
+                              "url": "https://digitalintelligence.review/company/braintrust?utm_source=openai"
+                            },
+                            {
+                              "type": "url",
+                              "url": "https://enterpriseleague.com/company/braintrust?utm_source=openai"
+                            }
+                          ]
+                        },
+                        "providerExecuted": true,
+                        "toolCallId": "<toolCallId:2>",
+                        "toolName": "web_search",
+                        "type": "tool-result"
+                      },
+                      {
+                        "providerMetadata": {
+                          "openai": {
+                            "itemId": "<itemId:3>"
+                          }
+                        },
+                        "text": "https://www.usebraintrust.com ",
+                        "type": "text"
+                      }
+                    ],
+                    "finishReason": "stop",
+                    "model": {
+                      "modelId": "gpt-4.1-mini",
+                      "provider": "openai.responses"
+                    },
+                    "providerMetadata": {
+                      "openai": {
+                        "responseId": "<responseId:4>",
+                        "serviceTier": "auto"
+                      }
+                    },
+                    "response": {
+                      "messages": [
+                        {
+                          "content": [
+                            {
+                              "input": {},
+                              "providerExecuted": true,
+                              "toolCallId": "<toolCallId:2>",
+                              "toolName": "web_search",
+                              "type": "tool-call"
+                            },
+                            {
+                              "output": {
+                                "type": "json",
+                                "value": {
+                                  "action": {
+                                    "queries": "[Object]",
+                                    "query": "Search the web for the official Braintrust website. Reply with its URL only.",
+                                    "type": "search"
+                                  },
+                                  "sources": [
+                                    "[Object]",
+                                    "[Object]",
+                                    "[Object]",
+                                    "[Object]",
+                                    "[Object]",
+                                    "[Object]",
+                                    "[Object]",
+                                    "[Object]",
+                                    "[Object]",
+                                    "[Object]",
+                                    "[Object]",
+                                    "[Object]"
+                                  ]
+                                }
+                              },
+                              "toolCallId": "<toolCallId:2>",
+                              "toolName": "web_search",
+                              "type": "tool-result"
+                            },
+                            {
+                              "providerOptions": {
+                                "openai": {
+                                  "itemId": "<itemId:3>"
+                                }
+                              },
+                              "text": "https://www.usebraintrust.com ",
+                              "type": "text"
+                            }
+                          ],
+                          "role": "assistant"
+                        }
+                      ],
+                      "modelId": "gpt-4.1-mini-2025-04-14",
+                      "timestamp": "<timestamp>"
+                    },
+                    "runtimeContext": {},
+                    "stepNumber": 0,
+                    "toolsContext": {},
+                    "usage": {
+                      "inputTokenDetails": {
+                        "cacheReadTokens": 0,
+                        "noCacheTokens": 8517
+                      },
+                      "inputTokens": 8517,
+                      "outputTokenDetails": {
+                        "reasoningTokens": 0,
+                        "textTokens": 8
+                      },
+                      "outputTokens": 8,
+                      "raw": {
+                        "input_tokens": 8517,
+                        "input_tokens_details": {
+                          "cached_tokens": 0
+                        },
+                        "output_tokens": 8,
+                        "output_tokens_details": {
+                          "reasoning_tokens": 0
+                        }
+                      },
+                      "totalTokens": 8525
+                    },
+                    "warnings": []
+                  }
+                ],
+                "text": "https://www.usebraintrust.com ",
+                "toolCalls": [
+                  {
+                    "input": {},
+                    "providerExecuted": true,
+                    "toolCallId": "<toolCallId:2>",
+                    "toolName": "web_search",
+                    "type": "tool-call"
+                  }
+                ],
+                "toolResults": [
+                  {
+                    "input": {},
+                    "output": {
+                      "action": {
+                        "queries": [
+                          "Search the web for the official Braintrust website. Reply with its URL only."
+                        ],
+                        "query": "Search the web for the official Braintrust website. Reply with its URL only.",
+                        "type": "search"
+                      },
+                      "sources": [
+                        {
+                          "type": "url",
+                          "url": "https://www.braintrust.com/?utm_source=openai"
+                        },
+                        {
+                          "type": "url",
+                          "url": "https://www.braintrust.dev/?utm_source=openai"
+                        },
+                        {
+                          "type": "url",
+                          "url": "https://www.usebraintrust.com/?utm_source=openai"
+                        },
+                        {
+                          "type": "url",
+                          "url": "https://www.usebraintrust.com/about?utm_source=openai"
+                        },
+                        {
+                          "type": "url",
+                          "url": "https://www.braintrustgroup.com/?utm_source=openai"
+                        },
+                        {
+                          "type": "url",
+                          "url": "https://braintrustagency.com/?utm_source=openai"
+                        },
+                        {
+                          "type": "url",
+                          "url": "https://ai.engineer/orgs/braintrust?utm_source=openai"
+                        },
+                        {
+                          "type": "url",
+                          "url": "https://braintrusttutors.com/?utm_source=openai"
+                        },
+                        {
+                          "type": "url",
+                          "url": "https://www.aiexplore.io/explore/braintrust?utm_source=openai"
+                        },
+                        {
+                          "type": "url",
+                          "url": "https://builtin.com/company/braintrust?utm_source=openai"
+                        },
+                        {
+                          "type": "url",
+                          "url": "https://digitalintelligence.review/company/braintrust?utm_source=openai"
+                        },
+                        {
+                          "type": "url",
+                          "url": "https://enterpriseleague.com/company/braintrust?utm_source=openai"
+                        }
+                      ]
+                    },
+                    "providerExecuted": true,
+                    "toolCallId": "<toolCallId:2>",
+                    "toolName": "web_search",
+                    "type": "tool-result"
+                  }
+                ],
+                "totalUsage": {
+                  "inputTokenDetails": {
+                    "cacheReadTokens": 0,
+                    "noCacheTokens": 8517
+                  },
+                  "inputTokens": 8517,
+                  "outputTokenDetails": {
+                    "reasoningTokens": 0,
+                    "textTokens": 8
+                  },
+                  "outputTokens": 8,
+                  "totalTokens": 8525
+                },
+                "usage": {
+                  "inputTokenDetails": {
+                    "cacheReadTokens": 0,
+                    "noCacheTokens": 8517
+                  },
+                  "inputTokens": 8517,
+                  "outputTokenDetails": {
+                    "reasoningTokens": 0,
+                    "textTokens": 8
+                  },
+                  "outputTokens": 8,
+                  "totalTokens": 8525
+                },
+                "warnings": []
+              },
+              "metadata": {
+                "braintrust": {
+                  "integration_name": "ai-sdk",
+                  "sdk_language": "typescript"
+                },
+                "model": "gpt-4.1-mini",
+                "provider": "openai.responses"
+              },
+              "metrics": {
+                "time_to_first_token": 0
+              }
+            }
+          ],
+          "metadata": {
+            "operation": "provider-tool-streamText",
+            "testRunId": "<run:1>"
+          }
+        },
+        {
+          "name": "ai-sdk-evaluate-operation",
+          "children": [
+            {
+              "name": "evaluate",
+              "type": "question",
+              "children": [],
+              "input": {
+                "questions": [
+                  {
+                    "criteria": {
+                      "billing": "Payments and refunds",
+                      "technical": "Software problems"
+                    },
+                    "instructions": "Which team should handle this request?",
+                    "type": "choice"
+                  },
+                  {
+                    "criteria": [
+                      "Low",
+                      "Medium",
+                      "High"
+                    ],
+                    "instructions": "How urgent is this request?",
+                    "type": "score"
+                  },
+                  {
+                    "instructions": "Does the customer report a duplicate charge?",
+                    "type": "boolean"
+                  }
+                ],
+                "state": {
+                  "message": "I was charged twice for my subscription. Please refund the duplicate charge."
+                }
+              },
+              "output": {
+                "answers": [
+                  {
+                    "choice": "billing",
+                    "confidence": 1,
+                    "probabilities": {
+                      "billing": 1,
+                      "technical": 0
+                    },
+                    "type": "choice"
+                  },
+                  {
+                    "probability": 0.99,
+                    "type": "boolean"
+                  },
+                  {
+                    "confidence": 0.76,
+                    "probabilities": {
+                      "0": 0.03,
+                      "1": 0.84,
+                      "2": 0.13
+                    },
+                    "score": 1.1,
+                    "type": "score"
+                  }
+                ]
+              },
+              "metadata": {
+                "braintrust": {
+                  "integration_name": "ai-sdk",
+                  "sdk_language": "typescript"
+                },
+                "model": "jev-1.13.0",
+                "provider": "typesafe",
+                "providerMetadata": {
+                  "typesafe": {
+                    "confidence": {
+                      "category": 1,
+                      "urgency": 0.76
+                    }
+                  }
+                }
+              },
+              "metrics": {
+                "completion_tokens": 62,
+                "prompt_tokens": 382,
+                "tokens": 444
+              }
+            }
+          ],
+          "metadata": {
+            "operation": "evaluate",
+            "testRunId": "<run:1>"
+          }
+        },
+        {
           "name": "ai-sdk-generate-operation",
           "children": [
             {
@@ -34,7 +2015,7 @@
                       {
                         "providerMetadata": {
                           "openai": {
-                            "itemId": "<itemId:1>"
+                            "itemId": "<itemId:2>"
                           }
                         },
                         "text": "PARIS",
@@ -42,6 +2023,12 @@
                       }
                     ],
                     "finishReason": "stop",
+                    "providerMetadata": {
+                      "openai": {
+                        "responseId": "<responseId:1>",
+                        "serviceTier": "default"
+                      }
+                    },
                     "response": {},
                     "usage": {
                       "inputTokenDetails": {
@@ -296,7 +2283,7 @@
                       {
                         "providerMetadata": {
                           "openai": {
-                            "itemId": "<itemId:1>"
+                            "itemId": "<itemId:2>"
                           }
                         },
                         "text": "{\"answer\":\"4\"}",
@@ -304,6 +2291,12 @@
                       }
                     ],
                     "finishReason": "stop",
+                    "providerMetadata": {
+                      "openai": {
+                        "responseId": "<responseId:1>",
+                        "serviceTier": "default"
+                      }
+                    },
                     "response": {},
                     "usage": {
                       "inputTokenDetails": {
@@ -568,7 +2561,7 @@
                       {
                         "providerMetadata": {
                           "openai": {
-                            "itemId": "<itemId:1>"
+                            "itemId": "<itemId:2>"
                           }
                         },
                         "text": "One, two, three.",
@@ -576,6 +2569,12 @@
                       }
                     ],
                     "finishReason": "stop",
+                    "providerMetadata": {
+                      "openai": {
+                        "responseId": "<responseId:1>",
+                        "serviceTier": "default"
+                      }
+                    },
                     "response": {},
                     "usage": {
                       "inputTokenDetails": {
@@ -1065,14 +3064,21 @@
                         },
                         "providerMetadata": {
                           "openai": {
-                            "itemId": "<itemId:1>"
+                            "itemId": "<itemId:3>"
                           }
                         },
+                        "toolCallId": "<toolCallId:2>",
                         "toolName": "get_weather",
                         "type": "tool-call"
                       }
                     ],
                     "finishReason": "tool-calls",
+                    "providerMetadata": {
+                      "openai": {
+                        "responseId": "<responseId:1>",
+                        "serviceTier": "default"
+                      }
+                    },
                     "response": {},
                     "usage": {
                       "inputTokenDetails": {
@@ -1126,6 +3132,7 @@
                       "integration_name": "ai-sdk",
                       "sdk_language": "typescript"
                     },
+                    "toolCallId": "<toolCallId:1>",
                     "toolName": "get_weather"
                   }
                 },
@@ -1149,9 +3156,10 @@
                             },
                             "providerOptions": {
                               "openai": {
-                                "itemId": "<itemId:1>"
+                                "itemId": "<itemId:2>"
                               }
                             },
+                            "toolCallId": "<toolCallId:1>",
                             "toolName": "get_weather",
                             "type": "tool-call"
                           }
@@ -1167,9 +3175,10 @@
                             },
                             "providerOptions": {
                               "openai": {
-                                "itemId": "<itemId:1>"
+                                "itemId": "<itemId:2>"
                               }
                             },
+                            "toolCallId": "<toolCallId:1>",
                             "toolName": "get_weather",
                             "type": "tool-result"
                           }
@@ -1212,14 +3221,21 @@
                         },
                         "providerMetadata": {
                           "openai": {
-                            "itemId": "<itemId:1>"
+                            "itemId": "<itemId:3>"
                           }
                         },
+                        "toolCallId": "<toolCallId:2>",
                         "toolName": "get_weather",
                         "type": "tool-call"
                       }
                     ],
                     "finishReason": "tool-calls",
+                    "providerMetadata": {
+                      "openai": {
+                        "responseId": "<responseId:1>",
+                        "serviceTier": "default"
+                      }
+                    },
                     "response": {},
                     "usage": {
                       "inputTokenDetails": {
@@ -1273,6 +3289,7 @@
                       "integration_name": "ai-sdk",
                       "sdk_language": "typescript"
                     },
+                    "toolCallId": "<toolCallId:1>",
                     "toolName": "get_weather"
                   }
                 },
@@ -1296,9 +3313,10 @@
                             },
                             "providerOptions": {
                               "openai": {
-                                "itemId": "<itemId:1>"
+                                "itemId": "<itemId:2>"
                               }
                             },
+                            "toolCallId": "<toolCallId:1>",
                             "toolName": "get_weather",
                             "type": "tool-call"
                           }
@@ -1314,9 +3332,10 @@
                             },
                             "providerOptions": {
                               "openai": {
-                                "itemId": "<itemId:1>"
+                                "itemId": "<itemId:2>"
                               }
                             },
+                            "toolCallId": "<toolCallId:1>",
                             "toolName": "get_weather",
                             "type": "tool-result"
                           }
@@ -1331,9 +3350,10 @@
                             },
                             "providerOptions": {
                               "openai": {
-                                "itemId": "<itemId:2>"
+                                "itemId": "<itemId:4>"
                               }
                             },
+                            "toolCallId": "<toolCallId:3>",
                             "toolName": "get_weather",
                             "type": "tool-call"
                           }
@@ -1349,9 +3369,10 @@
                             },
                             "providerOptions": {
                               "openai": {
-                                "itemId": "<itemId:2>"
+                                "itemId": "<itemId:4>"
                               }
                             },
+                            "toolCallId": "<toolCallId:3>",
                             "toolName": "get_weather",
                             "type": "tool-result"
                           }
@@ -1394,14 +3415,21 @@
                         },
                         "providerMetadata": {
                           "openai": {
-                            "itemId": "<itemId:1>"
+                            "itemId": "<itemId:3>"
                           }
                         },
+                        "toolCallId": "<toolCallId:2>",
                         "toolName": "get_weather",
                         "type": "tool-call"
                       }
                     ],
                     "finishReason": "tool-calls",
+                    "providerMetadata": {
+                      "openai": {
+                        "responseId": "<responseId:1>",
+                        "serviceTier": "default"
+                      }
+                    },
                     "response": {},
                     "usage": {
                       "inputTokenDetails": {
@@ -1455,6 +3483,7 @@
                       "integration_name": "ai-sdk",
                       "sdk_language": "typescript"
                     },
+                    "toolCallId": "<toolCallId:1>",
                     "toolName": "get_weather"
                   }
                 },
@@ -1478,44 +3507,10 @@
                             },
                             "providerOptions": {
                               "openai": {
-                                "itemId": "<itemId:1>"
-                              }
-                            },
-                            "toolName": "get_weather",
-                            "type": "tool-call"
-                          }
-                        ],
-                        "role": "assistant"
-                      },
-                      {
-                        "content": [
-                          {
-                            "output": {
-                              "type": "text",
-                              "value": "{\"condition\":\"sunny\",\"location\":\"Paris, France\",\"temperatureC\":22}"
-                            },
-                            "providerOptions": {
-                              "openai": {
-                                "itemId": "<itemId:1>"
-                              }
-                            },
-                            "toolName": "get_weather",
-                            "type": "tool-result"
-                          }
-                        ],
-                        "role": "tool"
-                      },
-                      {
-                        "content": [
-                          {
-                            "input": {
-                              "location": "Paris, France"
-                            },
-                            "providerOptions": {
-                              "openai": {
                                 "itemId": "<itemId:2>"
                               }
                             },
+                            "toolCallId": "<toolCallId:1>",
                             "toolName": "get_weather",
                             "type": "tool-call"
                           }
@@ -1534,6 +3529,7 @@
                                 "itemId": "<itemId:2>"
                               }
                             },
+                            "toolCallId": "<toolCallId:1>",
                             "toolName": "get_weather",
                             "type": "tool-result"
                           }
@@ -1548,9 +3544,10 @@
                             },
                             "providerOptions": {
                               "openai": {
-                                "itemId": "<itemId:3>"
+                                "itemId": "<itemId:4>"
                               }
                             },
+                            "toolCallId": "<toolCallId:3>",
                             "toolName": "get_weather",
                             "type": "tool-call"
                           }
@@ -1566,9 +3563,47 @@
                             },
                             "providerOptions": {
                               "openai": {
-                                "itemId": "<itemId:3>"
+                                "itemId": "<itemId:4>"
                               }
                             },
+                            "toolCallId": "<toolCallId:3>",
+                            "toolName": "get_weather",
+                            "type": "tool-result"
+                          }
+                        ],
+                        "role": "tool"
+                      },
+                      {
+                        "content": [
+                          {
+                            "input": {
+                              "location": "Paris, France"
+                            },
+                            "providerOptions": {
+                              "openai": {
+                                "itemId": "<itemId:6>"
+                              }
+                            },
+                            "toolCallId": "<toolCallId:5>",
+                            "toolName": "get_weather",
+                            "type": "tool-call"
+                          }
+                        ],
+                        "role": "assistant"
+                      },
+                      {
+                        "content": [
+                          {
+                            "output": {
+                              "type": "text",
+                              "value": "{\"condition\":\"sunny\",\"location\":\"Paris, France\",\"temperatureC\":22}"
+                            },
+                            "providerOptions": {
+                              "openai": {
+                                "itemId": "<itemId:6>"
+                              }
+                            },
+                            "toolCallId": "<toolCallId:5>",
                             "toolName": "get_weather",
                             "type": "tool-result"
                           }
@@ -1611,14 +3646,21 @@
                         },
                         "providerMetadata": {
                           "openai": {
-                            "itemId": "<itemId:1>"
+                            "itemId": "<itemId:3>"
                           }
                         },
+                        "toolCallId": "<toolCallId:2>",
                         "toolName": "get_weather",
                         "type": "tool-call"
                       }
                     ],
                     "finishReason": "tool-calls",
+                    "providerMetadata": {
+                      "openai": {
+                        "responseId": "<responseId:1>",
+                        "serviceTier": "default"
+                      }
+                    },
                     "response": {},
                     "usage": {
                       "inputTokenDetails": {
@@ -1672,6 +3714,7 @@
                       "integration_name": "ai-sdk",
                       "sdk_language": "typescript"
                     },
+                    "toolCallId": "<toolCallId:1>",
                     "toolName": "get_weather"
                   }
                 }
@@ -1720,9 +3763,10 @@
                     },
                     "providerMetadata": {
                       "openai": {
-                        "itemId": "<itemId:2>"
+                        "itemId": "<itemId:3>"
                       }
                     },
+                    "toolCallId": "<toolCallId:2>",
                     "toolName": "get_weather",
                     "type": "tool-call"
                   },
@@ -1734,35 +3778,10 @@
                     "output": "{\"condition\":\"sunny\",\"location\":\"Paris, France\",\"temperatureC\":22}",
                     "providerMetadata": {
                       "openai": {
-                        "itemId": "<itemId:2>"
+                        "itemId": "<itemId:3>"
                       }
                     },
-                    "toolName": "get_weather",
-                    "type": "tool-result"
-                  },
-                  {
-                    "input": {
-                      "location": "Paris, France"
-                    },
-                    "providerMetadata": {
-                      "openai": {
-                        "itemId": "<itemId:4>"
-                      }
-                    },
-                    "toolName": "get_weather",
-                    "type": "tool-call"
-                  },
-                  {
-                    "dynamic": false,
-                    "input": {
-                      "location": "Paris, France"
-                    },
-                    "output": "{\"condition\":\"sunny\",\"location\":\"Paris, France\",\"temperatureC\":22}",
-                    "providerMetadata": {
-                      "openai": {
-                        "itemId": "<itemId:4>"
-                      }
-                    },
+                    "toolCallId": "<toolCallId:2>",
                     "toolName": "get_weather",
                     "type": "tool-result"
                   },
@@ -1775,6 +3794,7 @@
                         "itemId": "<itemId:6>"
                       }
                     },
+                    "toolCallId": "<toolCallId:5>",
                     "toolName": "get_weather",
                     "type": "tool-call"
                   },
@@ -1789,6 +3809,7 @@
                         "itemId": "<itemId:6>"
                       }
                     },
+                    "toolCallId": "<toolCallId:5>",
                     "toolName": "get_weather",
                     "type": "tool-result"
                   },
@@ -1798,9 +3819,10 @@
                     },
                     "providerMetadata": {
                       "openai": {
-                        "itemId": "<itemId:8>"
+                        "itemId": "<itemId:9>"
                       }
                     },
+                    "toolCallId": "<toolCallId:8>",
                     "toolName": "get_weather",
                     "type": "tool-call"
                   },
@@ -1812,9 +3834,38 @@
                     "output": "{\"condition\":\"sunny\",\"location\":\"Paris, France\",\"temperatureC\":22}",
                     "providerMetadata": {
                       "openai": {
-                        "itemId": "<itemId:8>"
+                        "itemId": "<itemId:9>"
                       }
                     },
+                    "toolCallId": "<toolCallId:8>",
+                    "toolName": "get_weather",
+                    "type": "tool-result"
+                  },
+                  {
+                    "input": {
+                      "location": "Paris, France"
+                    },
+                    "providerMetadata": {
+                      "openai": {
+                        "itemId": "<itemId:12>"
+                      }
+                    },
+                    "toolCallId": "<toolCallId:11>",
+                    "toolName": "get_weather",
+                    "type": "tool-call"
+                  },
+                  {
+                    "dynamic": false,
+                    "input": {
+                      "location": "Paris, France"
+                    },
+                    "output": "{\"condition\":\"sunny\",\"location\":\"Paris, France\",\"temperatureC\":22}",
+                    "providerMetadata": {
+                      "openai": {
+                        "itemId": "<itemId:12>"
+                      }
+                    },
+                    "toolCallId": "<toolCallId:11>",
                     "toolName": "get_weather",
                     "type": "tool-result"
                   }
@@ -1822,7 +3873,7 @@
                 "finishReason": "tool-calls",
                 "providerMetadata": {
                   "openai": {
-                    "responseId": "<responseId:9>",
+                    "responseId": "<responseId:13>",
                     "serviceTier": "default"
                   }
                 },
@@ -1836,9 +3887,10 @@
                           },
                           "providerOptions": {
                             "openai": {
-                              "itemId": "<itemId:8>"
+                              "itemId": "<itemId:12>"
                             }
                           },
+                          "toolCallId": "<toolCallId:11>",
                           "toolName": "get_weather",
                           "type": "tool-call"
                         }
@@ -1854,9 +3906,10 @@
                           },
                           "providerOptions": {
                             "openai": {
-                              "itemId": "<itemId:8>"
+                              "itemId": "<itemId:12>"
                             }
                           },
+                          "toolCallId": "<toolCallId:11>",
                           "toolName": "get_weather",
                           "type": "tool-result"
                         }
@@ -1878,9 +3931,10 @@
                         },
                         "providerMetadata": {
                           "openai": {
-                            "itemId": "<itemId:2>"
+                            "itemId": "<itemId:3>"
                           }
                         },
+                        "toolCallId": "<toolCallId:2>",
                         "toolName": "get_weather",
                         "type": "tool-call"
                       },
@@ -1892,9 +3946,10 @@
                         "output": "{\"condition\":\"sunny\",\"location\":\"Paris, France\",\"temperatureC\":22}",
                         "providerMetadata": {
                           "openai": {
-                            "itemId": "<itemId:2>"
+                            "itemId": "<itemId:3>"
                           }
                         },
+                        "toolCallId": "<toolCallId:2>",
                         "toolName": "get_weather",
                         "type": "tool-result"
                       }
@@ -1906,7 +3961,7 @@
                     },
                     "providerMetadata": {
                       "openai": {
-                        "responseId": "<responseId:3>",
+                        "responseId": "<responseId:4>",
                         "serviceTier": "default"
                       }
                     },
@@ -1920,9 +3975,10 @@
                               },
                               "providerOptions": {
                                 "openai": {
-                                  "itemId": "<itemId:2>"
+                                  "itemId": "<itemId:3>"
                                 }
                               },
+                              "toolCallId": "<toolCallId:2>",
                               "toolName": "get_weather",
                               "type": "tool-call"
                             }
@@ -1938,9 +3994,10 @@
                               },
                               "providerOptions": {
                                 "openai": {
-                                  "itemId": "<itemId:2>"
+                                  "itemId": "<itemId:3>"
                                 }
                               },
+                              "toolCallId": "<toolCallId:2>",
                               "toolName": "get_weather",
                               "type": "tool-result"
                             }
@@ -1988,9 +4045,10 @@
                         },
                         "providerMetadata": {
                           "openai": {
-                            "itemId": "<itemId:4>"
+                            "itemId": "<itemId:6>"
                           }
                         },
+                        "toolCallId": "<toolCallId:5>",
                         "toolName": "get_weather",
                         "type": "tool-call"
                       },
@@ -2002,9 +4060,10 @@
                         "output": "{\"condition\":\"sunny\",\"location\":\"Paris, France\",\"temperatureC\":22}",
                         "providerMetadata": {
                           "openai": {
-                            "itemId": "<itemId:4>"
+                            "itemId": "<itemId:6>"
                           }
                         },
+                        "toolCallId": "<toolCallId:5>",
                         "toolName": "get_weather",
                         "type": "tool-result"
                       }
@@ -2016,7 +4075,7 @@
                     },
                     "providerMetadata": {
                       "openai": {
-                        "responseId": "<responseId:5>",
+                        "responseId": "<responseId:7>",
                         "serviceTier": "default"
                       }
                     },
@@ -2030,9 +4089,10 @@
                               },
                               "providerOptions": {
                                 "openai": {
-                                  "itemId": "<itemId:4>"
+                                  "itemId": "<itemId:6>"
                                 }
                               },
+                              "toolCallId": "<toolCallId:5>",
                               "toolName": "get_weather",
                               "type": "tool-call"
                             }
@@ -2048,9 +4108,10 @@
                               },
                               "providerOptions": {
                                 "openai": {
-                                  "itemId": "<itemId:4>"
+                                  "itemId": "<itemId:6>"
                                 }
                               },
+                              "toolCallId": "<toolCallId:5>",
                               "toolName": "get_weather",
                               "type": "tool-result"
                             }
@@ -2098,9 +4159,10 @@
                         },
                         "providerMetadata": {
                           "openai": {
-                            "itemId": "<itemId:6>"
+                            "itemId": "<itemId:9>"
                           }
                         },
+                        "toolCallId": "<toolCallId:8>",
                         "toolName": "get_weather",
                         "type": "tool-call"
                       },
@@ -2112,9 +4174,10 @@
                         "output": "{\"condition\":\"sunny\",\"location\":\"Paris, France\",\"temperatureC\":22}",
                         "providerMetadata": {
                           "openai": {
-                            "itemId": "<itemId:6>"
+                            "itemId": "<itemId:9>"
                           }
                         },
+                        "toolCallId": "<toolCallId:8>",
                         "toolName": "get_weather",
                         "type": "tool-result"
                       }
@@ -2126,7 +4189,7 @@
                     },
                     "providerMetadata": {
                       "openai": {
-                        "responseId": "<responseId:7>",
+                        "responseId": "<responseId:10>",
                         "serviceTier": "default"
                       }
                     },
@@ -2140,9 +4203,10 @@
                               },
                               "providerOptions": {
                                 "openai": {
-                                  "itemId": "<itemId:6>"
+                                  "itemId": "<itemId:9>"
                                 }
                               },
+                              "toolCallId": "<toolCallId:8>",
                               "toolName": "get_weather",
                               "type": "tool-call"
                             }
@@ -2158,9 +4222,10 @@
                               },
                               "providerOptions": {
                                 "openai": {
-                                  "itemId": "<itemId:6>"
+                                  "itemId": "<itemId:9>"
                                 }
                               },
+                              "toolCallId": "<toolCallId:8>",
                               "toolName": "get_weather",
                               "type": "tool-result"
                             }
@@ -2208,9 +4273,10 @@
                         },
                         "providerMetadata": {
                           "openai": {
-                            "itemId": "<itemId:8>"
+                            "itemId": "<itemId:12>"
                           }
                         },
+                        "toolCallId": "<toolCallId:11>",
                         "toolName": "get_weather",
                         "type": "tool-call"
                       },
@@ -2222,9 +4288,10 @@
                         "output": "{\"condition\":\"sunny\",\"location\":\"Paris, France\",\"temperatureC\":22}",
                         "providerMetadata": {
                           "openai": {
-                            "itemId": "<itemId:8>"
+                            "itemId": "<itemId:12>"
                           }
                         },
+                        "toolCallId": "<toolCallId:11>",
                         "toolName": "get_weather",
                         "type": "tool-result"
                       }
@@ -2236,7 +4303,7 @@
                     },
                     "providerMetadata": {
                       "openai": {
-                        "responseId": "<responseId:9>",
+                        "responseId": "<responseId:13>",
                         "serviceTier": "default"
                       }
                     },
@@ -2250,9 +4317,10 @@
                               },
                               "providerOptions": {
                                 "openai": {
-                                  "itemId": "<itemId:8>"
+                                  "itemId": "<itemId:12>"
                                 }
                               },
+                              "toolCallId": "<toolCallId:11>",
                               "toolName": "get_weather",
                               "type": "tool-call"
                             }
@@ -2268,9 +4336,10 @@
                               },
                               "providerOptions": {
                                 "openai": {
-                                  "itemId": "<itemId:8>"
+                                  "itemId": "<itemId:12>"
                                 }
                               },
+                              "toolCallId": "<toolCallId:11>",
                               "toolName": "get_weather",
                               "type": "tool-result"
                             }
@@ -2318,21 +4387,10 @@
                     },
                     "providerMetadata": {
                       "openai": {
-                        "itemId": "<itemId:2>"
+                        "itemId": "<itemId:3>"
                       }
                     },
-                    "toolName": "get_weather",
-                    "type": "tool-call"
-                  },
-                  {
-                    "input": {
-                      "location": "Paris, France"
-                    },
-                    "providerMetadata": {
-                      "openai": {
-                        "itemId": "<itemId:4>"
-                      }
-                    },
+                    "toolCallId": "<toolCallId:2>",
                     "toolName": "get_weather",
                     "type": "tool-call"
                   },
@@ -2345,6 +4403,7 @@
                         "itemId": "<itemId:6>"
                       }
                     },
+                    "toolCallId": "<toolCallId:5>",
                     "toolName": "get_weather",
                     "type": "tool-call"
                   },
@@ -2354,9 +4413,23 @@
                     },
                     "providerMetadata": {
                       "openai": {
-                        "itemId": "<itemId:8>"
+                        "itemId": "<itemId:9>"
                       }
                     },
+                    "toolCallId": "<toolCallId:8>",
+                    "toolName": "get_weather",
+                    "type": "tool-call"
+                  },
+                  {
+                    "input": {
+                      "location": "Paris, France"
+                    },
+                    "providerMetadata": {
+                      "openai": {
+                        "itemId": "<itemId:12>"
+                      }
+                    },
+                    "toolCallId": "<toolCallId:11>",
                     "toolName": "get_weather",
                     "type": "tool-call"
                   }
@@ -2370,23 +4443,10 @@
                     "output": "{\"condition\":\"sunny\",\"location\":\"Paris, France\",\"temperatureC\":22}",
                     "providerMetadata": {
                       "openai": {
-                        "itemId": "<itemId:2>"
+                        "itemId": "<itemId:3>"
                       }
                     },
-                    "toolName": "get_weather",
-                    "type": "tool-result"
-                  },
-                  {
-                    "dynamic": false,
-                    "input": {
-                      "location": "Paris, France"
-                    },
-                    "output": "{\"condition\":\"sunny\",\"location\":\"Paris, France\",\"temperatureC\":22}",
-                    "providerMetadata": {
-                      "openai": {
-                        "itemId": "<itemId:4>"
-                      }
-                    },
+                    "toolCallId": "<toolCallId:2>",
                     "toolName": "get_weather",
                     "type": "tool-result"
                   },
@@ -2401,6 +4461,7 @@
                         "itemId": "<itemId:6>"
                       }
                     },
+                    "toolCallId": "<toolCallId:5>",
                     "toolName": "get_weather",
                     "type": "tool-result"
                   },
@@ -2412,9 +4473,25 @@
                     "output": "{\"condition\":\"sunny\",\"location\":\"Paris, France\",\"temperatureC\":22}",
                     "providerMetadata": {
                       "openai": {
-                        "itemId": "<itemId:8>"
+                        "itemId": "<itemId:9>"
                       }
                     },
+                    "toolCallId": "<toolCallId:8>",
+                    "toolName": "get_weather",
+                    "type": "tool-result"
+                  },
+                  {
+                    "dynamic": false,
+                    "input": {
+                      "location": "Paris, France"
+                    },
+                    "output": "{\"condition\":\"sunny\",\"location\":\"Paris, France\",\"temperatureC\":22}",
+                    "providerMetadata": {
+                      "openai": {
+                        "itemId": "<itemId:12>"
+                      }
+                    },
+                    "toolCallId": "<toolCallId:11>",
                     "toolName": "get_weather",
                     "type": "tool-result"
                   }
@@ -2504,6 +4581,26 @@
                   }
                 ],
                 "finishReason": "stop",
+                "providerMetadata": {
+                  "anthropic": {
+                    "container": null,
+                    "contextManagement": null,
+                    "iterations": null,
+                    "stopSequence": null,
+                    "usage": {
+                      "cache_creation": {
+                        "ephemeral_1h_input_tokens": 0,
+                        "ephemeral_5m_input_tokens": 0
+                      },
+                      "cache_creation_input_tokens": 0,
+                      "cache_read_input_tokens": 4516,
+                      "inference_geo": "not_available",
+                      "input_tokens": 3,
+                      "output_tokens": 7,
+                      "service_tier": "standard"
+                    }
+                  }
+                },
                 "response": {},
                 "usage": {
                   "inputTokenDetails": {
@@ -2777,6 +4874,26 @@
                       }
                     ],
                     "finishReason": "stop",
+                    "providerMetadata": {
+                      "anthropic": {
+                        "container": null,
+                        "contextManagement": null,
+                        "iterations": null,
+                        "stopSequence": null,
+                        "usage": {
+                          "cache_creation": {
+                            "ephemeral_1h_input_tokens": 0,
+                            "ephemeral_5m_input_tokens": 0
+                          },
+                          "cache_creation_input_tokens": 0,
+                          "cache_read_input_tokens": 4516,
+                          "inference_geo": "not_available",
+                          "input_tokens": 3,
+                          "output_tokens": 7,
+                          "service_tier": "standard"
+                        }
+                      }
+                    },
                     "response": {},
                     "usage": {
                       "inputTokenDetails": {
@@ -3047,6 +5164,26 @@
                       }
                     ],
                     "finishReason": "stop",
+                    "providerMetadata": {
+                      "anthropic": {
+                        "container": null,
+                        "contextManagement": null,
+                        "iterations": null,
+                        "stopSequence": null,
+                        "usage": {
+                          "cache_creation": {
+                            "ephemeral_1h_input_tokens": 0,
+                            "ephemeral_5m_input_tokens": 0
+                          },
+                          "cache_creation_input_tokens": 0,
+                          "cache_read_input_tokens": 4516,
+                          "inference_geo": "not_available",
+                          "input_tokens": 3,
+                          "output_tokens": 7,
+                          "service_tier": "standard"
+                        }
+                      }
+                    },
                     "response": {},
                     "usage": {
                       "inputTokenDetails": {
@@ -3627,7 +5764,7 @@
                       {
                         "providerMetadata": {
                           "openai": {
-                            "itemId": "<itemId:1>"
+                            "itemId": "<itemId:2>"
                           }
                         },
                         "text": "HELLO",
@@ -3635,6 +5772,12 @@
                       }
                     ],
                     "finishReason": "stop",
+                    "providerMetadata": {
+                      "openai": {
+                        "responseId": "<responseId:1>",
+                        "serviceTier": "default"
+                      }
+                    },
                     "response": {},
                     "usage": {
                       "inputTokenDetails": {
@@ -3881,7 +6024,7 @@
                       {
                         "providerMetadata": {
                           "openai": {
-                            "itemId": "<itemId:1>"
+                            "itemId": "<itemId:2>"
                           }
                         },
                         "text": "STREAM HELLO",
@@ -3889,6 +6032,12 @@
                       }
                     ],
                     "finishReason": "stop",
+                    "providerMetadata": {
+                      "openai": {
+                        "responseId": "<responseId:1>",
+                        "serviceTier": "default"
+                      }
+                    },
                     "response": {},
                     "usage": {
                       "inputTokenDetails": {
@@ -4201,9 +6350,10 @@
                         },
                         "providerMetadata": {
                           "openai": {
-                            "itemId": "<itemId:1>"
+                            "itemId": "<itemId:3>"
                           }
                         },
+                        "toolCallId": "<toolCallId:2>",
                         "toolName": "get_store_price",
                         "type": "tool-call"
                       },
@@ -4214,14 +6364,21 @@
                         },
                         "providerMetadata": {
                           "openai": {
-                            "itemId": "<itemId:2>"
+                            "itemId": "<itemId:5>"
                           }
                         },
+                        "toolCallId": "<toolCallId:4>",
                         "toolName": "get_store_price",
                         "type": "tool-call"
                       }
                     ],
                     "finishReason": "tool-calls",
+                    "providerMetadata": {
+                      "openai": {
+                        "responseId": "<responseId:1>",
+                        "serviceTier": "default"
+                      }
+                    },
                     "response": {},
                     "usage": {
                       "inputTokenDetails": {
@@ -4276,6 +6433,7 @@
                       "integration_name": "ai-sdk",
                       "sdk_language": "typescript"
                     },
+                    "toolCallId": "<toolCallId:1>",
                     "toolName": "get_store_price"
                   }
                 },
@@ -4293,6 +6451,7 @@
                       "integration_name": "ai-sdk",
                       "sdk_language": "typescript"
                     },
+                    "toolCallId": "<toolCallId:1>",
                     "toolName": "get_store_price"
                   }
                 },
@@ -4325,9 +6484,10 @@
                             },
                             "providerOptions": {
                               "openai": {
-                                "itemId": "<itemId:1>"
+                                "itemId": "<itemId:2>"
                               }
                             },
+                            "toolCallId": "<toolCallId:1>",
                             "toolName": "get_store_price",
                             "type": "tool-call"
                           },
@@ -4338,9 +6498,10 @@
                             },
                             "providerOptions": {
                               "openai": {
-                                "itemId": "<itemId:2>"
+                                "itemId": "<itemId:4>"
                               }
                             },
+                            "toolCallId": "<toolCallId:3>",
                             "toolName": "get_store_price",
                             "type": "tool-call"
                           }
@@ -4356,9 +6517,10 @@
                             },
                             "providerOptions": {
                               "openai": {
-                                "itemId": "<itemId:1>"
+                                "itemId": "<itemId:2>"
                               }
                             },
+                            "toolCallId": "<toolCallId:1>",
                             "toolName": "get_store_price",
                             "type": "tool-result"
                           },
@@ -4369,9 +6531,10 @@
                             },
                             "providerOptions": {
                               "openai": {
-                                "itemId": "<itemId:2>"
+                                "itemId": "<itemId:4>"
                               }
                             },
+                            "toolCallId": "<toolCallId:3>",
                             "toolName": "get_store_price",
                             "type": "tool-result"
                           }
@@ -4444,14 +6607,21 @@
                         },
                         "providerMetadata": {
                           "openai": {
-                            "itemId": "<itemId:1>"
+                            "itemId": "<itemId:3>"
                           }
                         },
+                        "toolCallId": "<toolCallId:2>",
                         "toolName": "apply_discount",
                         "type": "tool-call"
                       }
                     ],
                     "finishReason": "tool-calls",
+                    "providerMetadata": {
+                      "openai": {
+                        "responseId": "<responseId:1>",
+                        "serviceTier": "default"
+                      }
+                    },
                     "response": {},
                     "usage": {
                       "inputTokenDetails": {
@@ -4506,6 +6676,7 @@
                       "integration_name": "ai-sdk",
                       "sdk_language": "typescript"
                     },
+                    "toolCallId": "<toolCallId:1>",
                     "toolName": "apply_discount"
                   }
                 },
@@ -4538,9 +6709,10 @@
                             },
                             "providerOptions": {
                               "openai": {
-                                "itemId": "<itemId:1>"
+                                "itemId": "<itemId:2>"
                               }
                             },
+                            "toolCallId": "<toolCallId:1>",
                             "toolName": "get_store_price",
                             "type": "tool-call"
                           },
@@ -4551,9 +6723,10 @@
                             },
                             "providerOptions": {
                               "openai": {
-                                "itemId": "<itemId:2>"
+                                "itemId": "<itemId:4>"
                               }
                             },
+                            "toolCallId": "<toolCallId:3>",
                             "toolName": "get_store_price",
                             "type": "tool-call"
                           }
@@ -4569,9 +6742,10 @@
                             },
                             "providerOptions": {
                               "openai": {
-                                "itemId": "<itemId:1>"
+                                "itemId": "<itemId:2>"
                               }
                             },
+                            "toolCallId": "<toolCallId:1>",
                             "toolName": "get_store_price",
                             "type": "tool-result"
                           },
@@ -4582,9 +6756,10 @@
                             },
                             "providerOptions": {
                               "openai": {
-                                "itemId": "<itemId:2>"
+                                "itemId": "<itemId:4>"
                               }
                             },
+                            "toolCallId": "<toolCallId:3>",
                             "toolName": "get_store_price",
                             "type": "tool-result"
                           }
@@ -4600,9 +6775,10 @@
                             },
                             "providerOptions": {
                               "openai": {
-                                "itemId": "<itemId:3>"
+                                "itemId": "<itemId:6>"
                               }
                             },
+                            "toolCallId": "<toolCallId:5>",
                             "toolName": "apply_discount",
                             "type": "tool-call"
                           }
@@ -4618,9 +6794,10 @@
                             },
                             "providerOptions": {
                               "openai": {
-                                "itemId": "<itemId:3>"
+                                "itemId": "<itemId:6>"
                               }
                             },
+                            "toolCallId": "<toolCallId:5>",
                             "toolName": "apply_discount",
                             "type": "tool-result"
                           }
@@ -4689,37 +6866,43 @@
                       {
                         "providerMetadata": {
                           "openai": {
-                            "itemId": "<itemId:1>"
+                            "itemId": "<itemId:2>"
                           }
                         },
-                        "text": "Here are the prices for the laptop:\n\n- **Store A**: $999\n- **Store B**: $1099\n\nThe cheaper price is from **Store A** at $999. After applying the discount code **SAVE20**, the final total is **$799.20**.",
+                        "text": "Here are the prices for the laptop:\n\n- **Store A**: $999\n- **Store B**: $1099\n\nThe cheaper price is from **Store A**. After applying the discount code **SAVE20**, the final total is **$799.20**.",
                         "type": "text"
                       }
                     ],
                     "finishReason": "stop",
+                    "providerMetadata": {
+                      "openai": {
+                        "responseId": "<responseId:1>",
+                        "serviceTier": "default"
+                      }
+                    },
                     "response": {},
                     "usage": {
                       "inputTokenDetails": {
                         "cacheReadTokens": 0,
-                        "noCacheTokens": 308
+                        "noCacheTokens": 305
                       },
-                      "inputTokens": 308,
+                      "inputTokens": 305,
                       "outputTokenDetails": {
                         "reasoningTokens": 0,
-                        "textTokens": 62
+                        "textTokens": 59
                       },
-                      "outputTokens": 62,
+                      "outputTokens": 59,
                       "raw": {
-                        "input_tokens": 308,
+                        "input_tokens": 305,
                         "input_tokens_details": {
                           "cached_tokens": 0
                         },
-                        "output_tokens": 62,
+                        "output_tokens": 59,
                         "output_tokens_details": {
                           "reasoning_tokens": 0
                         }
                       },
-                      "totalTokens": 370
+                      "totalTokens": 364
                     }
                   },
                   "metadata": {
@@ -4731,10 +6914,10 @@
                     "provider": "openai.responses"
                   },
                   "metrics": {
-                    "completion_tokens": 62,
+                    "completion_tokens": 59,
                     "prompt_cached_tokens": 0,
-                    "prompt_tokens": 308,
-                    "tokens": 370
+                    "prompt_tokens": 305,
+                    "tokens": 364
                   }
                 }
               ],
@@ -4817,9 +7000,10 @@
                     },
                     "providerMetadata": {
                       "openai": {
-                        "itemId": "<itemId:2>"
+                        "itemId": "<itemId:3>"
                       }
                     },
+                    "toolCallId": "<toolCallId:2>",
                     "toolName": "get_store_price",
                     "type": "tool-call"
                   },
@@ -4830,9 +7014,10 @@
                     },
                     "providerMetadata": {
                       "openai": {
-                        "itemId": "<itemId:3>"
+                        "itemId": "<itemId:5>"
                       }
                     },
+                    "toolCallId": "<toolCallId:4>",
                     "toolName": "get_store_price",
                     "type": "tool-call"
                   },
@@ -4845,9 +7030,10 @@
                     "output": "{\"item\":\"laptop\",\"price\":999,\"store\":\"StoreA\"}",
                     "providerMetadata": {
                       "openai": {
-                        "itemId": "<itemId:2>"
+                        "itemId": "<itemId:3>"
                       }
                     },
+                    "toolCallId": "<toolCallId:2>",
                     "toolName": "get_store_price",
                     "type": "tool-result"
                   },
@@ -4860,9 +7046,10 @@
                     "output": "{\"item\":\"laptop\",\"price\":1099,\"store\":\"StoreB\"}",
                     "providerMetadata": {
                       "openai": {
-                        "itemId": "<itemId:3>"
+                        "itemId": "<itemId:5>"
                       }
                     },
+                    "toolCallId": "<toolCallId:4>",
                     "toolName": "get_store_price",
                     "type": "tool-result"
                   },
@@ -4873,9 +7060,10 @@
                     },
                     "providerMetadata": {
                       "openai": {
-                        "itemId": "<itemId:5>"
+                        "itemId": "<itemId:8>"
                       }
                     },
+                    "toolCallId": "<toolCallId:7>",
                     "toolName": "apply_discount",
                     "type": "tool-call"
                   },
@@ -4888,26 +7076,27 @@
                     "output": "{\"discountCode\":\"SAVE20\",\"finalTotal\":799.2,\"originalTotal\":999}",
                     "providerMetadata": {
                       "openai": {
-                        "itemId": "<itemId:5>"
+                        "itemId": "<itemId:8>"
                       }
                     },
+                    "toolCallId": "<toolCallId:7>",
                     "toolName": "apply_discount",
                     "type": "tool-result"
                   },
                   {
                     "providerMetadata": {
                       "openai": {
-                        "itemId": "<itemId:7>"
+                        "itemId": "<itemId:10>"
                       }
                     },
-                    "text": "Here are the prices for the laptop:\n\n- **Store A**: $999\n- **Store B**: $1099\n\nThe cheaper price is from **Store A** at $999. After applying the discount code **SAVE20**, the final total is **$799.20**.",
+                    "text": "Here are the prices for the laptop:\n\n- **Store A**: $999\n- **Store B**: $1099\n\nThe cheaper price is from **Store A**. After applying the discount code **SAVE20**, the final total is **$799.20**.",
                     "type": "text"
                   }
                 ],
                 "finishReason": "stop",
                 "providerMetadata": {
                   "openai": {
-                    "responseId": "<responseId:8>",
+                    "responseId": "<responseId:11>",
                     "serviceTier": "default"
                   }
                 },
@@ -4918,10 +7107,10 @@
                         {
                           "providerOptions": {
                             "openai": {
-                              "itemId": "<itemId:7>"
+                              "itemId": "<itemId:10>"
                             }
                           },
-                          "text": "Here are the prices for the laptop:\n\n- **Store A**: $999\n- **Store B**: $1099\n\nThe cheaper price is from **Store A** at $999. After applying the discount code **SAVE20**, the final total is **$799.20**.",
+                          "text": "Here are the prices for the laptop:\n\n- **Store A**: $999\n- **Store B**: $1099\n\nThe cheaper price is from **Store A**. After applying the discount code **SAVE20**, the final total is **$799.20**.",
                           "type": "text"
                         }
                       ],
@@ -4943,9 +7132,10 @@
                         },
                         "providerMetadata": {
                           "openai": {
-                            "itemId": "<itemId:2>"
+                            "itemId": "<itemId:3>"
                           }
                         },
+                        "toolCallId": "<toolCallId:2>",
                         "toolName": "get_store_price",
                         "type": "tool-call"
                       },
@@ -4956,9 +7146,10 @@
                         },
                         "providerMetadata": {
                           "openai": {
-                            "itemId": "<itemId:3>"
+                            "itemId": "<itemId:5>"
                           }
                         },
+                        "toolCallId": "<toolCallId:4>",
                         "toolName": "get_store_price",
                         "type": "tool-call"
                       },
@@ -4971,9 +7162,10 @@
                         "output": "{\"item\":\"laptop\",\"price\":999,\"store\":\"StoreA\"}",
                         "providerMetadata": {
                           "openai": {
-                            "itemId": "<itemId:2>"
+                            "itemId": "<itemId:3>"
                           }
                         },
+                        "toolCallId": "<toolCallId:2>",
                         "toolName": "get_store_price",
                         "type": "tool-result"
                       },
@@ -4986,9 +7178,10 @@
                         "output": "{\"item\":\"laptop\",\"price\":1099,\"store\":\"StoreB\"}",
                         "providerMetadata": {
                           "openai": {
-                            "itemId": "<itemId:3>"
+                            "itemId": "<itemId:5>"
                           }
                         },
+                        "toolCallId": "<toolCallId:4>",
                         "toolName": "get_store_price",
                         "type": "tool-result"
                       }
@@ -5000,7 +7193,7 @@
                     },
                     "providerMetadata": {
                       "openai": {
-                        "responseId": "<responseId:4>",
+                        "responseId": "<responseId:6>",
                         "serviceTier": "default"
                       }
                     },
@@ -5015,9 +7208,10 @@
                               },
                               "providerOptions": {
                                 "openai": {
-                                  "itemId": "<itemId:2>"
+                                  "itemId": "<itemId:3>"
                                 }
                               },
+                              "toolCallId": "<toolCallId:2>",
                               "toolName": "get_store_price",
                               "type": "tool-call"
                             },
@@ -5028,9 +7222,10 @@
                               },
                               "providerOptions": {
                                 "openai": {
-                                  "itemId": "<itemId:3>"
+                                  "itemId": "<itemId:5>"
                                 }
                               },
+                              "toolCallId": "<toolCallId:4>",
                               "toolName": "get_store_price",
                               "type": "tool-call"
                             }
@@ -5046,9 +7241,10 @@
                               },
                               "providerOptions": {
                                 "openai": {
-                                  "itemId": "<itemId:2>"
+                                  "itemId": "<itemId:3>"
                                 }
                               },
+                              "toolCallId": "<toolCallId:2>",
                               "toolName": "get_store_price",
                               "type": "tool-result"
                             },
@@ -5059,9 +7255,10 @@
                               },
                               "providerOptions": {
                                 "openai": {
-                                  "itemId": "<itemId:3>"
+                                  "itemId": "<itemId:5>"
                                 }
                               },
+                              "toolCallId": "<toolCallId:4>",
                               "toolName": "get_store_price",
                               "type": "tool-result"
                             }
@@ -5110,9 +7307,10 @@
                         },
                         "providerMetadata": {
                           "openai": {
-                            "itemId": "<itemId:5>"
+                            "itemId": "<itemId:8>"
                           }
                         },
+                        "toolCallId": "<toolCallId:7>",
                         "toolName": "apply_discount",
                         "type": "tool-call"
                       },
@@ -5125,9 +7323,10 @@
                         "output": "{\"discountCode\":\"SAVE20\",\"finalTotal\":799.2,\"originalTotal\":999}",
                         "providerMetadata": {
                           "openai": {
-                            "itemId": "<itemId:5>"
+                            "itemId": "<itemId:8>"
                           }
                         },
+                        "toolCallId": "<toolCallId:7>",
                         "toolName": "apply_discount",
                         "type": "tool-result"
                       }
@@ -5139,7 +7338,7 @@
                     },
                     "providerMetadata": {
                       "openai": {
-                        "responseId": "<responseId:6>",
+                        "responseId": "<responseId:9>",
                         "serviceTier": "default"
                       }
                     },
@@ -5154,9 +7353,10 @@
                               },
                               "providerOptions": {
                                 "openai": {
-                                  "itemId": "<itemId:5>"
+                                  "itemId": "<itemId:8>"
                                 }
                               },
+                              "toolCallId": "<toolCallId:7>",
                               "toolName": "apply_discount",
                               "type": "tool-call"
                             }
@@ -5172,9 +7372,10 @@
                               },
                               "providerOptions": {
                                 "openai": {
-                                  "itemId": "<itemId:5>"
+                                  "itemId": "<itemId:8>"
                                 }
                               },
+                              "toolCallId": "<toolCallId:7>",
                               "toolName": "apply_discount",
                               "type": "tool-result"
                             }
@@ -5219,10 +7420,10 @@
                       {
                         "providerMetadata": {
                           "openai": {
-                            "itemId": "<itemId:7>"
+                            "itemId": "<itemId:10>"
                           }
                         },
-                        "text": "Here are the prices for the laptop:\n\n- **Store A**: $999\n- **Store B**: $1099\n\nThe cheaper price is from **Store A** at $999. After applying the discount code **SAVE20**, the final total is **$799.20**.",
+                        "text": "Here are the prices for the laptop:\n\n- **Store A**: $999\n- **Store B**: $1099\n\nThe cheaper price is from **Store A**. After applying the discount code **SAVE20**, the final total is **$799.20**.",
                         "type": "text"
                       }
                     ],
@@ -5233,7 +7434,7 @@
                     },
                     "providerMetadata": {
                       "openai": {
-                        "responseId": "<responseId:8>",
+                        "responseId": "<responseId:11>",
                         "serviceTier": "default"
                       }
                     },
@@ -5244,10 +7445,10 @@
                             {
                               "providerOptions": {
                                 "openai": {
-                                  "itemId": "<itemId:7>"
+                                  "itemId": "<itemId:10>"
                                 }
                               },
-                              "text": "Here are the prices for the laptop:\n\n- **Store A**: $999\n- **Store B**: $1099\n\nThe cheaper price is from **Store A** at $999. After applying the discount code **SAVE20**, the final total is **$799.20**.",
+                              "text": "Here are the prices for the laptop:\n\n- **Store A**: $999\n- **Store B**: $1099\n\nThe cheaper price is from **Store A**. After applying the discount code **SAVE20**, the final total is **$799.20**.",
                               "type": "text"
                             }
                           ],
@@ -5263,30 +7464,30 @@
                     "usage": {
                       "inputTokenDetails": {
                         "cacheReadTokens": 0,
-                        "noCacheTokens": 308
+                        "noCacheTokens": 305
                       },
-                      "inputTokens": 308,
+                      "inputTokens": 305,
                       "outputTokenDetails": {
                         "reasoningTokens": 0,
-                        "textTokens": 62
+                        "textTokens": 59
                       },
-                      "outputTokens": 62,
+                      "outputTokens": 59,
                       "raw": {
-                        "input_tokens": 308,
+                        "input_tokens": 305,
                         "input_tokens_details": {
                           "cached_tokens": 0
                         },
-                        "output_tokens": 62,
+                        "output_tokens": 59,
                         "output_tokens_details": {
                           "reasoning_tokens": 0
                         }
                       },
-                      "totalTokens": 370
+                      "totalTokens": 364
                     },
                     "warnings": []
                   }
                 ],
-                "text": "Here are the prices for the laptop:\n\n- **Store A**: $999\n- **Store B**: $1099\n\nThe cheaper price is from **Store A** at $999. After applying the discount code **SAVE20**, the final total is **$799.20**.",
+                "text": "Here are the prices for the laptop:\n\n- **Store A**: $999\n- **Store B**: $1099\n\nThe cheaper price is from **Store A**. After applying the discount code **SAVE20**, the final total is **$799.20**.",
                 "toolCalls": [
                   {
                     "input": {
@@ -5295,9 +7496,10 @@
                     },
                     "providerMetadata": {
                       "openai": {
-                        "itemId": "<itemId:2>"
+                        "itemId": "<itemId:3>"
                       }
                     },
+                    "toolCallId": "<toolCallId:2>",
                     "toolName": "get_store_price",
                     "type": "tool-call"
                   },
@@ -5308,9 +7510,10 @@
                     },
                     "providerMetadata": {
                       "openai": {
-                        "itemId": "<itemId:3>"
+                        "itemId": "<itemId:5>"
                       }
                     },
+                    "toolCallId": "<toolCallId:4>",
                     "toolName": "get_store_price",
                     "type": "tool-call"
                   },
@@ -5321,9 +7524,10 @@
                     },
                     "providerMetadata": {
                       "openai": {
-                        "itemId": "<itemId:5>"
+                        "itemId": "<itemId:8>"
                       }
                     },
+                    "toolCallId": "<toolCallId:7>",
                     "toolName": "apply_discount",
                     "type": "tool-call"
                   }
@@ -5338,9 +7542,10 @@
                     "output": "{\"item\":\"laptop\",\"price\":999,\"store\":\"StoreA\"}",
                     "providerMetadata": {
                       "openai": {
-                        "itemId": "<itemId:2>"
+                        "itemId": "<itemId:3>"
                       }
                     },
+                    "toolCallId": "<toolCallId:2>",
                     "toolName": "get_store_price",
                     "type": "tool-result"
                   },
@@ -5353,9 +7558,10 @@
                     "output": "{\"item\":\"laptop\",\"price\":1099,\"store\":\"StoreB\"}",
                     "providerMetadata": {
                       "openai": {
-                        "itemId": "<itemId:3>"
+                        "itemId": "<itemId:5>"
                       }
                     },
+                    "toolCallId": "<toolCallId:4>",
                     "toolName": "get_store_price",
                     "type": "tool-result"
                   },
@@ -5368,9 +7574,10 @@
                     "output": "{\"discountCode\":\"SAVE20\",\"finalTotal\":799.2,\"originalTotal\":999}",
                     "providerMetadata": {
                       "openai": {
-                        "itemId": "<itemId:5>"
+                        "itemId": "<itemId:8>"
                       }
                     },
+                    "toolCallId": "<toolCallId:7>",
                     "toolName": "apply_discount",
                     "type": "tool-result"
                   }
@@ -5378,28 +7585,28 @@
                 "totalUsage": {
                   "inputTokenDetails": {
                     "cacheReadTokens": 0,
-                    "noCacheTokens": 741
+                    "noCacheTokens": 738
                   },
-                  "inputTokens": 741,
+                  "inputTokens": 738,
                   "outputTokenDetails": {
                     "reasoningTokens": 0,
-                    "textTokens": 142
+                    "textTokens": 139
                   },
-                  "outputTokens": 142,
-                  "totalTokens": 883
+                  "outputTokens": 139,
+                  "totalTokens": 877
                 },
                 "usage": {
                   "inputTokenDetails": {
                     "cacheReadTokens": 0,
-                    "noCacheTokens": 741
+                    "noCacheTokens": 738
                   },
-                  "inputTokens": 741,
+                  "inputTokens": 738,
                   "outputTokenDetails": {
                     "reasoningTokens": 0,
-                    "textTokens": 142
+                    "textTokens": 139
                   },
-                  "outputTokens": 142,
-                  "totalTokens": 883
+                  "outputTokens": 139,
+                  "totalTokens": 877
                 },
                 "warnings": []
               },
@@ -5452,6 +7659,7 @@
                         "input": {
                           "location": "Paris, France"
                         },
+                        "toolCallId": "<toolCallId:1>",
                         "toolName": "get_weather",
                         "type": "tool-call"
                       }
@@ -5537,6 +7745,7 @@
                       "integration_name": "ai-sdk",
                       "sdk_language": "typescript"
                     },
+                    "toolCallId": "<toolCallId:1>",
                     "toolName": "get_weather"
                   },
                   "metrics": {
@@ -5568,6 +7777,7 @@
                             "input": {
                               "location": "Paris, France"
                             },
+                            "toolCallId": "<toolCallId:1>",
                             "toolName": "get_weather",
                             "type": "tool-call"
                           }
@@ -5585,6 +7795,7 @@
                                 "temperatureC": 22
                               }
                             },
+                            "toolCallId": "<toolCallId:1>",
                             "toolName": "get_weather",
                             "type": "tool-result"
                           }
@@ -5599,6 +7810,7 @@
                         "input": {
                           "location": "Paris, France"
                         },
+                        "toolCallId": "<toolCallId:1>",
                         "toolName": "get_weather",
                         "type": "tool-call"
                       }
@@ -5684,6 +7896,7 @@
                       "integration_name": "ai-sdk",
                       "sdk_language": "typescript"
                     },
+                    "toolCallId": "<toolCallId:1>",
                     "toolName": "get_weather"
                   },
                   "metrics": {
@@ -5715,6 +7928,7 @@
                             "input": {
                               "location": "Paris, France"
                             },
+                            "toolCallId": "<toolCallId:1>",
                             "toolName": "get_weather",
                             "type": "tool-call"
                           }
@@ -5732,6 +7946,7 @@
                                 "temperatureC": 22
                               }
                             },
+                            "toolCallId": "<toolCallId:1>",
                             "toolName": "get_weather",
                             "type": "tool-result"
                           }
@@ -5744,6 +7959,7 @@
                             "input": {
                               "location": "Paris, France"
                             },
+                            "toolCallId": "<toolCallId:2>",
                             "toolName": "get_weather",
                             "type": "tool-call"
                           }
@@ -5761,6 +7977,7 @@
                                 "temperatureC": 22
                               }
                             },
+                            "toolCallId": "<toolCallId:2>",
                             "toolName": "get_weather",
                             "type": "tool-result"
                           }
@@ -5775,6 +7992,7 @@
                         "input": {
                           "location": "Paris, France"
                         },
+                        "toolCallId": "<toolCallId:1>",
                         "toolName": "get_weather",
                         "type": "tool-call"
                       }
@@ -5860,6 +8078,7 @@
                       "integration_name": "ai-sdk",
                       "sdk_language": "typescript"
                     },
+                    "toolCallId": "<toolCallId:1>",
                     "toolName": "get_weather"
                   },
                   "metrics": {
@@ -5891,6 +8110,7 @@
                             "input": {
                               "location": "Paris, France"
                             },
+                            "toolCallId": "<toolCallId:1>",
                             "toolName": "get_weather",
                             "type": "tool-call"
                           }
@@ -5908,6 +8128,7 @@
                                 "temperatureC": 22
                               }
                             },
+                            "toolCallId": "<toolCallId:1>",
                             "toolName": "get_weather",
                             "type": "tool-result"
                           }
@@ -5920,6 +8141,7 @@
                             "input": {
                               "location": "Paris, France"
                             },
+                            "toolCallId": "<toolCallId:2>",
                             "toolName": "get_weather",
                             "type": "tool-call"
                           }
@@ -5937,6 +8159,7 @@
                                 "temperatureC": 22
                               }
                             },
+                            "toolCallId": "<toolCallId:2>",
                             "toolName": "get_weather",
                             "type": "tool-result"
                           }
@@ -5949,6 +8172,7 @@
                             "input": {
                               "location": "Paris, France"
                             },
+                            "toolCallId": "<toolCallId:3>",
                             "toolName": "get_weather",
                             "type": "tool-call"
                           }
@@ -5966,6 +8190,7 @@
                                 "temperatureC": 22
                               }
                             },
+                            "toolCallId": "<toolCallId:3>",
                             "toolName": "get_weather",
                             "type": "tool-result"
                           }
@@ -5980,6 +8205,7 @@
                         "input": {
                           "location": "Paris, France"
                         },
+                        "toolCallId": "<toolCallId:1>",
                         "toolName": "get_weather",
                         "type": "tool-call"
                       }
@@ -6065,6 +8291,7 @@
                       "integration_name": "ai-sdk",
                       "sdk_language": "typescript"
                     },
+                    "toolCallId": "<toolCallId:1>",
                     "toolName": "get_weather"
                   },
                   "metrics": {
@@ -6086,6 +8313,7 @@
                     "input": {
                       "location": "Paris, France"
                     },
+                    "toolCallId": "<toolCallId:8>",
                     "toolName": "get_weather",
                     "type": "tool-call"
                   }
@@ -6093,7 +8321,7 @@
                 "finishReason": "tool-calls",
                 "providerMetadata": {
                   "openai": {
-                    "responseId": "<responseId:5>",
+                    "responseId": "<responseId:9>",
                     "serviceTier": "default"
                   }
                 },
@@ -6113,6 +8341,7 @@
                         "input": {
                           "location": "Paris, France"
                         },
+                        "toolCallId": "<toolCallId:2>",
                         "toolName": "get_weather",
                         "type": "tool-call"
                       }
@@ -6124,7 +8353,7 @@
                     },
                     "providerMetadata": {
                       "openai": {
-                        "responseId": "<responseId:2>",
+                        "responseId": "<responseId:3>",
                         "serviceTier": "default"
                       }
                     },
@@ -6171,6 +8400,7 @@
                         "input": {
                           "location": "Paris, France"
                         },
+                        "toolCallId": "<toolCallId:4>",
                         "toolName": "get_weather",
                         "type": "tool-call"
                       }
@@ -6182,7 +8412,7 @@
                     },
                     "providerMetadata": {
                       "openai": {
-                        "responseId": "<responseId:3>",
+                        "responseId": "<responseId:5>",
                         "serviceTier": "default"
                       }
                     },
@@ -6229,6 +8459,7 @@
                         "input": {
                           "location": "Paris, France"
                         },
+                        "toolCallId": "<toolCallId:6>",
                         "toolName": "get_weather",
                         "type": "tool-call"
                       }
@@ -6240,7 +8471,7 @@
                     },
                     "providerMetadata": {
                       "openai": {
-                        "responseId": "<responseId:4>",
+                        "responseId": "<responseId:7>",
                         "serviceTier": "default"
                       }
                     },
@@ -6287,6 +8518,7 @@
                         "input": {
                           "location": "Paris, France"
                         },
+                        "toolCallId": "<toolCallId:8>",
                         "toolName": "get_weather",
                         "type": "tool-call"
                       }
@@ -6298,7 +8530,7 @@
                     },
                     "providerMetadata": {
                       "openai": {
-                        "responseId": "<responseId:5>",
+                        "responseId": "<responseId:9>",
                         "serviceTier": "default"
                       }
                     },
@@ -6345,6 +8577,7 @@
                     "input": {
                       "location": "Paris, France"
                     },
+                    "toolCallId": "<toolCallId:8>",
                     "toolName": "get_weather",
                     "type": "tool-call"
                   }
@@ -6436,6 +8669,7 @@
                         "input": {
                           "location": "Paris, France"
                         },
+                        "toolCallId": "<toolCallId:1>",
                         "toolName": "get_weather",
                         "type": "tool-call"
                       }
@@ -6521,6 +8755,7 @@
                       "integration_name": "ai-sdk",
                       "sdk_language": "typescript"
                     },
+                    "toolCallId": "<toolCallId:1>",
                     "toolName": "get_weather"
                   },
                   "metrics": {
@@ -6552,6 +8787,7 @@
                             "input": {
                               "location": "Paris, France"
                             },
+                            "toolCallId": "<toolCallId:1>",
                             "toolName": "get_weather",
                             "type": "tool-call"
                           }
@@ -6569,6 +8805,7 @@
                                 "temperatureC": 22
                               }
                             },
+                            "toolCallId": "<toolCallId:1>",
                             "toolName": "get_weather",
                             "type": "tool-result"
                           }
@@ -6583,6 +8820,7 @@
                         "input": {
                           "location": "Paris, France"
                         },
+                        "toolCallId": "<toolCallId:1>",
                         "toolName": "get_weather",
                         "type": "tool-call"
                       }
@@ -6668,6 +8906,7 @@
                       "integration_name": "ai-sdk",
                       "sdk_language": "typescript"
                     },
+                    "toolCallId": "<toolCallId:1>",
                     "toolName": "get_weather"
                   },
                   "metrics": {
@@ -6699,6 +8938,7 @@
                             "input": {
                               "location": "Paris, France"
                             },
+                            "toolCallId": "<toolCallId:1>",
                             "toolName": "get_weather",
                             "type": "tool-call"
                           }
@@ -6716,6 +8956,7 @@
                                 "temperatureC": 22
                               }
                             },
+                            "toolCallId": "<toolCallId:1>",
                             "toolName": "get_weather",
                             "type": "tool-result"
                           }
@@ -6728,6 +8969,7 @@
                             "input": {
                               "location": "Paris, France"
                             },
+                            "toolCallId": "<toolCallId:2>",
                             "toolName": "get_weather",
                             "type": "tool-call"
                           }
@@ -6745,6 +8987,7 @@
                                 "temperatureC": 22
                               }
                             },
+                            "toolCallId": "<toolCallId:2>",
                             "toolName": "get_weather",
                             "type": "tool-result"
                           }
@@ -6759,6 +9002,7 @@
                         "input": {
                           "location": "Paris, France"
                         },
+                        "toolCallId": "<toolCallId:1>",
                         "toolName": "get_weather",
                         "type": "tool-call"
                       }
@@ -6844,6 +9088,7 @@
                       "integration_name": "ai-sdk",
                       "sdk_language": "typescript"
                     },
+                    "toolCallId": "<toolCallId:1>",
                     "toolName": "get_weather"
                   },
                   "metrics": {
@@ -6875,6 +9120,7 @@
                             "input": {
                               "location": "Paris, France"
                             },
+                            "toolCallId": "<toolCallId:1>",
                             "toolName": "get_weather",
                             "type": "tool-call"
                           }
@@ -6892,6 +9138,7 @@
                                 "temperatureC": 22
                               }
                             },
+                            "toolCallId": "<toolCallId:1>",
                             "toolName": "get_weather",
                             "type": "tool-result"
                           }
@@ -6904,6 +9151,7 @@
                             "input": {
                               "location": "Paris, France"
                             },
+                            "toolCallId": "<toolCallId:2>",
                             "toolName": "get_weather",
                             "type": "tool-call"
                           }
@@ -6921,6 +9169,7 @@
                                 "temperatureC": 22
                               }
                             },
+                            "toolCallId": "<toolCallId:2>",
                             "toolName": "get_weather",
                             "type": "tool-result"
                           }
@@ -6933,6 +9182,7 @@
                             "input": {
                               "location": "Paris, France"
                             },
+                            "toolCallId": "<toolCallId:3>",
                             "toolName": "get_weather",
                             "type": "tool-call"
                           }
@@ -6950,6 +9200,7 @@
                                 "temperatureC": 22
                               }
                             },
+                            "toolCallId": "<toolCallId:3>",
                             "toolName": "get_weather",
                             "type": "tool-result"
                           }
@@ -6964,6 +9215,7 @@
                         "input": {
                           "location": "Paris, France"
                         },
+                        "toolCallId": "<toolCallId:1>",
                         "toolName": "get_weather",
                         "type": "tool-call"
                       }
@@ -7049,6 +9301,7 @@
                       "integration_name": "ai-sdk",
                       "sdk_language": "typescript"
                     },
+                    "toolCallId": "<toolCallId:1>",
                     "toolName": "get_weather"
                   },
                   "metrics": {
@@ -7070,6 +9323,7 @@
                     "input": {
                       "location": "Paris, France"
                     },
+                    "toolCallId": "<toolCallId:8>",
                     "toolName": "get_weather",
                     "type": "tool-call"
                   }
@@ -7077,7 +9331,7 @@
                 "finishReason": "tool-calls",
                 "providerMetadata": {
                   "openai": {
-                    "responseId": "<responseId:5>",
+                    "responseId": "<responseId:9>",
                     "serviceTier": "default"
                   }
                 },
@@ -7097,6 +9351,7 @@
                         "input": {
                           "location": "Paris, France"
                         },
+                        "toolCallId": "<toolCallId:2>",
                         "toolName": "get_weather",
                         "type": "tool-call"
                       }
@@ -7108,7 +9363,7 @@
                     },
                     "providerMetadata": {
                       "openai": {
-                        "responseId": "<responseId:2>",
+                        "responseId": "<responseId:3>",
                         "serviceTier": "default"
                       }
                     },
@@ -7155,6 +9410,7 @@
                         "input": {
                           "location": "Paris, France"
                         },
+                        "toolCallId": "<toolCallId:4>",
                         "toolName": "get_weather",
                         "type": "tool-call"
                       }
@@ -7166,7 +9422,7 @@
                     },
                     "providerMetadata": {
                       "openai": {
-                        "responseId": "<responseId:3>",
+                        "responseId": "<responseId:5>",
                         "serviceTier": "default"
                       }
                     },
@@ -7213,6 +9469,7 @@
                         "input": {
                           "location": "Paris, France"
                         },
+                        "toolCallId": "<toolCallId:6>",
                         "toolName": "get_weather",
                         "type": "tool-call"
                       }
@@ -7224,7 +9481,7 @@
                     },
                     "providerMetadata": {
                       "openai": {
-                        "responseId": "<responseId:4>",
+                        "responseId": "<responseId:7>",
                         "serviceTier": "default"
                       }
                     },
@@ -7271,6 +9528,7 @@
                         "input": {
                           "location": "Paris, France"
                         },
+                        "toolCallId": "<toolCallId:8>",
                         "toolName": "get_weather",
                         "type": "tool-call"
                       }
@@ -7282,7 +9540,7 @@
                     },
                     "providerMetadata": {
                       "openai": {
-                        "responseId": "<responseId:5>",
+                        "responseId": "<responseId:9>",
                         "serviceTier": "default"
                       }
                     },
@@ -7329,6 +9587,7 @@
                     "input": {
                       "location": "Paris, France"
                     },
+                    "toolCallId": "<toolCallId:8>",
                     "toolName": "get_weather",
                     "type": "tool-call"
                   }
@@ -7388,7 +9647,7 @@
         }
       ],
       "metadata": {
-        "aiSdkVersion": "7.0.0",
+        "aiSdkVersion": "7.0.103",
         "scenario": "ai-sdk-instrumentation",
         "testRunId": "<run:1>",
         "workflowVersion": "1.0.8"

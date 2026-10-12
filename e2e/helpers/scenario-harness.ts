@@ -80,6 +80,7 @@ export interface ScenarioRunContext {
 }
 
 interface ScenarioRunContextRecord {
+  forwardToProduction?: boolean;
   entry: string;
   runner: ScenarioRunner;
   scenarioDirName: string;
@@ -301,9 +302,11 @@ function getCassetteServerRoutes(): CassetteServerRoute[] {
       prefix: "/aws-bedrock-runtime",
       upstreamOrigin: `https://bedrock-runtime.${getBedrockRegion()}.amazonaws.com`,
     },
+    { prefix: "/elevenlabs", upstreamOrigin: "https://api.elevenlabs.io" },
     { prefix: "/cohere", upstreamOrigin: "https://api.cohere.com" },
     { prefix: "/cursor/v1", upstreamOrigin: "https://api.cursor.com/v1" },
     { prefix: "/cursor", upstreamOrigin: "https://api2.cursor.sh" },
+    { prefix: "/deepseek", upstreamOrigin: "https://api.deepseek.com" },
     {
       prefix: "/google-generative-language",
       upstreamOrigin: "https://generativelanguage.googleapis.com",
@@ -318,6 +321,7 @@ function getCassetteServerRoutes(): CassetteServerRoute[] {
     { prefix: "/ollama", upstreamOrigin: "https://ollama.com" },
     { prefix: "/openai", upstreamOrigin: "https://api.openai.com" },
     { prefix: "/openrouter", upstreamOrigin: "https://openrouter.ai" },
+    { prefix: "/typesafe", upstreamOrigin: "https://api.typesafe.ai" },
   ];
 }
 
@@ -336,9 +340,11 @@ function getCassetteEnv(wiring: ActiveCassetteWiring): Record<string, string> {
     ANTHROPIC_BASE_URL: `${serverUrl}/anthropic`,
     ANTHROPIC_BEDROCK_BASE_URL: `${serverUrl}/anthropic-bedrock`,
     AWS_BEDROCK_RUNTIME_BASE_URL: `${serverUrl}/aws-bedrock-runtime`,
+    ELEVENLABS_BASE_URL: `${serverUrl}/elevenlabs`,
     COHERE_BASE_URL: `${serverUrl}/cohere`,
     COHERE_API_URL: `${serverUrl}/cohere`,
     CURSOR_BACKEND_URL: `${serverUrl}/cursor`,
+    DEEPSEEK_BASE_URL: `${serverUrl}/deepseek/v1`,
     GEMINI_BASE_URL: `${serverUrl}/google-generative-language`,
     GEMINI_NEXT_GEN_API_BASE_URL: `${serverUrl}/google-generative-language`,
     GOOGLE_GENERATIVE_AI_BASE_URL: `${serverUrl}/google-generative-language`,
@@ -353,6 +359,7 @@ function getCassetteEnv(wiring: ActiveCassetteWiring): Record<string, string> {
     OLLAMA_HOST: `${serverUrl}/ollama`,
     OPENAI_BASE_URL: `${serverUrl}/openai/v1`,
     OPENROUTER_BASE_URL: `${serverUrl}/openrouter/api/v1`,
+    TYPESAFE_BASE_URL: `${serverUrl}/typesafe`,
   };
 }
 
@@ -392,7 +399,9 @@ const CASSETTE_PROVIDER_KEYS: Array<{
     envVars: ["COHERE_API_KEY", "CO_API_KEY"],
     placeholder: "cassette-placeholder",
   },
+  { envVars: ["ELEVENLABS_API_KEY"], placeholder: "cassette-placeholder" },
   { envVars: ["CURSOR_API_KEY"], placeholder: "key_cassette-placeholder" },
+  { envVars: ["DEEPSEEK_API_KEY"], placeholder: "sk-cassette-placeholder" },
   {
     envVars: ["GOOGLE_API_KEY", "GOOGLE_GENAI_API_KEY", "GEMINI_API_KEY"],
     placeholder: "cassette-placeholder",
@@ -406,6 +415,7 @@ const CASSETTE_PROVIDER_KEYS: Array<{
     envVars: ["OPENROUTER_API_KEY"],
     placeholder: "sk-or-cassette-placeholder",
   },
+  { envVars: ["TYPESAFE_API_KEY"], placeholder: "cassette-placeholder" },
 ];
 
 function getProviderKeyPlaceholders(): Record<string, string> {
@@ -697,9 +707,13 @@ interface ScenarioHarness {
 
 export async function withScenarioHarness(
   body: (harness: ScenarioHarness) => Promise<void>,
+  optionsForHarness: { forwardToProduction?: boolean } = {},
 ): Promise<void> {
   const { getProdForwarding } = await import("./prod-forwarding");
-  const prodForwarding = getProdForwarding();
+  const prodForwarding =
+    optionsForHarness.forwardToProduction === false
+      ? null
+      : getProdForwarding();
   const testRunId = createTestRunId();
   const server = await startMockBraintrustServer({
     prodForwarding,
@@ -829,6 +843,7 @@ export async function withScenarioHarness(
   ): Promise<ScenarioResult> => {
     const result = await run();
     await recordScenarioRunContext({
+      forwardToProduction: optionsForHarness.forwardToProduction,
       entry: options.entry ?? defaultEntry,
       runner,
       scenarioDirName: path.basename(

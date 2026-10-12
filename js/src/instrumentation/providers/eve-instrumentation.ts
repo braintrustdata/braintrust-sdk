@@ -50,6 +50,7 @@ type EveSpanReference = {
 };
 
 type TurnState = {
+  inputRecorded?: boolean;
   key: string;
   metadata: Record<string, unknown>;
   rootSpanId: string;
@@ -81,6 +82,7 @@ const eveRootSpanIdsByTurnKey = new LRUCache<string, string>({
  *
  * Eve 0.34.0 introduced the provider event API used here. Older Eve hook and
  * single-file instrumentation layouts are intentionally unsupported.
+ * Export the result directly from the Eve instrumentation module.
  */
 export function braintrustEveInstrumentation(
   options: {
@@ -89,9 +91,7 @@ export function braintrustEveInstrumentation(
   } = {},
 ): EveInstrumentationDefinition {
   const bridge = new EveBridge(options.metadata);
-  return {
-    // Supported older Eve versions use capture; newer versions prefer tracePolicy.
-    capture: "content",
+  const provider: Omit<EveInstrumentationDefinition, "capture"> = {
     tracePolicy: () => ({
       emit: true,
       recordInputs: true,
@@ -115,6 +115,16 @@ export function braintrustEveInstrumentation(
     flush: () => flush(),
     setup: options.setup,
   };
+  // Eve before 0.47.4 reads capture, while Eve 0.62+ rejects providers with
+  // an own capture property. Inherit it to support both version lines.
+  return Object.assign(
+    Object.create({ capture: "content" }) as Pick<
+      EveInstrumentationDefinition,
+      "capture"
+    >,
+    provider,
+    { [Symbol.for("eve.instrumentation.provider")]: true },
+  );
 }
 
 class ResumedEveSpan implements EveSpan {
@@ -241,9 +251,10 @@ class EveBridge {
     openModels.set(event.idempotencyKey, span);
     this.openModelsByAttempt.set(event.scope.attemptId, openModels);
 
-    if (input !== undefined) {
+    if (input !== undefined && !turn.inputRecorded) {
       const initialInput = initialTurnInput(input);
       if (initialInput !== undefined) {
+        turn.inputRecorded = true;
         this.updateTurn(turn, { input: initialInput });
       }
     }
@@ -394,7 +405,7 @@ class EveBridge {
     const ids = await generateEveIds("turn", event.sessionId, event.turnId);
     const parentSpanId =
       event.parentLineage === undefined
-        ? undefined
+        ? event.parentTraceContext?.spanId
         : await deterministicEveId(
             "eve:action",
             event.parentLineage.sessionId,
@@ -415,7 +426,8 @@ class EveBridge {
           );
     const rootSpanId =
       event.parentLineage === undefined
-        ? await deterministicEveId("eve:root", event.sessionId, event.turnId)
+        ? (event.parentTraceContext?.traceId ??
+          (await deterministicEveId("eve:root", event.sessionId, event.turnId)))
         : (parentTurn?.rootSpanId ??
           parentRootSpanId ??
           (typeof event.parentTraceContext?.traceId === "string" &&

@@ -92,7 +92,10 @@ describe.concurrent("variants", () => {
         runScenario: async ({ runScenarioDir }) => {
           await runScenarioDir({
             entry: scenario.wrapperEntry,
-            env: { OPENAI_PACKAGE_NAME: scenario.dependencyName },
+            env: {
+              BRAINTRUST_CAPTURE_ATTACHMENTS: "true",
+              OPENAI_PACKAGE_NAME: scenario.dependencyName,
+            },
             runContext: {
               variantKey: scenario.snapshotName,
               originalScenarioDir,
@@ -102,9 +105,8 @@ describe.concurrent("variants", () => {
           });
         },
         snapshotName: `${scenario.snapshotName}-wrapped`,
-        cassetteName: scenario.snapshotName,
         testFileUrl: import.meta.url,
-        timeoutMs: TIMEOUT_MS,
+        timeoutMs: 300_000,
         version: scenario.version,
       });
 
@@ -113,7 +115,10 @@ describe.concurrent("variants", () => {
         runScenario: async ({ runNodeScenarioDir }) => {
           await runNodeScenarioDir({
             entry: scenario.autoEntry,
-            env: { OPENAI_PACKAGE_NAME: scenario.dependencyName },
+            env: {
+              BRAINTRUST_CAPTURE_ATTACHMENTS: "true",
+              OPENAI_PACKAGE_NAME: scenario.dependencyName,
+            },
             nodeArgs: ["--import", "braintrust/hook.mjs"],
             runContext: {
               variantKey: scenario.snapshotName,
@@ -124,9 +129,8 @@ describe.concurrent("variants", () => {
           });
         },
         snapshotName: `${scenario.snapshotName}-auto-hook`,
-        cassetteName: scenario.snapshotName,
         testFileUrl: import.meta.url,
-        timeoutMs: TIMEOUT_MS,
+        timeoutMs: 300_000,
         version: scenario.version,
       });
     });

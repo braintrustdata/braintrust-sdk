@@ -18,3 +18,4 @@ export type { InstrumentationConfig } from "./registry";
 
 // Integration hook used by @braintrust/otel so core flushes also drain OTEL.
 export { registerOtelFlush } from "../logger";
+export type { SpanCustomizer, SpanExportData } from "./config";
