@@ -115,6 +115,7 @@ The same rule applies in cascaded and realtime pipelines:
 - **`generated_text`:** the full generated text, set only when it differs from `text`.
   - Cascaded: the TTS input.
   - Realtime: that item's output transcript.
+- **While `open`:** the assistant entry omits `text` until playout ends. Partial spoken text is never written. `text_status` is `missing` (or `not_captured` with capture off) until then, and its final value is set when playout ends.
 - **Fallback:** when there is no aligned text (no synchronized transcript, or TTS without word timestamps), `text` is the generated text. `text_source` is then `tts_input` (cascaded) or `realtime_output_transcript` (realtime), meaning it may overstate what was heard, and `generated_text` is omitted.
 
 All examples use `playout_aligned`; none show the fallback.
@@ -218,7 +219,7 @@ LiveKit creates a new `SpeechHandle` for each reply, including each reply after 
   - The user aggregator's push of the context (`LLMContextFrame`) is the commit.
 - **Assistant message:**
   - A record per TTS `context_id`, created at `TTSStartedFrame`; seq is assigned then.
-  - At TTS start the integration records `context_id` → the LLM span that is open, the one opened at `LLMFullResponseStartFrame` whose output feeds that context. That span becomes `produced_by_span_id`, and it gets `voice.output_message_id` once the id is known.
+  - At TTS start the integration records `context_id` → the most recent LLM span (opened at `LLMFullResponseStartFrame`) whose output feeds that TTS context. That span may already have ended, since TTS can start after the LLM response finished. That span becomes `produced_by_span_id`, and it gets `voice.output_message_id` once the id is known.
   - Bounds come from output-transport writes.
   - Spoken `text` follows [Assistant spoken text](#assistant-spoken-text), from `TTSTextFrame`s that passed the output transport.
   - Interruption comes from `InterruptionFrame` (not handled today; must be added).

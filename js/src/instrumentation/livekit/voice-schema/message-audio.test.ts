@@ -158,6 +158,17 @@ describe("message-audio schema", () => {
     ).toBe(false);
   });
 
+  it("rejects partial text on open assistant speech", () => {
+    expect(
+      parses({
+        ...base,
+        role: "assistant",
+        state: "open",
+        text_status: "partial",
+      }),
+    ).toBe(false);
+  });
+
   it("rejects uncommitted assistant speech that completed", () => {
     expect(parses({ ...base, role: "assistant", committed: false })).toBe(
       false,

@@ -75,6 +75,12 @@ export const voiceMessageSchema = z
         issue("uncommitted assistant speech is unplayed or interrupted");
     }
     if (
+      message.role === "assistant" &&
+      message.state === "open" &&
+      message.text !== undefined
+    )
+      issue("open assistant speech has no text until playout ends");
+    if (
       message.state === "unplayed" &&
       (message.selections.length > 0 ||
         message.interrupted_at_ms !== undefined ||
