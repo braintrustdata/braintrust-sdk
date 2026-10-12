@@ -429,7 +429,7 @@
           "at_ms": 3450,
           "basis": "local",
           "kind": "response_start",
-          "response_id": "r1",
+          "response_id": "speech_1",
           "span_id": "llm-1",
           "in_reply_to": ["u1"]
         },
@@ -438,7 +438,7 @@
           "at_ms": 4100,
           "basis": "local",
           "kind": "tool_call",
-          "response_id": "r1",
+          "response_id": "speech_1",
           "tool_call_id": "call_1",
           "name": "find_slots",
           "span_id": "tool-1"
@@ -457,7 +457,7 @@
           "at_ms": 4600,
           "basis": "local",
           "kind": "response_start",
-          "response_id": "r2",
+          "response_id": "speech_2",
           "span_id": "llm-2",
           "in_reply_to": ["u1"]
         },
@@ -467,8 +467,8 @@
           "basis": "audio",
           "kind": "speech_start",
           "speaker": "agent",
-          "utterance_id": "speech_1/0",
-          "response_id": "r2"
+          "utterance_id": "speech_2/0",
+          "response_id": "speech_2"
         },
         {
           "seq": 10,
@@ -484,7 +484,7 @@
           "basis": "audio",
           "kind": "speech_end",
           "speaker": "agent",
-          "utterance_id": "speech_1/0",
+          "utterance_id": "speech_2/0",
           "interrupted": true,
           "played_ms": 2600
         },
@@ -494,7 +494,7 @@
           "basis": "local",
           "kind": "transcript",
           "speaker": "agent",
-          "utterance_id": "speech_1/0",
+          "utterance_id": "speech_2/0",
           "final": true,
           "text": "I have nine thirty or eleven on Fri",
           "source": "playout"
@@ -506,7 +506,7 @@
           "kind": "message",
           "speaker": "agent",
           "message_id": "item_a1",
-          "utterance_ids": ["speech_1/0"]
+          "utterance_ids": ["speech_2/0"]
         }
       ]
     }
@@ -571,7 +571,7 @@
           "at_ms": 8700,
           "basis": "local",
           "kind": "response_start",
-          "response_id": "r3",
+          "response_id": "speech_3",
           "span_id": "llm-3",
           "in_reply_to": ["u2"]
         },
@@ -580,7 +580,7 @@
           "at_ms": 9000,
           "basis": "local",
           "kind": "tool_call",
-          "response_id": "r3",
+          "response_id": "speech_3",
           "tool_call_id": "call_2",
           "name": "reschedule",
           "span_id": "tool-2"
@@ -599,7 +599,7 @@
           "at_ms": 9400,
           "basis": "local",
           "kind": "response_start",
-          "response_id": "r4",
+          "response_id": "speech_4",
           "span_id": "llm-4",
           "in_reply_to": ["u2"]
         },
@@ -609,8 +609,8 @@
           "basis": "audio",
           "kind": "speech_start",
           "speaker": "agent",
-          "utterance_id": "speech_2/0",
-          "response_id": "r4"
+          "utterance_id": "speech_4/0",
+          "response_id": "speech_4"
         },
         {
           "seq": 23,
@@ -618,7 +618,7 @@
           "basis": "audio",
           "kind": "speech_end",
           "speaker": "agent",
-          "utterance_id": "speech_2/0",
+          "utterance_id": "speech_4/0",
           "interrupted": false,
           "played_ms": 2700
         },
@@ -628,7 +628,7 @@
           "basis": "local",
           "kind": "transcript",
           "speaker": "agent",
-          "utterance_id": "speech_2/0",
+          "utterance_id": "speech_4/0",
           "final": true,
           "text": "Done — you're booked Friday at nine thirty.",
           "source": "playout"
@@ -640,7 +640,7 @@
           "kind": "message",
           "speaker": "agent",
           "message_id": "item_a2",
-          "utterance_ids": ["speech_2/0"]
+          "utterance_ids": ["speech_4/0"]
         },
         {
           "seq": 26,
