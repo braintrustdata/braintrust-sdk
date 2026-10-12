@@ -1,0 +1,543 @@
+[
+  {
+    "span_id": "r-root",
+    "root_span_id": "r-root",
+    "span_parents": [],
+    "span_attributes": {
+      "name": "livekit.agent_session",
+      "type": "task"
+    },
+    "metrics": {
+      "start": 1791830000.0,
+      "end": 1791830013.0
+    },
+    "input": {
+      "audio": {
+        "call-0000": {
+          "type": "braintrust_attachment",
+          "filename": "call-0000.ogg",
+          "content_type": "audio/ogg",
+          "key": "fictional/call-0000.ogg"
+        }
+      }
+    },
+    "metadata": {
+      "audio.recordings": [
+        {
+          "id": "call-0000",
+          "recording_group_id": "call",
+          "state": "ready",
+          "attachment": {
+            "span_id": "r-root",
+            "ref": "/input/audio/call-0000"
+          },
+          "mime_type": "audio/ogg",
+          "duration_ms": 13000,
+          "channel_count": 2,
+          "sample_rate_hz": 48000,
+          "sources": [
+            {
+              "channel_index": 0,
+              "boundary": "session_input"
+            },
+            {
+              "channel_index": 1,
+              "boundary": "local_audio_output"
+            }
+          ],
+          "timeline": {
+            "origin_unix_ms": 1791830000000,
+            "recording_start_offset_ms": 0,
+            "basis": "local_input_arrival_and_output_playout"
+          }
+        }
+      ],
+      "voice.origin_unix_ms": 1791830000000,
+      "voice.messages": {
+        "item_rt_u1": {
+          "role": "user",
+          "seq": 0,
+          "committed": true,
+          "state": "complete",
+          "text": "Hi, can I move my Thursday cleaning to Friday morning?",
+          "text_status": "final",
+          "text_source": "realtime_input_transcription",
+          "start_ms": 300,
+          "end_ms": 3400,
+          "timing_source": "local_receipt",
+          "end_of_turn_ms": 3600,
+          "transcript_final_ms": 4300,
+          "selections": [
+            {
+              "recording_span_id": "r-root",
+              "recording_id": "call-0000",
+              "start_offset_ms": 300,
+              "end_offset_ms": 3400,
+              "channel_index": 0
+            }
+          ],
+          "source_ids": {
+            "livekit.item_id": "item_rt_u1",
+            "openai.item_id": "item_rt_u1"
+          }
+        },
+        "item_rt_a1": {
+          "role": "assistant",
+          "seq": 2,
+          "committed": true,
+          "state": "interrupted",
+          "text": "I have nine thirty or eleven on Fri",
+          "text_status": "final",
+          "text_source": "playout_aligned",
+          "generated_text": "I have nine thirty or eleven on Friday. Which would you like?",
+          "start_ms": 5000,
+          "end_ms": 7900,
+          "timing_source": "playout_events",
+          "interrupted_at_ms": 7900,
+          "provider_audio_end_ms": 2900,
+          "selections": [
+            {
+              "recording_span_id": "r-root",
+              "recording_id": "call-0000",
+              "start_offset_ms": 5000,
+              "end_offset_ms": 7900,
+              "channel_index": 1
+            }
+          ],
+          "produced_by_span_id": "r-llm2",
+          "source_ids": {
+            "livekit.item_id": "item_rt_a1",
+            "openai.item_id": "item_rt_a1",
+            "openai.response_id": "resp_2"
+          }
+        },
+        "item_rt_u2": {
+          "role": "user",
+          "seq": 3,
+          "committed": true,
+          "state": "complete",
+          "text_status": "missing",
+          "text_source": "realtime_input_transcription",
+          "start_ms": 7600,
+          "end_ms": 9000,
+          "timing_source": "local_receipt",
+          "end_of_turn_ms": 9050,
+          "selections": [
+            {
+              "recording_span_id": "r-root",
+              "recording_id": "call-0000",
+              "start_offset_ms": 7600,
+              "end_offset_ms": 9000,
+              "channel_index": 0
+            }
+          ],
+          "source_ids": {
+            "livekit.item_id": "item_rt_u2",
+            "openai.item_id": "item_rt_u2"
+          }
+        },
+        "item_rt_a2": {
+          "role": "assistant",
+          "seq": 5,
+          "committed": true,
+          "state": "complete",
+          "text": "Done — you're booked Friday at nine thirty.",
+          "text_status": "final",
+          "text_source": "playout_aligned",
+          "start_ms": 9700,
+          "end_ms": 12500,
+          "timing_source": "playout_events",
+          "selections": [
+            {
+              "recording_span_id": "r-root",
+              "recording_id": "call-0000",
+              "start_offset_ms": 9700,
+              "end_offset_ms": 12500,
+              "channel_index": 1
+            }
+          ],
+          "produced_by_span_id": "r-llm4",
+          "source_ids": {
+            "livekit.item_id": "item_rt_a2",
+            "openai.item_id": "item_rt_a2",
+            "openai.response_id": "resp_4"
+          }
+        }
+      }
+    }
+  },
+  {
+    "span_id": "r-at1",
+    "root_span_id": "r-root",
+    "span_parents": ["r-root"],
+    "span_attributes": {
+      "name": "assistant_turn",
+      "type": "task"
+    },
+    "metrics": {
+      "start": 1791830003.6,
+      "end": 1791830007.9
+    },
+    "output": [
+      {
+        "role": "assistant",
+        "content": null,
+        "tool_calls": [
+          {
+            "id": "call_find",
+            "type": "function",
+            "function": {
+              "name": "find_slots",
+              "arguments": "{\"date\": \"2026-10-16\", \"window\": \"morning\"}"
+            }
+          }
+        ]
+      },
+      {
+        "role": "assistant",
+        "content": "I have nine thirty or eleven on Fri"
+      }
+    ],
+    "metadata": {
+      "turn.id": "r-at1"
+    }
+  },
+  {
+    "span_id": "r-llm1",
+    "root_span_id": "r-root",
+    "span_parents": ["r-at1"],
+    "span_attributes": {
+      "name": "llm_response",
+      "type": "llm"
+    },
+    "metrics": {
+      "start": 1791830003.6,
+      "end": 1791830004.1
+    },
+    "input": [
+      {
+        "role": "user",
+        "content": ""
+      }
+    ],
+    "output": [
+      {
+        "role": "assistant",
+        "content": null,
+        "tool_calls": [
+          {
+            "id": "call_find",
+            "type": "function",
+            "function": {
+              "name": "find_slots",
+              "arguments": "{\"date\": \"2026-10-16\", \"window\": \"morning\"}"
+            }
+          }
+        ]
+      }
+    ],
+    "metadata": {
+      "model": "gpt-realtime-mini",
+      "contrib.livekit.response_id": "resp_1",
+      "contrib.livekit.input_scope": "realtime_session_context",
+      "voice.context_message_ids": ["item_rt_u1"]
+    }
+  },
+  {
+    "span_id": "r-tool1",
+    "root_span_id": "r-root",
+    "span_parents": ["r-at1"],
+    "span_attributes": {
+      "name": "find_slots",
+      "type": "tool"
+    },
+    "metrics": {
+      "start": 1791830004.1,
+      "end": 1791830004.6
+    },
+    "input": {
+      "date": "2026-10-16",
+      "window": "morning"
+    },
+    "output": ["09:30", "11:00"],
+    "metadata": {
+      "gen_ai.tool.call.id": "call_find",
+      "contrib.livekit.request_span_id": "r-llm1"
+    }
+  },
+  {
+    "span_id": "r-llm2",
+    "root_span_id": "r-root",
+    "span_parents": ["r-at1"],
+    "span_attributes": {
+      "name": "llm_response",
+      "type": "llm"
+    },
+    "metrics": {
+      "start": 1791830004.6,
+      "end": 1791830007.9
+    },
+    "input": [
+      {
+        "role": "user",
+        "content": "Hi, can I move my Thursday cleaning to Friday morning?"
+      },
+      {
+        "role": "assistant",
+        "content": null,
+        "tool_calls": [
+          {
+            "id": "call_find",
+            "type": "function",
+            "function": {
+              "name": "find_slots",
+              "arguments": "{\"date\": \"2026-10-16\", \"window\": \"morning\"}"
+            }
+          }
+        ]
+      },
+      {
+        "role": "tool",
+        "tool_call_id": "call_find",
+        "content": "[\"09:30\", \"11:00\"]"
+      }
+    ],
+    "output": [
+      {
+        "role": "assistant",
+        "content": "I have nine thirty or eleven on Friday. Which would you like?"
+      }
+    ],
+    "metadata": {
+      "model": "gpt-realtime-mini",
+      "contrib.livekit.response_id": "resp_2",
+      "contrib.livekit.input_scope": "realtime_session_context",
+      "voice.context_message_ids": [
+        "item_rt_u1",
+        "item_rt_fc1",
+        "item_rt_fco1"
+      ],
+      "voice.output_message_id": "item_rt_a1"
+    }
+  },
+  {
+    "span_id": "r-at2",
+    "root_span_id": "r-root",
+    "span_parents": ["r-root"],
+    "span_attributes": {
+      "name": "assistant_turn",
+      "type": "task"
+    },
+    "metrics": {
+      "start": 1791830009.05,
+      "end": 1791830012.5
+    },
+    "output": [
+      {
+        "role": "assistant",
+        "content": null,
+        "tool_calls": [
+          {
+            "id": "call_resched",
+            "type": "function",
+            "function": {
+              "name": "reschedule",
+              "arguments": "{\"appointment_id\": \"apt_481\", \"slot\": \"2026-10-16T09:30\"}"
+            }
+          }
+        ]
+      },
+      {
+        "role": "assistant",
+        "content": "Done — you're booked Friday at nine thirty."
+      }
+    ],
+    "metadata": {
+      "turn.id": "r-at2"
+    }
+  },
+  {
+    "span_id": "r-llm3",
+    "root_span_id": "r-root",
+    "span_parents": ["r-at2"],
+    "span_attributes": {
+      "name": "llm_response",
+      "type": "llm"
+    },
+    "metrics": {
+      "start": 1791830009.05,
+      "end": 1791830009.15
+    },
+    "input": [
+      {
+        "role": "user",
+        "content": "Hi, can I move my Thursday cleaning to Friday morning?"
+      },
+      {
+        "role": "assistant",
+        "content": null,
+        "tool_calls": [
+          {
+            "id": "call_find",
+            "type": "function",
+            "function": {
+              "name": "find_slots",
+              "arguments": "{\"date\": \"2026-10-16\", \"window\": \"morning\"}"
+            }
+          }
+        ]
+      },
+      {
+        "role": "tool",
+        "tool_call_id": "call_find",
+        "content": "[\"09:30\", \"11:00\"]"
+      },
+      {
+        "role": "assistant",
+        "content": "I have nine thirty or eleven on Fri"
+      },
+      {
+        "role": "user",
+        "content": ""
+      }
+    ],
+    "output": [
+      {
+        "role": "assistant",
+        "content": null,
+        "tool_calls": [
+          {
+            "id": "call_resched",
+            "type": "function",
+            "function": {
+              "name": "reschedule",
+              "arguments": "{\"appointment_id\": \"apt_481\", \"slot\": \"2026-10-16T09:30\"}"
+            }
+          }
+        ]
+      }
+    ],
+    "metadata": {
+      "model": "gpt-realtime-mini",
+      "contrib.livekit.response_id": "resp_3",
+      "contrib.livekit.input_scope": "realtime_session_context",
+      "voice.context_message_ids": [
+        "item_rt_u1",
+        "item_rt_fc1",
+        "item_rt_fco1",
+        "item_rt_a1",
+        "item_rt_u2"
+      ]
+    }
+  },
+  {
+    "span_id": "r-tool2",
+    "root_span_id": "r-root",
+    "span_parents": ["r-at2"],
+    "span_attributes": {
+      "name": "reschedule",
+      "type": "tool"
+    },
+    "metrics": {
+      "start": 1791830009.15,
+      "end": 1791830009.55
+    },
+    "input": {
+      "appointment_id": "apt_481",
+      "slot": "2026-10-16T09:30"
+    },
+    "output": {
+      "ok": true
+    },
+    "metadata": {
+      "gen_ai.tool.call.id": "call_resched",
+      "contrib.livekit.request_span_id": "r-llm3"
+    }
+  },
+  {
+    "span_id": "r-llm4",
+    "root_span_id": "r-root",
+    "span_parents": ["r-at2"],
+    "span_attributes": {
+      "name": "llm_response",
+      "type": "llm"
+    },
+    "metrics": {
+      "start": 1791830009.55,
+      "end": 1791830012.5
+    },
+    "input": [
+      {
+        "role": "user",
+        "content": "Hi, can I move my Thursday cleaning to Friday morning?"
+      },
+      {
+        "role": "assistant",
+        "content": null,
+        "tool_calls": [
+          {
+            "id": "call_find",
+            "type": "function",
+            "function": {
+              "name": "find_slots",
+              "arguments": "{\"date\": \"2026-10-16\", \"window\": \"morning\"}"
+            }
+          }
+        ]
+      },
+      {
+        "role": "tool",
+        "tool_call_id": "call_find",
+        "content": "[\"09:30\", \"11:00\"]"
+      },
+      {
+        "role": "assistant",
+        "content": "I have nine thirty or eleven on Fri"
+      },
+      {
+        "role": "user",
+        "content": ""
+      },
+      {
+        "role": "assistant",
+        "content": null,
+        "tool_calls": [
+          {
+            "id": "call_resched",
+            "type": "function",
+            "function": {
+              "name": "reschedule",
+              "arguments": "{\"appointment_id\": \"apt_481\", \"slot\": \"2026-10-16T09:30\"}"
+            }
+          }
+        ]
+      },
+      {
+        "role": "tool",
+        "tool_call_id": "call_resched",
+        "content": "{\"ok\": true}"
+      }
+    ],
+    "output": [
+      {
+        "role": "assistant",
+        "content": "Done — you're booked Friday at nine thirty."
+      }
+    ],
+    "metadata": {
+      "model": "gpt-realtime-mini",
+      "contrib.livekit.response_id": "resp_4",
+      "contrib.livekit.input_scope": "realtime_session_context",
+      "voice.context_message_ids": [
+        "item_rt_u1",
+        "item_rt_fc1",
+        "item_rt_fco1",
+        "item_rt_a1",
+        "item_rt_u2",
+        "item_rt_fc2",
+        "item_rt_fco2"
+      ],
+      "voice.output_message_id": "item_rt_a2"
+    }
+  }
+]
