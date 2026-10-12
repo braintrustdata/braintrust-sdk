@@ -90,7 +90,7 @@ Braintrust merges span `metadata` across logs with `mergeDicts`. Objects deep-me
   - LiveKit: the `ChatMessage.id` (`item_…`). In realtime this is the provider's conversation item id.
   - Pipecat: no native id; the integration mints one (see [Pipecat ids](#pipecat-ids)).
   - Minted only by the integration:
-    - `speech_<speech_id>` for assistant speech that never got an item;
+    - the LiveKit `speech_id` itself (already unique and prefixed `speech_`, from `shortuuid("speech_")` in `SpeechHandle`) for assistant speech that never got an item;
     - `vad_<seq>` for uncommitted user speech.
 - **User message → LLM step:** the first LLM span whose `voice.context_message_ids` contains the message id ("heard by"), inferred by Lingua.
 - **Assistant message → LLM step:** `produced_by_span_id`, mirrored by `voice.output_message_id` on that span.
@@ -161,7 +161,7 @@ Sources the MVP uses:
 - **Record:** a pending record keyed by speech id, created when the `SpeechHandle` first appears at `_pipelineReplyTaskImpl` or `_realtimeGenerationTaskImpl` entry (both hooked; add `id` to the vendored `SpeechHandle` type). Seq is assigned then.
 - **Playout:** `playbackStarted` / `playbackProgressed` / `playbackFinished {playbackPosition, interrupted, synchronizedTranscript}` (observed in `playback.ts`) fill bounds, selections, `state`, `interrupted_at_ms` and `text` (`playout_aligned`).
 - **Becomes `item.id`:** when `_conversationItemAdded` fires for that speech's assistant item.
-- **No item:** if the speech ends without an item (cancelled before commit), the record is written as `unplayed` (or `interrupted`, if any audio played) under `speech_<speech_id>`.
+- **No item:** if the speech ends without an item (cancelled before commit), the record is written as `unplayed` (or `interrupted`, if any audio played) keyed by its `speech_id`.
 
 **Realtime pairing:**
 
@@ -337,7 +337,7 @@ Abridged cascaded `voice.messages` on `c-root`:
 - **Unknown clock offset:** if the recording started late, its descriptor origin differs from `voice.origin_unix_ms`. Lingua uses the descriptor timeline for selections and `voice.origin_unix_ms` for `*_ms`, and warns when they differ by more than 1 ms. The contract does not say how large an offset is acceptable.
 - **Call in progress:** entries with `state: "open"`. Lingua shows them without a step link if no LLM span has heard them yet.
 - **Content capture off:** `text_status: "not_captured"`. Ids, timing and audio remain, because context ids are read from `chatCtx.items` directly.
-- **Tool cancelled by interruption:** the cancelled tool span ends with an error. The partially spoken assistant message is `interrupted`; speech that never got an item is written as `speech_<speech_id>`. Nothing records "this tool was cancelled because of that barge-in"; that is inferred from timing.
+- **Tool cancelled by interruption:** the cancelled tool span ends with an error. The partially spoken assistant message is `interrupted`; speech that never got an item is keyed by its `speech_id`. Nothing records "this tool was cancelled because of that barge-in"; that is inferred from timing.
 - **Agent handoff:** messages stay keyed per call, and `produced_by_span_id` points into the new agent's spans. Per-agent attribution is inferred from the span tree.
 - **Large calls:** one root metadata map grows with call length (about 1 KB per message). Every write re-sends one whole entry, and the row stores the merged map. A 30-minute call stays well under 1 MB, but this is the main scaling cost.
 - **Pipecat context rewrites:** summarization replaces messages with new content, so new ids are minted. The thread then shows the summary as a message with no audio, which is correct but loses the link back to the original speech.
