@@ -24,7 +24,7 @@ Evidence lives in `metadata["voice.events"]` on `voice.timeline` child rows; the
 ```ts
 // Call span (root). span_attributes = { name: "livekit.agent_session", type: "task" }
 type CallRow = {
-  input: { audio: Record<RecordingId, Attachment> }           // shared @braintrust/audio, ready segments only
+  input?: { audio: Record<RecordingId, Attachment> }          // shared @braintrust/audio, ready segments; absent when capture is off
   metadata: {
     "audio.recordings"?: AudioRecording[]                     // shared; absent when audio capture is off
     "voice.timeline_version": 1                               // required; selects the timeline path in Lingua
