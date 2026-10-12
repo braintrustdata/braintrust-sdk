@@ -115,6 +115,7 @@ export const callSpanMetadataSchema = z.object({
   "voice.timeline_version": z.literal(1),
   "voice.pipeline": z.enum(["cascaded", "realtime", "half_cascade"]),
   "voice.timeline_origin_unix_ms": z.number().optional(),
+  "voice.server_vad_silence_ms": z.number().nonnegative().optional(),
 });
 
 export const timelineRowMetadataSchema = z.object({
