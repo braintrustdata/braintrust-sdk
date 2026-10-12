@@ -50,6 +50,7 @@ export interface InstrumentationIntegrationsConfig {
   openaiCodexSDK?: boolean;
   piCodingAgent?: boolean;
   strandsAgentSDK?: boolean;
+  lettaAgentSDK?: boolean;
   cloudflareAgents?: boolean;
   langchain?: boolean;
   langgraph?: boolean;
@@ -96,6 +97,11 @@ const envIntegrationAliases: Record<
   strandsagentsdk: "strandsAgentSDK",
   "strands-agent-sdk": "strandsAgentSDK",
   "@strands-agents/sdk": "strandsAgentSDK",
+  lettaAgentSDK: "lettaAgentSDK",
+  lettaagentsdk: "lettaAgentSDK",
+  letta: "lettaAgentSDK",
+  "letta-agent-sdk": "lettaAgentSDK",
+  "@letta-ai/letta-agent-sdk": "lettaAgentSDK",
   agents: "cloudflareAgents",
   "cloudflare-agents": "cloudflareAgents",
   cloudflareagents: "cloudflareAgents",
@@ -210,6 +216,7 @@ export function getDefaultInstrumentationIntegrations(): Record<
     elevenlabs: true,
     piCodingAgent: true,
     strandsAgentSDK: true,
+    lettaAgentSDK: true,
     cloudflareAgents: true,
   };
 }

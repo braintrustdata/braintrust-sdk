@@ -190,6 +190,7 @@
   "license": "MIT",
   "devDependencies": {
     "@anthropic-ai/sdk": "^0.60.0",
+    "@letta-ai/letta-agent-sdk": "0.8.28",
     "@nodelib/fs.walk": "^1.2.8",
     "@types/argparse": "^2.0.14",
     "@types/async": "^3.2.24",

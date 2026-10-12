@@ -27,6 +27,7 @@ import { LangChainPlugin } from "./plugins/langchain-plugin";
 import { LangSmithPlugin } from "./plugins/langsmith-plugin";
 import { PiCodingAgentPlugin } from "./plugins/pi-coding-agent-plugin";
 import { StrandsAgentSDKPlugin } from "./plugins/strands-agent-sdk-plugin";
+import { LettaAgentSDKPlugin } from "./plugins/letta-agent-sdk-plugin";
 import { ElevenLabsPlugin } from "./plugins/elevenlabs-plugin";
 import { VoyageAIPlugin } from "./plugins/voyageai-plugin";
 import { TypeSafePlugin } from "./plugins/typesafe-plugin";
@@ -88,6 +89,7 @@ export class BraintrustPlugin extends BasePlugin {
   private langSmithPlugin: LangSmithPlugin | null = null;
   private piCodingAgentPlugin: PiCodingAgentPlugin | null = null;
   private strandsAgentSDKPlugin: StrandsAgentSDKPlugin | null = null;
+  private lettaAgentSDKPlugin: LettaAgentSDKPlugin | null = null;
   private elevenLabsPlugin: ElevenLabsPlugin | null = null;
   private voyageAIPlugin: VoyageAIPlugin | null = null;
   private typeSafePlugin: TypeSafePlugin | null = null;
@@ -250,6 +252,11 @@ export class BraintrustPlugin extends BasePlugin {
     if (integrations.strandsAgentSDK !== false) {
       this.strandsAgentSDKPlugin = new StrandsAgentSDKPlugin();
       this.strandsAgentSDKPlugin.enable();
+    }
+
+    if (integrations.lettaAgentSDK !== false) {
+      this.lettaAgentSDKPlugin = new LettaAgentSDKPlugin();
+      this.lettaAgentSDKPlugin.enable();
     }
 
     if (integrations.cloudflareAIChat !== false) {
@@ -424,6 +431,11 @@ export class BraintrustPlugin extends BasePlugin {
     if (this.strandsAgentSDKPlugin) {
       this.strandsAgentSDKPlugin.disable();
       this.strandsAgentSDKPlugin = null;
+    }
+
+    if (this.lettaAgentSDKPlugin) {
+      this.lettaAgentSDKPlugin.disable();
+      this.lettaAgentSDKPlugin = null;
     }
 
     if (this.cloudflareAIChatPlugin) {
