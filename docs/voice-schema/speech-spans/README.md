@@ -193,7 +193,7 @@ selection.recording_span_id / recording_id -> call span_id / audio.recordings[].
 
 Full rows: [`examples/cascaded.json`](examples/cascaded.json) and [`examples/realtime.json`](examples/realtime.json).
 
-Implemented: zod types (`js/src/instrumentation/livekit/voice-schema/speech-spans.ts`), examples, test. Sketch: LiveKit/Pipecat emission. Lingua mapping: implemented in the companion Lingua PR (branch `kevchoi/voice-schema-speech-spans`; link TBD).
+Implemented: zod types (`js/src/instrumentation/livekit/voice-schema/speech-spans.ts`), examples, test. Sketch: LiveKit/Pipecat emission. Lingua mapping: implemented in the companion Lingua PR [braintrustdata/lingua#489](https://github.com/braintrustdata/lingua/pull/489).
 
 ## Contract
 
