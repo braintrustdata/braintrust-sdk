@@ -31,7 +31,12 @@ export const voiceMessageSchema = z
     start_ms: callMs.optional(),
     end_ms: callMs.optional(),
     timing_source: z
-      .enum(["vad_events", "provider_events", "playout_events"])
+      .enum([
+        "vad_events",
+        "provider_events",
+        "local_receipt",
+        "playout_events",
+      ])
       .optional(),
     end_of_turn_ms: callMs.optional(),
     transcript_final_ms: callMs.optional(),

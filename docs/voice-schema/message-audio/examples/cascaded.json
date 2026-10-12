@@ -273,7 +273,7 @@
     ],
     "metadata": {
       "model": "gpt-4.1-nano",
-      "voice.context_message_ids": [null, "item_u1"]
+      "voice.context_message_ids": ["lk.agent_task.instructions", "item_u1"]
     }
   },
   {
@@ -347,7 +347,12 @@
     ],
     "metadata": {
       "model": "gpt-4.1-nano",
-      "voice.context_message_ids": [null, "item_u1", "item_fc1", "item_fco1"],
+      "voice.context_message_ids": [
+        "lk.agent_task.instructions",
+        "item_u1",
+        "item_fc1",
+        "item_fco1"
+      ],
       "voice.output_message_id": "item_a1"
     }
   },
@@ -497,7 +502,7 @@
     "metadata": {
       "model": "gpt-4.1-nano",
       "voice.context_message_ids": [
-        null,
+        "lk.agent_task.instructions",
         "item_u1",
         "item_fc1",
         "item_fco1",
@@ -607,7 +612,7 @@
     "metadata": {
       "model": "gpt-4.1-nano",
       "voice.context_message_ids": [
-        null,
+        "lk.agent_task.instructions",
         "item_u1",
         "item_fc1",
         "item_fco1",

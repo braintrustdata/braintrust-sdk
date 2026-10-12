@@ -63,8 +63,8 @@
           "text_status": "final",
           "text_source": "realtime_input_transcription",
           "start_ms": 300,
-          "end_ms": 2900,
-          "timing_source": "provider_events",
+          "end_ms": 3400,
+          "timing_source": "local_receipt",
           "end_of_turn_ms": 3600,
           "transcript_final_ms": 4300,
           "selections": [
@@ -72,7 +72,7 @@
               "recording_span_id": "r-root",
               "recording_id": "call-0000",
               "start_offset_ms": 300,
-              "end_offset_ms": 2900,
+              "end_offset_ms": 3400,
               "channel_index": 0
             }
           ],
@@ -94,7 +94,7 @@
           "end_ms": 7900,
           "timing_source": "playout_events",
           "interrupted_at_ms": 7900,
-          "provider_audio_end_ms": 2600,
+          "provider_audio_end_ms": 2900,
           "selections": [
             {
               "recording_span_id": "r-root",
@@ -119,15 +119,15 @@
           "text_status": "missing",
           "text_source": "realtime_input_transcription",
           "start_ms": 7600,
-          "end_ms": 8500,
-          "timing_source": "provider_events",
+          "end_ms": 9000,
+          "timing_source": "local_receipt",
           "end_of_turn_ms": 9050,
           "selections": [
             {
               "recording_span_id": "r-root",
               "recording_id": "call-0000",
               "start_offset_ms": 7600,
-              "end_offset_ms": 8500,
+              "end_offset_ms": 9000,
               "channel_index": 0
             }
           ],
@@ -216,10 +216,6 @@
     },
     "input": [
       {
-        "role": "system",
-        "content": "You are Molar, the receptionist for a fictional dental clinic."
-      },
-      {
         "role": "user",
         "content": ""
       }
@@ -244,7 +240,7 @@
       "model": "gpt-realtime-mini",
       "contrib.livekit.response_id": "resp_1",
       "contrib.livekit.input_scope": "realtime_session_context",
-      "voice.context_message_ids": [null, "item_rt_u1"]
+      "voice.context_message_ids": ["item_rt_u1"]
     }
   },
   {
@@ -283,10 +279,6 @@
     },
     "input": [
       {
-        "role": "system",
-        "content": "You are Molar, the receptionist for a fictional dental clinic."
-      },
-      {
         "role": "user",
         "content": "Hi, can I move my Thursday cleaning to Friday morning?"
       },
@@ -321,7 +313,6 @@
       "contrib.livekit.response_id": "resp_2",
       "contrib.livekit.input_scope": "realtime_session_context",
       "voice.context_message_ids": [
-        null,
         "item_rt_u1",
         "item_rt_fc1",
         "item_rt_fco1"
@@ -379,10 +370,6 @@
     },
     "input": [
       {
-        "role": "system",
-        "content": "You are Molar, the receptionist for a fictional dental clinic."
-      },
-      {
         "role": "user",
         "content": "Hi, can I move my Thursday cleaning to Friday morning?"
       },
@@ -435,7 +422,6 @@
       "contrib.livekit.response_id": "resp_3",
       "contrib.livekit.input_scope": "realtime_session_context",
       "voice.context_message_ids": [
-        null,
         "item_rt_u1",
         "item_rt_fc1",
         "item_rt_fco1",
@@ -481,10 +467,6 @@
       "end": 1791830012.5
     },
     "input": [
-      {
-        "role": "system",
-        "content": "You are Molar, the receptionist for a fictional dental clinic."
-      },
       {
         "role": "user",
         "content": "Hi, can I move my Thursday cleaning to Friday morning?"
@@ -547,7 +529,6 @@
       "contrib.livekit.response_id": "resp_4",
       "contrib.livekit.input_scope": "realtime_session_context",
       "voice.context_message_ids": [
-        null,
         "item_rt_u1",
         "item_rt_fc1",
         "item_rt_fco1",
