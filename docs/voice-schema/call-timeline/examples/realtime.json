@@ -373,13 +373,22 @@
           "seq": 3,
           "at_ms": 3600,
           "basis": "local",
+          "kind": "message",
+          "speaker": "user",
+          "message_id": "item_u1",
+          "utterance_ids": ["u1"]
+        },
+        {
+          "seq": 4,
+          "at_ms": 3600,
+          "basis": "local",
           "kind": "response_start",
           "response_id": "speech_1",
           "span_id": "rt-1",
           "in_reply_to": ["u1"]
         },
         {
-          "seq": 4,
+          "seq": 5,
           "at_ms": 4100,
           "basis": "local",
           "kind": "tool_call",
@@ -389,7 +398,7 @@
           "span_id": "tool-1"
         },
         {
-          "seq": 5,
+          "seq": 6,
           "at_ms": 4300,
           "basis": "local",
           "kind": "transcript",
@@ -397,16 +406,8 @@
           "utterance_id": "u1",
           "final": true,
           "text": "Hi, can I move my Thursday cleaning to Friday morning?",
-          "source": "provider"
-        },
-        {
-          "seq": 6,
-          "at_ms": 4300,
-          "basis": "local",
-          "kind": "message",
-          "speaker": "user",
-          "message_id": "item_u1",
-          "utterance_ids": ["u1"]
+          "source": "provider",
+          "message_id": "item_u1"
         },
         {
           "seq": 7,
@@ -523,13 +524,22 @@
           "seq": 17,
           "at_ms": 8600,
           "basis": "local",
+          "kind": "message",
+          "speaker": "user",
+          "message_id": "item_u2",
+          "utterance_ids": ["u2"]
+        },
+        {
+          "seq": 18,
+          "at_ms": 8600,
+          "basis": "local",
           "kind": "response_start",
           "response_id": "speech_3",
           "span_id": "rt-3",
           "in_reply_to": ["u2"]
         },
         {
-          "seq": 18,
+          "seq": 19,
           "at_ms": 8900,
           "basis": "local",
           "kind": "tool_call",
@@ -539,7 +549,7 @@
           "span_id": "tool-2"
         },
         {
-          "seq": 19,
+          "seq": 20,
           "at_ms": 9300,
           "basis": "local",
           "kind": "tool_result",
@@ -548,7 +558,7 @@
           "outcome": "ok"
         },
         {
-          "seq": 20,
+          "seq": 21,
           "at_ms": 9300,
           "basis": "local",
           "kind": "response_start",
@@ -557,7 +567,7 @@
           "in_reply_to": ["u2"]
         },
         {
-          "seq": 21,
+          "seq": 22,
           "at_ms": 9700,
           "basis": "audio",
           "kind": "speech_start",
@@ -566,7 +576,7 @@
           "response_id": "speech_4"
         },
         {
-          "seq": 22,
+          "seq": 23,
           "at_ms": 12500,
           "basis": "audio",
           "kind": "speech_end",
@@ -576,7 +586,7 @@
           "played_ms": 2800
         },
         {
-          "seq": 23,
+          "seq": 24,
           "at_ms": 12500,
           "basis": "local",
           "kind": "transcript",
@@ -587,7 +597,7 @@
           "source": "playout"
         },
         {
-          "seq": 24,
+          "seq": 25,
           "at_ms": 12500,
           "basis": "local",
           "kind": "message",
@@ -596,7 +606,7 @@
           "utterance_ids": ["speech_4/0"]
         },
         {
-          "seq": 25,
+          "seq": 26,
           "at_ms": 13000,
           "basis": "local",
           "kind": "missing",
@@ -605,7 +615,7 @@
           "reason": "input_transcription_not_received"
         },
         {
-          "seq": 26,
+          "seq": 27,
           "at_ms": 13000,
           "basis": "local",
           "kind": "call_end",

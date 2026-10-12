@@ -72,4 +72,19 @@ describe.each(["cascaded.json", "realtime.json"])("%s", (file) => {
     );
     expect(referenced.filter((id) => !started.has(id))).toEqual([]);
   });
+
+  it("maps every committed caller utterance to a message", () => {
+    const log = events(file);
+    const mapped = new Set(
+      log.flatMap((event) =>
+        event.kind === "message" && event.speaker === "user"
+          ? event.utterance_ids
+          : [],
+      ),
+    );
+    const committed = log.flatMap((event) =>
+      event.kind === "end_of_turn" ? event.utterance_ids : [],
+    );
+    expect(committed.filter((id) => !mapped.has(id))).toEqual([]);
+  });
 });
