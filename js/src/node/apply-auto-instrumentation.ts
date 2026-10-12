@@ -1,7 +1,7 @@
 import { register } from "node:module";
 import { pathToFileURL } from "node:url";
 import { getDefaultAutoInstrumentationConfigs } from "../auto-instrumentations/configs/all";
-import { ModulePatch } from "../auto-instrumentations/loader/cjs-patch";
+import { patchCommonJS } from "../auto-instrumentations/loader/cjs-patch";
 import { debugLogger } from "../debug-logger";
 import { GLOBAL_INSTRUMENTATION_HOOKS_PROTOCOL_VERSION } from "../global-instrumentation-hooks";
 
@@ -46,7 +46,7 @@ export function applyAutoInstrumentation(): void {
   state.applied = true;
 
   try {
-    new ModulePatch({ instrumentations: allConfigs }).patch();
+    patchCommonJS(allConfigs);
   } catch (error) {
     debugLogger.warn(
       "Failed to enable CommonJS auto-instrumentation; ESM instrumentation remains active:",

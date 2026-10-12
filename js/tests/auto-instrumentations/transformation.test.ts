@@ -10,6 +10,7 @@
 import * as esbuild from "esbuild";
 import * as fs from "node:fs";
 import * as path from "node:path";
+import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
 import { runInNewContext } from "node:vm";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
@@ -48,9 +49,8 @@ const openAIPromiseEntryPoint = path.join(
 
 function testConfig(
   functionQuery: InstrumentationConfig["functionQuery"],
-  astQuery?: string,
 ): InstrumentationConfig {
-  const config: InstrumentationConfig = {
+  return {
     channelName: "test",
     module: {
       name: "test-sdk",
@@ -59,23 +59,14 @@ function testConfig(
     },
     functionQuery,
   };
-
-  if (astQuery) {
-    config.astQuery = astQuery;
-  }
-
-  return config;
 }
 
 function transformTestCode(
   functionQuery: InstrumentationConfig["functionQuery"],
   code: string,
   moduleType: "esm" | "cjs" = "esm",
-  astQuery?: string,
 ) {
-  const matcher = new InstrumentationMatcher([
-    testConfig(functionQuery, astQuery),
-  ]);
+  const matcher = new InstrumentationMatcher([testConfig(functionQuery)]);
   const transformer = matcher.getTransformer("test-sdk", "1.0.0", "index.mjs");
 
   expect(transformer).toBeDefined();
@@ -283,31 +274,9 @@ describe("Orchestrion Transformation Tests", () => {
       expect(result.code).toContain("__bt$hook.invoke");
     });
 
-    it("supports private class method configs", () => {
-      const result = transformTestCode(
-        { className: "Client", privateMethodName: "create" },
-        `
-          class Client {
-            async #create(input) {
-              return input;
-            }
-
-            async run(input) {
-              return this.#create(input);
-            }
-          }
-          module.exports = Client;
-        `,
-        "cjs",
-      );
-
-      expect(result.code).toContain("orchestrion:test-sdk:test");
-      expect(result.code).toContain("__bt$hook.invoke");
-    });
-
     it("supports object/property configs", () => {
       const result = transformTestCode(
-        { objectName: "this", propertyName: "create" },
+        { propertyName: "create" },
         `
           function Client() {
             this.create = async () => {
@@ -331,22 +300,6 @@ describe("Orchestrion Transformation Tests", () => {
             callback(null, input);
           }
         `,
-      );
-
-      expect(result.code).toContain("orchestrion:test-sdk:test");
-      expect(result.code).toContain("__bt$hook.invoke");
-    });
-
-    it("supports raw AST query configs", () => {
-      const result = transformTestCode(
-        {},
-        `
-          export async function request(input) {
-            return input;
-          }
-        `,
-        "esm",
-        'FunctionDeclaration[id.name="request"][async]',
       );
 
       expect(result.code).toContain("orchestrion:test-sdk:test");
@@ -708,6 +661,59 @@ describe("Orchestrion Transformation Tests", () => {
       __dirname,
       "../../dist/auto-instrumentations/bundler/webpack-loader.cjs",
     );
+    it.each([
+      "",
+      path.join(fixturesDir, "test-app.js"),
+      path.join(nodeModulesDir, "openai", "index.mjs"),
+    ])(
+      "preserves input source maps when no transformation matches: %s",
+      (resourcePath) => {
+        const loader = createRequire(import.meta.url)(webpackLoaderPath);
+        const callback = vi.fn();
+        const code = "const value = 1;";
+        const sourceMap = {
+          version: 3,
+          sources: ["input.ts"],
+          mappings: "AAAA",
+        };
+
+        loader.call(
+          { async: () => callback, getOptions: () => ({}), resourcePath },
+          code,
+          sourceMap,
+        );
+
+        expect(callback).toHaveBeenCalledExactlyOnceWith(null, code, sourceMap);
+      },
+    );
+
+    it("discards stale input source maps when applying a source patch", () => {
+      const loader = createRequire(import.meta.url)(webpackLoaderPath);
+      const callback = vi.fn();
+      const code = "class APIPromise extends Promise {}";
+
+      loader.call(
+        {
+          async: () => callback,
+          getOptions: () => ({}),
+          resourcePath: path.join(
+            openAIPromisePackageDir,
+            "core",
+            "api-promise.mjs",
+          ),
+        },
+        code,
+        { version: 3, sources: ["input.ts"], mappings: "AAAA" },
+      );
+
+      expect(callback).toHaveBeenCalledTimes(1);
+      const [error, transformed, sourceMap] = callback.mock.calls[0];
+      expect(error).toBeNull();
+      expect(transformed).not.toBe(code);
+      expect(transformed).toContain(code);
+      expect(sourceMap).toBeUndefined();
+    });
+
     async function runWebpackWithLoader(
       config: object,
     ): Promise<{ errors: string[]; output: string }> {
@@ -760,41 +766,44 @@ describe("Orchestrion Transformation Tests", () => {
       },
     );
 
-    it("should respect instrumentation opt-outs in loader-only mode", async () => {
-      vi.stubEnv("BRAINTRUST_DISABLE_INSTRUMENTATION", "openai");
-      try {
-        const { errors, output } = await runWebpackWithLoader({
-          entry: path.join(fixturesDir, "test-app.js"),
-          output: {
-            path: outputDir,
-            filename: "turbopack-opt-out-bundle.js",
-            library: { type: "module" },
-          },
-          experiments: { outputModule: true },
-          mode: "development",
-          resolve: { modules: [nodeModulesDir, "node_modules"] },
-          module: {
-            rules: [
-              {
-                use: [
-                  {
-                    loader: webpackLoaderPath,
-                    options: { browser: false },
-                  },
-                ],
-              },
-            ],
-          },
-        });
+    it.each(["openai", ""])(
+      "respects changed instrumentation opt-outs in loader-only mode (%s)",
+      async (disabled) => {
+        vi.stubEnv("BRAINTRUST_DISABLE_INSTRUMENTATION", disabled);
+        try {
+          const { errors, output } = await runWebpackWithLoader({
+            entry: path.join(fixturesDir, "test-app.js"),
+            output: {
+              path: outputDir,
+              filename: "turbopack-opt-out-bundle.js",
+              library: { type: "module" },
+            },
+            experiments: { outputModule: true },
+            mode: "development",
+            resolve: { modules: [nodeModulesDir, "node_modules"] },
+            module: {
+              rules: [
+                {
+                  use: [
+                    {
+                      loader: webpackLoaderPath,
+                      options: { browser: false },
+                    },
+                  ],
+                },
+              ],
+            },
+          });
 
-        expect(errors).toHaveLength(0);
-        expect(output).not.toContain(
-          "orchestrion:openai:chat.completions.create",
-        );
-      } finally {
-        vi.unstubAllEnvs();
-      }
-    });
+          expect(errors).toHaveLength(0);
+          expect(
+            output.includes("orchestrion:openai:chat.completions.create"),
+          ).toBe(disabled !== "openai");
+        } finally {
+          vi.unstubAllEnvs();
+        }
+      },
+    );
 
     it.each([
       [

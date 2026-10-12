@@ -151,22 +151,15 @@ const defaultInstrumentationConfigGroups: readonly InstrumentationConfigGroup[] 
 
 export function getDefaultInstrumentationConfigs({
   disabledIntegrationConfig,
-  disabledIntegrations,
 }: {
   disabledIntegrationConfig?: InstrumentationIntegrationsConfig;
-  disabledIntegrations?: ReadonlySet<string>;
 } = {}): InstrumentationConfig[] {
-  const disabledConfig =
-    disabledIntegrationConfig ??
-    (disabledIntegrations
-      ? readDisabledInstrumentationEnvConfig(
-          [...disabledIntegrations].join(","),
-        ).integrations
-      : undefined);
-
   return defaultInstrumentationConfigGroups.flatMap(
     ({ configs, integrations }) =>
-      isInstrumentationIntegrationDisabled(disabledConfig, ...integrations)
+      isInstrumentationIntegrationDisabled(
+        disabledIntegrationConfig,
+        ...integrations,
+      )
         ? []
         : configs,
   );

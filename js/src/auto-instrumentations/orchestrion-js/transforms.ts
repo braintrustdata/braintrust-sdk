@@ -16,15 +16,10 @@ import type { InstrumentationConfig } from "./types";
 type AnyNode = any;
 export interface TransformState extends InstrumentationConfig {
   moduleVersion: string;
-  functionIndex?: number;
 }
 
 const CHANNEL_REGEX = /[^\w]/g;
 const SHARED_HOOK_LOOKUP = "tr_ch_bt$get_hook";
-
-function formatChannelVariable(channelName: string): string {
-  return `tr_ch_bt$${channelName.replace(CHANNEL_REGEX, "_")}`;
-}
 
 function formatChannelGetter(channelName: string): string {
   return `tr_ch_bt$get_${channelName.replace(CHANNEL_REGEX, "_")}`;
@@ -35,9 +30,9 @@ function declareInvocationHook(state: TransformState, node: AnyNode): void {
     channelName,
     module: { name },
   } = state;
-  const channelVariable = formatChannelVariable(channelName);
+  const channelVariable = `tr_ch_bt$${channelName.replace(CHANNEL_REGEX, "_")}`;
   const channelGetter = formatChannelGetter(channelName);
-  const hasSharedHookLookup = node.body.some(
+  const sharedHookLookupIndex = node.body.findIndex(
     (child: AnyNode) =>
       child.declarations?.[0]?.id?.name === SHARED_HOOK_LOOKUP,
   );
@@ -50,9 +45,10 @@ function declareInvocationHook(state: TransformState, node: AnyNode): void {
     return;
   }
 
-  const sharedHookLookup = hasSharedHookLookup
-    ? ""
-    : `
+  const sharedHookLookup =
+    sharedHookLookupIndex !== -1
+      ? ""
+      : `
       const ${SHARED_HOOK_LOOKUP} = (__bt$hookName) => {
         try {
           const __bt$hooks = globalThis[${JSON.stringify(
@@ -92,10 +88,6 @@ function declareInvocationHook(state: TransformState, node: AnyNode): void {
         );
     `;
 
-  const sharedHookLookupIndex = node.body.findIndex(
-    (child: AnyNode) =>
-      child.declarations?.[0]?.id?.name === SHARED_HOOK_LOOKUP,
-  );
   const index =
     sharedHookLookupIndex === -1
       ? node.body.findIndex(
@@ -108,10 +100,8 @@ function declareInvocationHook(state: TransformState, node: AnyNode): void {
 export function wrapInvocation(
   state: TransformState,
   node: AnyNode,
-  ancestry: AnyNode[],
+  program: AnyNode,
 ): void {
-  const program = ancestry[ancestry.length - 1];
-
   if (node.type === "ClassDeclaration" || node.type === "ClassExpression") {
     wrapInstanceMethod(state, node, program);
   } else {
@@ -202,7 +192,6 @@ function wrapInstanceMethod(
 
   const fn = ctorBody[1].expression.right;
 
-  fn.async = false;
   fn.body = wrap(
     state,
     {
@@ -211,8 +200,6 @@ function wrapInstanceMethod(
     },
     "arguments",
   );
-
-  wrapSuper(fn);
 
   ctor.value.body.body.push(...ctorBody);
 }

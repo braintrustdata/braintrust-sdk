@@ -93,18 +93,8 @@ function runFixture({
 }
 
 // Upstream cases for removed APIs are intentionally omitted: custom transforms,
-// constructor-only configs, and expression-name queries.
+// constructor-only configs, expression-name queries, and raw AST selectors.
 const fixtureCases: UpstreamFixtureCase[] = [
-  {
-    name: "ast_query_cjs",
-    title: "instruments using a raw AST query selector",
-    configs: [
-      {
-        ...config("fetch_ast_query", {}),
-        astQuery: 'FunctionDeclaration[id.name="fetch"][async]',
-      },
-    ],
-  },
   {
     name: "arguments_mutation",
     title: "supports argument mutation from invocation interceptors",
@@ -293,36 +283,17 @@ const fixtureCases: UpstreamFixtureCase[] = [
     title: "instruments async functions assigned to this properties",
     configs: [
       config("Connection_query", {
-        objectName: "this",
         propertyName: "_query",
       }),
     ],
   },
-  {
-    name: "object_property_named_cjs",
-    title: "instruments async functions assigned to named object properties",
-    configs: [
-      config("conn_query", {
-        objectName: "conn",
-        propertyName: "query",
-      }),
-    ],
-  },
+
   {
     name: "promise_subclass",
     title: "preserves Promise subclass return values",
     configs: [config("fetch_subclass", { functionName: "fetch" })],
   },
-  {
-    name: "private_method_cjs",
-    title: "instruments async private class methods",
-    configs: [
-      config("TestClass:testMe", {
-        className: "TestClass",
-        privateMethodName: "testMe",
-      }),
-    ],
-  },
+
   {
     name: "callback_cjs",
     title: "instruments callback-style functions",
@@ -365,30 +336,6 @@ describe("Orchestrion-JS upstream-derived behavior", () => {
       runFixture(testCase);
     });
   }
-
-  it("accepts Buffer input and produces the same output as string input", () => {
-    const code = [
-      "async function fetch (url) {",
-      "  return 42;",
-      "}",
-      "module.exports = { fetch };",
-    ].join("\n");
-
-    const matcher = new InstrumentationMatcher([
-      config("fetch", { functionName: "fetch" }),
-    ]);
-    const transformer = matcher.getTransformer(
-      TEST_MODULE_NAME,
-      TEST_MODULE_VERSION,
-      TEST_MODULE_PATH,
-    );
-
-    expect(transformer).toBeDefined();
-    const fromString = transformer!.transform(code, "cjs");
-    const fromBuffer = transformer!.transform(Buffer.from(code), "cjs");
-
-    expect(fromBuffer.code).toEqual(fromString.code);
-  });
 
   it("maps generated positions back to original line and column", async () => {
     const originalCode = [

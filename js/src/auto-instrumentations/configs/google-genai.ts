@@ -52,7 +52,6 @@ export const googleGenAIConfigs: InstrumentationConfig[] = [
       filePath: "dist/node/index.mjs",
     },
     functionQuery: {
-      objectName: "this",
       propertyName: "generateImages",
     },
   },
@@ -66,7 +65,6 @@ export const googleGenAIConfigs: InstrumentationConfig[] = [
       filePath: "dist/node/index.mjs",
     },
     functionQuery: {
-      objectName: "this",
       propertyName: "editImage",
     },
   },
@@ -82,7 +80,6 @@ export const googleGenAIConfigs: InstrumentationConfig[] = [
       filePath: "dist/node/index.mjs",
     },
     functionQuery: {
-      objectName: "this",
       propertyName: "generateVideos",
     },
   },

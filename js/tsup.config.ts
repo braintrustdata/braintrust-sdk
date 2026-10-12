@@ -111,15 +111,13 @@ export default defineConfig([
     clean: true,
   },
   {
-    entry: [
-      "src/auto-instrumentations/loader/cjs-patch.ts",
-      "src/auto-instrumentations/loader/get-package-version.ts",
-      "src/auto-instrumentations/bundler/vite.ts",
-      "src/auto-instrumentations/bundler/webpack.ts",
-      "src/auto-instrumentations/bundler/next.ts",
-      "src/auto-instrumentations/bundler/esbuild.ts",
-      "src/auto-instrumentations/bundler/rollup.ts",
-    ],
+    entry: {
+      "bundler/vite": "src/auto-instrumentations/bundler/vite.ts",
+      "bundler/webpack": "src/auto-instrumentations/bundler/webpack.ts",
+      "bundler/next": "src/auto-instrumentations/bundler/next.ts",
+      "bundler/esbuild": "src/auto-instrumentations/bundler/esbuild.ts",
+      "bundler/rollup": "src/auto-instrumentations/bundler/rollup.ts",
+    },
     format: ["cjs", "esm"],
     outDir: "dist/auto-instrumentations",
     dts: true,

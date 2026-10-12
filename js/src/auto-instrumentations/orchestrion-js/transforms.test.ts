@@ -3,7 +3,7 @@ import { newGlobalInvocationHook } from "../../global-instrumentation-hooks";
 import { Transformer } from "./transformer";
 
 describe("orchestrion transforms", () => {
-  it("preserves receiver replacement for raw AST selectors", async () => {
+  it("preserves receiver replacement for function declarations", async () => {
     const transformer = new Transformer("example", "1.0.0", "index.mjs", [
       {
         channelName: "replaceReceiver",
@@ -12,8 +12,7 @@ describe("orchestrion transforms", () => {
           versionRange: ">=1.0.0",
           filePath: "index.mjs",
         },
-        functionQuery: {},
-        astQuery: 'FunctionDeclaration[id.name="request"]',
+        functionQuery: { functionName: "request" },
       },
     ]);
     const transformed = transformer.transform(
@@ -39,7 +38,7 @@ describe("orchestrion transforms", () => {
     }
   });
 
-  it("forwards call arguments for raw AST function selectors", async () => {
+  it("forwards call arguments for function declarations", async () => {
     const transformer = new Transformer("example", "1.0.0", "index.mjs", [
       {
         channelName: "request",
@@ -48,8 +47,7 @@ describe("orchestrion transforms", () => {
           versionRange: ">=1.0.0",
           filePath: "index.mjs",
         },
-        functionQuery: {},
-        astQuery: 'FunctionDeclaration[id.name="request"][async]',
+        functionQuery: { functionName: "request" },
       },
     ]);
     const source = `
@@ -75,7 +73,6 @@ describe("orchestrion transforms", () => {
           filePath: "index.mjs",
         },
         functionQuery: {
-          objectName: "this",
           propertyName: "call",
         },
       },

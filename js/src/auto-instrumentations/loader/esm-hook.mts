@@ -11,22 +11,13 @@ import {
   type InstrumentationConfig,
 } from "../orchestrion-js";
 import moduleDetailsFromPath from "module-details-from-path";
-import { getPackageName, getPackageVersion } from "./get-package-version.js";
+import { getPackageInfo } from "./get-package-info.js";
 import {
   applySpecialCasePatch,
   isSpecialCaseTarget,
 } from "./special-case-patches.js";
 
-let instrumentator: any;
-let packages: Set<string>;
-let transformers: Map<string, any> = new Map();
-// URLs that need a per-package source patch (see special-case-patches.ts).
-// Resolve records the (packageName, modulePath) it already computed so load
-// doesn't have to redo the moduleDetailsFromPath roundtrip.
-const specialCaseUrls: Map<
-  string,
-  { packageName: string; modulePath: string }
-> = new Map();
+let matcher: InstrumentationMatcher;
 
 function getModuleType(url: string, format: string | undefined) {
   if (format === "module") {
@@ -48,119 +39,58 @@ function getModuleType(url: string, format: string | undefined) {
   return "unknown";
 }
 
-export async function initialize(
-  data: { instrumentations?: InstrumentationConfig[] } = {},
-) {
-  // Use the instrumentations passed from the parent via register()
-  const configs = data.instrumentations || [];
-  instrumentator = new InstrumentationMatcher(configs);
-  packages = new Set(configs.map((i) => i.module.name));
-}
-
-export async function resolve(
-  specifier: string,
-  context: any,
-  nextResolve: Function,
-) {
-  const url = await nextResolve(specifier, context);
-
-  // Convert file:// URL to path
-  const filePath = url.url.startsWith("file:")
-    ? fileURLToPath(url.url)
-    : url.url;
-
-  // Normalize path to platform-specific separator for module-details-from-path
-  // Some bundlers pass forward slashes even on Windows
-  const normalizedForPlatform = filePath.split("/").join(sep);
-
-  const resolvedModule = moduleDetailsFromPath(normalizedForPlatform);
-
-  if (resolvedModule) {
-    const packageName =
-      getPackageName(resolvedModule.basedir) ?? resolvedModule.name;
-    const normalizedModulePath = resolvedModule.path.replace(/\\/g, "/");
-    const version = getPackageVersion(resolvedModule.basedir);
-
-    // Track files that need per-package source patches (see
-    // loader/special-case-patches.ts). Anti-pattern fallback for SDKs we
-    // can't instrument via the standard pipeline; the load step retrieves
-    // the recorded (packageName, modulePath) and applies the patch.
-    if (isSpecialCaseTarget(packageName, normalizedModulePath)) {
-      specialCaseUrls.set(url.url, {
-        packageName,
-        modulePath: normalizedModulePath,
-      });
-    }
-
-    if (!packages?.has(packageName)) {
-      return url;
-    }
-
-    const transformer = instrumentator.getTransformer(
-      packageName,
-      version,
-      normalizedModulePath,
-    );
-
-    if (transformer) {
-      transformers.set(url.url, transformer);
-    }
-  }
-
-  return url;
+export function initialize({
+  instrumentations,
+}: {
+  instrumentations: InstrumentationConfig[];
+}) {
+  matcher = new InstrumentationMatcher(instrumentations);
 }
 
 export async function load(url: string, context: any, nextLoad: Function) {
   const result = await nextLoad(url, context);
+  const filePath = url.startsWith("file:") ? fileURLToPath(url) : url;
+  const resolvedModule = moduleDetailsFromPath(filePath.split("/").join(sep));
+  if (!resolvedModule) return result;
 
-  // Per-package source patches (see loader/special-case-patches.ts).
-  // Anti-pattern fallback — keep this branch and the helper module narrow.
-  const specialCase = specialCaseUrls.get(url);
-  if (specialCase) {
-    if (result.format === "commonjs") {
-      const parsedUrl = new URL(result.responseURL ?? url);
-      result.source ??= await readFile(parsedUrl);
-    }
-    if (result.source) {
-      const patched = applySpecialCasePatch({
-        packageName: specialCase.packageName,
-        modulePath: specialCase.modulePath,
-        source: result.source.toString("utf8"),
-        format: result.format === "commonjs" ? "cjs" : "esm",
-      });
-      if (patched !== null) {
-        result.source = patched;
-        result.shortCircuit = true;
-      }
-    }
-    return result;
-  }
+  const packageInfo = getPackageInfo(resolvedModule.basedir);
+  const packageName = packageInfo?.name ?? resolvedModule.name;
+  const modulePath = resolvedModule.path.replace(/\\/g, "/");
+  const specialCase = isSpecialCaseTarget(packageName, modulePath);
+  const transformer =
+    !specialCase && packageInfo?.version
+      ? matcher.getTransformer(packageName, packageInfo.version, modulePath)
+      : undefined;
+  if (!specialCase && !transformer) return result;
 
-  if (!transformers.has(url)) {
-    // No transformation needed for this module
-    return result;
-  }
-
+  // Node may omit CommonJS source; only read it for an instrumentation target.
   if (result.format === "commonjs") {
-    const parsedUrl = new URL(result.responseURL ?? url);
-    result.source ??= await readFile(parsedUrl);
+    result.source ??= await readFile(new URL(result.responseURL ?? url));
   }
+  if (!result.source) return result;
+  const source = result.source.toString("utf8");
 
-  const code = result.source;
-  if (code) {
-    const transformer = transformers.get(url);
+  if (specialCase) {
+    const patched = applySpecialCasePatch({
+      packageName,
+      modulePath,
+      source,
+      format: result.format === "commonjs" ? "cjs" : "esm",
+    });
+    if (patched !== null) {
+      result.source = patched;
+      result.shortCircuit = true;
+    }
+  } else if (transformer) {
     try {
-      const moduleType = getModuleType(url, result.format);
-      const transformedCode = transformer.transform(
-        code.toString("utf8"),
-        moduleType,
-      );
-      result.source = transformedCode?.code;
+      result.source = transformer.transform(
+        source,
+        getModuleType(url, result.format),
+      ).code;
       result.shortCircuit = true;
     } catch (err) {
       console.warn(`Error transforming module ${url}:`, err);
     }
   }
-
   return result;
 }
