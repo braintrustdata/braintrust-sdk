@@ -65,7 +65,7 @@
           "start_ms": 300,
           "end_ms": 2900,
           "timing_source": "provider_events",
-          "end_of_turn_ms": 3400,
+          "end_of_turn_ms": 3600,
           "transcript_final_ms": 4300,
           "selections": [
             {
@@ -83,7 +83,7 @@
         },
         "item_rt_a1": {
           "role": "assistant",
-          "seq": 1,
+          "seq": 2,
           "committed": true,
           "state": "interrupted",
           "text": "I have nine thirty or eleven on Fri",
@@ -113,7 +113,7 @@
         },
         "item_rt_u2": {
           "role": "user",
-          "seq": 2,
+          "seq": 3,
           "committed": true,
           "state": "complete",
           "text_status": "missing",
@@ -121,7 +121,7 @@
           "start_ms": 7600,
           "end_ms": 8500,
           "timing_source": "provider_events",
-          "end_of_turn_ms": 8600,
+          "end_of_turn_ms": 9050,
           "selections": [
             {
               "recording_span_id": "r-root",
@@ -138,7 +138,7 @@
         },
         "item_rt_a2": {
           "role": "assistant",
-          "seq": 3,
+          "seq": 5,
           "committed": true,
           "state": "complete",
           "text": "Done — you're booked Friday at nine thirty.",
@@ -338,7 +338,7 @@
       "type": "task"
     },
     "metrics": {
-      "start": 1791830008.6,
+      "start": 1791830009.05,
       "end": 1791830012.5
     },
     "output": [
@@ -374,8 +374,8 @@
       "type": "llm"
     },
     "metrics": {
-      "start": 1791830008.6,
-      "end": 1791830008.9
+      "start": 1791830009.05,
+      "end": 1791830009.15
     },
     "input": [
       {
@@ -453,8 +453,8 @@
       "type": "tool"
     },
     "metrics": {
-      "start": 1791830008.9,
-      "end": 1791830009.3
+      "start": 1791830009.15,
+      "end": 1791830009.55
     },
     "input": {
       "appointment_id": "apt_481",
@@ -477,7 +477,7 @@
       "type": "llm"
     },
     "metrics": {
-      "start": 1791830009.3,
+      "start": 1791830009.55,
       "end": 1791830012.5
     },
     "input": [

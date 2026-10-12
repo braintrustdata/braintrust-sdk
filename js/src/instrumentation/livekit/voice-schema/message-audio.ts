@@ -61,13 +61,27 @@ export const voiceMessageSchema = z
       message.end_ms < message.start_ms
     )
       issue("end_ms must not precede start_ms");
+    if (!message.committed) {
+      if (
+        message.role === "user" &&
+        (message.state !== "complete" || message.text !== undefined)
+      )
+        issue("uncommitted user speech is complete and has no text");
+      if (
+        message.role === "assistant" &&
+        message.state !== "unplayed" &&
+        message.state !== "interrupted"
+      )
+        issue("uncommitted assistant speech is unplayed or interrupted");
+    }
     if (
-      !message.committed &&
-      (message.role !== "user" ||
-        message.state !== "complete" ||
-        message.text !== undefined)
+      message.state === "unplayed" &&
+      (message.selections.length > 0 ||
+        message.interrupted_at_ms !== undefined ||
+        (message.text_status !== "final" &&
+          message.text_status !== "not_captured"))
     )
-      issue("uncommitted entries are complete user speech without text");
+      issue("unplayed speech has generated text and no played audio");
     const channel = message.role === "user" ? 0 : 1;
     if (message.selections.some((s) => s.channel_index !== channel))
       issue(`${message.role} selections must use channel ${channel}`);

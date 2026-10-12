@@ -132,17 +132,36 @@ describe("message-audio schema", () => {
     expect(parses({ ...base, text_status: "missing" })).toBe(false);
   });
 
-  it("accepts unplayed assistant speech that never got an item", () => {
+  it("accepts cancelled assistant speech that never entered the context", () => {
     expect(
       parses({
         ...base,
         role: "assistant",
+        committed: false,
         state: "unplayed",
         text_status: "final",
         text_source: "tts_input",
         text: "Let me check.",
       }),
     ).toBe(true);
+  });
+
+  it("rejects unplayed speech without generated text", () => {
+    const { text: _text, ...rest } = base;
+    expect(
+      parses({
+        ...rest,
+        role: "assistant",
+        state: "unplayed",
+        text_status: "missing",
+      }),
+    ).toBe(false);
+  });
+
+  it("rejects uncommitted assistant speech that completed", () => {
+    expect(parses({ ...base, role: "assistant", committed: false })).toBe(
+      false,
+    );
   });
 
   it("rejects user audio on the agent channel", () => {
