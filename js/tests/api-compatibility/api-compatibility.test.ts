@@ -370,6 +370,7 @@ function verifyRuntimeMatchesTypes(
 function compareExports(
   publishedExports: Map<string, ExportedSymbol>,
   currentExports: Map<string, ExportedSymbol>,
+  typesPath: string,
 ): {
   removed: ExportedSymbol[];
   added: ExportedSymbol[];
@@ -389,8 +390,13 @@ function compareExports(
     kind: string;
   }> = [];
 
-  // Internal testing exports that can change without breaking compatibility
+  // Internal exports are outside the supported public API compatibility contract.
   const internalExports = new Set(["_exportsForTestingOnly"]);
+  if (typesPath === "dist/instrumentation/index.d.ts") {
+    // These plugin implementation details were historically exported for SDK use.
+    internalExports.add("ChannelHandlers");
+    internalExports.add("BasePlugin");
+  }
 
   // Check for removed or modified exports
   for (const [name, publishedSymbol] of publishedExports) {
@@ -2148,6 +2154,71 @@ function findDifference(before: string, after: string): string {
   return `First difference at position ${diffStart}:\n    Before: ...${beforeContext}...\n    After:  ...${afterContext}...`;
 }
 
+describe("internal instrumentation API compatibility", () => {
+  const published = new Map<string, ExportedSymbol>([
+    [
+      "ChannelHandlers",
+      {
+        name: "ChannelHandlers",
+        kind: "interface",
+        signature: "interface ChannelHandlers { start(): void; }",
+      },
+    ],
+    [
+      "BasePlugin",
+      {
+        name: "BasePlugin",
+        kind: "class",
+        signature: `declare class BasePlugin {
+  protected subscribe(): void;
+}`,
+      },
+    ],
+    [
+      "BraintrustPlugin",
+      {
+        name: "BraintrustPlugin",
+        kind: "interface",
+        signature: "interface BraintrustPlugin { enable(): void; }",
+      },
+    ],
+  ]);
+  const current = new Map<string, ExportedSymbol>([
+    [
+      "BasePlugin",
+      {
+        name: "BasePlugin",
+        kind: "class",
+        signature: "declare class BasePlugin {}",
+      },
+    ],
+    ["BraintrustPlugin", published.get("BraintrustPlugin")!],
+  ]);
+
+  test("allows removing and changing internal plugin exports", () => {
+    expect(
+      compareExports(published, current, "dist/instrumentation/index.d.ts"),
+    ).toEqual({ removed: [], added: [], modified: [] });
+  });
+
+  test("still checks public instrumentation exports", () => {
+    const result = compareExports(
+      published,
+      new Map(),
+      "dist/instrumentation/index.d.ts",
+    );
+    expect(result.removed.map(({ name }) => name)).toEqual([
+      "BraintrustPlugin",
+    ]);
+  });
+
+  test("does not exempt matching names in other entrypoints", () => {
+    const result = compareExports(published, current, "dist/index.d.ts");
+    expect(result.removed.map(({ name }) => name)).toEqual(["ChannelHandlers"]);
+    expect(result.modified.map(({ name }) => name)).toEqual(["BasePlugin"]);
+  });
+});
+
 describe("isUnionTypeWidening", () => {
   test("should recognize single type becoming union", () => {
     const result = isUnionTypeWidening("string", "string | number");
@@ -2973,10 +3044,12 @@ describe("API Compatibility", () => {
         const baselineComparison = compareExports(
           publishedExports,
           mainExports,
+          entrypoint.typesPath,
         );
         const currentComparison = compareExports(
           publishedExports,
           currentExports,
+          entrypoint.typesPath,
         );
 
         // Log additions in current
@@ -3076,7 +3149,11 @@ describe("API Compatibility", () => {
           `${entrypoint.name}: Could not read main branch, using direct comparison`,
         );
 
-        const comparison = compareExports(publishedExports, currentExports);
+        const comparison = compareExports(
+          publishedExports,
+          currentExports,
+          entrypoint.typesPath,
+        );
 
         // Log additions
         if (comparison.added.length > 0) {

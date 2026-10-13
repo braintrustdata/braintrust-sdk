@@ -24,13 +24,13 @@ export type ExtraOf<T> = T extends { __extra?: infer E extends object }
   : never;
 export type ChunkOf<T> = T extends { __chunk?: infer R } ? R : never;
 export type InvocationAdditionalOf<T> = ExtraOf<T> & { moduleVersion?: string };
-export type Interceptor<T extends AnySpec> = (
+type Interceptor<T extends AnySpec> = (
   target: (this: unknown, ...args: ArgsOf<T>) => ReturnOf<T>,
   receiver: unknown,
   args: ArgsOf<T>,
   additional: InvocationAdditionalOf<T>,
 ) => ReturnOf<T>;
-export type InvocationChannel<T extends AnySpec> = T & {
+type InvocationChannel<T extends AnySpec> = T & {
   intercept(interceptor: Interceptor<T>): () => void;
   invoke<F extends (this: any, ...args: any[]) => ReturnOf<T>>(
     target: F,
