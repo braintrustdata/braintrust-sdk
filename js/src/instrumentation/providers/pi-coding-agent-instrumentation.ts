@@ -5,6 +5,7 @@ import { debugLogger } from "../../debug-logger";
 import {
   _internalCaptureAttachmentsEnabled,
   CAPTURE_ATTACHMENTS,
+  withCurrent,
   _internalStartSpan as startBaseSpan,
 } from "../../logger";
 import type { Span } from "../../logger";
@@ -326,9 +327,20 @@ function wrapPiToolExecutors(tools: PiTool[] | undefined): void {
       }
 
       const wrappedExecute = function (this: unknown, ...args: unknown[]) {
-        return runWithAutoInstrumentationAllowed(() =>
-          Reflect.apply(execute, this, args),
-        );
+        const invokeOriginal = () =>
+          runWithAutoInstrumentationAllowed(() =>
+            Reflect.apply(execute, this, args),
+          );
+        const state = currentPiPromptState();
+        const toolCallId = args[0];
+        const toolState =
+          !state?.finalized && typeof toolCallId === "string"
+            ? state?.activeToolSpans.get(toolCallId)
+            : undefined;
+
+        return toolState
+          ? withCurrent(toolState.span, invokeOriginal)
+          : invokeOriginal();
       };
       Object.defineProperty(wrappedExecute, PI_TOOL_EXECUTE_WRAPPED, {
         configurable: false,

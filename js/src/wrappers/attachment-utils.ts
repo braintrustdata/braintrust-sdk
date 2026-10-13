@@ -37,13 +37,14 @@ export function getExtensionFromMediaType(mediaType: string): string {
     "image/webp": "webp",
     "image/svg+xml": "svg",
     "audio/mpeg": "mp3",
-    "audio/wav": "wav",
-    "audio/ogg": "ogg",
-    "audio/aac": "aac",
-    "audio/pcm": "pcm",
     "audio/flac": "flac",
     "audio/basic": "mulaw",
     "audio/mp4": "m4a",
+    "audio/wav": "wav",
+    "audio/webm": "webm",
+    "audio/ogg": "ogg",
+    "audio/aac": "aac",
+    "audio/pcm": "pcm",
     "video/mp4": "mp4",
     "video/webm": "webm",
     "application/pdf": "pdf",
@@ -295,7 +296,9 @@ export function processInputAttachments(
         "image/png",
       );
       const filename = `image.${getExtensionFromMediaType(mediaType)}`;
-      const attachment = toAttachment(node.image_url.url, mediaType, filename);
+      const attachment = captureAttachments
+        ? toAttachment(node.image_url.url, mediaType, filename)
+        : "<omitted>";
 
       if (attachment) {
         return {
@@ -333,7 +336,9 @@ export function processInputAttachments(
         node.type === "video_base64" ? "video/mp4" : "image/png",
       );
       const filename = `${node.type === "video_base64" ? "video" : "image"}.${getExtensionFromMediaType(mediaType)}`;
-      const attachment = toAttachment(voyageBase64Value, mediaType, filename);
+      const attachment = captureAttachments
+        ? toAttachment(voyageBase64Value, mediaType, filename)
+        : "<omitted>";
 
       if (attachment) {
         return {
@@ -366,7 +371,9 @@ export function processInputAttachments(
         typeof node.file.filename === "string" && node.file.filename
           ? node.file.filename
           : `document.${getExtensionFromMediaType(mediaType)}`;
-      const attachment = toAttachment(node.file.file_data, mediaType, filename);
+      const attachment = captureAttachments
+        ? toAttachment(node.file.file_data, mediaType, filename)
+        : "<omitted>";
 
       if (attachment) {
         return {
@@ -400,7 +407,12 @@ export function processInputAttachments(
       }
 
       const filename = `input_image_${attachmentIndex}.${getExtensionFromMediaType(mediaType)}`;
-      const attachment = toAttachment(node.image, mediaType, filename);
+      const attachment = captureAttachments
+        ? toAttachment(node.image, mediaType, filename)
+        : node.image instanceof URL ||
+            (typeof node.image === "string" && /^https?:/.test(node.image))
+          ? null
+          : "<omitted>";
 
       if (attachment) {
         attachmentIndex++;
@@ -430,7 +442,12 @@ export function processInputAttachments(
       const filename =
         node.filename ||
         `input_file_${attachmentIndex}.${getExtensionFromMediaType(mediaType)}`;
-      const attachment = toAttachment(node.data, mediaType, filename);
+      const attachment = captureAttachments
+        ? toAttachment(node.data, mediaType, filename)
+        : node.data instanceof URL ||
+            (typeof node.data === "string" && /^https?:/.test(node.data))
+          ? null
+          : "<omitted>";
 
       if (attachment) {
         attachmentIndex++;

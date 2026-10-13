@@ -106,9 +106,8 @@ describe.concurrent("variants", () => {
           });
         },
         snapshotName: `${scenario.snapshotName}-wrapped`,
-        cassetteName: scenario.snapshotName,
         testFileUrl: import.meta.url,
-        timeoutMs: TIMEOUT_MS,
+        timeoutMs: 300_000,
         version: scenario.version,
       });
 
@@ -131,9 +130,8 @@ describe.concurrent("variants", () => {
           });
         },
         snapshotName: `${scenario.snapshotName}-auto-hook`,
-        cassetteName: scenario.snapshotName,
         testFileUrl: import.meta.url,
-        timeoutMs: TIMEOUT_MS,
+        timeoutMs: 300_000,
         version: scenario.version,
       });
     });

@@ -1,5 +1,6 @@
 import { _internalCaptureAttachmentsEnabled } from "../../logger";
 import { processInputAttachments } from "../../wrappers/attachment-utils";
+import { interceptOpenAIMedia } from "./openai-media";
 import {
   traceAsyncChannel,
   traceStreamingChannel,
@@ -20,6 +21,11 @@ import {
   interceptOpenAIFilesCreateTraced,
 } from "./openai-batch-instrumentation";
 import {
+  interceptOpenAIAgentsTraceCapture,
+  interceptOpenAIAgentsTraceFail,
+  interceptOpenAIAgentsTraceStart,
+} from "./openai-agents-api-instrumentation";
+import {
   BRAINTRUST_CACHED_STREAM_METRIC,
   getCachedMetricFromHeaders,
   parseMetricsFromUsage,
@@ -32,7 +38,7 @@ import type {
 } from "../../vendor-sdk-types/openai";
 
 /**
- * Register the internal OpenAI instrumentation consumer.
+ * Registers OpenAI SDK instrumentation.
  *
  * Handles instrumentation for:
  * - Chat completions (streaming and non-streaming)
@@ -42,6 +48,11 @@ import type {
  * - Responses API (create, stream, parse, compact)
  */
 export function registerOpenAIInstrumentation(): void {
+  openAIChannels.agentsTraceStart.intercept(interceptOpenAIAgentsTraceStart);
+  openAIChannels.agentsTraceCapture.intercept(
+    interceptOpenAIAgentsTraceCapture,
+  );
+  openAIChannels.agentsTraceFail.intercept(interceptOpenAIAgentsTraceFail);
   openAIChannels.filesCreateTraced.intercept(interceptOpenAIFilesCreateTraced);
   openAIChannels.batchesRetrieveTraced.intercept(
     interceptOpenAIBatchesRetrieveTraced,
@@ -49,6 +60,13 @@ export function registerOpenAIInstrumentation(): void {
   openAIChannels.batchesCompleteTrace.intercept(
     interceptOpenAIBatchTraceComplete,
   );
+
+  interceptOpenAIMedia(openAIChannels.imagesGenerate, "generate");
+  interceptOpenAIMedia(openAIChannels.imagesEdit, "edit");
+  interceptOpenAIMedia(openAIChannels.imagesCreateVariation, "variation");
+  interceptOpenAIMedia(openAIChannels.audioSpeechCreate, "speech");
+  interceptOpenAIMedia(openAIChannels.audioTranscriptionsCreate, "transcribe");
+  interceptOpenAIMedia(openAIChannels.audioTranslationsCreate, "translate");
 
   // Chat Completions - supports streaming
   traceStreamingChannel(openAIChannels.chatCompletionsCreate, {
@@ -182,26 +200,10 @@ export function registerOpenAIInstrumentation(): void {
     name: "openai.responses.create",
     type: SpanTypeAttribute.LLM,
     extractInput: ([params]) => extractOpenAIResponsesInput(params),
-    extractFromEvent: (event) => {
-      if (event.type !== "response.completed" || !event.response) {
-        return {};
-      }
-
-      const response = event.response;
-      const data: Record<string, unknown> = {};
-
-      if (response.output !== undefined) {
-        data.output = processImagesInOutput(response.output);
-      }
-
-      const { usage: _usage, output: _output, ...metadata } = response;
-      if (Object.keys(metadata).length > 0) {
-        data.metadata = metadata;
-      }
-
-      data.metrics = parseMetricsFromUsage(response.usage);
-      return data;
-    },
+    extractFromEvent: (event) =>
+      TERMINAL_RESPONSE_EVENT_TYPES.has(event.type)
+        ? aggregateResponseStreamEvents([event])
+        : {},
   });
 
   // Responses API - parse
@@ -387,7 +389,9 @@ type AggregatedChatChoice = {
   index: number;
   role: string | undefined;
   content: string | undefined;
+  reasoning_content: string | null | undefined;
   refusal: string | undefined;
+  audio: NonNullable<OpenAIChatChoice["message"]["audio"]> | undefined;
   toolCallsByIndex: Map<
     number,
     NonNullable<OpenAIChatChoice["message"]["tool_calls"]>[number]
@@ -401,7 +405,9 @@ function createAggregatedChatChoice(index: number): AggregatedChatChoice {
     index,
     role: undefined,
     content: undefined,
+    reasoning_content: undefined,
     refusal: undefined,
+    audio: undefined,
     toolCallsByIndex: new Map(),
     logprobs: undefined,
     finish_reason: undefined,
@@ -418,7 +424,11 @@ function toChatChoice(choice: AggregatedChatChoice): OpenAIChatChoice {
     message: {
       role: choice.role,
       content: choice.content,
+      ...(choice.reasoning_content !== undefined
+        ? { reasoning_content: choice.reasoning_content }
+        : {}),
       ...(choice.refusal !== undefined ? { refusal: choice.refusal } : {}),
+      ...(choice.audio !== undefined ? { audio: choice.audio } : {}),
       tool_calls: toolCalls.length > 0 ? toolCalls : undefined,
     },
     logprobs: choice.logprobs ?? null,
@@ -428,8 +438,8 @@ function toChatChoice(choice: AggregatedChatChoice): OpenAIChatChoice {
 
 /**
  * Aggregate chat completion chunks into a single response.
- * Combines role (first), content (concatenated), tool_calls (by index),
- * finish_reason (last), and usage (last chunk).
+ * Combines role (first), content, reasoning_content and audio transcripts (concatenated),
+ * tool_calls (by index), finish_reason (last), and usage (last chunk).
  */
 export function aggregateChatCompletionChunks(
   chunks: OpenAIChatCompletionChunk[],
@@ -490,9 +500,38 @@ export function aggregateChatCompletionChunks(
           (aggregatedChoice.content || "") + delta.content;
       }
 
+      if (typeof delta.reasoning_content === "string") {
+        aggregatedChoice.reasoning_content =
+          (aggregatedChoice.reasoning_content ?? "") + delta.reasoning_content;
+      } else if (delta.reasoning_content === null) {
+        // Retain explicit nulls, but never discard text from earlier chunks.
+        aggregatedChoice.reasoning_content ??= null;
+      }
+
       if (delta.refusal) {
         aggregatedChoice.refusal =
           (aggregatedChoice.refusal || "") + delta.refusal;
+      }
+
+      if (delta.audio) {
+        const { id, expires_at: expiresAt, transcript } = delta.audio;
+        if (
+          id !== undefined ||
+          expiresAt !== undefined ||
+          transcript !== undefined
+        ) {
+          aggregatedChoice.audio ??= {};
+          if (id !== undefined) {
+            aggregatedChoice.audio.id = id;
+          }
+          if (expiresAt !== undefined) {
+            aggregatedChoice.audio.expires_at = expiresAt;
+          }
+          if (transcript !== undefined) {
+            aggregatedChoice.audio.transcript =
+              (aggregatedChoice.audio.transcript || "") + transcript;
+          }
+        }
       }
 
       if (delta.tool_calls) {
@@ -542,7 +581,17 @@ export function aggregateChatCompletionChunks(
   };
 }
 
-function aggregateResponseStreamEvents(
+// A Responses API stream ends with one of these events. Streams that hit
+// `max_output_tokens` or a content filter end with `response.incomplete`, and
+// streams that error server-side end with `response.failed`. All of them carry
+// the final `response` object with output and usage.
+const TERMINAL_RESPONSE_EVENT_TYPES = new Set([
+  "response.completed",
+  "response.incomplete",
+  "response.failed",
+]);
+
+export function aggregateResponseStreamEvents(
   chunks: OpenAIResponseStreamEvent[],
   _streamResult?: unknown,
   endEvent?: unknown,
@@ -550,36 +599,39 @@ function aggregateResponseStreamEvents(
   output: any;
   metrics: Record<string, number>;
   metadata?: Record<string, any>;
+  error?: string;
 } {
   let output: any = undefined;
   let metrics: Record<string, number> = {};
   let metadata: Record<string, any> | undefined = undefined;
+  let error: string | undefined = undefined;
 
   for (const chunk of chunks) {
-    if (!chunk || !chunk.type || !chunk.response) {
-      continue;
-    }
-    if (chunk.type !== "response.completed") {
+    if (!chunk?.response || !TERMINAL_RESPONSE_EVENT_TYPES.has(chunk.type)) {
       continue;
     }
 
     const response = chunk.response;
-    if (response?.output !== undefined) {
+    if (response.output !== undefined) {
       output = processImagesInOutput(response.output);
     }
 
-    const { usage: _usage, output: _output, ...rest } = response || {};
+    const { usage: _usage, output: _output, ...rest } = response;
     if (Object.keys(rest).length > 0) {
       metadata = rest;
     }
 
-    metrics = parseMetricsFromUsage(response?.usage);
+    metrics = parseMetricsFromUsage(response.usage);
+    if (chunk.type === "response.failed" && response.error) {
+      error = `${response.error.code}: ${response.error.message}`;
+    }
   }
 
   return {
     output,
     metrics: withCachedMetric(metrics, undefined, endEvent),
     ...(metadata !== undefined ? { metadata } : {}),
+    ...(error !== undefined ? { error } : {}),
   };
 }
 

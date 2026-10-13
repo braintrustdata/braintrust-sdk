@@ -1,4 +1,5 @@
 import { describe } from "vitest";
+import { resolve } from "node:path";
 import {
   prepareScenarioDir,
   readInstalledPackageVersion,
@@ -8,6 +9,10 @@ import { defineGroqInstrumentationAssertions } from "./assertions";
 import { GROQ_SCENARIO_TIMEOUT_MS } from "./scenario.impl.mjs";
 
 const originalScenarioDir = resolveScenarioDir(import.meta.url);
+const audioFile = resolve(
+  originalScenarioDir,
+  "../google-genai-instrumentation/test-audio.wav",
+);
 const scenarioDir = await prepareScenarioDir({
   scenarioDir: originalScenarioDir,
 });
@@ -40,10 +45,11 @@ describe.concurrent("variants", () => {
             entry: "scenario.ts",
             env: {
               BRAINTRUST_CAPTURE_ATTACHMENTS: "true",
+              GROQ_AUDIO_FILE: audioFile,
               GROQ_PACKAGE_NAME: scenario.dependencyName,
             },
             runContext: {
-              variantKey: scenario.snapshotName,
+              variantKey: `${scenario.snapshotName}-wrapped`,
               originalScenarioDir,
             },
             scenarioDir,
@@ -62,11 +68,12 @@ describe.concurrent("variants", () => {
             entry: "scenario.mjs",
             env: {
               BRAINTRUST_CAPTURE_ATTACHMENTS: "true",
+              GROQ_AUDIO_FILE: audioFile,
               GROQ_PACKAGE_NAME: scenario.dependencyName,
             },
             nodeArgs: ["--import", "braintrust/hook.mjs"],
             runContext: {
-              variantKey: scenario.snapshotName,
+              variantKey: `${scenario.snapshotName}-auto`,
               originalScenarioDir,
             },
             scenarioDir,

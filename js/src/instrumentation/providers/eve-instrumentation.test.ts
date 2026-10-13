@@ -77,6 +77,10 @@ describe("braintrustEveInstrumentation", () => {
     const provider = braintrustEveInstrumentation({ setup });
 
     expect(provider.capture).toBe("content");
+    expect(Object.hasOwn(provider, "capture")).toBe(false);
+    expect(
+      Reflect.get(provider, Symbol.for("eve.instrumentation.provider")),
+    ).toBe(true);
     expect(provider.tracePolicy?.({ audience: "private" })).toEqual({
       emit: true,
       recordInputs: true,
@@ -218,6 +222,7 @@ describe("braintrustEveInstrumentation", () => {
               ],
               role: "assistant",
             },
+            { content: "Task status update", role: "user" },
           ],
         },
         model: {
@@ -526,6 +531,7 @@ describe("braintrustEveInstrumentation", () => {
       typeof rootReference !== "object" ||
       rootReference === null ||
       Array.isArray(rootReference) ||
+      !("rootSpanId" in rootReference) ||
       typeof rootReference.rootSpanId !== "string"
     ) {
       throw new Error("Expected the root turn trace context to be persisted");
@@ -582,6 +588,32 @@ describe("braintrustEveInstrumentation", () => {
       root?.root_span_id,
       root?.root_span_id,
     ]);
+  });
+
+  it("parents a top-level turn to the caller's trace context", async () => {
+    const provider = braintrustEveInstrumentation();
+    const parentTraceContext = {
+      traceFlags: 1,
+      traceId: "0123456789abcdef0123456789abcdef",
+      spanId: "0123456789abcdef",
+    };
+    await provider.events["turn.started"](
+      {
+        idempotencyKey: "turn:external-session:turn-0",
+        rootSessionId: "external-session",
+        sequence: 0,
+        sessionId: "external-session",
+        turnId: "turn-0",
+        type: "turn.started",
+        parentTraceContext,
+      },
+      providerContext(),
+    );
+    const [turn] = await backgroundLogger.drain();
+    expect(turn).toMatchObject({
+      root_span_id: parentTraceContext.traceId,
+      span_parents: [parentTraceContext.spanId],
+    });
   });
 
   it("creates a separate trace for each top-level turn in one session", async () => {

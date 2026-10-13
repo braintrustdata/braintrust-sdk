@@ -151,6 +151,7 @@ export class BraintrustLangChainCallbackHandler {
           name: runName,
           metadata,
           ...extraParams,
+          model: getModelNameFromInvocation(extraParams),
         },
       },
     });
@@ -188,9 +189,7 @@ export class BraintrustLangChainCallbackHandler {
       output,
       metrics,
       tags,
-      metadata: {
-        model: modelName,
-      },
+      metadata: modelName !== undefined ? { model: modelName } : undefined,
     });
   }
 
@@ -221,6 +220,7 @@ export class BraintrustLangChainCallbackHandler {
           name: runName,
           metadata,
           ...extraParams,
+          model: getModelNameFromInvocation(extraParams),
         },
       },
     });
@@ -480,6 +480,17 @@ function walkGenerations(
   return result;
 }
 
+function getModelNameFromInvocation(
+  extraParams: Record<string, unknown> | undefined,
+): string | undefined {
+  const params = extraParams?.invocation_params;
+  if (!isRecord(params)) {
+    return undefined;
+  }
+  const modelName = params.model ?? params.model_name;
+  return typeof modelName === "string" ? modelName : undefined;
+}
+
 function getModelNameFromResponse(
   response: LangChainLLMResult,
 ): string | undefined {
@@ -489,14 +500,17 @@ function getModelNameFromResponse(
       continue;
     }
 
-    const responseMetadata = message.response_metadata;
-    if (!isRecord(responseMetadata)) {
-      continue;
-    }
-
-    const modelName = responseMetadata.model_name ?? responseMetadata.model;
-    if (typeof modelName === "string") {
-      return modelName;
+    for (const metadata of [
+      message.response_metadata,
+      message.additional_kwargs,
+    ]) {
+      if (!isRecord(metadata)) {
+        continue;
+      }
+      const modelName = metadata.model_name ?? metadata.model;
+      if (typeof modelName === "string") {
+        return modelName;
+      }
     }
   }
 
@@ -519,18 +533,25 @@ function getMetricsFromResponse(
       continue;
     }
 
-    const inputTokenDetails = usageMetadata.input_token_details;
+    const inputTokenDetails = isRecord(usageMetadata.input_token_details)
+      ? usageMetadata.input_token_details
+      : {};
     const outputTokenDetails = usageMetadata.output_token_details;
     return normalizeTokenMetrics({
       total_tokens: usageMetadata.total_tokens,
       prompt_tokens: usageMetadata.input_tokens,
       completion_tokens: usageMetadata.output_tokens,
-      prompt_cache_creation_tokens: isRecord(inputTokenDetails)
-        ? inputTokenDetails.cache_creation
-        : undefined,
-      prompt_cached_tokens: isRecord(inputTokenDetails)
-        ? inputTokenDetails.cache_read
-        : undefined,
+      // Prefer TTL-specific cache writes over the aggregate when available.
+      prompt_cache_creation_tokens:
+        inputTokenDetails.ephemeral_5m_input_tokens == null &&
+        inputTokenDetails.ephemeral_1h_input_tokens == null
+          ? inputTokenDetails.cache_creation
+          : undefined,
+      prompt_cache_creation_5m_tokens:
+        inputTokenDetails.ephemeral_5m_input_tokens,
+      prompt_cache_creation_1h_tokens:
+        inputTokenDetails.ephemeral_1h_input_tokens,
+      prompt_cached_tokens: inputTokenDetails.cache_read,
       completion_reasoning_tokens: isRecord(outputTokenDetails)
         ? outputTokenDetails.reasoning
         : undefined,

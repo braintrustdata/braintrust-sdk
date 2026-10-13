@@ -2,9 +2,13 @@ import { describe, it, expect } from "vitest";
 import {
   parseMetricsFromUsage,
   aggregateChatCompletionChunks,
+  aggregateResponseStreamEvents,
 } from "./openai-instrumentation";
-import { processImagesInOutput } from "./openai-span-data";
+import { processImagesInOutput as processImagesInOutputWithFlag } from "./openai-span-data";
 import { Attachment } from "../../logger";
+
+const processImagesInOutput = (output: unknown, captureAttachments = true) =>
+  processImagesInOutputWithFlag(output, captureAttachments);
 
 describe("parseMetricsFromUsage", () => {
   describe("null/undefined handling", () => {
@@ -297,6 +301,108 @@ describe("parseMetricsFromUsage", () => {
 });
 
 describe("aggregateChatCompletionChunks", () => {
+  describe("reasoning_content", () => {
+    it("concatenates reasoning separately from content for each choice", () => {
+      const chunks = [
+        {
+          choices: [
+            {
+              index: 1,
+              delta: { role: "assistant", reasoning_content: "Let " },
+            },
+            {
+              index: 0,
+              delta: { role: "assistant", reasoning_content: "Think " },
+            },
+          ],
+        },
+        {
+          choices: [
+            { index: 0, delta: { reasoning_content: "first.", content: "An" } },
+            {
+              index: 1,
+              delta: { reasoning_content: "me think.", content: "Other" },
+            },
+          ],
+        },
+        {
+          choices: [
+            {
+              index: 1,
+              delta: { reasoning_content: null },
+              finish_reason: "length",
+            },
+            { index: 0, delta: { content: "swer" }, finish_reason: "stop" },
+          ],
+        },
+        {
+          choices: [],
+          usage: { prompt_tokens: 2, completion_tokens: 8, total_tokens: 10 },
+        },
+      ];
+      const originalChunks = structuredClone(chunks);
+
+      expect(aggregateChatCompletionChunks(chunks)).toEqual({
+        output: [
+          {
+            index: 0,
+            message: {
+              role: "assistant",
+              content: "Answer",
+              reasoning_content: "Think first.",
+            },
+            logprobs: null,
+            finish_reason: "stop",
+          },
+          {
+            index: 1,
+            message: {
+              role: "assistant",
+              content: "Other",
+              reasoning_content: "Let me think.",
+            },
+            logprobs: null,
+            finish_reason: "length",
+          },
+        ],
+        metrics: { prompt_tokens: 2, completion_tokens: 8, tokens: 10 },
+      });
+      expect(chunks).toEqual(originalChunks);
+    });
+
+    it.each([
+      { fragments: [undefined, undefined], expected: undefined },
+      { fragments: [null, undefined, null], expected: null },
+      { fragments: ["", undefined, ""], expected: "" },
+      { fragments: [null, "", null], expected: "" },
+      {
+        fragments: [null, "Think", undefined, null, "", " more", null],
+        expected: "Think more",
+      },
+    ])(
+      "preserves reasoning fragments $fragments as $expected",
+      ({ fragments, expected }) => {
+        const chunks = fragments.map((reasoning_content) => ({
+          choices: [
+            {
+              index: 0,
+              delta:
+                reasoning_content === undefined ? {} : { reasoning_content },
+            },
+          ],
+        }));
+        const { message } = aggregateChatCompletionChunks(chunks).output[0];
+
+        if (expected === undefined) {
+          expect(message).not.toHaveProperty("reasoning_content");
+        } else {
+          expect(message).toHaveProperty("reasoning_content", expected);
+        }
+        expect(message.content).toBeUndefined();
+      },
+    );
+  });
+
   describe("basic aggregation", () => {
     it("should aggregate simple text chunks", () => {
       const chunks = [
@@ -496,6 +602,80 @@ describe("aggregateChatCompletionChunks", () => {
       const result = aggregateChatCompletionChunks(chunks);
 
       expect(result.output[0].message.content).toBe("Hello!");
+    });
+  });
+
+  describe("audio aggregation", () => {
+    it("should aggregate audio transcripts without logging base64 data", () => {
+      const chunks = [
+        {
+          choices: [
+            {
+              index: 0,
+              delta: {
+                role: "assistant",
+                audio: {
+                  id: "audio_123",
+                  data: "UklGRg==",
+                  expires_at: 1_740_000_000,
+                  transcript: "Hello",
+                },
+              },
+            },
+          ],
+        },
+        {
+          choices: [
+            {
+              index: 0,
+              delta: {
+                audio: {
+                  data: "AAAAAA==",
+                  transcript: " world",
+                },
+              },
+            },
+          ],
+        },
+        {
+          choices: [
+            {
+              index: 0,
+              delta: {
+                audio: {
+                  data: "AQEBAQ==",
+                  transcript: "!",
+                },
+              },
+            },
+            {
+              index: 1,
+              delta: {
+                role: "assistant",
+                audio: {
+                  id: "audio_456",
+                  transcript: "Bonjour",
+                },
+              },
+            },
+          ],
+        },
+      ];
+
+      const result = aggregateChatCompletionChunks(chunks);
+
+      expect(result.output[0].message.audio).toEqual({
+        id: "audio_123",
+        expires_at: 1_740_000_000,
+        transcript: "Hello world!",
+      });
+      expect(result.output[1].message.audio).toEqual({
+        id: "audio_456",
+        transcript: "Bonjour",
+      });
+      expect(JSON.stringify(result.output)).not.toContain("UklGRg==");
+      expect(JSON.stringify(result.output)).not.toContain("AAAAAA==");
+      expect(JSON.stringify(result.output)).not.toContain("AQEBAQ==");
     });
   });
 
@@ -1525,5 +1705,60 @@ describe("processImagesInOutput", () => {
       const attachment = result.result as Attachment;
       expect(attachment.reference.filename).toBe("generated_image.png");
     });
+  });
+});
+
+describe("aggregateResponseStreamEvents", () => {
+  const usage = { input_tokens: 10, output_tokens: 4, total_tokens: 14 };
+
+  it.each(["response.completed", "response.incomplete", "response.failed"])(
+    "reads output and usage from the terminal %s event",
+    (type) => {
+      const chunks = [
+        { type: "response.created", response: { id: "resp_1" } },
+        {
+          type,
+          response: {
+            id: "resp_1",
+            status: type.split(".")[1],
+            output: [{ type: "message", id: "msg_1" }],
+            usage,
+          },
+        },
+      ];
+
+      const result = aggregateResponseStreamEvents(chunks);
+
+      expect(result.output).toEqual([{ type: "message", id: "msg_1" }]);
+      expect(result.metrics).toEqual({
+        prompt_tokens: 10,
+        completion_tokens: 4,
+        tokens: 14,
+      });
+      expect(result.metadata).toMatchObject({ id: "resp_1" });
+      expect(result.error).toBeUndefined();
+    },
+  );
+
+  it("logs the error from a terminal response.failed event", () => {
+    const error = { code: "server_error", message: "The model failed." };
+    const result = aggregateResponseStreamEvents([
+      {
+        type: "response.failed",
+        response: { id: "resp_1", status: "failed", output: [], error, usage },
+      },
+    ]);
+
+    expect(result.error).toBe("server_error: The model failed.");
+    expect(result.metadata).toMatchObject({ status: "failed", error });
+  });
+
+  it("ignores non-terminal events that carry a response", () => {
+    const result = aggregateResponseStreamEvents([
+      { type: "response.in_progress", response: { id: "resp_1", usage } },
+    ]);
+
+    expect(result.output).toBeUndefined();
+    expect(result.metrics).toEqual({});
   });
 });

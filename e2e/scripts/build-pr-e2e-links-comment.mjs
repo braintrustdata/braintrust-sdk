@@ -173,11 +173,21 @@ async function readRunContextRecords(runContextDir) {
     return { records, runIdsByScenarioAndVariant };
   }
 
-  const entries = await readdir(runContextDir, { withFileTypes: true });
-  const ndjsonFiles = entries
-    .filter((entry) => entry.isFile() && entry.name.endsWith(".ndjson"))
-    .map((entry) => path.join(runContextDir, entry.name))
-    .sort();
+  const pendingDirs = [runContextDir];
+  const ndjsonFiles = [];
+  while (pendingDirs.length > 0) {
+    const currentDir = pendingDirs.pop();
+    const entries = await readdir(currentDir, { withFileTypes: true });
+    for (const entry of entries) {
+      const entryPath = path.join(currentDir, entry.name);
+      if (entry.isDirectory()) {
+        pendingDirs.push(entryPath);
+      } else if (entry.isFile() && entry.name.endsWith(".ndjson")) {
+        ndjsonFiles.push(entryPath);
+      }
+    }
+  }
+  ndjsonFiles.sort();
 
   for (const filePath of ndjsonFiles) {
     const raw = await readFile(filePath, "utf8");
@@ -208,6 +218,10 @@ async function readRunContextRecords(runContextDir) {
       ) {
         continue;
       }
+
+      // These runs still provide local assertions and cassette coverage.
+      // Only published runs belong in the production trace links.
+      if (parsed.forwardToProduction === false) continue;
 
       const scenarioDirName = parsed.scenarioDirName;
       const variantKey =
