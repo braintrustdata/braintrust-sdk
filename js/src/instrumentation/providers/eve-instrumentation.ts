@@ -1,6 +1,9 @@
 import { debugLogger } from "../../debug-logger";
 import {
   Attachment,
+  BaseAttachment,
+  CAPTURE_ATTACHMENTS,
+  _internalCaptureAttachmentsEnabled,
   NOOP_SPAN,
   _internalStartSpanWithInitialMerge,
   currentLogger,
@@ -19,7 +22,6 @@ import { getCurrentUnixTimestamp } from "../../util";
 import {
   convertDataToBlob,
   getExtensionFromMediaType,
-  processInputAttachments,
 } from "../../wrappers/attachment-utils";
 import type {
   EveInstrumentationActionCompletedEvent,
@@ -43,6 +45,7 @@ import type {
 type EveSpan = Pick<Span, "end" | "log" | "rootSpanId" | "spanId">;
 
 type EveSpanReference = {
+  readonly captureAttachments: boolean;
   readonly exported: string;
   readonly rootSpanId: string;
   readonly spanId: string;
@@ -55,6 +58,7 @@ type TurnState = {
   rootSpanId: string;
   rowId: string;
   span: EveSpan;
+  captureAttachments: boolean;
   spanId: string;
 };
 
@@ -121,6 +125,10 @@ class ResumedEveSpan implements EveSpan {
   private endTime: number | undefined;
 
   constructor(private readonly reference: EveSpanReference) {}
+
+  get [CAPTURE_ATTACHMENTS](): boolean {
+    return this.reference.captureAttachments;
+  }
 
   get rootSpanId(): string {
     return this.reference.rootSpanId;
@@ -212,7 +220,7 @@ class EveBridge {
       ...this.metadata(event.scope.sessionId),
       ...modelMetadata(event.model.modelId, event.model.provider),
     };
-    const input = capturedModelInput(event.input);
+    const input = capturedModelInput(event.input, turn.captureAttachments);
     const ids = await generateEveIds("step", event.idempotencyKey);
     const span = await this.startEveSpan(context, {
       event: {
@@ -221,6 +229,7 @@ class EveBridge {
         metadata,
       },
       name: "eve.step",
+      [CAPTURE_ATTACHMENTS]: turn.captureAttachments,
       parentSpanIds: {
         rootSpanId: turn.rootSpanId,
         spanId: turn.spanId,
@@ -309,7 +318,7 @@ class EveBridge {
   ): Promise<void> {
     const turn = await this.turnForScope(event.scope, context);
     const metadata = turn.metadata;
-    const input = processInputAttachments(event.input);
+    const input = event.input;
     const ids = await generateEveIds(
       "action",
       event.scope.sessionId,
@@ -323,6 +332,7 @@ class EveBridge {
         metadata,
       },
       name: event.name,
+      [CAPTURE_ATTACHMENTS]: turn.captureAttachments,
       parentSpanIds: {
         rootSpanId: turn.rootSpanId,
         spanId: turn.spanId,
@@ -342,7 +352,7 @@ class EveBridge {
         error: toError(event.output.error, "Eve action failed"),
       });
     } else if (event.output.output !== undefined) {
-      span.log({ output: processInputAttachments(event.output.output) });
+      span.log({ output: event.output.output });
     }
     span.end(actionEndArgs(event.acceptedAtMs));
   }
@@ -391,6 +401,7 @@ class EveBridge {
     context: EveInstrumentationHandlerContext,
     metadata: Record<string, unknown>,
   ): Promise<EveSpan> {
+    const captureAttachments = _internalCaptureAttachmentsEnabled();
     const ids = await generateEveIds("turn", event.sessionId, event.turnId);
     const parentSpanId =
       event.parentLineage === undefined
@@ -429,6 +440,8 @@ class EveBridge {
     return await this.startEveSpan(context, {
       event: { id: ids.rowId, metadata },
       name: "eve.turn",
+      [CAPTURE_ATTACHMENTS]:
+        parentTurn?.captureAttachments ?? captureAttachments,
       parentSpanIds:
         parentSpanId === undefined
           ? { parentSpanIds: [], rootSpanId }
@@ -440,7 +453,9 @@ class EveBridge {
 
   private async startEveSpan(
     context: EveInstrumentationHandlerContext,
-    args: Parameters<typeof _internalStartSpanWithInitialMerge>[0],
+    args: Parameters<typeof _internalStartSpanWithInitialMerge>[0] & {
+      [CAPTURE_ATTACHMENTS]: boolean;
+    },
   ): Promise<EveSpan> {
     const reference = readSpanReference(context.state.get());
     if (reference !== undefined) {
@@ -459,6 +474,7 @@ class EveBridge {
 
     try {
       const reference: EveSpanReference = {
+        captureAttachments: _internalCaptureAttachmentsEnabled(span),
         exported: await span.export(),
         rootSpanId: span.rootSpanId,
         spanId: span.spanId,
@@ -495,6 +511,7 @@ class EveBridge {
         rootSpanId: span.rootSpanId,
         rowId: ids.rowId,
         span,
+        captureAttachments: _internalCaptureAttachmentsEnabled(span),
         spanId: span.spanId,
       };
       this.turnsByKey.set(key, turn);
@@ -547,6 +564,7 @@ class EveBridge {
       rootSpanId: span.rootSpanId,
       rowId: ids.rowId,
       span,
+      captureAttachments: _internalCaptureAttachmentsEnabled(span),
       spanId: span.spanId,
     };
   }
@@ -566,9 +584,8 @@ class EveBridge {
     }
 
     const ids = await generateEveIds("turn", scope.sessionId, scope.turnId);
-    const persistedRootSpanId = readSpanReference(
-      context.state.get(),
-    )?.rootSpanId;
+    const reference = readSpanReference(context.state.get());
+    const persistedRootSpanId = reference?.rootSpanId;
     const rememberedRootSpanId = eveRootSpanIdsByTurnKey.get(key);
     return {
       key,
@@ -582,6 +599,8 @@ class EveBridge {
           scope.turnId,
         )),
       rowId: ids.rowId,
+      captureAttachments:
+        reference?.captureAttachments ?? _internalCaptureAttachmentsEnabled(),
       span: NOOP_SPAN,
       spanId: ids.spanId,
     };
@@ -665,6 +684,7 @@ class EveBridge {
         metadata: this.metadata(event.scope.sessionId),
       },
       name: "eve.step",
+      [CAPTURE_ATTACHMENTS]: turn.captureAttachments,
       parentSpanIds: {
         rootSpanId: turn.rootSpanId,
         spanId: turn.spanId,
@@ -695,6 +715,7 @@ class EveBridge {
     return await this.startEveSpan(context, {
       event: { id: ids.rowId, metadata: turn.metadata },
       name: "eve.action",
+      [CAPTURE_ATTACHMENTS]: turn.captureAttachments,
       parentSpanIds: {
         rootSpanId: turn.rootSpanId,
         spanId: turn.spanId,
@@ -720,6 +741,7 @@ function readSpanReference(value: unknown): EveSpanReference | undefined {
   const rootSpanId = value["rootSpanId"];
   const spanId = value["spanId"];
   if (
+    typeof value["captureAttachments"] !== "boolean" ||
     typeof exported !== "string" ||
     typeof rootSpanId !== "string" ||
     typeof spanId !== "string"
@@ -727,6 +749,7 @@ function readSpanReference(value: unknown): EveSpanReference | undefined {
     return undefined;
   }
   return {
+    captureAttachments: value["captureAttachments"],
     exported,
     rootSpanId,
     spanId,
@@ -742,6 +765,7 @@ function readSpanReference(value: unknown): EveSpanReference | undefined {
 
 function capturedModelInput(
   input: EveInstrumentationModelInput | undefined,
+  captureAttachments: boolean,
 ): unknown[] | undefined {
   if (input === undefined) {
     return undefined;
@@ -751,19 +775,22 @@ function capturedModelInput(
     value.push({ content: input.instructions, role: "system" });
   } else if (Array.isArray(input.instructions)) {
     for (const instruction of input.instructions) {
-      const projected = projectedModelMessage(instruction);
+      const projected = projectedModelMessage(instruction, captureAttachments);
       if (projected?.role === "system") {
         value.push(projected);
       }
     }
   } else if (isObject(input.instructions)) {
-    const instruction = projectedModelMessage(input.instructions);
+    const instruction = projectedModelMessage(
+      input.instructions,
+      captureAttachments,
+    );
     if (instruction?.role === "system") {
       value.push(instruction);
     }
   }
   for (const message of input.messages) {
-    const projected = projectedModelMessage(message);
+    const projected = projectedModelMessage(message, captureAttachments);
     if (projected !== undefined) {
       value.push(projected);
     }
@@ -773,6 +800,7 @@ function capturedModelInput(
 
 function projectedModelMessage(
   value: unknown,
+  captureAttachments: boolean,
 ): { content: unknown; role: string } | undefined {
   if (!isObject(value)) {
     return undefined;
@@ -814,7 +842,12 @@ function projectedModelMessage(
             ? part["mediaType"]
             : "image/png";
         projected.push({
-          image: mediaAttachment(part["image"], mediaType, undefined),
+          image: mediaAttachment(
+            part["image"],
+            mediaType,
+            undefined,
+            captureAttachments,
+          ),
           ...(typeof part["mediaType"] === "string" ? { mediaType } : {}),
           type: "image",
         });
@@ -834,6 +867,7 @@ function projectedModelMessage(
                 typeof part["filename"] === "string"
                   ? part["filename"]
                   : undefined,
+                captureAttachments,
               );
         projected.push({
           ...(data === undefined ? {} : { data }),
@@ -864,7 +898,7 @@ function projectedModelMessage(
           typeof part["toolName"] === "string"
         ) {
           projected.push({
-            output: projectedToolOutput(part["output"]),
+            output: projectedToolOutput(part["output"], captureAttachments),
             toolCallId: part["toolCallId"],
             toolName: part["toolName"],
             type: "tool-result",
@@ -893,7 +927,10 @@ function projectedModelMessage(
   return { content: projected, role };
 }
 
-function projectedToolOutput(value: unknown): unknown {
+function projectedToolOutput(
+  value: unknown,
+  captureAttachments: boolean,
+): unknown {
   if (!isObject(value)) {
     return value;
   }
@@ -933,6 +970,7 @@ function projectedToolOutput(value: unknown): unknown {
             part["data"],
             part["mediaType"],
             typeof part["filename"] === "string" ? part["filename"] : undefined,
+            captureAttachments,
           );
           content.push({
             ...(data === undefined ? {} : { data }),
@@ -963,7 +1001,15 @@ function mediaAttachment(
   data: unknown,
   contentType: string,
   filename: string | undefined,
+  captureAttachments: boolean,
 ): unknown {
+  if (
+    data instanceof BaseAttachment ||
+    (data instanceof URL && data.protocol !== "data:") ||
+    (typeof data === "string" && /^https?:/i.test(data))
+  )
+    return data;
+  if (!captureAttachments) return undefined;
   const blob = convertDataToBlob(data, contentType);
   if (blob === null) {
     return data;

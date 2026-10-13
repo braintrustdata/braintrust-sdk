@@ -107,7 +107,7 @@ export function convertDataToBlob(data: any, mediaType: string): Blob | null {
 
 /**
  * Process input to extract and convert image/file content parts to Attachments
- * Similar to processImagesInOutput in oai_responses.ts - replaces data in-place
+ * Only pass provider content containers, never arbitrary tool arguments or JSON results.
  */
 export function processInputAttachments(
   input: any,
