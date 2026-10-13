@@ -61,6 +61,7 @@ interface MockBraintrustServer {
   apiKey: string;
   close: () => Promise<void>;
   events: CapturedLogEvent[];
+  experiments: { id: string; name: string; projectId: string }[];
   payloads: CapturedLogPayload[];
   requests: CapturedRequest[];
   url: string;
@@ -810,6 +811,9 @@ export async function startMockBraintrustServer(
       }
     },
     events,
+    get experiments() {
+      return [...experimentsByProjectAndName.values()];
+    },
     payloads,
     requests,
     url: serverUrl,

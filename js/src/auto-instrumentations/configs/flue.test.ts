@@ -1,10 +1,10 @@
-import { create } from "@apm-js-collab/code-transformer";
+import { InstrumentationMatcher } from "../orchestrion-js";
 import { describe, expect, it } from "vitest";
 import { flueConfigs, flueVersionRange } from "./flue";
 
 describe("flue auto-instrumentation configs", () => {
   it("targets the stable Flue 0.8 context factory", () => {
-    const matcher = create(flueConfigs);
+    const matcher = new InstrumentationMatcher(flueConfigs);
     const flue08Transformer = matcher.getTransformer(
       "@flue/runtime",
       "0.8.0",
@@ -40,7 +40,7 @@ function createFlueContext(config) {
   });
 
   it("does not target Flue content-hashed workflow or tool chunks", () => {
-    const matcher = create(flueConfigs);
+    const matcher = new InstrumentationMatcher(flueConfigs);
 
     expect(
       matcher.getTransformer(

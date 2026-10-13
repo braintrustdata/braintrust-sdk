@@ -20,6 +20,11 @@ it("links published runs while preserving legacy records and excluding local-onl
           label: "Scenario",
           metadataScenario: "scenario",
         },
+        ...["captured", "eval-only", "empty"].map((name) => ({
+          scenarioDirName: name,
+          label: name,
+          metadataScenario: name,
+        })),
       ]),
     );
     await writeFile(
@@ -28,6 +33,27 @@ it("links published runs while preserving legacy records and excluding local-onl
         { testRunId: "e2e-published", forwardToProduction: true },
         { testRunId: "e2e-local-only", forwardToProduction: false },
         { testRunId: "e2e-legacy" },
+        {
+          scenarioDirName: "captured",
+          testRunId: "e2e-captured",
+          forwardToProduction: true,
+          logRootSpanIds: ["trace-without-scenario-metadata"],
+          experimentNames: [],
+        },
+        {
+          scenarioDirName: "eval-only",
+          testRunId: "e2e-eval",
+          forwardToProduction: true,
+          logRootSpanIds: [],
+          experimentNames: ["eval/with spaces"],
+        },
+        {
+          scenarioDirName: "empty",
+          testRunId: "e2e-empty",
+          forwardToProduction: true,
+          logRootSpanIds: [],
+          experimentNames: [],
+        },
       ]
         .map((record) =>
           JSON.stringify({ scenarioDirName: "scenario", ...record }),
@@ -55,6 +81,17 @@ it("links published runs while preserving legacy records and excluding local-onl
     expect(stdout).toContain("e2e-published");
     expect(stdout).toContain("e2e-legacy");
     expect(stdout).not.toContain("e2e-local-only");
+    const logsLinks = [...stdout.matchAll(/\[Open logs\]\(([^)]+)\)/g)];
+    expect(logsLinks).toHaveLength(2);
+    const search = JSON.parse(
+      new URL(logsLinks[1][1]).searchParams.get("search")!,
+    );
+    expect(decodeURIComponent(search.filter[0].text)).toBe(
+      '(root_span_id IN ("trace-without-scenario-metadata"))',
+    );
+    expect(stdout).toContain("/experiments/eval%2Fwith%20spaces");
+    expect(stdout).toContain("| empty | N/A | Observed (no captured traces) |");
+    expect(stdout).not.toContain("e2e-eval");
   } finally {
     await rm(dir, { recursive: true, force: true });
   }

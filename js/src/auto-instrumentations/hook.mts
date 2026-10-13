@@ -2,7 +2,7 @@
  * Unified loader hook for auto-instrumentation (ESM + CJS).
  *
  * Usage:
- *   node --import @braintrust/auto-instrumentations/hook.mjs app.js
+ *   node --import braintrust/hook.mjs app.js
  *
  * This hook performs AST transformation at load-time for BOTH ESM and CJS modules,
  * injecting global instrumentation hook calls into AI SDK functions.
@@ -10,7 +10,7 @@
  * Many modern apps use a mix of ESM and CJS modules, so this single hook
  * handles both:
  * - ESM modules: Transformed via register() loader hook
- * - CJS modules: Transformed via ModulePatch monkey-patching Module._compile
+ * - CJS modules: Transformed via patching Module._compile
  */
 
 import { register } from "node:module";
@@ -21,7 +21,7 @@ import {
 import { BraintrustObservabilityExporter } from "../wrappers/mastra.js";
 import { installMastraExporterFactory } from "./loader/mastra-observability-patch.js";
 import { getDefaultAutoInstrumentationConfigs } from "./configs/all.js";
-import { ModulePatch } from "./loader/cjs-patch.js";
+import { patchCommonJS } from "./loader/cjs-patch.js";
 import { GLOBAL_INSTRUMENTATION_HOOKS_PROTOCOL_VERSION } from "../global-instrumentation-hooks.js";
 
 const state = ((globalThis as any)[
@@ -55,8 +55,7 @@ if (!alreadyApplied) {
 
   // 2. Also load CJS register for CJS modules (many apps use mixed ESM/CJS)
   try {
-    const patch = new ModulePatch({ instrumentations: allConfigs });
-    patch.patch();
+    patchCommonJS(allConfigs);
 
     if (process.env.DEBUG === "@braintrust*" || process.env.DEBUG === "*") {
       console.log(

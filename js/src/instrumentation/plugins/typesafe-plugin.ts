@@ -16,8 +16,8 @@ import {
   runWithAutoInstrumentationSuppressed,
 } from "../auto-instrumentation-suppression";
 import { BasePlugin } from "../core";
-import { unsubscribeAll } from "../core/channel-tracing";
-import { typeSafeChannels } from "./typesafe-channels";
+import { unsubscribeAll } from "../core/tracing";
+import { typeSafeChannels } from "./typesafe-interceptors";
 
 export class TypeSafePlugin extends BasePlugin {
   protected onEnable(): void {

@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   registerHuggingFaceTransformersPipeline,
   type HuggingFaceTransformersEventContext,
-} from "./huggingface-transformers-channels";
+} from "./huggingface-transformers-interceptors";
 import { _exportsForTestingOnly } from "./huggingface-transformers-plugin";
 import type { HuggingFaceTransformersPipeline } from "../../vendor-sdk-types/huggingface-transformers";
 

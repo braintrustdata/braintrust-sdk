@@ -1,7 +1,7 @@
 import { afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { Attachment, _exportsForTestingOnly, initLogger } from "../../logger";
 import { configureNode } from "../../node/config";
-import { voyageAIChannels } from "./voyageai-channels";
+import { voyageAIChannels } from "./voyageai-interceptors";
 
 try {
   configureNode();

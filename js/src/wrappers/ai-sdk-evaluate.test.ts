@@ -8,7 +8,7 @@ import {
   type TestBackgroundLogger,
 } from "../logger";
 import { configureNode } from "../node/config";
-import { aiSDKChannels } from "../instrumentation/plugins/ai-sdk-channels";
+import { aiSDKChannels } from "../instrumentation/plugins/ai-sdk-interceptors";
 import { registry } from "../instrumentation/registry";
 import { runWithAutoInstrumentationSuppressed } from "../instrumentation/auto-instrumentation-suppression";
 import type {

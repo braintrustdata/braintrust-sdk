@@ -1,5 +1,5 @@
 import { debugLogger } from "./debug-logger";
-import { openAIChannels } from "./instrumentation/plugins/openai-channels";
+import { openAIChannels } from "./instrumentation/plugins/openai-interceptors";
 import { resolveUseLegacyUuidIds } from "./id-gen";
 import {
   _internalExportParentSynchronously,

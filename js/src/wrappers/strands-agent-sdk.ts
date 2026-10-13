@@ -1,4 +1,4 @@
-import { strandsAgentSDKChannels } from "../instrumentation/plugins/strands-agent-sdk-channels";
+import { strandsAgentSDKChannels } from "../instrumentation/plugins/strands-agent-sdk-interceptors";
 import type {
   StrandsAgent,
   StrandsAgentConstructor,
@@ -221,9 +221,7 @@ function wrapMultiAgentInstance(
             value as StrandsMultiAgent["stream"],
             target,
             callArgs,
-            {
-              orchestrator: proxy,
-            },
+            { orchestrator: proxy },
           );
         };
       }

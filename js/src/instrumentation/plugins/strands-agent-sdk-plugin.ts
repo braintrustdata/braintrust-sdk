@@ -17,7 +17,7 @@ import { getCurrentUnixTimestamp } from "../../util";
 import { SpanTypeAttribute, isObject } from "../../../util/index";
 import { convertDataToBlob } from "../../wrappers/attachment-utils";
 import { runWithAutoInstrumentationSuppressed } from "../auto-instrumentation-suppression";
-import { strandsAgentSDKChannels } from "./strands-agent-sdk-channels";
+import { strandsAgentSDKChannels } from "./strands-agent-sdk-interceptors";
 import type {
   StrandsAfterModelCallEvent,
   StrandsAfterNodeCallEvent,

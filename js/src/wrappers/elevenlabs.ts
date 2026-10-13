@@ -1,6 +1,6 @@
 import { isObject } from "../../util";
 import { debugLogger } from "../debug-logger";
-import { elevenLabsChannels } from "../instrumentation/plugins/elevenlabs-channels";
+import { elevenLabsChannels } from "../instrumentation/plugins/elevenlabs-interceptors";
 import type {
   ElevenLabsClient,
   ElevenLabsSpeechArgs,
