@@ -1,4 +1,6 @@
 import type {
+  AISDKEvaluateParams,
+  AISDKEvaluationResult,
   AISDKAgentClass,
   AISDKAgentInstance,
   AISDKCallParams,
@@ -36,6 +38,8 @@ import type {
 export type AISDK = AISDKNamespaceBase;
 
 export type {
+  AISDKEvaluateParams,
+  AISDKEvaluationResult,
   AISDKAgentClass,
   AISDKAgentInstance,
   AISDKCallParams,

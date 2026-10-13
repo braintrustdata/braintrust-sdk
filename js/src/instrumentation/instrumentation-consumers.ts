@@ -1,3 +1,7 @@
+import { registerTypeSafeInstrumentation } from "./providers/typesafe-instrumentation";
+import { registerLangGraphSDKInstrumentation } from "./providers/langgraph-sdk-instrumentation";
+import { registerGoogleGenerativeAIInstrumentation } from "./providers/google-generative-ai-instrumentation";
+import { registerElevenLabsInstrumentation } from "./providers/elevenlabs-instrumentation";
 import { registerOpenAIInstrumentation } from "./providers/openai-instrumentation";
 import { registerOpenAICodexInstrumentation } from "./providers/openai-codex-instrumentation";
 import { registerAnthropicInstrumentation } from "./providers/anthropic-instrumentation";
@@ -143,6 +147,22 @@ export function registerInstrumentationConsumers(
     registerLangSmithInstrumentation({
       skipLangChainRuns: integrations.langchain !== false,
     });
+  }
+
+  if (integrations.elevenlabs !== false) {
+    registerElevenLabsInstrumentation();
+  }
+
+  if (integrations.googleGenerativeAI !== false) {
+    registerGoogleGenerativeAIInstrumentation();
+  }
+
+  if (integrations.langgraphSDK !== false) {
+    registerLangGraphSDKInstrumentation();
+  }
+
+  if (integrations.typesafe !== false) {
+    registerTypeSafeInstrumentation();
   }
 
   // Mastra is intentionally not wired here: `@mastra/core` ships its own

@@ -1,5 +1,5 @@
-import { z } from "zod/v3";
 import { Prompt } from "./logger";
+import type { ZodSchema } from "./zod/utils";
 import {
   promptDefinitionToPromptData,
   type PromptDefinitionWithTools,
@@ -18,15 +18,15 @@ export type EvalParameters = Record<
       default?: string;
       description?: string;
     }
-  | z.ZodTypeAny
+  | ZodSchema
 >;
 
 type InferParameterValue<T> = T extends { type: "prompt" }
   ? Prompt<boolean, boolean>
   : T extends { type: "model" }
     ? string
-    : T extends z.ZodType
-      ? z.infer<T>
+    : T extends ZodSchema
+      ? T["_output"]
       : never;
 
 export type InferParameters<T extends EvalParameters> = {
@@ -78,7 +78,7 @@ export function validateParameters<Parameters extends EvalParameters>(
         }
 
         // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
-        const zodSchema = schema as z.ZodSchema<unknown>;
+        const zodSchema = schema as ZodSchema;
         return [name, zodSchema.parse(value)];
       } catch (e) {
         // eslint-disable-next-line no-restricted-properties -- preserving intentional console usage.

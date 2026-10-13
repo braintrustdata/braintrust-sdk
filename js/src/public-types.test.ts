@@ -7,7 +7,7 @@ import type {
   ContextParentSpanIds,
   CurrentSpanStore,
   Dataset,
-  DurableEvalStore,
+  WorkflowEvalStore,
   EvalScorer,
   EvalTask,
   LangChainCallbackHandlerOptions,
@@ -33,7 +33,7 @@ test("exports only intentional extension types", () => {
   expectTypeOf<PropagationContext>().toBeObject();
   expectTypeOf(publicExports.configureContextManager).toBeFunction();
   expectTypeOf<Trace>().toBeObject();
-  expectTypeOf<DurableEvalStore>().toBeObject();
+  expectTypeOf<WorkflowEvalStore>().toBeObject();
   expectTypeOf<TemplateRendererPlugin>().toBeObject();
   expectTypeOf<LangChainCallbackHandlerOptions>().toBeObject();
   expectTypeOf(BraintrustLangChainCallbackHandler).toBeConstructibleWith();

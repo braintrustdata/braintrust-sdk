@@ -3,6 +3,7 @@ import type { IsoAsyncLocalStorage, IsoTracingChannel } from "../../isomorph";
 import {
   _internalGetGlobalState,
   _internalStartSpan,
+  _internalExportParentSynchronously,
   currentSpan,
   updateSpan,
   type Span,
@@ -117,32 +118,10 @@ function continuationParentFromCreateSessionParams(
   return context.parent;
 }
 
-function exportSpanSynchronously(span: Span): string | undefined {
-  const parentInfo = span.getParentInfo();
-  if (!parentInfo) {
-    return undefined;
-  }
-  const objectId = parentInfo.objectId.getSync().value;
-  if (!objectId && !parentInfo.computeObjectMetadataArgs) {
-    return undefined;
-  }
-
-  return new SpanComponentsV4({
-    object_type: parentInfo.objectType,
-    ...(objectId
-      ? { object_id: objectId }
-      : {
-          compute_object_metadata_args:
-            parentInfo.computeObjectMetadataArgs ?? {},
-        }),
-    row_id: span.id,
-    root_span_id: span.rootSpanId,
-    span_id: span.spanId,
-  }).toStr();
-}
-
 function exportedParent(parent: HarnessTurnParent): string | undefined {
-  return typeof parent === "string" ? parent : exportSpanSynchronously(parent);
+  return typeof parent === "string"
+    ? parent
+    : _internalExportParentSynchronously(parent);
 }
 
 function addSerializedContext(args: {

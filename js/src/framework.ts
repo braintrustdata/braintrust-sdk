@@ -7,6 +7,7 @@ import {
   SpanTypeAttribute,
   spanObjectTypeV3ToTypedString,
 } from "../util/index";
+import type { SingleScore } from "../util/score";
 import { ObjectReference as ObjectReferenceSchema } from "./sdk-schemas";
 import type {
   GitMetadataSettings,
@@ -15,6 +16,7 @@ import type {
   SSEProgressEventData,
 } from "./sdk-types";
 import { queue } from "async";
+import { v5 as uuidv5 } from "uuid";
 
 import iso from "./isomorph";
 import { debugLogger } from "./debug-logger";
@@ -152,6 +154,12 @@ export interface EvalHooks<
    * The tags for the current evaluation.
    */
   tags: string[] | undefined;
+  /**
+   * Aborted when the evaluation times out or its `signal` is aborted.
+   * Cancellation is cooperative: pass this to the APIs you call or check
+   * `signal.aborted` to stop work early.
+   */
+  signal?: AbortSignal;
 }
 
 // This happens to be compatible with ScorerArgs defined in "../util".
@@ -165,7 +173,7 @@ export type EvalScorerArgs<
   trace?: Trace;
 };
 
-export type OneOrMoreScores = Score | number | null | Array<Score>;
+export type OneOrMoreScores = SingleScore | number | null | Array<Score>;
 
 export type EvalScorer<
   Input,
@@ -285,12 +293,23 @@ export interface Evaluator<
 
   /**
    * The duration, in milliseconds, after which to time out the evaluation.
-   * Defaults to undefined, in which case there is no timeout.
+   * A timeout of 0 times out immediately. Defaults to undefined, in which case
+   * there is no timeout.
+   *
+   * On timeout, trials that have not started are skipped and the task hooks'
+   * `signal` is aborted. The evaluation then waits for in-flight tasks and
+   * scorers to settle before rejecting, so tasks that ignore the signal can
+   * make the evaluation take longer than `timeout`.
    */
   timeout?: number;
 
   /**
    * An abort signal that can be used to stop the evaluation.
+   *
+   * On abort, trials that have not started are skipped and the task hooks'
+   * `signal` is aborted. The evaluation then waits for in-flight tasks and
+   * scorers to settle before rejecting, so tasks that ignore the signal can
+   * delay the rejection.
    */
   signal?: AbortSignal;
 
@@ -740,14 +759,13 @@ export async function Eval<
       { disabled: Boolean(options.parent || options.noSendLogs) },
     );
 
-    // Ensure experiment ID is resolved before tasks start for OTEL parent attribute support
-    // The Experiment constructor starts resolution (fire-and-forget), but we await here to ensure completion
-    // Only needed when OTEL compat mode is enabled
-    if (
-      experiment &&
-      typeof process !== "undefined" &&
-      globalThis.BRAINTRUST_CONTEXT_MANAGER !== undefined
-    ) {
+    // Resolve the experiment ID before any task (and therefore any span) exists.
+    // Everything that reads the parent synchronously depends on it: OTEL parent
+    // attributes, and the `braintrust.parent` baggage entry that `Span.inject` /
+    // `injectTraceContext` emit. Without this, the first span of a run would
+    // propagate trace identity with no destination, and the receiving process
+    // would silently start a fresh local trace instead.
+    if (experiment) {
       await experiment._waitForId();
     }
 
@@ -849,6 +867,7 @@ export async function _internalRunEvaluatorTask(
   parameters: Record<string, unknown>,
   span: Span,
   reportProgress: (event: TaskProgressEvent) => void = () => undefined,
+  signal: AbortSignal = new AbortController().signal,
 ): Promise<{
   output: unknown;
   metadata: Record<string, unknown>;
@@ -865,6 +884,7 @@ export async function _internalRunEvaluatorTask(
     reportProgress,
     trialIndex,
     tags: [...(datum.tags ?? [])],
+    signal,
   };
   const output = await task(datum.input, hooks);
   span.log({ output });
@@ -909,19 +929,29 @@ export function _internalPrepareEvaluatorScore(
 } {
   if (scoreValue === null) return { results: null };
   if (Array.isArray(scoreValue)) {
+    const names = new Set<string>();
     for (const score of scoreValue) {
       if (!(typeof score === "object" && !isEmpty(score))) {
         throw new Error(
           `When returning an array of scores, each score must be a non-empty object. Got: ${JSON.stringify(score)}`,
         );
       }
+      if (typeof score.name !== "string") {
+        throw new Error(
+          `When returning an array of scores, each score must have a name. Got: ${JSON.stringify(score)}`,
+        );
+      }
+      if (names.has(score.name)) {
+        throw new Error(`Duplicate score name '${score.name}' in score array`);
+      }
+      names.add(score.name);
     }
   }
   let results: Score[];
   if (Array.isArray(scoreValue)) {
     results = scoreValue;
   } else if (typeof scoreValue === "object" && !isEmpty(scoreValue)) {
-    results = [scoreValue];
+    results = [{ ...scoreValue, name: scoreValue.name ?? name }];
   } else {
     results = [{ name, score: scoreValue }];
   }
@@ -1124,7 +1154,10 @@ export async function runEvaluator(
     const localScoreAccumulator: ScoreAccumulator | null = experiment
       ? null
       : {};
-    let cancelled = false;
+    // Aborted on timeout or when `evaluator.signal` aborts. Tasks observe it
+    // through `hooks.signal`; the eval itself uses it to stop scheduling trials.
+    const abortController = new AbortController();
+    const abortSignal = abortController.signal;
     let scheduledTrials = 0;
     const q = queue(
       async ({
@@ -1135,7 +1168,8 @@ export async function runEvaluator(
         datum: EvalCase<any, any, any>;
         trialIndex: number;
       }) => {
-        if (cancelled) {
+        // Trials that were queued but not started before the abort are skipped.
+        if (abortSignal.aborted) {
           return;
         }
         const eventDataset: Dataset | undefined = experiment
@@ -1157,6 +1191,13 @@ export async function runEvaluator(
         const origin =
           inlineDatasetOrigin ??
           (parsedDatumOrigin?.success ? parsedDatumOrigin.data : undefined);
+        const upsertId =
+          datum.upsert_id && trialIndex > 0
+            ? uuidv5(
+                `braintrust:eval:${datum.upsert_id}:trial:${trialIndex}`,
+                uuidv5.URL,
+              )
+            : datum.upsert_id;
 
         const baseEvent: StartSpanArgs = {
           name: "eval",
@@ -1168,7 +1209,7 @@ export async function runEvaluator(
             expected: "expected" in datum ? datum.expected : undefined,
             tags: datum.tags,
             origin,
-            ...(datum.upsert_id ? { id: datum.upsert_id } : {}),
+            ...(upsertId ? { id: upsertId } : {}),
           },
         };
 
@@ -1250,6 +1291,7 @@ export async function runEvaluator(
                       object_type: "task",
                     });
                   },
+                  abortSignal,
                 ),
               {
                 name: "task",
@@ -1451,15 +1493,38 @@ export async function runEvaluator(
       Math.max(evaluator.maxConcurrency ?? Number.MAX_SAFE_INTEGER, 1),
     );
 
-    const queueErrors: Error[] = [];
+    const abortOnSignal = () =>
+      abortController.abort(new InternalAbortError("Evaluator aborted"));
+    if (evaluator.signal?.aborted) {
+      abortOnSignal();
+    } else {
+      evaluator.signal?.addEventListener("abort", abortOnSignal, {
+        once: true,
+      });
+    }
+    let timeoutId: ReturnType<typeof setTimeout> | undefined;
+    if (evaluator.timeout !== undefined) {
+      const abortOnTimeout = () =>
+        abortController.abort(new InternalAbortError("Evaluator timed out"));
+      if (evaluator.timeout <= 0) {
+        abortOnTimeout();
+      } else {
+        timeoutId = setTimeout(abortOnTimeout, evaluator.timeout);
+      }
+    }
+
+    const queueErrors: unknown[] = [];
     const enqueuePromise = (async () => {
+      if (abortSignal.aborted) {
+        return;
+      }
       for await (const datum of dataIterable) {
-        if (cancelled) {
+        if (abortSignal.aborted) {
           break;
         }
         const trialCount = datum.trialCount ?? evaluator.trialCount ?? 1;
         for (let trialIndex = 0; trialIndex < trialCount; trialIndex++) {
-          if (cancelled) {
+          if (abortSignal.aborted) {
             break;
           }
           scheduledTrials++;
@@ -1474,63 +1539,33 @@ export async function runEvaluator(
       }
     })();
 
-    let timeoutId: ReturnType<typeof setTimeout> | undefined;
-    let abortHandler: (() => void) | undefined;
-
-    const cleanupCancellation = () => {
-      if (timeoutId !== undefined) {
-        clearTimeout(timeoutId);
-        timeoutId = undefined;
-      }
-      if (abortHandler && evaluator.signal) {
-        evaluator.signal.removeEventListener("abort", abortHandler);
-        abortHandler = undefined;
-      }
-    };
-
-    const cancel = async () => {
-      await new Promise<never>((_, reject) => {
-        // If already cancelled, reject immediately
-        if (cancelled) {
-          reject(new InternalAbortError("Evaluator already cancelled"));
-          return;
-        }
-
-        const rejectOnce = (error: InternalAbortError) => {
-          if (cancelled) {
-            return;
-          }
-          cancelled = true;
-          cleanupCancellation();
-          reject(error);
-        };
-
-        if (evaluator.timeout) {
-          timeoutId = setTimeout(() => {
-            rejectOnce(new InternalAbortError("Evaluator timed out"));
-          }, evaluator.timeout);
-        }
-        if (evaluator.signal) {
-          abortHandler = () => {
-            rejectOnce(new InternalAbortError("Evaluator aborted"));
-          };
-          evaluator.signal.addEventListener("abort", abortHandler);
-        }
-      });
-    };
-
-    const waitForQueue = (async () => {
-      await enqueuePromise;
-      if (q.idle()) {
-        return;
-      }
-      await q.drain();
-    })();
-
-    // wait for tasks to be completed or the evaluator to be cancelled
-    // if the evaluator is cancelled, the remaining tasks that have not been started will be killed
+    // Wait for all trials to finish. On abort, the data loop stops and queued
+    // trials are skipped, so this settles once in-flight tasks and scorers do.
+    // We only reject after that, so no work started by this eval outlives it.
     try {
-      await Promise.race([waitForQueue, cancel()]);
+      try {
+        await enqueuePromise;
+      } catch (e) {
+        if (!abortSignal.aborted) {
+          throw e;
+        }
+        queueErrors.push(e);
+      }
+      if (!q.idle()) {
+        await q.drain();
+      }
+
+      if (abortSignal.aborted) {
+        const reason: InternalAbortError = abortSignal.reason;
+        if (iso.getEnv("BRAINTRUST_VERBOSE")) {
+          debugLogger
+            .forState(evaluator.state)
+            .warn("Evaluator cancelled:", reason.message);
+        }
+        throw queueErrors.length > 0
+          ? new AggregateError([reason, ...queueErrors], reason.message)
+          : reason;
+      }
       if (queueErrors.length > 0) {
         throw new AggregateError(
           queueErrors,
@@ -1538,21 +1573,12 @@ export async function runEvaluator(
         );
       }
     } catch (e) {
-      // Always kill the queue to prevent hanging tasks and memory leaks
+      // If the data loop failed, drop the trials that are still queued.
       q.kill();
-
-      if (e instanceof InternalAbortError) {
-        // Log cancellation for debugging
-        if (iso.getEnv("BRAINTRUST_VERBOSE")) {
-          debugLogger
-            .forState(evaluator.state)
-            .warn("Evaluator cancelled:", e.message);
-        }
-      }
-
       throw e;
     } finally {
-      cleanupCancellation();
+      clearTimeout(timeoutId);
+      evaluator.signal?.removeEventListener("abort", abortOnSignal);
 
       // Ensure results are cleared if not collecting to free memory
       if (!collectResults) {

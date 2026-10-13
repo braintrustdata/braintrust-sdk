@@ -1,5 +1,118 @@
 # braintrust
 
+## 3.37.2
+
+### Patch Changes
+
+- fix: Make `@types/react` an optional peer dependency `braintrust` no longer installs React 18 types for every consumer. Projects that use `braintrust/custom-views` now type-check against their own `@types/react` (React 18 or newer), which fixes `ReactNode` type conflicts in React 19 projects. (https://github.com/braintrustdata/braintrust-sdk-javascript/pull/2596)
+
+## 3.37.1
+
+### Patch Changes
+
+- fix(vite): support Vite 8 dependency optimization (https://github.com/braintrustdata/braintrust-sdk-javascript/pull/2582)
+
+## 3.37.0
+
+### Minor Changes
+
+- feat(evals): Add cooperative cancellation via `signal` in task hooks When an eval hits its `timeout` or its `signal` aborts, it now stops scheduling new trials, aborts the new `signal` in the task hooks, and waits for in-flight tasks and scorers to settle before rejecting. Previously the eval rejected right away and left running tasks going in the background. Pass `hooks.signal` to the APIs your task calls (or check `signal.aborted`) to stop work early. (https://github.com/braintrustdata/braintrust-sdk-javascript/pull/2549)
+- feat(workflow-eval): Add batch tasks and scorers (https://github.com/braintrustdata/braintrust-sdk-javascript/pull/2548)
+
+### Patch Changes
+
+- fix(eve): Support Eve 0.62+ and 0.70 (https://github.com/braintrustdata/braintrust-sdk-javascript/pull/2572)
+- fix: Log output and token metrics for OpenAI Responses API streams that end with `response.incomplete` or `response.failed`, and log the error for `response.failed` Thanks @raphaelfakhri! (https://github.com/braintrustdata/braintrust-sdk-javascript/pull/2540)
+- fix: Fix claude token usage stats (https://github.com/braintrustdata/braintrust-sdk-javascript/pull/2544)
+- fix(eve): Nest turns under the caller's propagated trace context (https://github.com/braintrustdata/braintrust-sdk-javascript/pull/2574)
+
+## 3.36.0
+
+### Minor Changes
+
+- feat: Support zod v4 schemas for eval parameters and function parameters (https://github.com/braintrustdata/braintrust-sdk-javascript/pull/2533)
+- feat: Add `_createInProjectGroup` to logger options (https://github.com/braintrustdata/braintrust-sdk-javascript/pull/2558)
+- feat: Expose helper types for pushing pre-processors (https://github.com/braintrustdata/braintrust-sdk-javascript/pull/2539)
+- feat: Add `projectGroupName` to create projects inside a project group Thanks @elijah0528! (https://github.com/braintrustdata/braintrust-sdk-javascript/pull/2541)
+- span customizer enhancements Thanks @realark! (https://github.com/braintrustdata/braintrust-sdk-javascript/pull/2536)
+
+### Patch Changes
+
+- fix: Add span provenance for temporal and openai agents sdk (https://github.com/braintrustdata/braintrust-sdk-javascript/pull/2518)
+- fix: Ignore empty numeric environment variables such as `BRAINTRUST_NUM_RETRIES` and `BRAINTRUST_DEFAULT_BATCH_SIZE` instead of reading them as `0` Thanks @raphaelfakhri! (https://github.com/braintrustdata/braintrust-sdk-javascript/pull/2538)
+- fix(flue): Stop resending span metadata on end rows (https://github.com/braintrustdata/braintrust-sdk-javascript/pull/2547)
+- fix: Fix `reasoning_content` for openai compatible responses (https://github.com/braintrustdata/braintrust-sdk-javascript/pull/2524)
+- fix: Preserve LangChain model attribution (https://github.com/braintrustdata/braintrust-sdk-javascript/pull/2537)
+- perf: Cache project lookup (https://github.com/braintrustdata/braintrust-sdk-javascript/pull/2523)
+
+## 3.35.0
+
+### Minor Changes
+
+- feat: Fix token metrics with AI SDK middleware (https://github.com/braintrustdata/braintrust-sdk-javascript/pull/2497)
+- feat: Add instrumentation for openai multimodal APIs (https://github.com/braintrustdata/braintrust-sdk-javascript/pull/2434)
+- feat: add span export hooks (https://github.com/braintrustdata/braintrust-sdk-javascript/pull/2489)
+
+### Patch Changes
+
+- feat(groq): Instrument groq audio APIs (https://github.com/braintrustdata/braintrust-sdk-javascript/pull/2473)
+- feat: Instrument Google GenAI multimodal APIs (https://github.com/braintrustdata/braintrust-sdk-javascript/pull/2484)
+- fix: Keep Pi Coding Agent tool spans current during execution so nested spans attach to the tool span. Thanks @btaaron! (https://github.com/braintrustdata/braintrust-sdk-javascript/pull/2499)
+- fix: Capture provider managed tool calls and capture right provider when using Vercel AI gateway (https://github.com/braintrustdata/braintrust-sdk-javascript/pull/2507)
+- fix: Fix dataset snapshots silently including deleted rows (https://github.com/braintrustdata/braintrust-sdk-javascript/pull/2512)
+
+## 3.34.0
+
+### Minor Changes
+
+- feat: Add instrumentation for `@typesafe-ai/sdk` (https://github.com/braintrustdata/braintrust-sdk-javascript/pull/2493)
+- feat: Add AI SDK instrumentation for typesafe ai jev (https://github.com/braintrustdata/braintrust-sdk-javascript/pull/2494)
+- feat: Streamline SDK flushing (https://github.com/braintrustdata/braintrust-sdk-javascript/pull/2490)
+
+### Patch Changes
+
+- fix(js): Support Uint8Array and Buffer JSONL sources in OpenAI batch instrumentation Thanks @tyagiquamar! (https://github.com/braintrustdata/braintrust-sdk-javascript/pull/2479)
+- fix(js): Support `/v1/embeddings` endpoint in OpenAI batch instrumentation Thanks @tyagiquamar! (https://github.com/braintrustdata/braintrust-sdk-javascript/pull/2478)
+
+## 3.33.0
+
+### Minor Changes
+
+- feat: Add advanced filters to `Trace.getSpans()` (https://github.com/braintrustdata/braintrust-sdk-javascript/pull/2466)
+- feat: Add utilities for custom views (push + preview) (https://github.com/braintrustdata/braintrust-sdk-javascript/pull/2191)
+- feat: Add `@langchain/langgraph-sdk` instrumentation (https://github.com/braintrustdata/braintrust-sdk-javascript/pull/2441)
+- feat: Instrument OpenAI agents api (`openai.beta.agents`) (https://github.com/braintrustdata/braintrust-sdk-javascript/pull/2471)
+- feat: Turn batch evals API into API for evals deferred AI provider calls (https://github.com/braintrustdata/braintrust-sdk-javascript/pull/2433)
+
+### Patch Changes
+
+- fix(eve): Use `any` as return type to ensure eve version compat (https://github.com/braintrustdata/braintrust-sdk-javascript/pull/2470)
+- fix: Bump e2e tested versions for HarnessAgent, bedrock and google adk and fix orchestrion query for harness agent (https://github.com/braintrustdata/braintrust-sdk-javascript/pull/2428)
+- fix(cli): Don't externalize braintrust package on push Thanks @evanmkeith! (https://github.com/braintrustdata/braintrust-sdk-javascript/pull/2477)
+- feat: Add instrumentation for google genai multimodal embeddings (https://github.com/braintrustdata/braintrust-sdk-javascript/pull/2442)
+- fix: Prevent eval trial upsert collisions Thanks @paultancre-bt! (https://github.com/braintrustdata/braintrust-sdk-javascript/pull/2476)
+- fix: Fix OTEL trace context propagation race Thanks @delner! (https://github.com/braintrustdata/braintrust-sdk-javascript/pull/2450)
+
+## 3.32.0
+
+### Minor Changes
+
+- feat: Add instrumentation for synchronous elevenlabs SDK APIs (https://github.com/braintrustdata/braintrust-sdk-javascript/pull/2443)
+- feat: Add instrumentation for `@google/generative-ai` (https://github.com/braintrustdata/braintrust-sdk-javascript/pull/2435)
+- feat: Support input audio content in prompt templates Thanks @knjiang! (https://github.com/braintrustdata/braintrust-sdk-javascript/pull/2451)
+
+## 3.31.0
+
+### Minor Changes
+
+- feat: Allow nameless scorer results (https://github.com/braintrustdata/braintrust-sdk-javascript/pull/2444)
+
+### Patch Changes
+
+- feat: Track tool ids for ai SDK v6 (https://github.com/braintrustdata/braintrust-sdk-javascript/pull/2447)
+- fix: Fix Langchain anthropic token metrics (https://github.com/braintrustdata/braintrust-sdk-javascript/pull/2446)
+- fix: Inject instrumentation hook on Next.js versions <15 (https://github.com/braintrustdata/braintrust-sdk-javascript/pull/2445)
+
 ## 3.30.0
 
 ### Minor Changes

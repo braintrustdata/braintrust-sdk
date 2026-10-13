@@ -157,9 +157,15 @@ const ChatCompletionContentPartFileWithTitle = z.object({
   cache_control: CacheControl.optional(),
 });
 
+const ChatCompletionContentPartInputAudioWithTitle = z.object({
+  input_audio: z.object({ data: z.string(), format: z.enum(["wav", "mp3"]) }),
+  type: z.literal("input_audio"),
+  cache_control: CacheControl.optional(),
+});
 const ChatCompletionContentPart = z.union([
   ChatCompletionContentPartText,
   ChatCompletionContentPartImageWithTitle,
+  ChatCompletionContentPartInputAudioWithTitle,
   ChatCompletionContentPartFileWithTitle,
 ]);
 
@@ -286,6 +292,10 @@ const ModelParams = z.union([
     ]),
     n: z.number(),
     stop: z.array(z.string()),
+    chat_template_kwargs: z
+      .object({ enable_thinking: z.boolean() })
+      .partial()
+      .passthrough(),
     reasoning_effort: z.enum(["none", "minimal", "low", "medium", "high"]),
     verbosity: z.enum(["low", "medium", "high"]),
   })
@@ -506,6 +516,8 @@ const ProjectSettings = z.union([
       ]),
       disable_realtime_queries: z.union([z.boolean(), z.null()]),
       monitor_charts_use_metrics_start: z.union([z.boolean(), z.null()]),
+      coding_agent_insights_dashboard: z.union([z.boolean(), z.null()]),
+      require_all_human_review_scores: z.union([z.boolean(), z.null()]),
       blind_reviews: z.union([z.boolean(), z.null()]),
       default_preprocessor: z.union([...SavedFunctionId.options, z.null()]),
     })

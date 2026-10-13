@@ -1,6 +1,6 @@
 {
   "name": "braintrust",
-  "version": "3.30.0",
+  "version": "3.37.2",
   "description": "SDK for integrating Braintrust",
   "repository": {
     "type": "git",
@@ -32,6 +32,20 @@
       "import": "./dist/index.mjs",
       "require": "./dist/index.js",
       "default": "./dist/index.mjs"
+    },
+    "./custom-views": {
+      "types": "./dist/custom-views.d.ts",
+      "import": "./dist/custom-views.mjs",
+      "module": "./dist/custom-views.mjs",
+      "require": "./dist/custom-views.js",
+      "default": "./dist/custom-views.mjs"
+    },
+    "./preprocessors": {
+      "types": "./dist/preprocessors.d.ts",
+      "import": "./dist/preprocessors.mjs",
+      "module": "./dist/preprocessors.mjs",
+      "require": "./dist/preprocessors.js",
+      "default": "./dist/preprocessors.mjs"
     },
     "./workerd": {
       "import": "./dist/workerd.mjs",
@@ -146,6 +160,7 @@
     "@types/esquery": "^1.5.4",
     "@types/mustache": "^4.2.5",
     "@types/node": "^20.10.5",
+    "@types/react": "^18.3.1",
     "@typescript-eslint/eslint-plugin": "^8.49.0",
     "@typescript-eslint/parser": "^8.49.0",
     "ai": "^6.0.0",
@@ -167,7 +182,7 @@
     "typescript": "5.4.4",
     "vite": "^8.1.5",
     "vite-tsconfig-paths": "^4.3.2",
-    "vitest": "4.1.5",
+    "vitest": "4.1.11",
     "webpack": "^5.106.2",
     "zod": "^3.25.34"
   },
@@ -191,7 +206,13 @@
     "zod-to-json-schema": "^3.25.0"
   },
   "peerDependencies": {
+    "@types/react": ">=18",
     "zod": "^3.25.34 || ^4.0"
+  },
+  "peerDependenciesMeta": {
+    "@types/react": {
+      "optional": true
+    }
   },
   "publishConfig": {
     "access": "public",

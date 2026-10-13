@@ -62,6 +62,12 @@ export {
 export type { TemplateRendererPlugin } from "./template/registry";
 export { registerTemplatePlugin } from "./template/registry";
 export {
+  failOpenAIAgentsTrace,
+  startOpenAIAgentsTrace,
+  updateOpenAIAgentsTrace,
+} from "./openai-agents-api";
+
+export {
   isTemplateFormat,
   parseTemplateFormat,
   renderTemplateContent,
@@ -87,6 +93,7 @@ export { wrapPiCodingAgentSDK } from "./wrappers/pi-coding-agent";
 export { wrapCloudflareAgent } from "./wrappers/cloudflare-agent";
 export { wrapStrandsAgentSDK } from "./wrappers/strands-agent-sdk";
 export { wrapCloudflareAIChat } from "./wrappers/cloudflare-ai-chat";
+export { wrapGoogleGenerativeAI } from "./wrappers/google-generative-ai";
 export { wrapGoogleGenAI } from "./wrappers/google-genai";
 export { wrapGoogleADK } from "./wrappers/google-adk";
 export { wrapGenkit } from "./wrappers/genkit";
@@ -95,9 +102,11 @@ export { wrapHuggingFaceTransformers } from "./wrappers/huggingface-transformers
 export { wrapOpenRouterAgent } from "./wrappers/openrouter-agent";
 export { wrapOpenRouter } from "./wrappers/openrouter";
 export { wrapMistral } from "./wrappers/mistral";
+export { wrapLangGraphSDK } from "./wrappers/langgraph-sdk";
 export { wrapOllama } from "./wrappers/ollama";
 export { wrapCohere } from "./wrappers/cohere";
 export { wrapVoyageAI } from "./wrappers/voyageai";
+export { wrapTypeSafe } from "./wrappers/typesafe";
 export { wrapGroq } from "./wrappers/groq";
 export { wrapBedrockRuntime } from "./wrappers/bedrock-runtime";
 export { wrapCopilotClient } from "./wrappers/github-copilot";
@@ -125,14 +134,16 @@ export {
   defaultErrorScoreHandler,
 } from "./framework";
 
-export type { DurableEvalStore } from "./durable-eval";
+export type { WorkflowEvalStore } from "./workflow-eval";
 export {
-  BatchScorer,
-  BatchTask,
-  defineDurableEval,
-  DurableEvalMemoryStore,
-  DurableEvalRedisStore,
-} from "./durable-eval";
+  WorkflowBatchScorer,
+  WorkflowBatchTask,
+  WorkflowScorer,
+  WorkflowTask,
+  defineWorkflowEval,
+  WorkflowEvalMemoryStore,
+  WorkflowEvalRedisStore,
+} from "./workflow-eval";
 
 export { agentAssertionScorer } from "./agent-assertions";
 export { DatasetPipeline } from "./dataset-pipeline";
@@ -140,3 +151,5 @@ export { projects } from "./framework2";
 
 export type { Trace } from "./trace";
 export { LocalTrace } from "./trace";
+
+export { wrapElevenLabs } from "./wrappers/elevenlabs";

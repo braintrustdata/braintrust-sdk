@@ -22,12 +22,22 @@ import {
   promptDefinitionToPromptData,
   type PromptDefinition,
 } from "./prompt-schemas";
+import type { ZodSchema } from "./zod/utils";
 
 // Safe access to __filename (only exists in Node.js CJS)
 const currentFilename =
   typeof __filename !== "undefined" ? __filename : "unknown";
 
-type CreateProjectOpts = { name: string } | { id: string };
+type CreateProjectOpts =
+  | {
+      name: string;
+      /**
+       * If specified, creates the project inside the project group with this name when the project
+       * does not already exist. Requires permission to create projects in that group.
+       */
+      projectGroupName?: string;
+    }
+  | { id: string };
 class ProjectBuilder {
   create(opts: CreateProjectOpts) {
     return new Project(opts);
@@ -38,6 +48,7 @@ export const projects = new ProjectBuilder();
 class Project {
   public readonly name?: string;
   public readonly id?: string;
+  public readonly projectGroupName?: string;
   public prompts: PromptBuilder;
   public scorers: ScorerBuilder;
   public classifiers: ClassifierBuilder;
@@ -56,6 +67,7 @@ class Project {
     _initializeSpanContext();
     this.name = "name" in args ? args.name : undefined;
     this.id = "id" in args ? args.id : undefined;
+    this.projectGroupName = "name" in args ? args.projectGroupName : undefined;
     this.prompts = new PromptBuilder(this);
     this.scorers = new ScorerBuilder(this);
     this.classifiers = new ClassifierBuilder(this);
@@ -106,6 +118,9 @@ class Project {
             .appConn()
             .post_json("api/project/register", {
               project_name: this.name,
+              ...(this.projectGroupName
+                ? { project_group_name: this.projectGroupName }
+                : {}),
             }),
         ).project.id;
       for (const prompt of this._publishablePrompts) {
@@ -225,8 +240,8 @@ type CodeOpts<
   Fn extends GenericFunction<Params, Returns>,
 > = Partial<BaseFnOpts> & {
   handler: Fn;
-  parameters?: z.ZodSchema<Params>;
-  returns?: z.ZodSchema<Returns>;
+  parameters?: ZodSchema<Params>;
+  returns?: ZodSchema<Returns>;
 };
 
 type ScorerPromptOpts = Partial<BaseFnOpts> &
@@ -273,8 +288,8 @@ export class CodeFunction<
   public readonly slug: string;
   public readonly type: FunctionType;
   public readonly description?: string;
-  public readonly parameters?: z.ZodSchema<Input>;
-  public readonly returns?: z.ZodSchema<Output>;
+  public readonly parameters?: ZodSchema<Input>;
+  public readonly returns?: ZodSchema<Output>;
   public readonly ifExists?: IfExists;
   public readonly tags?: string[];
   public readonly metadata?: Record<string, unknown>;
