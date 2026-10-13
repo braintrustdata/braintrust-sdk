@@ -1,6 +1,9 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { Attachment } from "../../logger";
-import { processInputAttachments } from "../../wrappers/attachment-utils";
+import { _internalCaptureAttachmentsEnabled, Attachment } from "../../logger";
+import {
+  omitMediaData,
+  processInputAttachments,
+} from "../../wrappers/attachment-utils";
 import { isObject } from "../../../util/index";
 
 const OPENAI_METADATA_KEYS = [
@@ -78,9 +81,14 @@ export function extractOpenAIResponsesMetadata(
 }
 
 /** Convert Responses API base64 image outputs to Braintrust attachments. */
-export function processImagesInOutput(output: any): any {
+export function processImagesInOutput(
+  output: any,
+  captureAttachments = _internalCaptureAttachmentsEnabled(),
+): any {
   if (Array.isArray(output)) {
-    return output.map(processImagesInOutput);
+    return output
+      .map((item) => processImagesInOutput(item, captureAttachments))
+      .filter((item) => item !== undefined);
   }
 
   if (
@@ -89,6 +97,9 @@ export function processImagesInOutput(output: any): any {
     typeof output.result === "string" &&
     output.result
   ) {
+    if (!captureAttachments) {
+      return omitMediaData(output, "result");
+    }
     const fileExtension = output.output_format || "png";
     const contentType = `image/${fileExtension}`;
     const baseFilename =

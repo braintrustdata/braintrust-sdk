@@ -15,9 +15,13 @@ import {
 } from "../../../util/index";
 import { getCurrentUnixTimestamp } from "../../util";
 import {
+  _internalCaptureAttachmentsEnabled,
   _internalStartSpanWithInitialMerge,
   Attachment,
+  BaseAttachment,
+  CAPTURE_ATTACHMENTS,
   currentSpan,
+  deepCopyEvent,
   type Span,
   withCurrent,
 } from "../../logger";
@@ -28,6 +32,8 @@ import {
 import {
   convertDataToBlob,
   getExtensionFromMediaType,
+  omitMediaData,
+  processInputAttachments,
 } from "../../wrappers/attachment-utils";
 import { normalizeAISDKLoggedOutput } from "../../wrappers/ai-sdk/normalize-logged-output";
 import { serializeAISDKToolsForLogging } from "../../wrappers/ai-sdk/tool-serialization";
@@ -658,6 +664,9 @@ function subscribeToHarnessContinuation(
         result: AISDKResult | AsyncIterable<unknown>;
       };
       const span = {
+        [CAPTURE_ATTACHMENTS]: _internalCaptureAttachmentsEnabled(
+          typeof parent === "string" ? undefined : parent,
+        ),
         end: () => endHarnessTurn(parent),
         log: (update: Parameters<Span["log"]>[0]) =>
           updateHarnessTurn(
@@ -720,6 +729,7 @@ function subscribeToHarnessContinuation(
           output: processAISDKOutput(
             endEvent.result,
             resolveDenyOutputPaths(endEvent, defaultDenyOutputPaths),
+            _internalCaptureAttachmentsEnabled(span),
           ),
         });
         span.end();
@@ -1125,7 +1135,9 @@ const processMessage = (message: any): any => {
   if (Array.isArray(message.content)) {
     return {
       ...message,
-      content: message.content.map(processContentPart),
+      content: message.content
+        .map(processContentPart)
+        .filter((part: unknown) => part !== undefined),
     };
   }
 
@@ -1141,14 +1153,18 @@ const processMessage = (message: any): any => {
 
 const processPromptContent = (prompt: any): any => {
   if (Array.isArray(prompt)) {
-    return prompt.map(processContentPart);
+    return prompt
+      .map(processContentPart)
+      .filter((part: unknown) => part !== undefined);
   }
 
   if (prompt.content) {
     if (Array.isArray(prompt.content)) {
       return {
         ...prompt,
-        content: prompt.content.map(processContentPart),
+        content: prompt.content
+          .map(processContentPart)
+          .filter((part: unknown) => part !== undefined),
       };
     } else if (typeof prompt.content === "object") {
       return {
@@ -1165,7 +1181,12 @@ const processContentPart = (part: any): any => {
   if (!part || typeof part !== "object") return part;
 
   try {
+    if (part.type === "tool-result") return processInputAttachments(part);
+    const captureAttachments = _internalCaptureAttachmentsEnabled();
+
     if (part.type === "image" && part.image) {
+      if (!captureAttachments)
+        return isInlineMedia(part.image) ? omitMediaData(part, "image") : part;
       const imageAttachment = convertImageToAttachment(
         part.image,
         part.mimeType || part.mediaType,
@@ -1178,11 +1199,9 @@ const processContentPart = (part: any): any => {
       }
     }
 
-    if (
-      part.type === "file" &&
-      part.data &&
-      (part.mimeType || part.mediaType)
-    ) {
+    if (part.type === "file" && part.data) {
+      if (!captureAttachments)
+        return isInlineMedia(part.data) ? omitMediaData(part, "data") : part;
       const fileAttachment = convertDataToAttachment(
         part.data,
         part.mimeType || part.mediaType,
@@ -1198,6 +1217,13 @@ const processContentPart = (part: any): any => {
 
     if (part.type === "image_url" && part.image_url) {
       if (typeof part.image_url === "object" && part.image_url.url) {
+        if (!captureAttachments)
+          return isInlineMedia(part.image_url.url)
+            ? omitMediaData({
+                ...part,
+                image_url: omitMediaData(part.image_url, "url"),
+              })
+            : part;
         const imageAttachment = convertImageToAttachment(part.image_url.url);
         if (imageAttachment) {
           return {
@@ -1218,11 +1244,21 @@ const processContentPart = (part: any): any => {
   return part;
 };
 
+// Explicit attachments and remote URLs are references, not inline media.
+const isInlineMedia = (value: unknown): boolean =>
+  !(value instanceof BaseAttachment) &&
+  !(value instanceof URL && value.protocol !== "data:") &&
+  !(typeof value === "string" && /^https?:/i.test(value));
+
 const convertImageToAttachment = (
   image: any,
   explicitMimeType?: string,
 ): Attachment | null => {
   try {
+    if (image instanceof URL) {
+      if (image.protocol !== "data:") return null;
+      image = image.href;
+    }
     if (typeof image === "string" && image.startsWith("data:")) {
       const [mimeTypeSection, base64Data] = image.split(",");
       const mimeType = mimeTypeSection.match(/data:(.*?);/)?.[1];
@@ -1276,6 +1312,10 @@ const convertDataToAttachment = (
   if (!mimeType) return null;
 
   try {
+    if (data instanceof URL) {
+      if (data.protocol !== "data:") return null;
+      data = data.href;
+    }
     let blob: Blob | null = null;
 
     if (typeof data === "string" && data.startsWith("data:")) {
@@ -1326,14 +1366,19 @@ export function processAISDKGenerateImageInput(
   }
 
   const processedPrompt = { ...prompt };
+  const captureAttachments = _internalCaptureAttachmentsEnabled();
   if (Array.isArray(prompt.images)) {
-    processedPrompt.images = prompt.images.map(
-      (image) => convertImageToAttachment(image, "image/png") ?? image,
-    );
+    processedPrompt.images = captureAttachments
+      ? prompt.images.map(
+          (image) => convertImageToAttachment(image, "image/png") ?? image,
+        )
+      : prompt.images.filter((image) => !isInlineMedia(image));
   }
   if (prompt.mask !== undefined) {
-    processedPrompt.mask =
-      convertImageToAttachment(prompt.mask, "image/png") ?? prompt.mask;
+    if (captureAttachments)
+      processedPrompt.mask =
+        convertImageToAttachment(prompt.mask, "image/png") ?? prompt.mask;
+    else if (isInlineMedia(prompt.mask)) delete processedPrompt.mask;
   }
 
   return processAISDKCallInput({
@@ -1777,7 +1822,11 @@ function sanitizeAISDKCallInputValue(value: unknown, depth = 0): unknown {
     return undefined;
   }
 
-  if (value === null || typeof value !== "object") {
+  if (
+    value === null ||
+    typeof value !== "object" ||
+    value instanceof BaseAttachment
+  ) {
     return value;
   }
 
@@ -1874,7 +1923,11 @@ function sanitizeAISDKMetadataValue(value: unknown, depth = 0): unknown {
     return "[Function]";
   }
 
-  if (value === null || typeof value !== "object") {
+  if (
+    value === null ||
+    typeof value !== "object" ||
+    value instanceof BaseAttachment
+  ) {
     return value;
   }
 
@@ -2355,6 +2408,7 @@ function prepareAISDKChildTracing(
             output: processAISDKOutput(
               output as AISDKResult,
               activeEntry.denyOutputPaths,
+              _internalCaptureAttachmentsEnabled(span),
             ),
             metrics,
             ...mergeMetadataPayload(metadataPayload, missingUsageMetadata),
@@ -2834,6 +2888,7 @@ export function patchAISDKStreamingResult(args: {
   }
 
   const resultRecord = result as Record<string, unknown>;
+  const captureAttachments = _internalCaptureAttachmentsEnabled(span);
   attachKnownResultPromiseHandlers(resultRecord);
   let finalized = false;
   const finalize = (
@@ -2916,6 +2971,7 @@ export function patchAISDKStreamingResult(args: {
       const processedOutput = await processAISDKStreamingOutput(
         result,
         resolveDenyOutputPaths(endEvent, defaultDenyOutputPaths),
+        captureAttachments,
       );
       const output = transformOutput
         ? transformOutput(processedOutput)
@@ -3271,8 +3327,13 @@ function createPatchedAsyncIterable(
 async function processAISDKStreamingOutput(
   result: AISDKResult,
   denyOutputPaths: string[],
+  captureAttachments: boolean,
 ): Promise<Record<string, unknown> | AISDKResult> {
-  const output = processAISDKOutput(result, denyOutputPaths);
+  const output = processAISDKOutput(
+    result,
+    denyOutputPaths,
+    captureAttachments,
+  );
 
   if (!output || typeof output !== "object") {
     return output;
@@ -3467,14 +3528,48 @@ function isAsyncGenerator(value: unknown): value is AsyncGenerator {
 export function processAISDKOutput(
   output: AISDKResult,
   denyOutputPaths: string[],
+  captureAttachments = _internalCaptureAttachmentsEnabled(),
 ): Record<string, unknown> | AISDKResult {
   if (!output) return output;
 
   const merged = extractSerializableOutputFields(output);
+  // Only provider content containers contain media. Structured outputs, tool
+  // arguments, and metadata can use the same field names for ordinary JSON.
+  const processMediaContainers = (
+    container: Record<string, unknown>,
+  ): Record<string, unknown> =>
+    Object.fromEntries(
+      Object.entries(container).map(([key, value]) => {
+        if (
+          ["content", "messages", "responseMessages", "toolResults"].includes(
+            key,
+          ) &&
+          Array.isArray(value)
+        ) {
+          return [key, processInputAttachments(value, captureAttachments)];
+        }
+        if (key === "steps" && Array.isArray(value)) {
+          return [
+            key,
+            value.map((step) =>
+              isObject(step) ? processMediaContainers(step) : step,
+            ),
+          ];
+        }
+        if (key === "response" && isObject(value)) {
+          return [key, processMediaContainers(value)];
+        }
+        return [key, value];
+      }),
+    );
   const deleteOutputPaths = denyOutputPaths.filter((path) =>
     path.toLowerCase().endsWith("headers"),
   );
-  const sanitized = omit(merged, denyOutputPaths, deleteOutputPaths);
+  const sanitized = omit(
+    processMediaContainers(merged),
+    denyOutputPaths,
+    deleteOutputPaths,
+  );
 
   // Transport payloads can contain nested provider request/response headers; keep
   // user/model/tool payload fields named "headers" outside these roots intact.
@@ -3567,9 +3662,10 @@ export function processAISDKGenerateImageOutput(
     omit(summarized, denyOutputPaths),
   ) as Record<string, unknown>;
   if (generatedFiles.length > 0) {
-    loggedOutput.images = generatedFiles.map((file, index) =>
-      convertAISDKGeneratedFileToAttachment(file, index),
-    );
+    const images = generatedFiles
+      .map((file, index) => convertAISDKGeneratedFileToAttachment(file, index))
+      .filter((image) => image !== undefined);
+    if (images.length) loggedOutput.images = images;
   }
 
   return loggedOutput;
@@ -3582,6 +3678,8 @@ function convertAISDKGeneratedFileToAttachment(
   if (!file || typeof file !== "object") {
     return file;
   }
+
+  if (!_internalCaptureAttachmentsEnabled()) return undefined;
 
   const generatedFile = file as AISDKGeneratedFile & Record<string, unknown>;
   const generatedMediaType = safeSerializableFieldRead(
@@ -4170,13 +4268,6 @@ function firstNumber(...values: unknown[]): number | undefined {
 }
 
 /**
- * Deep copy an object via JSON serialization.
- */
-function deepCopy(obj: Record<string, unknown>): Record<string, unknown> {
-  return JSON.parse(JSON.stringify(obj));
-}
-
-/**
  * Parse a JSON path string into an array of keys.
  */
 function parsePath(path: string): (string | number)[] {
@@ -4275,7 +4366,7 @@ function omit(
   paths: string[],
   deletePaths: string[] = [],
 ): Record<string, unknown> {
-  const result = deepCopy(obj);
+  const result = deepCopyEvent({ output: obj }).output;
   const deletePathSet = new Set(deletePaths);
 
   for (const path of paths) {

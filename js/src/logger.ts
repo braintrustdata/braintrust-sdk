@@ -802,6 +802,28 @@ function normalizeProxyConnUrl(proxyUrl: string): string {
     : proxyUrl;
 }
 
+/** @internal */
+export const CAPTURE_ATTACHMENTS = Symbol.for("braintrust.captureAttachments");
+
+function captureAttachmentsFromEnv(): boolean {
+  return ["1", "true"].includes(
+    iso.getEnv("BRAINTRUST_CAPTURE_ATTACHMENTS")?.trim().toLowerCase() ?? "",
+  );
+}
+
+/**
+ * @internal Resolve automatic attachment capture for a logger or span. Only plain
+ * fields are read, so parents and global state from other SDK bundles also work.
+ */
+export function _internalCaptureAttachmentsEnabled(parent?: object): boolean {
+  // Global state is unset until a platform entrypoint configures the SDK.
+  const owner = parent ?? (_globalState ? getSpanParentObject() : undefined);
+  const policy = owner && Reflect.get(owner, CAPTURE_ATTACHMENTS);
+  return typeof policy === "boolean"
+    ? policy
+    : (_globalState?.captureAttachments ?? captureAttachmentsFromEnv());
+}
+
 export class BraintrustState {
   public id: string;
   public currentExperiment: Experiment | undefined;
@@ -824,6 +846,8 @@ export class BraintrustState {
   public proxyUrl: string | null = null;
   public loggedIn: boolean = false;
   public gitMetadataSettings?: GitMetadataSettings;
+  /** @internal Default for instrumentation without a logger-specific policy. */
+  public captureAttachments?: boolean;
   public debugLogLevel?: DebugLogLevel;
   private debugLogLevelConfigured = false;
 
@@ -2833,6 +2857,7 @@ export class Logger implements Exportable {
   private lastStartTime: number;
   private lazyId: LazyValue<string>;
   private calledStartSpan: boolean;
+  private readonly captureAttachments: boolean | undefined;
 
   // For type identification.
   public kind = "logger" as const;
@@ -2843,6 +2868,7 @@ export class Logger implements Exportable {
     options: {
       computeMetadataArgs?: ProjectMetadataArgs;
       linkArgs?: LinkArgs;
+      captureAttachments?: boolean;
     } = {},
   ) {
     this.lazyMetadata = lazyMetadata;
@@ -2851,6 +2877,7 @@ export class Logger implements Exportable {
     this.lastStartTime = getCurrentUnixTimestamp();
     this.lazyId = new LazyValue(() => this.id);
     this.calledStartSpan = false;
+    this.captureAttachments = options.captureAttachments;
     this.state = state;
   }
 
@@ -2872,6 +2899,11 @@ export class Logger implements Exportable {
 
   public get loggingState(): BraintrustState {
     return this.state;
+  }
+
+  /** @internal */
+  public get [CAPTURE_ATTACHMENTS](): boolean {
+    return this.captureAttachments ?? captureAttachmentsFromEnv();
   }
 
   private parentObjectType() {
@@ -2951,6 +2983,7 @@ export class Logger implements Exportable {
 
   private startSpanImpl(args?: StartSpanArgs): Span {
     return new SpanImpl({
+      [CAPTURE_ATTACHMENTS]: this[CAPTURE_ATTACHMENTS],
       ...args,
       // Sometimes `args` gets passed directly into this function, and it contains an undefined value for `state`.
       // To ensure that we always use this logger's state, we override the `state` argument no matter what.
@@ -4828,6 +4861,15 @@ async function computeLoggerMetadata(
 }
 
 export type InitLoggerOptions = FullLoginOptions & {
+  /**
+   * Capture inline media as attachments in instrumentation. Explicit booleans override
+   * BRAINTRUST_CAPTURE_ATTACHMENTS (1 or true); capture is otherwise disabled.
+   * With setCurrent: false, this logger and its child spans have an independent policy
+   * and an omitted option uses the environment, not the global logger's setting.
+   * Current loggers also update the state's default when this option is supplied;
+   * omitting it preserves that default. Explicitly logged attachments are unaffected.
+   */
+  captureAttachments?: boolean;
   projectName?: string;
   projectId?: string;
   environment?: SpanOriginEnvironment;
@@ -4896,11 +4938,18 @@ export function initLogger(options: Readonly<InitLoggerOptions> = {}): Logger {
     },
   );
 
+  const setCurrent = options.setCurrent ?? true;
+  if (setCurrent && options.captureAttachments !== undefined) {
+    state.captureAttachments = options.captureAttachments;
+  }
   const ret = new Logger(state, lazyMetadata, {
+    captureAttachments:
+      options.captureAttachments ??
+      (setCurrent ? state.captureAttachments : undefined),
     computeMetadataArgs,
     linkArgs,
   });
-  if (options.setCurrent ?? true) {
+  if (setCurrent) {
     state.currentLogger = ret;
   }
   return ret;
@@ -7792,6 +7841,8 @@ function _resolveSpanIds(
  * We suggest using one of the various `traced` methods, instead of creating Spans directly. See {@link Span.startSpan} for full details.
  */
 export class SpanImpl implements Span {
+  /** @internal Snapshot inherited by descendants and delayed instrumentation. */
+  public readonly [CAPTURE_ATTACHMENTS]: boolean;
   private _state: BraintrustState;
 
   private isMerge: boolean;
@@ -7827,11 +7878,16 @@ export class SpanImpl implements Span {
       defaultRootType?: SpanType;
       spanId?: string;
       propagatedState?: PropagatedState | undefined;
+      [CAPTURE_ATTACHMENTS]?: boolean;
     } & Omit<StartSpanArgs, "parent"> &
       InitialSpanWriteAsMergeArg &
       InternalSpanContextArg,
   ) {
     this._state = args.state;
+    this[CAPTURE_ATTACHMENTS] =
+      args[CAPTURE_ATTACHMENTS] ??
+      args.state.captureAttachments ??
+      captureAttachmentsFromEnv();
     this._propagatedState = args.propagatedState;
     const instrumentationName =
       getSpanInstrumentationName(args) ??
@@ -8056,6 +8112,7 @@ export class SpanImpl implements Span {
       : { spanId: this._spanId, rootSpanId: this._rootSpanId };
     return new SpanImpl({
       state: this._state,
+      [CAPTURE_ATTACHMENTS]: this[CAPTURE_ATTACHMENTS],
       ...args,
       ...startSpanParentArgs({
         state: this._state,
@@ -8081,6 +8138,7 @@ export class SpanImpl implements Span {
     };
     return new SpanImpl({
       state: this._state,
+      [CAPTURE_ATTACHMENTS]: this[CAPTURE_ATTACHMENTS],
       ...args,
       ...startSpanParentArgs({
         state: this._state,

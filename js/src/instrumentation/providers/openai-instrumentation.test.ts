@@ -1127,6 +1127,32 @@ describe("aggregateChatCompletionChunks", () => {
 });
 
 describe("processImagesInOutput", () => {
+  it("omits generated image data without attachment opt-in", () => {
+    const output = {
+      type: "image_generation_call",
+      result: "AQID",
+      output_format: "png",
+      revised_prompt: "A red pixel",
+    };
+
+    expect(processImagesInOutput(output, false)).toEqual({
+      type: "image_generation_call",
+      output_format: "png",
+      revised_prompt: "A red pixel",
+    });
+    expect(
+      processImagesInOutput(
+        [
+          { type: "image_generation_call", result: "AQID" },
+          { type: "message", content: [{ type: "output_text", text: "done" }] },
+        ],
+        false,
+      ),
+    ).toEqual([
+      { type: "message", content: [{ type: "output_text", text: "done" }] },
+    ]);
+  });
+
   describe("image_generation_call conversion", () => {
     it("should convert image_generation_call type to Attachment", () => {
       // Create a small 1x1 red PNG base64
@@ -1140,7 +1166,7 @@ describe("processImagesInOutput", () => {
         revised_prompt: "A red pixel",
       };
 
-      const result = processImagesInOutput(output);
+      const result = processImagesInOutput(output, true);
 
       expect(result.type).toBe("image_generation_call");
       expect(result.output_format).toBe("png");
@@ -1162,7 +1188,7 @@ describe("processImagesInOutput", () => {
         output_format: "jpg",
       };
 
-      const result = processImagesInOutput(output);
+      const result = processImagesInOutput(output, true);
 
       const attachment = result.result as Attachment;
       expect(attachment.reference.filename).toBe("generated_image.jpg");
@@ -1179,7 +1205,7 @@ describe("processImagesInOutput", () => {
         output_format: "webp",
       };
 
-      const result = processImagesInOutput(output);
+      const result = processImagesInOutput(output, true);
 
       const attachment = result.result as Attachment;
       expect(attachment.reference.filename).toBe("generated_image.webp");
@@ -1195,7 +1221,7 @@ describe("processImagesInOutput", () => {
         result: base64Image,
       };
 
-      const result = processImagesInOutput(output);
+      const result = processImagesInOutput(output, true);
 
       const attachment = result.result as Attachment;
       expect(attachment.reference.filename).toBe("generated_image.png");
@@ -1212,7 +1238,7 @@ describe("processImagesInOutput", () => {
         revised_prompt: "A beautiful sunset",
       };
 
-      const result = processImagesInOutput(output);
+      const result = processImagesInOutput(output, true);
 
       const attachment = result.result as Attachment;
       expect(attachment.reference.filename).toContain("A_beautiful_sunset");
@@ -1231,7 +1257,7 @@ describe("processImagesInOutput", () => {
         revised_prompt: longPrompt,
       };
 
-      const result = processImagesInOutput(output);
+      const result = processImagesInOutput(output, true);
 
       const attachment = result.result as Attachment;
       // Should be truncated to 50 chars + sanitized + extension
@@ -1248,7 +1274,7 @@ describe("processImagesInOutput", () => {
         revised_prompt: "Hello@World#Test!",
       };
 
-      const result = processImagesInOutput(output);
+      const result = processImagesInOutput(output, true);
 
       const attachment = result.result as Attachment;
       expect(attachment.reference.filename).toBe("Hello_World_Test_.png");
@@ -1264,7 +1290,7 @@ describe("processImagesInOutput", () => {
         output_format: "jpg",
       };
 
-      const result = processImagesInOutput(output);
+      const result = processImagesInOutput(output, true);
 
       const attachment = result.result as Attachment;
       expect(attachment.reference.filename).toBe("generated_image.jpg");
@@ -1283,7 +1309,7 @@ describe("processImagesInOutput", () => {
         another_field: 123,
       };
 
-      const result = processImagesInOutput(output);
+      const result = processImagesInOutput(output, true);
 
       expect(result.type).toBe("image_generation_call");
       expect(result.output_format).toBe("png");
@@ -1307,7 +1333,7 @@ describe("processImagesInOutput", () => {
         { type: "text", content: "World" },
       ];
 
-      const result = processImagesInOutput(output);
+      const result = processImagesInOutput(output, true);
 
       expect(Array.isArray(result)).toBe(true);
       expect(result[0]).toEqual({ type: "text", content: "Hello" });
@@ -1328,7 +1354,7 @@ describe("processImagesInOutput", () => {
         ],
       ];
 
-      const result = processImagesInOutput(output);
+      const result = processImagesInOutput(output, true);
 
       expect(Array.isArray(result)).toBe(true);
       expect(Array.isArray(result[0])).toBe(true);
@@ -1352,7 +1378,7 @@ describe("processImagesInOutput", () => {
         },
       ];
 
-      const result = processImagesInOutput(output);
+      const result = processImagesInOutput(output, true);
 
       expect(result[0].result).toBeInstanceOf(Attachment);
       expect(result[1].result).toBeInstanceOf(Attachment);
@@ -1374,7 +1400,7 @@ describe("processImagesInOutput", () => {
         content: "Hello world",
       };
 
-      const result = processImagesInOutput(output);
+      const result = processImagesInOutput(output, true);
       expect(result).toEqual(output);
     });
 
@@ -1384,7 +1410,7 @@ describe("processImagesInOutput", () => {
         data: "some data",
       };
 
-      const result = processImagesInOutput(output);
+      const result = processImagesInOutput(output, true);
       expect(result).toEqual(output);
     });
 
@@ -1394,7 +1420,7 @@ describe("processImagesInOutput", () => {
         content: "Generated text",
       };
 
-      const result = processImagesInOutput(output);
+      const result = processImagesInOutput(output, true);
       expect(result).toEqual(output);
     });
 
@@ -1427,7 +1453,7 @@ describe("processImagesInOutput", () => {
         result: null,
       };
 
-      const result = processImagesInOutput(output);
+      const result = processImagesInOutput(output, true);
       expect(result).toEqual(output);
     });
 
@@ -1437,7 +1463,7 @@ describe("processImagesInOutput", () => {
         result: undefined,
       };
 
-      const result = processImagesInOutput(output);
+      const result = processImagesInOutput(output, true);
       expect(result).toEqual(output);
     });
   });
@@ -1449,7 +1475,7 @@ describe("processImagesInOutput", () => {
         result: 12345, // Not a string
       };
 
-      const result = processImagesInOutput(output);
+      const result = processImagesInOutput(output, true);
       expect(result).toEqual(output);
       expect(result.result).toBe(12345);
     });
@@ -1460,7 +1486,7 @@ describe("processImagesInOutput", () => {
         result: { data: "some data" },
       };
 
-      const result = processImagesInOutput(output);
+      const result = processImagesInOutput(output, true);
       expect(result).toEqual(output);
     });
 
@@ -1470,7 +1496,7 @@ describe("processImagesInOutput", () => {
         result: ["data"],
       };
 
-      const result = processImagesInOutput(output);
+      const result = processImagesInOutput(output, true);
       expect(result).toEqual(output);
     });
 
@@ -1480,7 +1506,7 @@ describe("processImagesInOutput", () => {
         result: true,
       };
 
-      const result = processImagesInOutput(output);
+      const result = processImagesInOutput(output, true);
       expect(result).toEqual(output);
     });
 
@@ -1494,7 +1520,7 @@ describe("processImagesInOutput", () => {
         revised_prompt: 12345, // Not a string
       };
 
-      const result = processImagesInOutput(output);
+      const result = processImagesInOutput(output, true);
 
       const attachment = result.result as Attachment;
       expect(attachment.reference.filename).toBe("generated_image.png");

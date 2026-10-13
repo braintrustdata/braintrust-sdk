@@ -55,6 +55,7 @@ describeVariants("variants", () => {
           await runScenarioDir({
             entry: scenario.wrapperEntry,
             env: {
+              BRAINTRUST_CAPTURE_ATTACHMENTS: "true",
               AI_SDK_PACKAGE_NAME: scenario.packageName,
               AI_SDK_OPENAI_PACKAGE_NAME: scenario.openaiModuleName,
               ...(scenario.anthropicModuleName
@@ -110,6 +111,7 @@ describeVariants("variants", () => {
           await runNodeScenarioDir({
             entry: scenario.autoEntry,
             env: {
+              BRAINTRUST_CAPTURE_ATTACHMENTS: "true",
               AI_SDK_PACKAGE_NAME: scenario.packageName,
               AI_SDK_OPENAI_PACKAGE_NAME: scenario.openaiModuleName,
               ...(scenario.anthropicModuleName

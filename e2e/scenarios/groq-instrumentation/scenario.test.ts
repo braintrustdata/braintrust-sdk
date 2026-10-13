@@ -38,7 +38,10 @@ describe.concurrent("variants", () => {
         runScenario: async ({ runScenarioDir }) => {
           await runScenarioDir({
             entry: "scenario.ts",
-            env: { GROQ_PACKAGE_NAME: scenario.dependencyName },
+            env: {
+              BRAINTRUST_CAPTURE_ATTACHMENTS: "true",
+              GROQ_PACKAGE_NAME: scenario.dependencyName,
+            },
             runContext: {
               variantKey: scenario.snapshotName,
               originalScenarioDir,
@@ -57,7 +60,10 @@ describe.concurrent("variants", () => {
         runScenario: async ({ runNodeScenarioDir }) => {
           await runNodeScenarioDir({
             entry: "scenario.mjs",
-            env: { GROQ_PACKAGE_NAME: scenario.dependencyName },
+            env: {
+              BRAINTRUST_CAPTURE_ATTACHMENTS: "true",
+              GROQ_PACKAGE_NAME: scenario.dependencyName,
+            },
             nodeArgs: ["--import", "braintrust/hook.mjs"],
             runContext: {
               variantKey: scenario.snapshotName,

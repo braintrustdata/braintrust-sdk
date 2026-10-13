@@ -346,7 +346,9 @@ export function braintrustAISDKTelemetry(): any {
       span.log({
         ...(shouldRecordOutputs(event)
           ? {
-              output: processAISDKOutput(result, DEFAULT_DENY_OUTPUT_PATHS),
+              output: withCurrent(span, () =>
+                processAISDKOutput(result, DEFAULT_DENY_OUTPUT_PATHS),
+              ),
             }
           : {}),
         metrics: extractTokenMetrics(result),
@@ -445,7 +447,9 @@ export function braintrustAISDKTelemetry(): any {
       state.span.log({
         ...(shouldRecordOutputs(event)
           ? {
-              output: finishOutput(result, state.operationName),
+              output: withCurrent(state.span, () =>
+                finishOutput(result, state.operationName),
+              ),
             }
           : {}),
         metrics,
@@ -525,9 +529,11 @@ export function braintrustAISDKTelemetry(): any {
         if (shouldRecordInputs(event)) {
           const callInput =
             workflowAgentCallInput ?? operationInput(event, operationName);
-          const { input, outputPromise } = workflowAgent
-            ? processAISDKWorkflowAgentCallInput(callInput)
-            : processAISDKCallInput(callInput);
+          const { input, outputPromise } = withCurrent(span, () =>
+            workflowAgent
+              ? processAISDKWorkflowAgentCallInput(callInput)
+              : processAISDKCallInput(callInput),
+          );
           logPayload.input = input;
           const state = operations.get(operationKey);
           if (state) {
@@ -568,12 +574,15 @@ export function braintrustAISDKTelemetry(): any {
         const operationName = state?.operationName ?? "generateText";
         const callInput = operationInput(event, operationName);
         const workflowAgent = operationName === "WorkflowAgent.stream";
-        const processedInput =
+        const processInput = () =>
           shouldRecordInputs(event) && workflowAgent
             ? processAISDKWorkflowAgentModelCallInput(callInput).input
             : shouldRecordInputs(event)
               ? processAISDKCallInput(callInput).input
               : undefined;
+        const processedInput = state
+          ? withCurrent(state.span, processInput)
+          : processInput();
         if (
           workflowAgent &&
           state?.ownsSpan &&
@@ -654,7 +663,9 @@ export function braintrustAISDKTelemetry(): any {
         span.log({
           ...(shouldRecordOutputs(event)
             ? {
-                output: processAISDKOutput(result, DEFAULT_DENY_OUTPUT_PATHS),
+                output: withCurrent(span, () =>
+                  processAISDKOutput(result, DEFAULT_DENY_OUTPUT_PATHS),
+                ),
               }
             : {}),
           metrics: extractTokenMetrics(result),
