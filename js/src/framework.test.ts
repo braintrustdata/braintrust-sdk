@@ -54,6 +54,7 @@ test("meta (write) is passed to task", async () => {
     },
     new NoopProgressReporter(),
     undefined,
+    undefined,
     true,
   );
 
@@ -89,6 +90,7 @@ test("metadata (read/write) is passed to task", async () => {
       scores: [],
     },
     new NoopProgressReporter(),
+    undefined,
     undefined,
     true,
   );
@@ -127,6 +129,7 @@ test("expected (read/write) is passed to task", async () => {
       scores: [],
     },
     new NoopProgressReporter(),
+    undefined,
     undefined,
     true,
   );
@@ -168,6 +171,7 @@ test("EvalCase id and tags are passed to scorers", async () => {
       ],
     },
     new NoopProgressReporter(),
+    undefined,
     undefined,
     true,
   );
@@ -561,6 +565,7 @@ describe("runEvaluator", () => {
         },
         new NoopProgressReporter(),
         undefined,
+        undefined,
         true,
       ),
     ).rejects.toThrow("Encountered 1 unhandled task errors");
@@ -745,6 +750,7 @@ test("trialIndex is passed to task", async () => {
     },
     new NoopProgressReporter(),
     undefined,
+    undefined,
     true,
   );
 
@@ -784,6 +790,7 @@ test("trialIndex with multiple inputs", async () => {
       trialCount: 2,
     },
     new NoopProgressReporter(),
+    undefined,
     undefined,
     true,
   );
@@ -829,6 +836,7 @@ test("per-input trialCount overrides global trialCount", async () => {
     },
     new NoopProgressReporter(),
     undefined,
+    undefined,
     true,
   );
 
@@ -873,6 +881,7 @@ test("per-input trialCount works without global trialCount", async () => {
       scores: [],
     },
     new NoopProgressReporter(),
+    undefined,
     undefined,
     true,
   );
@@ -1039,6 +1048,7 @@ test("runEvaluator forwards baseExperimentId to summary", async () => {
     },
     new NoopProgressReporter(),
     undefined,
+    undefined,
     true,
   );
 
@@ -1080,6 +1090,7 @@ test("runEvaluator forwards persisted baseExperimentName id to summary", async (
     },
     new NoopProgressReporter(),
     undefined,
+    undefined,
     true,
   );
 
@@ -1119,6 +1130,7 @@ test("tags can be appended and logged to root span", async () => {
       summarizeScores: false,
     },
     new NoopProgressReporter(),
+    undefined,
     undefined,
     true,
   );
@@ -1167,6 +1179,7 @@ test.each([
     },
     new NoopProgressReporter(),
     undefined,
+    undefined,
     true,
   );
   expect(result.results[0].tags).toEqual(expectedTags);
@@ -1205,6 +1218,7 @@ test("tags are persisted with a failing scorer", async () => {
     },
     new NoopProgressReporter(),
     undefined,
+    undefined,
     true,
   );
   expect(result.results[0].tags).toEqual(expectedTags);
@@ -1235,6 +1249,7 @@ test("tags remain empty when not set", async () => {
       summarizeScores: false,
     },
     new NoopProgressReporter(),
+    undefined,
     undefined,
     true,
   );
@@ -1268,6 +1283,7 @@ test("scorer spans have purpose='scorer' attribute", async () => {
       ],
     },
     new NoopProgressReporter(),
+    undefined,
     undefined,
     true,
   );

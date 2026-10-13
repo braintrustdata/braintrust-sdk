@@ -1,4 +1,5 @@
 import { describe, expect, test, vi } from "vitest";
+import { z } from "zod/v3";
 import { configureNode } from "./node/config";
 import {
   BatchScorer,
@@ -177,6 +178,113 @@ describe("defineDurableEval", () => {
     expect(task).toHaveBeenCalledTimes(2);
   });
 
+  test("validates inline parameters once for ordinary tasks", async () => {
+    const transform = vi.fn((value: number) => value + 1);
+    const result = await defineDurableEval("inline-parameters", {
+      store: new DurableEvalMemoryStore(),
+      data: [{ input: "hello", expected: "hello:2" }],
+      parameters: {
+        count: z.number().default(1).transform(transform),
+        prompt: {
+          type: "prompt",
+          default: { prompt: "{{input}}:{{count}}", model: "test-model" },
+        },
+      },
+      task: (input, { parameters }) =>
+        parameters.prompt.build(
+          { input, count: parameters.count },
+          { flavor: "completion" },
+        ).prompt,
+      scores: [
+        function exact({ output, expected }) {
+          return output === expected ? 1 : 0;
+        },
+      ],
+    }).start({ noSendLogs: true });
+    expect(transform).toHaveBeenCalledTimes(1);
+    expect(result).toMatchObject({
+      status: "completed",
+      summary: { scores: { exact: { score: 1 } } },
+    });
+  });
+
+  test("batch tasks receive persisted inline parameter values", async () => {
+    const store = new DurableEvalMemoryStore();
+    const schema = {
+      factor: z.number().default(4),
+      prompt: {
+        type: "prompt" as const,
+        default: { prompt: "{{input}}", model: "test-model" },
+      },
+    };
+    let items: DurableBatchTaskItem<number, number, void, typeof schema>[] = [];
+    const task = new BatchTask<
+      number,
+      number,
+      number,
+      void,
+      typeof schema,
+      null
+    >({
+      async submit(submitted) {
+        items = submitted;
+        expect(items[0].parameters.factor).toBe(2);
+        expect(
+          items[0].parameters.prompt.build(
+            { input: "hello" },
+            { flavor: "completion" },
+          ).prompt,
+        ).toBe("hello");
+        return null;
+      },
+      completion: { mode: "webhook", getExternalId: () => "inline-job" },
+      async collect() {
+        return items.map(({ id, input, parameters }) => ({
+          id,
+          output: input * parameters.factor,
+        }));
+      },
+    });
+    const evaluator = {
+      store,
+      parameters: schema,
+      data: [{ id: "case-one", input: 3, expected: 6 }],
+      task,
+      scores: [
+        function exact({
+          output,
+          expected,
+        }: {
+          output: number;
+          expected?: number;
+        }) {
+          return output === expected ? 1 : 0;
+        },
+      ],
+    };
+    const { Prompt } = await import("./logger");
+    const run = await defineDurableEval("batch-parameters", evaluator).start({
+      noSendLogs: true,
+      parameters: {
+        factor: 2,
+        prompt: Prompt.fromPromptData("main", {
+          prompt: { type: "completion", content: "{{input}}" },
+          options: { model: "test-model" },
+        }),
+      },
+    });
+    expect(run.status).toBe("waiting");
+    const resumed = await defineDurableEval(
+      "batch-parameters",
+      evaluator,
+    ).processBatchResult({ runId: run.runId, externalId: "inline-job" });
+    expect(resumed.status).toBe("completed");
+    expect(resumed).toMatchObject({
+      status: "completed",
+      summary: { scores: { exact: { score: 1 } } },
+    });
+  });
+
   test("generates a new run id for every start", async () => {
     const durable = defineDurableEval("generated-runs", {
       store: new DurableEvalMemoryStore(),
@@ -193,9 +301,20 @@ describe("defineDurableEval", () => {
 
   test("merges batch task metadata with case metadata", async () => {
     type Metadata = { fromCase?: boolean; fromTask?: boolean };
-    let taskItems: DurableBatchTaskItem<number, void, Metadata>[] = [];
+    let taskItems: DurableBatchTaskItem<
+      number,
+      void,
+      Metadata,
+      Record<string, never>
+    >[] = [];
     let scorerMetadata: Metadata | undefined;
-    const task = new BatchTask<number, number, void, Metadata>({
+    const task = new BatchTask<
+      number,
+      number,
+      void,
+      Metadata,
+      Record<string, never>
+    >({
       async submit(items) {
         taskItems = items;
         return null;
@@ -248,7 +367,14 @@ describe("defineDurableEval", () => {
         return { value, created: true };
       },
     };
-    const task = new BatchTask<number, number, void, void, { id: string }>({
+    const task = new BatchTask<
+      number,
+      number,
+      void,
+      void,
+      Record<string, never>,
+      { id: string }
+    >({
       async submit() {
         return { id: "provider-job" };
       },
@@ -290,7 +416,6 @@ describe("defineDurableEval", () => {
       caseIds: ["one:trial:0", "two:trial:0"],
     });
     expect(run).not.toHaveProperty("schemaVersion");
-    expect(run).not.toHaveProperty("parameters");
     expect(run).not.toHaveProperty("projectName");
     expect(run).not.toHaveProperty("evalName");
     expect(run).not.toHaveProperty("cases");
@@ -308,7 +433,7 @@ describe("defineDurableEval", () => {
   test("polls each existing task and scorer sub-batch once", async () => {
     const taskJobs = new Map<
       string,
-      DurableBatchTaskItem<number, number, void>[]
+      DurableBatchTaskItem<number, number, void, Record<string, never>>[]
     >();
     const scoreJobs = new Map<
       string,
@@ -317,7 +442,14 @@ describe("defineDurableEval", () => {
     const taskPoll = vi.fn(async () => ({ status: "complete" as const }));
     const scorePoll = vi.fn(async () => ({ status: "complete" as const }));
 
-    const task = new BatchTask<number, number, number, void, { id: string }>({
+    const task = new BatchTask<
+      number,
+      number,
+      number,
+      void,
+      Record<string, never>,
+      { id: string }
+    >({
       batchSize: 2,
       async submit(items) {
         const id = `task-${taskJobs.size + 1}`;
@@ -421,7 +553,7 @@ describe("defineDurableEval", () => {
     const store = new DurableEvalMemoryStore();
     const taskJobs = new Map<
       string,
-      DurableBatchTaskItem<number, number, void>[]
+      DurableBatchTaskItem<number, number, void, Record<string, never>>[]
     >();
     const scoreJobs = new Map<
       string,
@@ -432,7 +564,14 @@ describe("defineDurableEval", () => {
     const taskBatchesCollecting = new Promise<void>((resolve) => {
       releaseTaskCollect = resolve;
     });
-    const task = new BatchTask<number, number, number, void, { id: string }>({
+    const task = new BatchTask<
+      number,
+      number,
+      number,
+      void,
+      Record<string, never>,
+      { id: string }
+    >({
       batchSize: 2,
       async submit(items) {
         const id = `task-provider-${taskJobs.size + 1}`;
@@ -529,13 +668,25 @@ describe("defineDurableEval", () => {
   });
 
   test("claims downstream work once across concurrent webhook deliveries", async () => {
-    let taskItems: DurableBatchTaskItem<number, number, void>[] = [];
+    let taskItems: DurableBatchTaskItem<
+      number,
+      number,
+      void,
+      Record<string, never>
+    >[] = [];
     let collectCount = 0;
     let releaseCollect!: () => void;
     const bothCollecting = new Promise<void>((resolve) => {
       releaseCollect = resolve;
     });
-    const task = new BatchTask<number, number, number, void, { id: string }>({
+    const task = new BatchTask<
+      number,
+      number,
+      number,
+      void,
+      Record<string, never>,
+      { id: string }
+    >({
       async submit(items) {
         taskItems = items;
         return { id: "task-provider" };
@@ -611,7 +762,13 @@ describe("defineDurableEval", () => {
         return { status: "complete" as const };
       },
     };
-    const task = new BatchTask<number, number, number, void>({
+    const task = new BatchTask<
+      number,
+      number,
+      number,
+      void,
+      Record<string, never>
+    >({
       async submit(items) {
         jobs.set("task", items);
         return { id: "task" };

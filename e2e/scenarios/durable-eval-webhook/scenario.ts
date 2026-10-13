@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { z } from "zod/v3";
 import {
   BatchScorer,
   BatchTask,
@@ -15,6 +16,7 @@ async function main() {
   const testRunId = getTestRunId();
   const scenario = "durable-eval-webhook";
   const store = new DurableEvalMemoryStore();
+  const parameters = { factor: z.number().default(4) };
   const jobs = new Map<string, unknown[]>();
   const webhookCompletion = {
     mode: "webhook" as const,
@@ -24,12 +26,14 @@ async function main() {
     number,
     number,
     number,
-    { testRunId: string; kind: string }
+    { testRunId: string; kind: string },
+    typeof parameters,
+    { id: string }
   >({
     batchSize: 2,
     async submit(items) {
       for (const item of items) {
-        assert.equal("parameters" in item, false);
+        assert.equal(item.parameters.factor, 2);
       }
       const id = `task-${jobs.size + 1}`;
       jobs.set(id, items);
@@ -40,10 +44,11 @@ async function main() {
       const items = (jobs.get(submissionData.id) ?? []) as Array<{
         id: string;
         input: number;
+        parameters: { factor: number };
       }>;
       return items.map((item) => ({
         id: item.id,
-        output: item.input * 2,
+        output: item.input * item.parameters.factor,
       }));
     },
   });
@@ -82,6 +87,7 @@ async function main() {
     scopedName("e2e-durable-eval-webhook-project", testRunId),
     {
       store,
+      parameters,
       experimentName: `${scenario}-${testRunId}`,
       data: [1, 2, 3].map((input) => ({
         id: `case-${input}`,
@@ -112,7 +118,7 @@ async function main() {
     },
   );
 
-  const waiting = await definition.start();
+  const waiting = await definition.start({ parameters: { factor: 2 } });
   if (waiting.status !== "waiting" || jobs.size !== 2) {
     throw new Error("Durable eval did not pause with two webhook batches");
   }

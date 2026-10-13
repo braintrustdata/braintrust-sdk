@@ -1,4 +1,5 @@
 import { expect, expectTypeOf, test } from "vitest";
+import { z } from "zod/v3";
 
 import * as publicExports from "./exports";
 import type {
@@ -36,11 +37,13 @@ test("exports only intentional extension types", () => {
   expectTypeOf<TemplateRendererPlugin>().toBeObject();
   expectTypeOf<LangChainCallbackHandlerOptions>().toBeObject();
   expectTypeOf(BraintrustLangChainCallbackHandler).toBeConstructibleWith();
-  expectTypeOf<EvalTask<unknown, unknown, unknown, void>>().toBeFunction();
+  expectTypeOf<
+    EvalTask<unknown, unknown, unknown, void, never>
+  >().toBeFunction();
   expectTypeOf<EvalScorer<unknown, unknown, unknown>>().toBeFunction();
 });
 
-test("does not expose deprecated tools or evaluation parameters", () => {
+test("does not expose deprecated tools or saved configurations", () => {
   expect(publicExports).not.toHaveProperty("loadParameters");
   const project = publicExports.projects.create({ name: "test-project" });
   expect(project).not.toHaveProperty("tools");
@@ -58,24 +61,18 @@ test("does not expose deprecated tools or evaluation parameters", () => {
       data: [{ input: 1 }],
       task: (input: number) => input,
       scores: [],
+      parameters: { count: z.number().default(1) },
     };
-    publicExports.Eval("test", {
-      ...evaluator,
-      // @ts-expect-error Local parameter schemas are no longer supported.
-      parameters: {},
-    });
     publicExports.Eval("test", evaluator, {
-      // @ts-expect-error Parameter overrides are no longer supported.
-      parameters: {},
+      // @ts-expect-error Inline overrides must match the parameter schema.
+      parameters: { count: "one" },
     });
     publicExports.Eval("test", {
       ...evaluator,
-      task: (input, hooks) => {
-        // @ts-expect-error Tasks no longer receive parameters.
-        hooks.parameters;
-        return input;
-      },
+      // @ts-expect-error Only inline schemas are supported, not remote configuration promises.
+      parameters: Promise.resolve(evaluator.parameters),
     });
+
     project.prompts.create({
       name: "test-prompt",
       model: "test-model",

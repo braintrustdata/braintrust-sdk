@@ -7,8 +7,6 @@ import { Project as projectSchema } from "./sdk-schemas";
 import type {
   FunctionTypeEnum as FunctionType,
   IfExists,
-  ChatCompletionMessageParam,
-  ModelParams,
   PromptData,
   ToolFunctionDefinition,
 } from "./sdk-types";
@@ -20,6 +18,10 @@ import {
   PromptRowWithId,
 } from "./logger";
 import type { BaseFnOpts, GenericFunction } from "./framework-types";
+import {
+  promptDefinitionToPromptData,
+  type PromptDefinition,
+} from "./prompt-schemas";
 
 // Safe access to __filename (only exists in Node.js CJS)
 const currentFilename =
@@ -372,16 +374,6 @@ export class CodePrompt {
   }
 }
 
-type PromptDefinition = (
-  | { prompt: string }
-  | { messages: ChatCompletionMessageParam[] }
-) & {
-  model: string;
-  params?: ModelParams;
-  templateFormat?: "mustache" | "nunjucks" | "none";
-  environments?: string[];
-};
-
 type PromptOpts<
   HasId extends boolean,
   HasVersion extends boolean,
@@ -448,35 +440,4 @@ interface PromptFunctionEvent {
   tags?: string[];
   metadata?: Record<string, unknown>;
   environments?: { slug: string }[];
-}
-
-function promptDefinitionToPromptData(
-  promptDefinition: PromptDefinition,
-  rawTools?: ToolFunctionDefinition[],
-): PromptData {
-  const promptBlock: PromptData["prompt"] =
-    "messages" in promptDefinition
-      ? {
-          type: "chat",
-          messages: promptDefinition.messages,
-          tools:
-            rawTools && rawTools.length > 0
-              ? JSON.stringify(rawTools)
-              : undefined,
-        }
-      : {
-          type: "completion",
-          content: promptDefinition.prompt,
-        };
-
-  return {
-    prompt: promptBlock,
-    options: {
-      model: promptDefinition.model,
-      params: promptDefinition.params,
-    },
-    ...(promptDefinition.templateFormat
-      ? { template_format: promptDefinition.templateFormat }
-      : {}),
-  };
 }

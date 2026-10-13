@@ -51,6 +51,11 @@ import type {
   ReporterDef,
 } from "./reporters/types";
 import { isEmpty, InternalAbortError } from "./util";
+import {
+  type EvalParameters,
+  type InferParameters,
+  validateParameters,
+} from "./eval-parameters";
 
 export type BaseExperiment<
   Input,
@@ -98,9 +103,15 @@ export type EvalData<
       | Promise<EvalCase<Input, Expected, Metadata>[]>
       | BaseExperiment<Input, Expected, Metadata>);
 
-export type EvalTask<Input, Output, Expected, Metadata extends BaseMetadata> = (
+export type EvalTask<
+  Input,
+  Output,
+  Expected,
+  Metadata extends BaseMetadata,
+  Parameters extends EvalParameters,
+> = (
   input: Input,
-  hooks: EvalHooks<Expected, Metadata>,
+  hooks: EvalHooks<Expected, Metadata, Parameters>,
 ) => Output | Promise<Output>;
 
 type TaskProgressEvent = Omit<
@@ -108,7 +119,11 @@ type TaskProgressEvent = Omit<
   "id" | "origin" | "object_type" | "name"
 >;
 
-export interface EvalHooks<Expected, Metadata extends BaseMetadata> {
+export interface EvalHooks<
+  Expected,
+  Metadata extends BaseMetadata,
+  Parameters extends EvalParameters,
+> {
   /**
    * The metadata object for the current evaluation. You can mutate this object to add or remove metadata.
    */
@@ -121,6 +136,10 @@ export interface EvalHooks<Expected, Metadata extends BaseMetadata> {
    * The task's span.
    */
   span: Span;
+  /**
+   * The current parameters being used for this specific task execution.
+   */
+  parameters: InferParameters<Parameters>;
   /**
    * Report progress that will show up in the playground.
    */
@@ -196,6 +215,7 @@ export interface Evaluator<
   Output,
   Expected,
   Metadata extends BaseMetadata = DefaultMetadataType,
+  Parameters extends EvalParameters = EvalParameters,
 > {
   /**
    * A function that returns a list of inputs, expected outputs, and metadata.
@@ -205,7 +225,7 @@ export interface Evaluator<
   /**
    * A function that takes an input and returns an output.
    */
-  task: EvalTask<Input, Output, Expected, Metadata>;
+  task: EvalTask<Input, Output, Expected, Metadata, Parameters>;
 
   /**
    * A set of functions that take an input, output, and expected value and return a {@link Score}.
@@ -219,6 +239,12 @@ export interface Evaluator<
    * At least one of `scores` or `classifiers` must be provided.
    */
   classifiers?: EvalClassifier<Input, Output, Expected, Metadata>[];
+
+  /**
+   * Inline parameter schemas whose validated values are passed to task hooks.
+   * Use Zod schemas, prompt definitions, or model identifiers with optional defaults.
+   */
+  parameters?: Parameters;
 
   /**
    * An optional name for the experiment.
@@ -360,10 +386,11 @@ export type EvaluatorDef<
   Output,
   Expected,
   Metadata extends BaseMetadata = DefaultMetadataType,
+  Parameters extends EvalParameters = EvalParameters,
 > = {
   projectName: string;
   evalName: string;
-} & Evaluator<Input, Output, Expected, Metadata>;
+} & Evaluator<Input, Output, Expected, Metadata, Parameters>;
 
 type EvaluatorFile = {
   functions: CodeFunction<
@@ -374,7 +401,13 @@ type EvaluatorFile = {
   prompts: CodePrompt[];
   evaluators: {
     [evalName: string]: {
-      evaluator: EvaluatorDef<unknown, unknown, unknown, BaseMetadata>;
+      evaluator: EvaluatorDef<
+        unknown,
+        unknown,
+        unknown,
+        BaseMetadata,
+        EvalParameters
+      >;
       reporter?: ReporterDef<unknown> | string;
     };
   };
@@ -394,7 +427,7 @@ function initExperiment<IsOpen extends boolean = false>(
 
 export async function _internalInitEvaluatorExperiment(
   projectName: string,
-  evaluator: Evaluator<any, any, any, any>,
+  evaluator: Evaluator<any, any, any, any, any>,
   data: EvalData<any, any, any>,
   options: {
     disabled?: boolean;
@@ -472,7 +505,7 @@ function isIterable<T>(value: unknown): value is Iterable<T> {
 
 export async function _internalResolveEvaluatorData(
   evaluator: Pick<
-    EvaluatorDef<any, any, any, any>,
+    EvaluatorDef<any, any, any, any, any>,
     "data" | "projectName" | "projectId" | "state"
   >,
   experiment: Experiment | null,
@@ -544,7 +577,7 @@ globalThis._evals = {
   reporters: {},
 };
 
-interface EvalOptions<EvalReport> {
+interface EvalOptions<EvalReport, Parameters extends EvalParameters> {
   /**
    * A `Reporter` which you can use to summarize progress after an Eval() runs.
    */
@@ -577,6 +610,10 @@ interface EvalOptions<EvalReport> {
    * is somewhat outdated, and may be removed in the future.
    */
   progress?: ProgressReporter;
+  /**
+   * The parameters to use for the evaluator.
+   */
+  parameters?: InferParameters<Parameters>;
   /**
    * Whether to retain the per-example Eval results and return them from Eval().
    *
@@ -631,18 +668,23 @@ export async function Eval<
   Expected = void,
   Metadata extends BaseMetadata = DefaultMetadataType,
   EvalReport = boolean,
+  Parameters extends EvalParameters = EvalParameters,
 >(
   name: string,
-  evaluator: Evaluator<Input, Output, Expected, Metadata>,
-  reporterOrOpts?: ReporterDef<EvalReport> | string | EvalOptions<EvalReport>,
+  evaluator: Evaluator<Input, Output, Expected, Metadata, Parameters>,
+  reporterOrOpts?:
+    | ReporterDef<EvalReport>
+    | string
+    | EvalOptions<EvalReport, Parameters>,
 ): Promise<EvalResultWithSummary<Input, Output, Expected, Metadata>> {
-  const options: EvalOptions<EvalReport> = isEmpty(reporterOrOpts)
-    ? {}
-    : typeof reporterOrOpts === "string"
-      ? { reporter: reporterOrOpts }
-      : "name" in reporterOrOpts
-        ? { reporter: reporterOrOpts }
-        : reporterOrOpts;
+  let options: EvalOptions<EvalReport, Parameters>;
+  if (isEmpty(reporterOrOpts)) {
+    options = {};
+  } else if (typeof reporterOrOpts === "string" || "name" in reporterOrOpts) {
+    options = { reporter: reporterOrOpts };
+  } else {
+    options = reporterOrOpts;
+  }
 
   let evalName = makeEvalName(name, evaluator.experimentName);
   if (globalThis._evals.evaluators[evalName]) {
@@ -655,7 +697,13 @@ export async function Eval<
         evalName,
         projectName: name,
         ...evaluator,
-      } as EvaluatorDef<unknown, unknown, unknown, BaseMetadata>,
+      } as EvaluatorDef<
+        unknown,
+        unknown,
+        unknown,
+        BaseMetadata,
+        EvalParameters
+      >,
       reporter: options.reporter,
     };
 
@@ -726,6 +774,7 @@ export async function Eval<
               evalDef,
               progressReporter,
               options.stream,
+              options.parameters,
               shouldCollectResults,
               enableCache,
             ),
@@ -737,6 +786,7 @@ export async function Eval<
           evalDef,
           progressReporter,
           options.stream,
+          options.parameters,
           shouldCollectResults,
           enableCache,
         );
@@ -793,9 +843,10 @@ export function classifierName(
 }
 
 export async function _internalRunEvaluatorTask(
-  task: EvalTask<any, any, any, any>,
+  task: EvalTask<any, any, any, any, any>,
   datum: EvalCase<any, any, any>,
   trialIndex: number,
+  parameters: Record<string, unknown>,
   span: Span,
   reportProgress: (event: TaskProgressEvent) => void = () => undefined,
 ): Promise<{
@@ -806,10 +857,11 @@ export async function _internalRunEvaluatorTask(
   const metadata: Record<string, unknown> = {
     ...("metadata" in datum ? datum.metadata : {}),
   };
-  const hooks: EvalHooks<unknown, Record<string, unknown>> = {
+  const hooks: EvalHooks<unknown, Record<string, unknown>, EvalParameters> = {
     metadata,
     expected: "expected" in datum ? datum.expected : undefined,
     span,
+    parameters,
     reportProgress,
     trialIndex,
     tags: [...(datum.tags ?? [])],
@@ -1027,9 +1079,10 @@ export const defaultErrorScoreHandler: ErrorScoreHandler = ({
 export async function runEvaluator(
   experiment: Experiment | null,
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  evaluator: EvaluatorDef<any, any, any, any>,
+  evaluator: EvaluatorDef<any, any, any, any, any>,
   progressReporter: ProgressReporter,
   stream: ((data: SSEProgressEventData) => void) | undefined,
+  parameters?: InferParameters<EvalParameters>,
   collectResults = true,
   enableCache = true,
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -1045,6 +1098,10 @@ export async function runEvaluator(
     (evaluator.state ?? _internalGetGlobalState())?.spanCache?.start();
   }
   try {
+    const validatedParameters = validateParameters(
+      parameters ?? {},
+      evaluator.parameters,
+    );
     const dataIterable = await _internalResolveEvaluatorData(
       evaluator,
       experiment,
@@ -1182,6 +1239,7 @@ export async function runEvaluator(
                   evaluator.task,
                   datum,
                   trialIndex,
+                  validatedParameters,
                   span,
                   (event) => {
                     stream?.({
@@ -1584,7 +1642,7 @@ function ensureScoreAccumulator(
 
 export function buildLocalSummary(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  evaluator: EvaluatorDef<any, any, any, any>,
+  evaluator: EvaluatorDef<any, any, any, any, any>,
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   results: EvalResult<any, any, any, any>[],
   precomputedScores?: ScoreAccumulator,
@@ -1661,7 +1719,7 @@ const defaultReporter: ReporterDef<boolean> = {
   name: "Braintrust default reporter",
   async reportEval(
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    evaluator: EvaluatorDef<any, any, any, any>,
+    evaluator: EvaluatorDef<any, any, any, any, any>,
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     result: EvalResultWithSummary<any, any, any, any>,
     { verbose, jsonl }: ReporterOpts,

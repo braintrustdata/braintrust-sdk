@@ -4,7 +4,11 @@ import {
   SpanTypeAttribute,
   uint8ArrayToBase64,
 } from "../util/index";
-
+import {
+  type EvalParameters,
+  type InferParameters,
+  validateParameters,
+} from "./eval-parameters";
 import {
   _internalInitEvaluatorExperiment,
   _internalPrepareEvaluatorClassification,
@@ -32,6 +36,9 @@ import {
   type Experiment,
   type ExperimentSummary,
   NOOP_SPAN,
+  Prompt,
+  serializePromptForCache,
+  type SerializedPrompt,
   type Span,
   _internalResumeSpan,
   _internalStartSpanWithInitialMerge,
@@ -224,6 +231,7 @@ export interface DurableBatchTaskItem<
   Input,
   Expected,
   Metadata extends BaseMetadata,
+  Parameters extends EvalParameters,
 > {
   /** Stable identifier for this case and trial within the durable run. */
   id: string;
@@ -235,6 +243,8 @@ export interface DurableBatchTaskItem<
   metadata: Metadata;
   /** Tags associated with the evaluation case. */
   tags: string[] | undefined;
+  /** Parameters supplied when the durable evaluation started. */
+  parameters: InferParameters<Parameters>;
   /** Zero-based trial index for this case. */
   trialIndex: number;
 }
@@ -292,11 +302,12 @@ interface DurableBatchTask<
   Output,
   Expected,
   Metadata extends BaseMetadata,
+  Parameters extends EvalParameters,
   SubmissionData extends JsonValue,
 > {
   readonly kind: typeof BATCH_TASK_KIND;
   readonly processor: DurableBatchProcessor<
-    DurableBatchTaskItem<Input, Expected, Metadata>,
+    DurableBatchTaskItem<Input, Expected, Metadata, Parameters>,
     DurableBatchTaskResult<Output, Metadata>,
     SubmissionData
   >;
@@ -328,19 +339,21 @@ export class BatchTask<
   Output,
   Expected = void,
   Metadata extends BaseMetadata = DefaultMetadataType,
+  Parameters extends EvalParameters = EvalParameters,
   SubmissionData extends JsonValue = JsonValue,
 > implements DurableBatchTask<
   Input,
   Output,
   Expected,
   Metadata,
+  Parameters,
   SubmissionData
 > {
   readonly kind: typeof BATCH_TASK_KIND = BATCH_TASK_KIND;
 
   constructor(
     readonly processor: DurableBatchProcessor<
-      DurableBatchTaskItem<Input, Expected, Metadata>,
+      DurableBatchTaskItem<Input, Expected, Metadata, Parameters>,
       DurableBatchTaskResult<Output, Metadata>,
       SubmissionData
     >,
@@ -384,8 +397,9 @@ type DurableEvaluator<
   Output,
   Expected = void,
   Metadata extends BaseMetadata = DefaultMetadataType,
+  Parameters extends EvalParameters = EvalParameters,
 > = Omit<
-  Evaluator<Input, Output, Expected, Metadata>,
+  Evaluator<Input, Output, Expected, Metadata, Parameters>,
   "task" | "scores" | "timeout" | "signal" | "maxConcurrency" | "update"
 > & {
   store: DurableEvalStore;
@@ -397,15 +411,25 @@ type DurableEvaluator<
     datum: EvalCase<Input, Expected, Metadata>,
   ) => string | Promise<string>;
   task:
-    | EvalTask<Input, Output, Expected, Metadata>
-    | DurableBatchTask<Input, Output, Expected, Metadata, JsonValue>;
+    | EvalTask<Input, Output, Expected, Metadata, Parameters>
+    | DurableBatchTask<
+        Input,
+        Output,
+        Expected,
+        Metadata,
+        Parameters,
+        JsonValue
+      >;
   scores?: Array<
     | EvalScorer<Input, Output, Expected, Metadata>
     | DurableBatchScorer<Input, Output, Expected, Metadata, JsonValue>
   >;
 };
 
-interface DurableEvalStartOptions {
+interface DurableEvalStartOptions<
+  Parameters extends EvalParameters = EvalParameters,
+> {
+  parameters?: InferParameters<Parameters>;
   noSendLogs?: boolean;
 }
 
@@ -439,14 +463,23 @@ interface DurableEvalRuntimeDefinition<
   Output,
   Expected = void,
   Metadata extends BaseMetadata = DefaultMetadataType,
+  Parameters extends EvalParameters = EvalParameters,
 > {
   readonly projectName: string;
   readonly evalName: string;
-  readonly evaluator: DurableEvaluator<Input, Output, Expected, Metadata>;
+  readonly evaluator: DurableEvaluator<
+    Input,
+    Output,
+    Expected,
+    Metadata,
+    Parameters
+  >;
 }
 
-interface DurableEvalDefinition {
-  start(options?: DurableEvalStartOptions): Promise<DurableEvalResult>;
+interface DurableEvalDefinition<Parameters extends EvalParameters> {
+  start(
+    options?: DurableEvalStartOptions<Parameters>,
+  ): Promise<DurableEvalResult>;
   status(options: { runId: string }): Promise<DurableEvalResult>;
   poll(options: { runId: string }): Promise<DurableEvalResult>;
   processBatchResult(result: DurableBatchResult): Promise<DurableEvalResult>;
@@ -497,6 +530,7 @@ type DurableRunState = {
   runId: string;
   experimentName: string;
   noSendLogs: boolean;
+  parameters: JsonValue;
   status: "running" | "completed";
   summary?: ExperimentSummary;
   cases: DurableCaseRecord[];
@@ -731,15 +765,17 @@ export function defineDurableEval<
   Output,
   Expected = void,
   Metadata extends BaseMetadata = DefaultMetadataType,
+  Parameters extends EvalParameters = EvalParameters,
 >(
   projectName: string,
-  evaluator: DurableEvaluator<Input, Output, Expected, Metadata>,
-): DurableEvalDefinition {
+  evaluator: DurableEvaluator<Input, Output, Expected, Metadata, Parameters>,
+): DurableEvalDefinition<Parameters> {
   const definition: DurableEvalRuntimeDefinition<
     Input,
     Output,
     Expected,
-    Metadata
+    Metadata,
+    Parameters
   > = {
     projectName,
     evalName: evaluator.experimentName ?? projectName,
@@ -759,14 +795,34 @@ async function startDurableEval<
   Output,
   Expected,
   Metadata extends BaseMetadata,
+  Parameters extends EvalParameters,
 >(
-  definition: DurableEvalRuntimeDefinition<Input, Output, Expected, Metadata>,
-  options: DurableEvalStartOptions,
+  definition: DurableEvalRuntimeDefinition<
+    Input,
+    Output,
+    Expected,
+    Metadata,
+    Parameters
+  >,
+  options: DurableEvalStartOptions<Parameters>,
 ): Promise<DurableEvalResult> {
   const store = definition.evaluator.store;
   const runId = newId();
   const key = runKey(definition.projectName, definition.evalName, runId);
   const { data } = callEvaluatorData(definition.evaluator.data);
+  const parameters = validateParameters(
+    options.parameters ?? {},
+    definition.evaluator.parameters,
+  );
+  const serializedParameters = assertJsonValue(
+    Object.fromEntries(
+      Object.entries(parameters).map(([name, value]) => [
+        name,
+        Prompt.isPrompt(value) ? serializePromptForCache(value) : value,
+      ]),
+    ),
+    "eval parameters",
+  );
   const experimentName =
     definition.evaluator.experimentName ?? `${definition.evalName}-${runId}`;
   const experiment = await _internalInitEvaluatorExperiment(
@@ -775,7 +831,8 @@ async function startDurableEval<
       Input,
       Output,
       Expected,
-      Metadata
+      Metadata,
+      Parameters
     >,
     data,
     {
@@ -795,13 +852,22 @@ async function startDurableEval<
         projectName: definition.projectName,
         evalName: definition.evalName,
         data,
-      } as unknown as EvaluatorDef<Input, Output, Expected, Metadata>,
+        // Parameters were already validated above, including Zod transforms.
+        parameters: undefined,
+      } as unknown as EvaluatorDef<
+        Input,
+        Output,
+        Expected,
+        Metadata,
+        Parameters
+      >,
       {
         start: () => undefined,
         stop: () => undefined,
         increment: () => undefined,
       },
       undefined,
+      parameters,
       true,
       true,
     );
@@ -809,6 +875,7 @@ async function startDurableEval<
       runId,
       experimentName,
       noSendLogs: options.noSendLogs ?? false,
+      parameters: serializedParameters,
       status: "completed",
       summary: result.summary,
       cases: [],
@@ -822,6 +889,7 @@ async function startDurableEval<
     runId,
     experimentName,
     noSendLogs: options.noSendLogs ?? false,
+    parameters: serializedParameters,
     status: "running",
     cases: await materializeCases(definition, data, experiment),
     batches: [],
@@ -836,8 +904,15 @@ async function getDurableEvalStatus<
   Output,
   Expected,
   Metadata extends BaseMetadata,
+  Parameters extends EvalParameters,
 >(
-  definition: DurableEvalRuntimeDefinition<Input, Output, Expected, Metadata>,
+  definition: DurableEvalRuntimeDefinition<
+    Input,
+    Output,
+    Expected,
+    Metadata,
+    Parameters
+  >,
   options: { runId: string },
 ): Promise<DurableEvalResult> {
   const store = definition.evaluator.store;
@@ -855,8 +930,15 @@ async function processDurableBatchResult<
   Output,
   Expected,
   Metadata extends BaseMetadata,
+  Parameters extends EvalParameters,
 >(
-  definition: DurableEvalRuntimeDefinition<Input, Output, Expected, Metadata>,
+  definition: DurableEvalRuntimeDefinition<
+    Input,
+    Output,
+    Expected,
+    Metadata,
+    Parameters
+  >,
   result: DurableBatchResult,
 ): Promise<DurableEvalResult> {
   if (!result.batchId && !result.externalId) {
@@ -898,8 +980,15 @@ async function pollDurableEval<
   Output,
   Expected,
   Metadata extends BaseMetadata,
+  Parameters extends EvalParameters,
 >(
-  definition: DurableEvalRuntimeDefinition<Input, Output, Expected, Metadata>,
+  definition: DurableEvalRuntimeDefinition<
+    Input,
+    Output,
+    Expected,
+    Metadata,
+    Parameters
+  >,
   options: { runId: string },
 ): Promise<DurableEvalResult> {
   const store = definition.evaluator.store;
@@ -956,7 +1045,7 @@ async function pollDurableEval<
 }
 
 async function openDurableExperiment(
-  definition: DurableEvalRuntimeDefinition<any, any, any, any>,
+  definition: DurableEvalRuntimeDefinition<any, any, any, any, any>,
   state: DurableRunState,
 ) {
   const data: EvalCase<unknown, unknown, BaseMetadata>[] = [];
@@ -966,7 +1055,8 @@ async function openDurableExperiment(
       unknown,
       unknown,
       unknown,
-      BaseMetadata
+      BaseMetadata,
+      EvalParameters
     >,
     data,
     {
@@ -982,8 +1072,15 @@ async function advanceDurableEval<
   Output,
   Expected,
   Metadata extends BaseMetadata,
+  Parameters extends EvalParameters,
 >(
-  definition: DurableEvalRuntimeDefinition<Input, Output, Expected, Metadata>,
+  definition: DurableEvalRuntimeDefinition<
+    Input,
+    Output,
+    Expected,
+    Metadata,
+    Parameters
+  >,
   state: DurableRunState,
   store: DurableEvalStore,
   key: string,
@@ -1038,7 +1135,7 @@ async function advanceDurableEval<
 }
 
 function currentStatus(
-  definition: DurableEvalRuntimeDefinition<any, any, any, any>,
+  definition: DurableEvalRuntimeDefinition<any, any, any, any, any>,
   state: DurableRunState,
 ): DurableEvalResult {
   if (state.status === "completed") {
@@ -1064,7 +1161,7 @@ function currentStatus(
 }
 
 async function startCaseRoot(
-  definition: DurableEvalRuntimeDefinition<any, any, any, any>,
+  definition: DurableEvalRuntimeDefinition<any, any, any, any, any>,
   state: DurableRunState,
   record: DurableCaseRecord,
   experiment: Experiment | null,
@@ -1090,11 +1187,11 @@ async function startCaseRoot(
 }
 
 async function logTaskResult(
-  definition: DurableEvalRuntimeDefinition<any, any, any, any>,
+  definition: DurableEvalRuntimeDefinition<any, any, any, any, any>,
   state: DurableRunState,
   record: DurableCaseRecord,
   experiment: Experiment | null,
-  task?: EvalTask<any, any, any, any>,
+  task?: EvalTask<any, any, any, any, any>,
 ) {
   const datum = record.datum as EvalCase<unknown, unknown, BaseMetadata>;
   const root = await startCaseRoot(definition, state, record, experiment);
@@ -1102,7 +1199,13 @@ async function logTaskResult(
     if (task) {
       const result = await root.traced(
         (span) =>
-          _internalRunEvaluatorTask(task, datum, record.trialIndex, span),
+          _internalRunEvaluatorTask(
+            task,
+            datum,
+            record.trialIndex,
+            taskParameters(definition, state),
+            span,
+          ),
         {
           name: "task",
           spanId: deterministicId(`${state.runId}:${record.id}:task`),
@@ -1149,7 +1252,7 @@ async function logTaskResult(
 }
 
 async function logCompletedTasks(
-  definition: DurableEvalRuntimeDefinition<any, any, any, any>,
+  definition: DurableEvalRuntimeDefinition<any, any, any, any, any>,
   state: DurableRunState,
   store: DurableEvalStore,
   key: string,
@@ -1173,8 +1276,15 @@ async function runTaskStage<
   Output,
   Expected,
   Metadata extends BaseMetadata,
+  Parameters extends EvalParameters,
 >(
-  definition: DurableEvalRuntimeDefinition<Input, Output, Expected, Metadata>,
+  definition: DurableEvalRuntimeDefinition<
+    Input,
+    Output,
+    Expected,
+    Metadata,
+    Parameters
+  >,
   state: DurableRunState,
   store: DurableEvalStore,
   key: string,
@@ -1189,7 +1299,8 @@ async function runTaskStage<
     Input,
     Output,
     Expected,
-    Metadata
+    Metadata,
+    Parameters
   >;
   const changed: DurableCaseRecord[] = [];
   for (const record of state.cases) {
@@ -1209,8 +1320,15 @@ async function runScoreStages<
   Output,
   Expected,
   Metadata extends BaseMetadata,
+  Parameters extends EvalParameters,
 >(
-  definition: DurableEvalRuntimeDefinition<Input, Output, Expected, Metadata>,
+  definition: DurableEvalRuntimeDefinition<
+    Input,
+    Output,
+    Expected,
+    Metadata,
+    Parameters
+  >,
   state: DurableRunState,
   store: DurableEvalStore,
   key: string,
@@ -1296,7 +1414,7 @@ function scorerArgs(record: DurableCaseRecord) {
 }
 
 function resumeCaseRoot(
-  definition: DurableEvalRuntimeDefinition<any, any, any, any>,
+  definition: DurableEvalRuntimeDefinition<any, any, any, any, any>,
   record: DurableCaseRecord,
   experiment: Experiment | null,
 ) {
@@ -1311,7 +1429,7 @@ function resumeCaseRoot(
 }
 
 async function evaluateAndLogScore(
-  definition: DurableEvalRuntimeDefinition<any, any, any, any>,
+  definition: DurableEvalRuntimeDefinition<any, any, any, any, any>,
   state: DurableRunState,
   record: DurableCaseRecord,
   name: string,
@@ -1361,7 +1479,7 @@ async function evaluateAndLogScore(
 }
 
 async function evaluateAndLogClassification(
-  definition: DurableEvalRuntimeDefinition<any, any, any, any>,
+  definition: DurableEvalRuntimeDefinition<any, any, any, any, any>,
   state: DurableRunState,
   record: DurableCaseRecord,
   name: string,
@@ -1410,7 +1528,7 @@ async function evaluateAndLogClassification(
 }
 
 async function ensureBatches(
-  definition: DurableEvalRuntimeDefinition<any, any, any, any>,
+  definition: DurableEvalRuntimeDefinition<any, any, any, any, any>,
   state: DurableRunState,
   store: DurableEvalStore,
   key: string,
@@ -1441,8 +1559,11 @@ async function ensureBatches(
     );
     if (!claim.created) continue;
     const context = { runId: state.runId, batchId };
+    const parameters = kind === "task" ? taskParameters(definition, state) : {};
     const items = records.map((record) =>
-      kind === "task" ? taskBatchItem(record) : scorerBatchItem(record),
+      kind === "task"
+        ? taskBatchItem(record, parameters)
+        : scorerBatchItem(record),
     );
     const submissionData = assertJsonValue(
       await processor.submit(items, context),
@@ -1470,7 +1591,7 @@ async function ensureBatches(
 }
 
 async function collectBatch(
-  definition: DurableEvalRuntimeDefinition<any, any, any, any>,
+  definition: DurableEvalRuntimeDefinition<any, any, any, any, any>,
   state: DurableRunState,
   batch: DurableBatchRecord,
 ) {
@@ -1528,7 +1649,7 @@ async function collectBatch(
 }
 
 function processorForStage(
-  definition: DurableEvalRuntimeDefinition<any, any, any, any>,
+  definition: DurableEvalRuntimeDefinition<any, any, any, any, any>,
   kind: "task" | "score",
   scorerName?: string,
 ): DurableBatchProcessor<any, any, JsonValue> {
@@ -1556,9 +1677,16 @@ async function materializeCases<
   Output,
   Expected,
   Metadata extends BaseMetadata,
+  Parameters extends EvalParameters,
 >(
-  definition: DurableEvalRuntimeDefinition<Input, Output, Expected, Metadata>,
-  data: Evaluator<Input, Output, Expected, Metadata>["data"],
+  definition: DurableEvalRuntimeDefinition<
+    Input,
+    Output,
+    Expected,
+    Metadata,
+    Parameters
+  >,
+  data: Evaluator<Input, Output, Expected, Metadata, Parameters>["data"],
   experiment: Experiment | null,
 ): Promise<DurableCaseRecord[]> {
   const evaluator = definition.evaluator;
@@ -1615,7 +1743,31 @@ async function materializeCases<
   return records;
 }
 
-function taskBatchItem(record: DurableCaseRecord) {
+function taskParameters(
+  definition: DurableEvalRuntimeDefinition<any, any, any, any, any>,
+  state: DurableRunState,
+): Record<string, unknown> {
+  return Object.fromEntries(
+    Object.entries(state.parameters as Record<string, unknown>).map(
+      ([name, value]) => {
+        const schema = definition.evaluator.parameters?.[name];
+        if (schema && "type" in schema && schema.type === "prompt") {
+          const prompt = value as SerializedPrompt;
+          return [
+            name,
+            new Prompt(prompt.metadata, prompt.defaults, prompt.noTrace),
+          ];
+        }
+        return [name, value];
+      },
+    ),
+  );
+}
+
+function taskBatchItem(
+  record: DurableCaseRecord,
+  parameters: Record<string, unknown>,
+) {
   const datum = record.datum as EvalCase<unknown, unknown, BaseMetadata>;
   return {
     id: record.id,
@@ -1623,6 +1775,7 @@ function taskBatchItem(record: DurableCaseRecord) {
     expected: "expected" in datum ? datum.expected : undefined,
     metadata: record.metadata,
     tags: record.tags,
+    parameters,
     trialIndex: record.trialIndex,
   };
 }
@@ -1641,7 +1794,7 @@ function scorerBatchItem(record: DurableCaseRecord) {
 }
 
 async function finishExperiment(
-  definition: DurableEvalRuntimeDefinition<any, any, any, any>,
+  definition: DurableEvalRuntimeDefinition<any, any, any, any, any>,
   state: DurableRunState,
   experiment: Experiment | null,
 ) {
@@ -1774,7 +1927,7 @@ type DurableBatchPlan = Omit<
 >;
 
 function plannedBatches(
-  definition: DurableEvalRuntimeDefinition<any, any, any, any>,
+  definition: DurableEvalRuntimeDefinition<any, any, any, any, any>,
   runId: string,
   caseIds: string[],
 ) {
@@ -1813,7 +1966,7 @@ function plannedBatches(
 }
 
 async function readCaseRecord(
-  definition: DurableEvalRuntimeDefinition<any, any, any, any>,
+  definition: DurableEvalRuntimeDefinition<any, any, any, any, any>,
   store: DurableEvalStore,
   key: string,
   id: string,
@@ -1904,7 +2057,7 @@ async function readCaseRecord(
 }
 
 async function readRunState(
-  definition: DurableEvalRuntimeDefinition<any, any, any, any>,
+  definition: DurableEvalRuntimeDefinition<any, any, any, any, any>,
   store: DurableEvalStore,
   key: string,
 ) {
@@ -2096,7 +2249,7 @@ function resultItemId(value: unknown) {
 
 function isBatchTask(
   value: unknown,
-): value is DurableBatchTask<any, any, any, any, JsonValue> {
+): value is DurableBatchTask<any, any, any, any, any, JsonValue> {
   return (
     typeof value === "object" &&
     value !== null &&
