@@ -6,7 +6,7 @@ import type {
   ServerResponse,
 } from "node:http";
 import type { AddressInfo } from "node:net";
-import { setTimeout as sleep } from "node:timers/promises";
+import { setTimeout } from "node:timers/promises";
 import type { ProdForwarding } from "./prod-forwarding";
 
 export type JsonValue =
@@ -291,7 +291,7 @@ export async function startMockBraintrustServer(
   >();
   let serverUrl = "";
   let xactCursor = 0;
-  const pendingProdForwarding = new Set<Promise<void>>();
+  let prodForwardingTail = Promise.resolve();
 
   if (prodForwarding) {
     projectsByName.set(prodForwarding.projectName, {
@@ -403,17 +403,15 @@ export async function startMockBraintrustServer(
     );
   }
 
-  function trackProdForwarding(context: string, promise: Promise<void>): void {
-    pendingProdForwarding.add(promise);
-    void promise.then(
-      () => {
-        pendingProdForwarding.delete(promise);
-      },
-      (error) => {
-        recordProdForwardingError(context, error);
-        pendingProdForwarding.delete(promise);
-      },
-    );
+  function trackProdForwarding(
+    context: string,
+    send: () => Promise<void>,
+  ): void {
+    // A later upsert can overwrite an earlier merge. Acknowledge the local
+    // request promptly, but preserve ingestion order when forwarding upstream.
+    prodForwardingTail = prodForwardingTail.then(send).catch((error) => {
+      recordProdForwardingError(context, error);
+    });
   }
 
   function requestForProdForwarding(
@@ -473,41 +471,46 @@ export async function startMockBraintrustServer(
     }
     headers.set("authorization", `Bearer ${prodForwarding.apiKey}`);
 
-    // Log rows have stable IDs, so retrying an upload does not duplicate spans.
-    // Keep registration and other requests single-attempt.
-    const maxAttempts = prodRequest.path === "/logs3" ? 4 : 1;
-    for (let attempt = 1; ; attempt++) {
-      const response = await fetch(url, {
-        body:
-          prodRequest.method === "GET" || prodRequest.method === "HEAD"
-            ? undefined
-            : prodRequest.rawBody,
-        headers,
-        method: prodRequest.method,
-      });
-
-      if (!response.ok) {
-        const responseText = await response.text().catch(() => "");
-        if (
-          attempt < maxAttempts &&
-          [502, 503, 504].includes(response.status)
-        ) {
-          await sleep(500 * 2 ** (attempt - 1));
-          continue;
-        }
-        throw new Error(
-          `prodForwarding failed for ${capturedRequest.method} ${capturedRequest.path}: ${response.status} ${response.statusText}${
-            responseText ? `: ${responseText.slice(0, 500)}` : ""
-          }`,
-        );
-      }
-
-      if (options.drainResponseBody) {
-        await response.arrayBuffer();
-      }
-
-      return response;
+    const requestInit = {
+      body:
+        prodRequest.method === "GET" || prodRequest.method === "HEAD"
+          ? undefined
+          : prodRequest.rawBody,
+      headers,
+      method: prodRequest.method,
+    };
+    // Retry ingestion inside the forwarding queue so later merges cannot
+    // overtake the initial upsert. Registration requests remain single-attempt.
+    const maxAttempts =
+      prodRequest.method === "POST" &&
+      ["/logs3", "/otel/v1/traces"].includes(prodRequest.path)
+        ? 3
+        : 1;
+    let response = await fetch(url, requestInit);
+    for (
+      let attempt = 1;
+      attempt < maxAttempts && [500, 502, 503, 504].includes(response.status);
+      attempt++
+    ) {
+      await response.arrayBuffer().catch(() => {});
+      await setTimeout(500 * 2 ** (attempt - 1));
+      response = await fetch(url, requestInit);
     }
+
+    if (!response.ok) {
+      const responseText = await response.text().catch(() => "");
+      throw new Error(
+        `prodForwarding failed for ${capturedRequest.method} ${capturedRequest.path}: ${response.status} ${response.statusText}${
+          responseText ? `: ${responseText.slice(0, 500)}` : ""
+        }`,
+      );
+    }
+
+    if (options.drainResponseBody) {
+      await response.arrayBuffer();
+    }
+
+    return response;
   }
 
   const server = createServer((req, res) => {
@@ -747,8 +750,7 @@ export async function startMockBraintrustServer(
             persistPayload(payload);
           }
           if (prodForwarding) {
-            trackProdForwarding(
-              "POST /logs3",
+            trackProdForwarding("POST /logs3", () =>
               forwardProdRequest(capturedRequest, {
                 drainResponseBody: true,
               }).then(() => undefined),
@@ -763,8 +765,7 @@ export async function startMockBraintrustServer(
           capturedRequest.path === "/otel/v1/traces"
         ) {
           if (prodForwarding) {
-            trackProdForwarding(
-              "POST /otel/v1/traces",
+            trackProdForwarding("POST /otel/v1/traces", () =>
               forwardProdRequest(capturedRequest, {
                 drainResponseBody: true,
               }).then(() => undefined),
@@ -798,9 +799,7 @@ export async function startMockBraintrustServer(
       await new Promise<void>((resolve, reject) => {
         server.close((error) => (error ? reject(error) : resolve()));
       });
-      while (pendingProdForwarding.size > 0) {
-        await Promise.allSettled([...pendingProdForwarding]);
-      }
+      await prodForwardingTail;
       if (prodForwardingErrors.length > 0) {
         throw new Error(
           [

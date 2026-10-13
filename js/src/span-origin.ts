@@ -24,6 +24,7 @@ export const INSTRUMENTATION_NAMES = {
   GENKIT: "genkit",
   GITHUB_COPILOT: "github-copilot",
   GOOGLE_ADK: "google-adk",
+  GOOGLE_GENERATIVE_AI: "google-generative-ai",
   GOOGLE_GENAI: "google-genai",
   GROQ: "groq",
   HUGGINGFACE: "huggingface",
@@ -31,6 +32,7 @@ export const INSTRUMENTATION_NAMES = {
   LANGSMITH: "langsmith",
   MASTRA: "mastra",
   MISTRAL: "mistral",
+  LANGGRAPH_SDK: "langgraph-sdk",
   OLLAMA: "ollama",
   OPENAI: "openai",
   OPENAI_AGENTS: "openai-agents",
@@ -39,7 +41,10 @@ export const INSTRUMENTATION_NAMES = {
   OPENROUTER_AGENT: "openrouter-agent",
   PI_CODING_AGENT: "pi-coding-agent",
   STRANDS_AGENT_SDK: "strands-agent-sdk",
+  TEMPORAL: "temporal",
+  TYPESAFE: "typesafe",
   VOYAGEAI: "voyageai",
+  ELEVENLABS: "elevenlabs",
 } as const;
 
 export type SpanInstrumentationName =

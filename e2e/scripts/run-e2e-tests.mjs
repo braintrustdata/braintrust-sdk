@@ -18,7 +18,27 @@ const DEFAULT_OPENAI_CODEX_E2E_MODEL = "gpt-5.3-codex";
 
 const rawArgs = process.argv.slice(2).filter((arg) => arg !== "--");
 const updateSnapshots = rawArgs.includes("--update");
-const scenarioArgs = rawArgs.filter((arg) => arg !== "--update");
+const shardArgIndex = rawArgs.findIndex(
+  (arg) => arg === "--shard" || arg.startsWith("--shard="),
+);
+const shardArg = rawArgs[shardArgIndex];
+const shardValue =
+  shardArgIndex === -1
+    ? null
+    : shardArg === "--shard"
+      ? rawArgs[shardArgIndex + 1]
+      : shardArg.slice("--shard=".length);
+if (shardArgIndex !== -1 && !shardValue) {
+  console.error("[e2e] --shard requires a value in the form <index>/<count>.");
+  process.exit(1);
+}
+const shardArgs = shardValue ? [`--shard=${shardValue}`] : [];
+const scenarioArgs = rawArgs.filter(
+  (arg, index) =>
+    arg !== "--update" &&
+    index !== shardArgIndex &&
+    !(shardArg === "--shard" && index === shardArgIndex + 1),
+);
 const testTargets =
   scenarioArgs.length > 0
     ? scenarioArgs.map((arg) => scenarioPathArg(arg))
@@ -27,6 +47,7 @@ const vitestArgs = [
   "run",
   "--run",
   ...testTargets,
+  ...shardArgs,
   ...(updateSnapshots ? ["--update"] : []),
 ];
 const result = await runProcess(VITEST_COMMAND, vitestArgs, {
@@ -45,26 +66,37 @@ function scenarioPathArg(arg) {
     return arg;
   }
 
-  const scenarioPath = path.join(E2E_DIR, "scenarios", arg, "scenario.test.ts");
-  return existsSync(scenarioPath) ? `scenarios/${arg}/scenario.test.ts` : arg;
+  const scenarioDir = path.join(E2E_DIR, "scenarios", arg);
+  return existsSync(path.join(scenarioDir, "scenario.test.ts"))
+    ? `scenarios/${arg}/`
+    : arg;
 }
 
 async function defaultScenarioTestPaths() {
   const entries = await readdir(path.join(E2E_DIR, "scenarios"), {
     withFileTypes: true,
   });
-  const scenarioPaths = entries
+  const scenarioDirs = entries
     .filter((entry) => entry.isDirectory() && !entry.name.startsWith("."))
-    .map((entry) => `scenarios/${entry.name}/scenario.test.ts`)
-    .filter((scenarioPath) => existsSync(path.join(E2E_DIR, scenarioPath)))
+    .map((entry) => `scenarios/${entry.name}`);
+  const testPaths = (
+    await Promise.all(
+      [...scenarioDirs, "helpers"].map(async (dir) =>
+        (await readdir(path.join(E2E_DIR, dir)))
+          .filter((name) => name.endsWith(".test.ts"))
+          .map((name) => `${dir}/${name}`),
+      ),
+    )
+  )
+    .flat()
     .sort();
 
-  if (scenarioPaths.length === 0) {
+  if (testPaths.length === 0) {
     console.error("[e2e] No scenario test files found.");
     process.exit(1);
   }
 
-  return scenarioPaths;
+  return testPaths;
 }
 
 function replayEnv() {

@@ -26,6 +26,7 @@ vi.mock("../../isomorph", async (importOriginal) => {
 });
 
 vi.mock("../../logger", () => ({
+  withCurrent: (_span: unknown, callback: () => unknown) => callback(),
   startSpan: (...args: unknown[]) => mockStartSpan(...args),
   _internalStartSpan: (...args: unknown[]) => mockStartSpan(...args),
 }));

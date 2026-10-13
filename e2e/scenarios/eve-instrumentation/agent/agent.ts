@@ -17,16 +17,21 @@ const dynamicModel = withReadableReasoning(
   }),
 );
 
+const providerInstrumentation =
+  process.env.EVE_INSTRUMENTATION_PROVIDER === "1";
+
 export default defineAgent({
-  experimental: {
-    instrumentationProviders: true,
-  },
+  ...(process.env.EVE_EXPERIMENTAL_INSTRUMENTATION_PROVIDERS === "1"
+    ? { experimental: { instrumentationProviders: true } }
+    : {}),
   model: defineDynamic({
+    ...(providerInstrumentation ? {} : { fallback: dynamicModel }),
     events: {
-      "step.started": () => ({
-        model: dynamicModel,
-        modelContextWindowTokens: 8_192,
-      }),
+      "step.started": () =>
+        providerInstrumentation
+          ? { model: dynamicModel, modelContextWindowTokens: 32_768 }
+          : dynamicModel,
     },
-  }),
-});
+  } as never),
+  ...(providerInstrumentation ? {} : { modelContextWindowTokens: 32_768 }),
+} as never);

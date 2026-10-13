@@ -1,8 +1,29 @@
+export type SpanExportData = Record<string, unknown>;
+
+export interface SpanCustomizer {
+  /**
+   * Customize each outgoing native SDK span record, including manual, instrumented,
+   * logger, and experiment spans, after lazy values resolve and before JSON
+   * serialization. Records are incremental and may not contain every span field.
+   * Dataset rows and feedback records are not customized.
+   *
+   * Callbacks are synchronous. Add, change, or delete payload fields, then return
+   * the record or a replacement plain object. Payloads may still contain SDK
+   * Attachment objects; attachment processing and serialization happen later.
+   * Throwing or returning an invalid value (including a promise) logs a safe
+   * error, stops the callback chain, and drops this outgoing record. Later
+   * records are evaluated independently; already exported records cannot be
+   * retracted. Handle recovery inside the callback if export should continue.
+   */
+  onSpanExport?(data: SpanExportData): SpanExportData;
+}
+
 export interface InstrumentationIntegrationsConfig {
   openai?: boolean;
   anthropic?: boolean;
   aisdk?: boolean;
   googleGenAI?: boolean;
+  googleGenerativeAI?: boolean;
   googleADK?: boolean;
   huggingface?: boolean;
   claudeAgentSDK?: boolean;
@@ -26,8 +47,11 @@ export interface InstrumentationIntegrationsConfig {
   cloudflareAgents?: boolean;
   langchain?: boolean;
   langgraph?: boolean;
+  langgraphSDK?: boolean;
   langsmith?: boolean;
   voyageai?: boolean;
+  typesafe?: boolean;
+  elevenlabs?: boolean;
 }
 
 export interface InstrumentationConfig {
@@ -36,6 +60,15 @@ export interface InstrumentationConfig {
    * Set to false to disable instrumentation for that SDK.
    */
   integrations?: InstrumentationIntegrationsConfig;
+
+  /**
+   * Customizers for all native SDK spans, in callback execution order.
+   * Configure before initializing the SDK or enabling instrumentation.
+   * Not yet supported with OpenTelemetry compat mode; registering a non-empty
+   * list while compat mode is active logs an error and leaves the previous
+   * registration unchanged. Clearing customizers is always allowed and silent.
+   */
+  spanCustomizers?: readonly SpanCustomizer[];
 }
 
 const envIntegrationAliases: Record<
@@ -80,6 +113,8 @@ const envIntegrationAliases: Record<
   "openai-agents-core": "openAIAgents",
   openaiagentscore: "openAIAgents",
   google: "googleGenAI",
+  "google-generative-ai": "googleGenerativeAI",
+  googlegenerativeai: "googleGenerativeAI",
   "google-genai": "googleGenAI",
   googlegenai: "googleGenAI",
   huggingface: "huggingface",
@@ -110,10 +145,18 @@ const envIntegrationAliases: Record<
   "langchain-js": "langchain",
   "@langchain": "langchain",
   langgraph: "langgraph",
+  langgraphsdk: "langgraphSDK",
+  "langgraph-sdk": "langgraphSDK",
+  "@langchain/langgraph-sdk": "langgraphSDK",
   langsmith: "langsmith",
   voyage: "voyageai",
   "voyage-ai": "voyageai",
   voyageai: "voyageai",
+  typesafe: "typesafe",
+  "typesafe-ai": "typesafe",
+  "@typesafe-ai/sdk": "typesafe",
+  elevenlabs: "elevenlabs",
+  "@elevenlabs/elevenlabs-js": "elevenlabs",
 };
 
 export function getDefaultInstrumentationIntegrations(): Record<
@@ -126,6 +169,7 @@ export function getDefaultInstrumentationIntegrations(): Record<
     anthropic: true,
     aisdk: true,
     googleGenAI: true,
+    googleGenerativeAI: true,
     googleADK: true,
     huggingface: true,
     claudeAgentSDK: true,
@@ -145,8 +189,11 @@ export function getDefaultInstrumentationIntegrations(): Record<
     gitHubCopilot: true,
     langchain: true,
     langgraph: true,
+    langgraphSDK: true,
     langsmith: true,
     voyageai: true,
+    typesafe: true,
+    elevenlabs: true,
     piCodingAgent: true,
     strandsAgentSDK: true,
     cloudflareAgents: true,

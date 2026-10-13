@@ -129,6 +129,91 @@ describe("BraintrustLangChainCallbackHandler metrics", () => {
     });
   });
 
+  it.each([
+    {
+      name: "TTL buckets without an aggregate",
+      details: {
+        cache_creation: undefined,
+        ephemeral_5m_input_tokens: 4,
+        ephemeral_1h_input_tokens: 0,
+      },
+      expected: {
+        prompt_cache_creation_5m_tokens: 4,
+        prompt_cache_creation_1h_tokens: 0,
+      },
+    },
+    {
+      name: "both TTL buckets",
+      details: { ephemeral_5m_input_tokens: 4, ephemeral_1h_input_tokens: 6 },
+      expected: {
+        prompt_cache_creation_5m_tokens: 4,
+        prompt_cache_creation_1h_tokens: 6,
+      },
+    },
+    {
+      name: "a zero-valued TTL bucket",
+      details: { ephemeral_5m_input_tokens: 4, ephemeral_1h_input_tokens: 0 },
+      expected: {
+        prompt_cache_creation_5m_tokens: 4,
+        prompt_cache_creation_1h_tokens: 0,
+      },
+    },
+    {
+      name: "only the 5-minute bucket",
+      details: { ephemeral_5m_input_tokens: 4 },
+      expected: { prompt_cache_creation_5m_tokens: 4 },
+    },
+    {
+      name: "only the 1-hour bucket",
+      details: { ephemeral_1h_input_tokens: 6 },
+      expected: { prompt_cache_creation_1h_tokens: 6 },
+    },
+    {
+      name: "only a zero-valued bucket",
+      details: { ephemeral_1h_input_tokens: 0 },
+      expected: { prompt_cache_creation_1h_tokens: 0 },
+    },
+    {
+      name: "null TTL buckets",
+      details: {
+        ephemeral_5m_input_tokens: null,
+        ephemeral_1h_input_tokens: null,
+      },
+      expected: { prompt_cache_creation_tokens: 10 },
+    },
+  ])(
+    "preserves cache creation metrics with $name",
+    async ({ details, expected }) => {
+      const { endLog } = await finishChatModelRun({
+        generations: [
+          [
+            {
+              message: {
+                usage_metadata: {
+                  input_tokens: 20,
+                  output_tokens: 2,
+                  input_token_details: {
+                    cache_creation: 10,
+                    cache_read: 3,
+                    ...details,
+                  },
+                },
+              },
+            },
+          ],
+        ],
+      });
+
+      expect(endLog.metrics).toEqual({
+        prompt_tokens: 20,
+        completion_tokens: 2,
+        prompt_cached_tokens: 3,
+        tokens: 22,
+        ...expected,
+      });
+    },
+  );
+
   it("preserves reasoning metrics from message usage metadata", async () => {
     const { endLog } = await finishChatModelRun({
       generations: [
@@ -190,4 +275,132 @@ describe("BraintrustLangChainCallbackHandler metrics", () => {
       tokens: 14,
     });
   });
+});
+
+describe("BraintrustLangChainCallbackHandler model attribution", () => {
+  it.each(["handleChatModelStart", "handleLLMStart"] as const)(
+    "%s records the invocation model before completion and preserves it when the response omits it",
+    async (startMethod) => {
+      for (const invocationParams of [
+        { model: "requested-model" },
+        { model_name: "requested-model" },
+      ]) {
+        const { handler, logs, parent } = createHarness();
+        await handler[startMethod]({ name: "LLM" }, [], "run-1", undefined, {
+          invocation_params: invocationParams,
+        });
+        expect(parent.startSpan).toHaveBeenCalledWith(
+          expect.objectContaining({
+            event: expect.objectContaining({
+              metadata: expect.objectContaining({ model: "requested-model" }),
+            }),
+          }),
+        );
+        await handler.handleLLMEnd({}, "run-1");
+        expect(logs.at(-1)).not.toHaveProperty("metadata.model");
+      }
+    },
+  );
+
+  it.each([
+    {
+      generations: [
+        [{ message: { response_metadata: { model: "resolved-model" } } }],
+      ],
+    },
+    { llmOutput: { model_name: "resolved-model" } },
+    {
+      generations: [
+        [{ message: { additional_kwargs: { model: "resolved-model" } } }],
+      ],
+    },
+    {
+      generations: [
+        [
+          {
+            message: {
+              response_metadata: { model_provider: "anthropic" },
+              additional_kwargs: { model: "resolved-model" },
+            },
+          },
+        ],
+      ],
+    },
+    {
+      generations: [
+        [
+          {
+            message: {
+              response_metadata: { model: "resolved-model" },
+              additional_kwargs: { model: "other-model" },
+            },
+          },
+        ],
+      ],
+    },
+  ])(
+    "prefers the response model over the requested model",
+    async (response) => {
+      const { handler, logs } = createHarness();
+      await handler.handleChatModelStart(
+        { name: "LLM" },
+        [],
+        "run-1",
+        undefined,
+        {
+          invocation_params: { model: "requested-model" },
+        },
+      );
+      await handler.handleLLMEnd(response, "run-1");
+      expect(logs.at(-1)).toMatchObject({
+        metadata: { model: "resolved-model" },
+      });
+    },
+  );
+
+  it.each(["handleChatModelStart", "handleLLMStart"] as const)(
+    "%s preserves the invocation model when the call fails",
+    async (startMethod) => {
+      const { handler, logs, parent } = createHarness();
+      await handler[startMethod]({ name: "LLM" }, [], "run-1", undefined, {
+        invocation_params: { model: "requested-model" },
+      });
+      expect(parent.startSpan).toHaveBeenCalledWith(
+        expect.objectContaining({
+          event: expect.objectContaining({
+            metadata: expect.objectContaining({ model: "requested-model" }),
+          }),
+        }),
+      );
+      const error = new Error("provider failed");
+      await handler.handleLLMError(error, "run-1");
+      expect(logs.at(-1)).toMatchObject({ error });
+      expect(logs.at(-1)).not.toHaveProperty("metadata.model");
+    },
+  );
+
+  it.each([undefined, null, "invalid", {}, { model: 42 }, { model: null }])(
+    "does not invent a model from invalid invocation parameters (%j)",
+    async (invocationParams) => {
+      const { handler, logs, parent } = createHarness();
+      await handler.handleChatModelStart(
+        { name: "LLM" },
+        [],
+        "run-1",
+        undefined,
+        {
+          invocation_params: invocationParams,
+        },
+      );
+      expect(parent.startSpan).toHaveBeenCalledWith(
+        expect.objectContaining({
+          event: expect.objectContaining({
+            metadata: expect.objectContaining({ model: undefined }),
+          }),
+        }),
+      );
+      await handler.handleLLMEnd({}, "run-1");
+      expect(logs.at(-1)).not.toHaveProperty("metadata.model");
+    },
+  );
 });

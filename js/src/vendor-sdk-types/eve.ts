@@ -10,7 +10,7 @@ export type EveJsonValue =
   | boolean
   | number
   | string
-  | EveJsonValue[]
+  | readonly EveJsonValue[]
   | { readonly [key: string]: EveJsonValue };
 
 export interface EveInstrumentationState {

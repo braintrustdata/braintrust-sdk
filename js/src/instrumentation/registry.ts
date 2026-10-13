@@ -13,6 +13,7 @@ import {
   type InstrumentationConfig,
 } from "./config";
 import { GLOBAL_INSTRUMENTATION_HOOKS_PROTOCOL_VERSION } from "../global-instrumentation-hooks";
+import { setSpanCustomizers } from "../span-customizer";
 
 export type { InstrumentationConfig } from "./config";
 
@@ -59,6 +60,9 @@ class InstrumentationRegistry {
           "Call configureInstrumentation() before importing any AI SDKs.",
       );
       return;
+    }
+    if ("spanCustomizers" in config) {
+      setSpanCustomizers(config.spanCustomizers);
     }
     this.config = { ...this.config, ...config };
   }

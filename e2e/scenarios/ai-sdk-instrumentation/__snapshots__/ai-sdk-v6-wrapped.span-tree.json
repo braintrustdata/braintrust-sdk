@@ -5,6 +5,394 @@
       "type": "task",
       "children": [
         {
+          "name": "ai-sdk-direct-model-generate-operation",
+          "children": [
+            {
+              "name": "doGenerate",
+              "type": "llm",
+              "children": [],
+              "input": {
+                "maxOutputTokens": 24,
+                "prompt": [
+                  {
+                    "content": [
+                      {
+                        "text": "Reply with the single token PARIS and no punctuation.",
+                        "type": "text"
+                      }
+                    ],
+                    "role": "user"
+                  }
+                ],
+                "temperature": 0
+              },
+              "output": {
+                "content": [
+                  {
+                    "providerMetadata": {
+                      "openai": {
+                        "itemId": "<itemId:2>"
+                      }
+                    },
+                    "text": "PARIS",
+                    "type": "text"
+                  }
+                ],
+                "finishReason": {
+                  "unified": "stop"
+                },
+                "providerMetadata": {
+                  "openai": {
+                    "responseId": "<responseId:1>",
+                    "serviceTier": "default"
+                  }
+                },
+                "response": {
+                  "body": "<omitted>",
+                  "modelId": "gpt-4o-mini-2024-07-18",
+                  "timestamp": "<timestamp>"
+                },
+                "usage": {
+                  "inputTokens": {
+                    "cacheRead": 0,
+                    "noCache": 18,
+                    "total": 18
+                  },
+                  "outputTokens": {
+                    "reasoning": 0,
+                    "text": 3,
+                    "total": 3
+                  },
+                  "raw": {
+                    "input_tokens": 18,
+                    "input_tokens_details": {
+                      "cached_tokens": 0
+                    },
+                    "output_tokens": 3,
+                    "output_tokens_details": {
+                      "reasoning_tokens": 0
+                    }
+                  }
+                },
+                "warnings": []
+              },
+              "metadata": {
+                "braintrust": {
+                  "integration_name": "ai-sdk",
+                  "sdk_language": "typescript"
+                },
+                "finish_reason": {
+                  "unified": "stop"
+                },
+                "model": "gpt-4o-mini-2024-07-18",
+                "provider": "openai.responses"
+              },
+              "metrics": {
+                "completion_reasoning_tokens": 0,
+                "completion_tokens": 3,
+                "prompt_cached_tokens": 0,
+                "prompt_tokens": 18,
+                "reasoning_tokens": 0,
+                "tokens": 21
+              }
+            }
+          ],
+          "metadata": {
+            "operation": "direct-model-generate",
+            "testRunId": "<run:1>"
+          }
+        },
+        {
+          "name": "ai-sdk-wrapped-model-generate-operation",
+          "children": [
+            {
+              "name": "generateText",
+              "type": "function",
+              "children": [
+                {
+                  "name": "doGenerate",
+                  "type": "llm",
+                  "children": [],
+                  "input": {
+                    "maxOutputTokens": 24,
+                    "prompt": [
+                      {
+                        "content": [
+                          {
+                            "text": "Reply with the single token PARIS and no punctuation.",
+                            "type": "text"
+                          }
+                        ],
+                        "role": "user"
+                      }
+                    ],
+                    "temperature": 0
+                  },
+                  "output": {
+                    "content": [
+                      {
+                        "providerMetadata": {
+                          "openai": {
+                            "itemId": "<itemId:2>"
+                          }
+                        },
+                        "text": "PARIS",
+                        "type": "text"
+                      }
+                    ],
+                    "finishReason": {
+                      "unified": "stop"
+                    },
+                    "providerMetadata": {
+                      "openai": {
+                        "responseId": "<responseId:1>",
+                        "serviceTier": "default"
+                      }
+                    },
+                    "response": {
+                      "body": "<omitted>",
+                      "modelId": "gpt-4o-mini-2024-07-18",
+                      "timestamp": "<timestamp>"
+                    },
+                    "usage": {
+                      "inputTokens": {
+                        "cacheRead": 0,
+                        "noCache": 18,
+                        "total": 18
+                      },
+                      "outputTokens": {
+                        "reasoning": 0,
+                        "text": 3,
+                        "total": 3
+                      },
+                      "raw": {
+                        "input_tokens": 18,
+                        "input_tokens_details": {
+                          "cached_tokens": 0
+                        },
+                        "output_tokens": 3,
+                        "output_tokens_details": {
+                          "reasoning_tokens": 0
+                        }
+                      }
+                    },
+                    "warnings": []
+                  },
+                  "metadata": {
+                    "braintrust": {
+                      "integration_name": "ai-sdk",
+                      "sdk_language": "typescript"
+                    },
+                    "finish_reason": {
+                      "unified": "stop"
+                    },
+                    "model": "gpt-4o-mini-2024-07-18",
+                    "provider": "openai.responses"
+                  },
+                  "metrics": {
+                    "completion_reasoning_tokens": 0,
+                    "completion_tokens": 3,
+                    "prompt_cached_tokens": 0,
+                    "prompt_tokens": 18,
+                    "reasoning_tokens": 0,
+                    "tokens": 21
+                  }
+                }
+              ],
+              "input": {
+                "maxOutputTokens": 24,
+                "model": {
+                  "config": {
+                    "fileIdPrefixes": [
+                      "file-"
+                    ],
+                    "provider": "openai.responses"
+                  },
+                  "modelId": "gpt-4o-mini-2024-07-18",
+                  "specificationVersion": "v3",
+                  "supportedUrls": {
+                    "application/pdf": [
+                      {}
+                    ],
+                    "image/*": [
+                      {}
+                    ]
+                  }
+                },
+                "prompt": "Reply with the single token PARIS and no punctuation.",
+                "temperature": 0
+              },
+              "output": {
+                "content": [
+                  {
+                    "providerMetadata": {
+                      "openai": {
+                        "itemId": "<itemId:1>"
+                      }
+                    },
+                    "text": "PARIS",
+                    "type": "text"
+                  }
+                ],
+                "finishReason": "stop",
+                "output": "PARIS",
+                "providerMetadata": {
+                  "openai": {
+                    "responseId": "<responseId:2>",
+                    "serviceTier": "default"
+                  }
+                },
+                "response": {
+                  "body": "<omitted>",
+                  "messages": [
+                    {
+                      "content": [
+                        {
+                          "providerOptions": {
+                            "openai": {
+                              "itemId": "<itemId:1>"
+                            }
+                          },
+                          "text": "PARIS",
+                          "type": "text"
+                        }
+                      ],
+                      "role": "assistant"
+                    }
+                  ],
+                  "modelId": "gpt-4o-mini-2024-07-18",
+                  "timestamp": "<timestamp>"
+                },
+                "steps": [
+                  {
+                    "content": [
+                      {
+                        "providerMetadata": {
+                          "openai": {
+                            "itemId": "<itemId:1>"
+                          }
+                        },
+                        "text": "PARIS",
+                        "type": "text"
+                      }
+                    ],
+                    "finishReason": "stop",
+                    "providerMetadata": {
+                      "openai": {
+                        "responseId": "<responseId:2>",
+                        "serviceTier": "default"
+                      }
+                    },
+                    "response": {
+                      "body": "<omitted>",
+                      "messages": [
+                        {
+                          "content": [
+                            {
+                              "providerOptions": {
+                                "openai": {
+                                  "itemId": "<itemId:1>"
+                                }
+                              },
+                              "text": "PARIS",
+                              "type": "text"
+                            }
+                          ],
+                          "role": "assistant"
+                        }
+                      ],
+                      "modelId": "gpt-4o-mini-2024-07-18",
+                      "timestamp": "<timestamp>"
+                    },
+                    "usage": {
+                      "cachedInputTokens": 0,
+                      "inputTokenDetails": {
+                        "cacheReadTokens": 0,
+                        "noCacheTokens": 18
+                      },
+                      "inputTokens": 18,
+                      "outputTokenDetails": {
+                        "reasoningTokens": 0,
+                        "textTokens": 3
+                      },
+                      "outputTokens": 3,
+                      "raw": {
+                        "input_tokens": 18,
+                        "input_tokens_details": {
+                          "cached_tokens": 0
+                        },
+                        "output_tokens": 3,
+                        "output_tokens_details": {
+                          "reasoning_tokens": 0
+                        }
+                      },
+                      "reasoningTokens": 0,
+                      "totalTokens": 21
+                    },
+                    "warnings": []
+                  }
+                ],
+                "text": "PARIS",
+                "toolCalls": [],
+                "toolResults": [],
+                "totalUsage": {
+                  "cachedInputTokens": 0,
+                  "inputTokenDetails": {
+                    "cacheReadTokens": 0,
+                    "noCacheTokens": 18
+                  },
+                  "inputTokens": 18,
+                  "outputTokenDetails": {
+                    "reasoningTokens": 0,
+                    "textTokens": 3
+                  },
+                  "outputTokens": 3,
+                  "reasoningTokens": 0,
+                  "totalTokens": 21
+                },
+                "usage": {
+                  "cachedInputTokens": 0,
+                  "inputTokenDetails": {
+                    "cacheReadTokens": 0,
+                    "noCacheTokens": 18
+                  },
+                  "inputTokens": 18,
+                  "outputTokenDetails": {
+                    "reasoningTokens": 0,
+                    "textTokens": 3
+                  },
+                  "outputTokens": 3,
+                  "raw": {
+                    "input_tokens": 18,
+                    "input_tokens_details": {
+                      "cached_tokens": 0
+                    },
+                    "output_tokens": 3,
+                    "output_tokens_details": {
+                      "reasoning_tokens": 0
+                    }
+                  },
+                  "reasoningTokens": 0,
+                  "totalTokens": 21
+                },
+                "warnings": []
+              },
+              "metadata": {
+                "braintrust": {
+                  "integration_name": "ai-sdk",
+                  "sdk_language": "typescript"
+                },
+                "model": "gpt-4o-mini-2024-07-18",
+                "provider": "openai.responses"
+              }
+            }
+          ],
+          "metadata": {
+            "operation": "wrapped-model-generate",
+            "testRunId": "<run:1>"
+          }
+        },
+        {
           "name": "ai-sdk-generate-operation",
           "children": [
             {
@@ -978,9 +1366,10 @@
                         "input": "{\"location\":\"Paris, France\"}",
                         "providerMetadata": {
                           "openai": {
-                            "itemId": "<itemId:2>"
+                            "itemId": "<itemId:3>"
                           }
                         },
+                        "toolCallId": "<toolCallId:2>",
                         "toolName": "get_weather",
                         "type": "tool-call"
                       }
@@ -1050,7 +1439,10 @@
                   "input": {
                     "location": "Paris, France"
                   },
-                  "output": "{\"condition\":\"sunny\",\"location\":\"Paris, France\",\"temperatureC\":22}"
+                  "output": "{\"condition\":\"sunny\",\"location\":\"Paris, France\",\"temperatureC\":22}",
+                  "metadata": {
+                    "toolCallId": "<toolCallId:1>"
+                  }
                 },
                 {
                   "name": "doGenerate",
@@ -1080,9 +1472,10 @@
                             },
                             "providerOptions": {
                               "openai": {
-                                "itemId": "<itemId:1>"
+                                "itemId": "<itemId:2>"
                               }
                             },
+                            "toolCallId": "<toolCallId:1>",
                             "toolName": "get_weather",
                             "type": "tool-call"
                           }
@@ -1098,9 +1491,10 @@
                             },
                             "providerOptions": {
                               "openai": {
-                                "itemId": "<itemId:1>"
+                                "itemId": "<itemId:2>"
                               }
                             },
+                            "toolCallId": "<toolCallId:1>",
                             "toolName": "get_weather",
                             "type": "tool-result"
                           }
@@ -1140,9 +1534,10 @@
                         "input": "{\"location\":\"Paris, France\"}",
                         "providerMetadata": {
                           "openai": {
-                            "itemId": "<itemId:2>"
+                            "itemId": "<itemId:3>"
                           }
                         },
+                        "toolCallId": "<toolCallId:2>",
                         "toolName": "get_weather",
                         "type": "tool-call"
                       }
@@ -1212,7 +1607,10 @@
                   "input": {
                     "location": "Paris, France"
                   },
-                  "output": "{\"condition\":\"sunny\",\"location\":\"Paris, France\",\"temperatureC\":22}"
+                  "output": "{\"condition\":\"sunny\",\"location\":\"Paris, France\",\"temperatureC\":22}",
+                  "metadata": {
+                    "toolCallId": "<toolCallId:1>"
+                  }
                 },
                 {
                   "name": "doGenerate",
@@ -1242,9 +1640,10 @@
                             },
                             "providerOptions": {
                               "openai": {
-                                "itemId": "<itemId:1>"
+                                "itemId": "<itemId:2>"
                               }
                             },
+                            "toolCallId": "<toolCallId:1>",
                             "toolName": "get_weather",
                             "type": "tool-call"
                           }
@@ -1260,9 +1659,10 @@
                             },
                             "providerOptions": {
                               "openai": {
-                                "itemId": "<itemId:1>"
+                                "itemId": "<itemId:2>"
                               }
                             },
+                            "toolCallId": "<toolCallId:1>",
                             "toolName": "get_weather",
                             "type": "tool-result"
                           }
@@ -1277,9 +1677,10 @@
                             },
                             "providerOptions": {
                               "openai": {
-                                "itemId": "<itemId:2>"
+                                "itemId": "<itemId:4>"
                               }
                             },
+                            "toolCallId": "<toolCallId:3>",
                             "toolName": "get_weather",
                             "type": "tool-call"
                           }
@@ -1295,9 +1696,10 @@
                             },
                             "providerOptions": {
                               "openai": {
-                                "itemId": "<itemId:2>"
+                                "itemId": "<itemId:4>"
                               }
                             },
+                            "toolCallId": "<toolCallId:3>",
                             "toolName": "get_weather",
                             "type": "tool-result"
                           }
@@ -1337,9 +1739,10 @@
                         "input": "{\"location\":\"Paris, France\"}",
                         "providerMetadata": {
                           "openai": {
-                            "itemId": "<itemId:2>"
+                            "itemId": "<itemId:3>"
                           }
                         },
+                        "toolCallId": "<toolCallId:2>",
                         "toolName": "get_weather",
                         "type": "tool-call"
                       }
@@ -1409,7 +1812,10 @@
                   "input": {
                     "location": "Paris, France"
                   },
-                  "output": "{\"condition\":\"sunny\",\"location\":\"Paris, France\",\"temperatureC\":22}"
+                  "output": "{\"condition\":\"sunny\",\"location\":\"Paris, France\",\"temperatureC\":22}",
+                  "metadata": {
+                    "toolCallId": "<toolCallId:1>"
+                  }
                 },
                 {
                   "name": "doGenerate",
@@ -1439,44 +1845,10 @@
                             },
                             "providerOptions": {
                               "openai": {
-                                "itemId": "<itemId:1>"
-                              }
-                            },
-                            "toolName": "get_weather",
-                            "type": "tool-call"
-                          }
-                        ],
-                        "role": "assistant"
-                      },
-                      {
-                        "content": [
-                          {
-                            "output": {
-                              "type": "text",
-                              "value": "{\"condition\":\"sunny\",\"location\":\"Paris, France\",\"temperatureC\":22}"
-                            },
-                            "providerOptions": {
-                              "openai": {
-                                "itemId": "<itemId:1>"
-                              }
-                            },
-                            "toolName": "get_weather",
-                            "type": "tool-result"
-                          }
-                        ],
-                        "role": "tool"
-                      },
-                      {
-                        "content": [
-                          {
-                            "input": {
-                              "location": "Paris, France"
-                            },
-                            "providerOptions": {
-                              "openai": {
                                 "itemId": "<itemId:2>"
                               }
                             },
+                            "toolCallId": "<toolCallId:1>",
                             "toolName": "get_weather",
                             "type": "tool-call"
                           }
@@ -1495,6 +1867,7 @@
                                 "itemId": "<itemId:2>"
                               }
                             },
+                            "toolCallId": "<toolCallId:1>",
                             "toolName": "get_weather",
                             "type": "tool-result"
                           }
@@ -1509,9 +1882,10 @@
                             },
                             "providerOptions": {
                               "openai": {
-                                "itemId": "<itemId:3>"
+                                "itemId": "<itemId:4>"
                               }
                             },
+                            "toolCallId": "<toolCallId:3>",
                             "toolName": "get_weather",
                             "type": "tool-call"
                           }
@@ -1527,9 +1901,47 @@
                             },
                             "providerOptions": {
                               "openai": {
-                                "itemId": "<itemId:3>"
+                                "itemId": "<itemId:4>"
                               }
                             },
+                            "toolCallId": "<toolCallId:3>",
+                            "toolName": "get_weather",
+                            "type": "tool-result"
+                          }
+                        ],
+                        "role": "tool"
+                      },
+                      {
+                        "content": [
+                          {
+                            "input": {
+                              "location": "Paris, France"
+                            },
+                            "providerOptions": {
+                              "openai": {
+                                "itemId": "<itemId:6>"
+                              }
+                            },
+                            "toolCallId": "<toolCallId:5>",
+                            "toolName": "get_weather",
+                            "type": "tool-call"
+                          }
+                        ],
+                        "role": "assistant"
+                      },
+                      {
+                        "content": [
+                          {
+                            "output": {
+                              "type": "text",
+                              "value": "{\"condition\":\"sunny\",\"location\":\"Paris, France\",\"temperatureC\":22}"
+                            },
+                            "providerOptions": {
+                              "openai": {
+                                "itemId": "<itemId:6>"
+                              }
+                            },
+                            "toolCallId": "<toolCallId:5>",
                             "toolName": "get_weather",
                             "type": "tool-result"
                           }
@@ -1569,9 +1981,10 @@
                         "input": "{\"location\":\"Paris, France\"}",
                         "providerMetadata": {
                           "openai": {
-                            "itemId": "<itemId:2>"
+                            "itemId": "<itemId:3>"
                           }
                         },
+                        "toolCallId": "<toolCallId:2>",
                         "toolName": "get_weather",
                         "type": "tool-call"
                       }
@@ -1641,7 +2054,10 @@
                   "input": {
                     "location": "Paris, France"
                   },
-                  "output": "{\"condition\":\"sunny\",\"location\":\"Paris, France\",\"temperatureC\":22}"
+                  "output": "{\"condition\":\"sunny\",\"location\":\"Paris, France\",\"temperatureC\":22}",
+                  "metadata": {
+                    "toolCallId": "<toolCallId:1>"
+                  }
                 }
               ],
               "input": {
@@ -1696,9 +2112,10 @@
                     },
                     "providerMetadata": {
                       "openai": {
-                        "itemId": "<itemId:7>"
+                        "itemId": "<itemId:11>"
                       }
                     },
+                    "toolCallId": "<toolCallId:10>",
                     "toolName": "get_weather",
                     "type": "tool-call"
                   },
@@ -1710,9 +2127,10 @@
                     "output": "{\"condition\":\"sunny\",\"location\":\"Paris, France\",\"temperatureC\":22}",
                     "providerMetadata": {
                       "openai": {
-                        "itemId": "<itemId:7>"
+                        "itemId": "<itemId:11>"
                       }
                     },
+                    "toolCallId": "<toolCallId:10>",
                     "toolName": "get_weather",
                     "type": "tool-result"
                   }
@@ -1720,7 +2138,7 @@
                 "finishReason": "tool-calls",
                 "providerMetadata": {
                   "openai": {
-                    "responseId": "<responseId:8>",
+                    "responseId": "<responseId:12>",
                     "serviceTier": "default"
                   }
                 },
@@ -1735,9 +2153,10 @@
                           },
                           "providerOptions": {
                             "openai": {
-                              "itemId": "<itemId:1>"
+                              "itemId": "<itemId:2>"
                             }
                           },
+                          "toolCallId": "<toolCallId:1>",
                           "toolName": "get_weather",
                           "type": "tool-call"
                         }
@@ -1753,44 +2172,10 @@
                           },
                           "providerOptions": {
                             "openai": {
-                              "itemId": "<itemId:1>"
+                              "itemId": "<itemId:2>"
                             }
                           },
-                          "toolName": "get_weather",
-                          "type": "tool-result"
-                        }
-                      ],
-                      "role": "tool"
-                    },
-                    {
-                      "content": [
-                        {
-                          "input": {
-                            "location": "Paris, France"
-                          },
-                          "providerOptions": {
-                            "openai": {
-                              "itemId": "<itemId:3>"
-                            }
-                          },
-                          "toolName": "get_weather",
-                          "type": "tool-call"
-                        }
-                      ],
-                      "role": "assistant"
-                    },
-                    {
-                      "content": [
-                        {
-                          "output": {
-                            "type": "text",
-                            "value": "{\"condition\":\"sunny\",\"location\":\"Paris, France\",\"temperatureC\":22}"
-                          },
-                          "providerOptions": {
-                            "openai": {
-                              "itemId": "<itemId:3>"
-                            }
-                          },
+                          "toolCallId": "<toolCallId:1>",
                           "toolName": "get_weather",
                           "type": "tool-result"
                         }
@@ -1808,6 +2193,7 @@
                               "itemId": "<itemId:5>"
                             }
                           },
+                          "toolCallId": "<toolCallId:4>",
                           "toolName": "get_weather",
                           "type": "tool-call"
                         }
@@ -1826,6 +2212,7 @@
                               "itemId": "<itemId:5>"
                             }
                           },
+                          "toolCallId": "<toolCallId:4>",
                           "toolName": "get_weather",
                           "type": "tool-result"
                         }
@@ -1840,9 +2227,10 @@
                           },
                           "providerOptions": {
                             "openai": {
-                              "itemId": "<itemId:7>"
+                              "itemId": "<itemId:8>"
                             }
                           },
+                          "toolCallId": "<toolCallId:7>",
                           "toolName": "get_weather",
                           "type": "tool-call"
                         }
@@ -1858,9 +2246,47 @@
                           },
                           "providerOptions": {
                             "openai": {
-                              "itemId": "<itemId:7>"
+                              "itemId": "<itemId:8>"
                             }
                           },
+                          "toolCallId": "<toolCallId:7>",
+                          "toolName": "get_weather",
+                          "type": "tool-result"
+                        }
+                      ],
+                      "role": "tool"
+                    },
+                    {
+                      "content": [
+                        {
+                          "input": {
+                            "location": "Paris, France"
+                          },
+                          "providerOptions": {
+                            "openai": {
+                              "itemId": "<itemId:11>"
+                            }
+                          },
+                          "toolCallId": "<toolCallId:10>",
+                          "toolName": "get_weather",
+                          "type": "tool-call"
+                        }
+                      ],
+                      "role": "assistant"
+                    },
+                    {
+                      "content": [
+                        {
+                          "output": {
+                            "type": "text",
+                            "value": "{\"condition\":\"sunny\",\"location\":\"Paris, France\",\"temperatureC\":22}"
+                          },
+                          "providerOptions": {
+                            "openai": {
+                              "itemId": "<itemId:11>"
+                            }
+                          },
+                          "toolCallId": "<toolCallId:10>",
                           "toolName": "get_weather",
                           "type": "tool-result"
                         }
@@ -1880,9 +2306,10 @@
                         },
                         "providerMetadata": {
                           "openai": {
-                            "itemId": "<itemId:1>"
+                            "itemId": "<itemId:2>"
                           }
                         },
+                        "toolCallId": "<toolCallId:1>",
                         "toolName": "get_weather",
                         "type": "tool-call"
                       },
@@ -1894,9 +2321,10 @@
                         "output": "{\"condition\":\"sunny\",\"location\":\"Paris, France\",\"temperatureC\":22}",
                         "providerMetadata": {
                           "openai": {
-                            "itemId": "<itemId:1>"
+                            "itemId": "<itemId:2>"
                           }
                         },
+                        "toolCallId": "<toolCallId:1>",
                         "toolName": "get_weather",
                         "type": "tool-result"
                       }
@@ -1904,7 +2332,7 @@
                     "finishReason": "tool-calls",
                     "providerMetadata": {
                       "openai": {
-                        "responseId": "<responseId:2>",
+                        "responseId": "<responseId:3>",
                         "serviceTier": "default"
                       }
                     },
@@ -1919,9 +2347,10 @@
                               },
                               "providerOptions": {
                                 "openai": {
-                                  "itemId": "<itemId:1>"
+                                  "itemId": "<itemId:2>"
                                 }
                               },
+                              "toolCallId": "<toolCallId:1>",
                               "toolName": "get_weather",
                               "type": "tool-call"
                             }
@@ -1937,9 +2366,10 @@
                               },
                               "providerOptions": {
                                 "openai": {
-                                  "itemId": "<itemId:1>"
+                                  "itemId": "<itemId:2>"
                                 }
                               },
+                              "toolCallId": "<toolCallId:1>",
                               "toolName": "get_weather",
                               "type": "tool-result"
                             }
@@ -1985,9 +2415,10 @@
                         },
                         "providerMetadata": {
                           "openai": {
-                            "itemId": "<itemId:3>"
+                            "itemId": "<itemId:5>"
                           }
                         },
+                        "toolCallId": "<toolCallId:4>",
                         "toolName": "get_weather",
                         "type": "tool-call"
                       },
@@ -1999,9 +2430,10 @@
                         "output": "{\"condition\":\"sunny\",\"location\":\"Paris, France\",\"temperatureC\":22}",
                         "providerMetadata": {
                           "openai": {
-                            "itemId": "<itemId:3>"
+                            "itemId": "<itemId:5>"
                           }
                         },
+                        "toolCallId": "<toolCallId:4>",
                         "toolName": "get_weather",
                         "type": "tool-result"
                       }
@@ -2009,7 +2441,7 @@
                     "finishReason": "tool-calls",
                     "providerMetadata": {
                       "openai": {
-                        "responseId": "<responseId:4>",
+                        "responseId": "<responseId:6>",
                         "serviceTier": "default"
                       }
                     },
@@ -2024,9 +2456,10 @@
                               },
                               "providerOptions": {
                                 "openai": {
-                                  "itemId": "<itemId:1>"
+                                  "itemId": "<itemId:2>"
                                 }
                               },
+                              "toolCallId": "<toolCallId:1>",
                               "toolName": "get_weather",
                               "type": "tool-call"
                             }
@@ -2042,9 +2475,10 @@
                               },
                               "providerOptions": {
                                 "openai": {
-                                  "itemId": "<itemId:1>"
+                                  "itemId": "<itemId:2>"
                                 }
                               },
+                              "toolCallId": "<toolCallId:1>",
                               "toolName": "get_weather",
                               "type": "tool-result"
                             }
@@ -2059,9 +2493,10 @@
                               },
                               "providerOptions": {
                                 "openai": {
-                                  "itemId": "<itemId:3>"
+                                  "itemId": "<itemId:5>"
                                 }
                               },
+                              "toolCallId": "<toolCallId:4>",
                               "toolName": "get_weather",
                               "type": "tool-call"
                             }
@@ -2077,9 +2512,10 @@
                               },
                               "providerOptions": {
                                 "openai": {
-                                  "itemId": "<itemId:3>"
+                                  "itemId": "<itemId:5>"
                                 }
                               },
+                              "toolCallId": "<toolCallId:4>",
                               "toolName": "get_weather",
                               "type": "tool-result"
                             }
@@ -2125,9 +2561,10 @@
                         },
                         "providerMetadata": {
                           "openai": {
-                            "itemId": "<itemId:5>"
+                            "itemId": "<itemId:8>"
                           }
                         },
+                        "toolCallId": "<toolCallId:7>",
                         "toolName": "get_weather",
                         "type": "tool-call"
                       },
@@ -2139,9 +2576,10 @@
                         "output": "{\"condition\":\"sunny\",\"location\":\"Paris, France\",\"temperatureC\":22}",
                         "providerMetadata": {
                           "openai": {
-                            "itemId": "<itemId:5>"
+                            "itemId": "<itemId:8>"
                           }
                         },
+                        "toolCallId": "<toolCallId:7>",
                         "toolName": "get_weather",
                         "type": "tool-result"
                       }
@@ -2149,7 +2587,7 @@
                     "finishReason": "tool-calls",
                     "providerMetadata": {
                       "openai": {
-                        "responseId": "<responseId:6>",
+                        "responseId": "<responseId:9>",
                         "serviceTier": "default"
                       }
                     },
@@ -2164,9 +2602,10 @@
                               },
                               "providerOptions": {
                                 "openai": {
-                                  "itemId": "<itemId:1>"
+                                  "itemId": "<itemId:2>"
                                 }
                               },
+                              "toolCallId": "<toolCallId:1>",
                               "toolName": "get_weather",
                               "type": "tool-call"
                             }
@@ -2182,44 +2621,10 @@
                               },
                               "providerOptions": {
                                 "openai": {
-                                  "itemId": "<itemId:1>"
+                                  "itemId": "<itemId:2>"
                                 }
                               },
-                              "toolName": "get_weather",
-                              "type": "tool-result"
-                            }
-                          ],
-                          "role": "tool"
-                        },
-                        {
-                          "content": [
-                            {
-                              "input": {
-                                "location": "Paris, France"
-                              },
-                              "providerOptions": {
-                                "openai": {
-                                  "itemId": "<itemId:3>"
-                                }
-                              },
-                              "toolName": "get_weather",
-                              "type": "tool-call"
-                            }
-                          ],
-                          "role": "assistant"
-                        },
-                        {
-                          "content": [
-                            {
-                              "output": {
-                                "type": "text",
-                                "value": "{\"condition\":\"sunny\",\"location\":\"Paris, France\",\"temperatureC\":22}"
-                              },
-                              "providerOptions": {
-                                "openai": {
-                                  "itemId": "<itemId:3>"
-                                }
-                              },
+                              "toolCallId": "<toolCallId:1>",
                               "toolName": "get_weather",
                               "type": "tool-result"
                             }
@@ -2237,6 +2642,7 @@
                                   "itemId": "<itemId:5>"
                                 }
                               },
+                              "toolCallId": "<toolCallId:4>",
                               "toolName": "get_weather",
                               "type": "tool-call"
                             }
@@ -2255,6 +2661,44 @@
                                   "itemId": "<itemId:5>"
                                 }
                               },
+                              "toolCallId": "<toolCallId:4>",
+                              "toolName": "get_weather",
+                              "type": "tool-result"
+                            }
+                          ],
+                          "role": "tool"
+                        },
+                        {
+                          "content": [
+                            {
+                              "input": {
+                                "location": "Paris, France"
+                              },
+                              "providerOptions": {
+                                "openai": {
+                                  "itemId": "<itemId:8>"
+                                }
+                              },
+                              "toolCallId": "<toolCallId:7>",
+                              "toolName": "get_weather",
+                              "type": "tool-call"
+                            }
+                          ],
+                          "role": "assistant"
+                        },
+                        {
+                          "content": [
+                            {
+                              "output": {
+                                "type": "text",
+                                "value": "{\"condition\":\"sunny\",\"location\":\"Paris, France\",\"temperatureC\":22}"
+                              },
+                              "providerOptions": {
+                                "openai": {
+                                  "itemId": "<itemId:8>"
+                                }
+                              },
+                              "toolCallId": "<toolCallId:7>",
                               "toolName": "get_weather",
                               "type": "tool-result"
                             }
@@ -2300,9 +2744,10 @@
                         },
                         "providerMetadata": {
                           "openai": {
-                            "itemId": "<itemId:7>"
+                            "itemId": "<itemId:11>"
                           }
                         },
+                        "toolCallId": "<toolCallId:10>",
                         "toolName": "get_weather",
                         "type": "tool-call"
                       },
@@ -2314,9 +2759,10 @@
                         "output": "{\"condition\":\"sunny\",\"location\":\"Paris, France\",\"temperatureC\":22}",
                         "providerMetadata": {
                           "openai": {
-                            "itemId": "<itemId:7>"
+                            "itemId": "<itemId:11>"
                           }
                         },
+                        "toolCallId": "<toolCallId:10>",
                         "toolName": "get_weather",
                         "type": "tool-result"
                       }
@@ -2324,7 +2770,7 @@
                     "finishReason": "tool-calls",
                     "providerMetadata": {
                       "openai": {
-                        "responseId": "<responseId:8>",
+                        "responseId": "<responseId:12>",
                         "serviceTier": "default"
                       }
                     },
@@ -2339,9 +2785,10 @@
                               },
                               "providerOptions": {
                                 "openai": {
-                                  "itemId": "<itemId:1>"
+                                  "itemId": "<itemId:2>"
                                 }
                               },
+                              "toolCallId": "<toolCallId:1>",
                               "toolName": "get_weather",
                               "type": "tool-call"
                             }
@@ -2357,44 +2804,10 @@
                               },
                               "providerOptions": {
                                 "openai": {
-                                  "itemId": "<itemId:1>"
+                                  "itemId": "<itemId:2>"
                                 }
                               },
-                              "toolName": "get_weather",
-                              "type": "tool-result"
-                            }
-                          ],
-                          "role": "tool"
-                        },
-                        {
-                          "content": [
-                            {
-                              "input": {
-                                "location": "Paris, France"
-                              },
-                              "providerOptions": {
-                                "openai": {
-                                  "itemId": "<itemId:3>"
-                                }
-                              },
-                              "toolName": "get_weather",
-                              "type": "tool-call"
-                            }
-                          ],
-                          "role": "assistant"
-                        },
-                        {
-                          "content": [
-                            {
-                              "output": {
-                                "type": "text",
-                                "value": "{\"condition\":\"sunny\",\"location\":\"Paris, France\",\"temperatureC\":22}"
-                              },
-                              "providerOptions": {
-                                "openai": {
-                                  "itemId": "<itemId:3>"
-                                }
-                              },
+                              "toolCallId": "<toolCallId:1>",
                               "toolName": "get_weather",
                               "type": "tool-result"
                             }
@@ -2412,6 +2825,7 @@
                                   "itemId": "<itemId:5>"
                                 }
                               },
+                              "toolCallId": "<toolCallId:4>",
                               "toolName": "get_weather",
                               "type": "tool-call"
                             }
@@ -2430,6 +2844,7 @@
                                   "itemId": "<itemId:5>"
                                 }
                               },
+                              "toolCallId": "<toolCallId:4>",
                               "toolName": "get_weather",
                               "type": "tool-result"
                             }
@@ -2444,9 +2859,10 @@
                               },
                               "providerOptions": {
                                 "openai": {
-                                  "itemId": "<itemId:7>"
+                                  "itemId": "<itemId:8>"
                                 }
                               },
+                              "toolCallId": "<toolCallId:7>",
                               "toolName": "get_weather",
                               "type": "tool-call"
                             }
@@ -2462,9 +2878,47 @@
                               },
                               "providerOptions": {
                                 "openai": {
-                                  "itemId": "<itemId:7>"
+                                  "itemId": "<itemId:8>"
                                 }
                               },
+                              "toolCallId": "<toolCallId:7>",
+                              "toolName": "get_weather",
+                              "type": "tool-result"
+                            }
+                          ],
+                          "role": "tool"
+                        },
+                        {
+                          "content": [
+                            {
+                              "input": {
+                                "location": "Paris, France"
+                              },
+                              "providerOptions": {
+                                "openai": {
+                                  "itemId": "<itemId:11>"
+                                }
+                              },
+                              "toolCallId": "<toolCallId:10>",
+                              "toolName": "get_weather",
+                              "type": "tool-call"
+                            }
+                          ],
+                          "role": "assistant"
+                        },
+                        {
+                          "content": [
+                            {
+                              "output": {
+                                "type": "text",
+                                "value": "{\"condition\":\"sunny\",\"location\":\"Paris, France\",\"temperatureC\":22}"
+                              },
+                              "providerOptions": {
+                                "openai": {
+                                  "itemId": "<itemId:11>"
+                                }
+                              },
+                              "toolCallId": "<toolCallId:10>",
                               "toolName": "get_weather",
                               "type": "tool-result"
                             }
@@ -2511,9 +2965,10 @@
                     },
                     "providerMetadata": {
                       "openai": {
-                        "itemId": "<itemId:7>"
+                        "itemId": "<itemId:11>"
                       }
                     },
+                    "toolCallId": "<toolCallId:10>",
                     "toolName": "get_weather",
                     "type": "tool-call"
                   }
@@ -2527,9 +2982,10 @@
                     "output": "{\"condition\":\"sunny\",\"location\":\"Paris, France\",\"temperatureC\":22}",
                     "providerMetadata": {
                       "openai": {
-                        "itemId": "<itemId:7>"
+                        "itemId": "<itemId:11>"
                       }
                     },
+                    "toolCallId": "<toolCallId:10>",
                     "toolName": "get_weather",
                     "type": "tool-result"
                   }
@@ -5225,9 +5681,10 @@
                         "input": "{\"item\":\"laptop\",\"store\":\"StoreA\"}",
                         "providerMetadata": {
                           "openai": {
-                            "itemId": "<itemId:2>"
+                            "itemId": "<itemId:3>"
                           }
                         },
+                        "toolCallId": "<toolCallId:2>",
                         "toolName": "get_store_price",
                         "type": "tool-call"
                       },
@@ -5235,9 +5692,10 @@
                         "input": "{\"item\":\"laptop\",\"store\":\"StoreB\"}",
                         "providerMetadata": {
                           "openai": {
-                            "itemId": "<itemId:3>"
+                            "itemId": "<itemId:5>"
                           }
                         },
+                        "toolCallId": "<toolCallId:4>",
                         "toolName": "get_store_price",
                         "type": "tool-call"
                       }
@@ -5308,7 +5766,10 @@
                     "item": "laptop",
                     "store": "StoreA"
                   },
-                  "output": "{\"item\":\"laptop\",\"price\":999,\"store\":\"StoreA\"}"
+                  "output": "{\"item\":\"laptop\",\"price\":999,\"store\":\"StoreA\"}",
+                  "metadata": {
+                    "toolCallId": "<toolCallId:1>"
+                  }
                 },
                 {
                   "name": "get_store_price",
@@ -5318,7 +5779,10 @@
                     "item": "laptop",
                     "store": "StoreB"
                   },
-                  "output": "{\"item\":\"laptop\",\"price\":1099,\"store\":\"StoreB\"}"
+                  "output": "{\"item\":\"laptop\",\"price\":1099,\"store\":\"StoreB\"}",
+                  "metadata": {
+                    "toolCallId": "<toolCallId:1>"
+                  }
                 },
                 {
                   "name": "doGenerate",
@@ -5367,9 +5831,10 @@
                             },
                             "providerOptions": {
                               "openai": {
-                                "itemId": "<itemId:1>"
+                                "itemId": "<itemId:2>"
                               }
                             },
+                            "toolCallId": "<toolCallId:1>",
                             "toolName": "get_store_price",
                             "type": "tool-call"
                           },
@@ -5380,9 +5845,10 @@
                             },
                             "providerOptions": {
                               "openai": {
-                                "itemId": "<itemId:2>"
+                                "itemId": "<itemId:4>"
                               }
                             },
+                            "toolCallId": "<toolCallId:3>",
                             "toolName": "get_store_price",
                             "type": "tool-call"
                           }
@@ -5398,9 +5864,10 @@
                             },
                             "providerOptions": {
                               "openai": {
-                                "itemId": "<itemId:1>"
+                                "itemId": "<itemId:2>"
                               }
                             },
+                            "toolCallId": "<toolCallId:1>",
                             "toolName": "get_store_price",
                             "type": "tool-result"
                           },
@@ -5411,9 +5878,10 @@
                             },
                             "providerOptions": {
                               "openai": {
-                                "itemId": "<itemId:2>"
+                                "itemId": "<itemId:4>"
                               }
                             },
+                            "toolCallId": "<toolCallId:3>",
                             "toolName": "get_store_price",
                             "type": "tool-result"
                           }
@@ -5482,9 +5950,10 @@
                         "input": "{\"discountCode\":\"SAVE20\",\"total\":999}",
                         "providerMetadata": {
                           "openai": {
-                            "itemId": "<itemId:2>"
+                            "itemId": "<itemId:3>"
                           }
                         },
+                        "toolCallId": "<toolCallId:2>",
                         "toolName": "apply_discount",
                         "type": "tool-call"
                       }
@@ -5555,7 +6024,10 @@
                     "discountCode": "SAVE20",
                     "total": 999
                   },
-                  "output": "{\"discountCode\":\"SAVE20\",\"finalTotal\":799.2,\"originalTotal\":999}"
+                  "output": "{\"discountCode\":\"SAVE20\",\"finalTotal\":799.2,\"originalTotal\":999}",
+                  "metadata": {
+                    "toolCallId": "<toolCallId:1>"
+                  }
                 },
                 {
                   "name": "doGenerate",
@@ -5604,9 +6076,10 @@
                             },
                             "providerOptions": {
                               "openai": {
-                                "itemId": "<itemId:1>"
+                                "itemId": "<itemId:2>"
                               }
                             },
+                            "toolCallId": "<toolCallId:1>",
                             "toolName": "get_store_price",
                             "type": "tool-call"
                           },
@@ -5617,9 +6090,10 @@
                             },
                             "providerOptions": {
                               "openai": {
-                                "itemId": "<itemId:2>"
+                                "itemId": "<itemId:4>"
                               }
                             },
+                            "toolCallId": "<toolCallId:3>",
                             "toolName": "get_store_price",
                             "type": "tool-call"
                           }
@@ -5635,9 +6109,10 @@
                             },
                             "providerOptions": {
                               "openai": {
-                                "itemId": "<itemId:1>"
+                                "itemId": "<itemId:2>"
                               }
                             },
+                            "toolCallId": "<toolCallId:1>",
                             "toolName": "get_store_price",
                             "type": "tool-result"
                           },
@@ -5648,9 +6123,10 @@
                             },
                             "providerOptions": {
                               "openai": {
-                                "itemId": "<itemId:2>"
+                                "itemId": "<itemId:4>"
                               }
                             },
+                            "toolCallId": "<toolCallId:3>",
                             "toolName": "get_store_price",
                             "type": "tool-result"
                           }
@@ -5666,9 +6142,10 @@
                             },
                             "providerOptions": {
                               "openai": {
-                                "itemId": "<itemId:3>"
+                                "itemId": "<itemId:6>"
                               }
                             },
+                            "toolCallId": "<toolCallId:5>",
                             "toolName": "apply_discount",
                             "type": "tool-call"
                           }
@@ -5684,9 +6161,10 @@
                             },
                             "providerOptions": {
                               "openai": {
-                                "itemId": "<itemId:3>"
+                                "itemId": "<itemId:6>"
                               }
                             },
+                            "toolCallId": "<toolCallId:5>",
                             "toolName": "apply_discount",
                             "type": "tool-result"
                           }
@@ -5908,7 +6386,7 @@
                   {
                     "providerMetadata": {
                       "openai": {
-                        "itemId": "<itemId:6>"
+                        "itemId": "<itemId:9>"
                       }
                     },
                     "text": "Here are the prices for the laptop:\n\n- **Store A**: $999\n- **Store B**: $1099\n\nThe cheaper price is from **Store A** at $999. After applying the discount code **SAVE20**, the final total is **$799.20**.",
@@ -5919,7 +6397,7 @@
                 "output": "Here are the prices for the laptop:\n\n- **Store A**: $999\n- **Store B**: $1099\n\nThe cheaper price is from **Store A** at $999. After applying the discount code **SAVE20**, the final total is **$799.20**.",
                 "providerMetadata": {
                   "openai": {
-                    "responseId": "<responseId:7>",
+                    "responseId": "<responseId:10>",
                     "serviceTier": "default"
                   }
                 },
@@ -5935,9 +6413,10 @@
                           },
                           "providerOptions": {
                             "openai": {
-                              "itemId": "<itemId:1>"
+                              "itemId": "<itemId:2>"
                             }
                           },
+                          "toolCallId": "<toolCallId:1>",
                           "toolName": "get_store_price",
                           "type": "tool-call"
                         },
@@ -5948,9 +6427,10 @@
                           },
                           "providerOptions": {
                             "openai": {
-                              "itemId": "<itemId:2>"
+                              "itemId": "<itemId:4>"
                             }
                           },
+                          "toolCallId": "<toolCallId:3>",
                           "toolName": "get_store_price",
                           "type": "tool-call"
                         }
@@ -5966,9 +6446,10 @@
                           },
                           "providerOptions": {
                             "openai": {
-                              "itemId": "<itemId:1>"
+                              "itemId": "<itemId:2>"
                             }
                           },
+                          "toolCallId": "<toolCallId:1>",
                           "toolName": "get_store_price",
                           "type": "tool-result"
                         },
@@ -5979,9 +6460,10 @@
                           },
                           "providerOptions": {
                             "openai": {
-                              "itemId": "<itemId:2>"
+                              "itemId": "<itemId:4>"
                             }
                           },
+                          "toolCallId": "<toolCallId:3>",
                           "toolName": "get_store_price",
                           "type": "tool-result"
                         }
@@ -5997,9 +6479,10 @@
                           },
                           "providerOptions": {
                             "openai": {
-                              "itemId": "<itemId:4>"
+                              "itemId": "<itemId:7>"
                             }
                           },
+                          "toolCallId": "<toolCallId:6>",
                           "toolName": "apply_discount",
                           "type": "tool-call"
                         }
@@ -6015,9 +6498,10 @@
                           },
                           "providerOptions": {
                             "openai": {
-                              "itemId": "<itemId:4>"
+                              "itemId": "<itemId:7>"
                             }
                           },
+                          "toolCallId": "<toolCallId:6>",
                           "toolName": "apply_discount",
                           "type": "tool-result"
                         }
@@ -6029,7 +6513,7 @@
                         {
                           "providerOptions": {
                             "openai": {
-                              "itemId": "<itemId:6>"
+                              "itemId": "<itemId:9>"
                             }
                           },
                           "text": "Here are the prices for the laptop:\n\n- **Store A**: $999\n- **Store B**: $1099\n\nThe cheaper price is from **Store A** at $999. After applying the discount code **SAVE20**, the final total is **$799.20**.",
@@ -6052,9 +6536,10 @@
                         },
                         "providerMetadata": {
                           "openai": {
-                            "itemId": "<itemId:1>"
+                            "itemId": "<itemId:2>"
                           }
                         },
+                        "toolCallId": "<toolCallId:1>",
                         "toolName": "get_store_price",
                         "type": "tool-call"
                       },
@@ -6065,9 +6550,10 @@
                         },
                         "providerMetadata": {
                           "openai": {
-                            "itemId": "<itemId:2>"
+                            "itemId": "<itemId:4>"
                           }
                         },
+                        "toolCallId": "<toolCallId:3>",
                         "toolName": "get_store_price",
                         "type": "tool-call"
                       },
@@ -6080,9 +6566,10 @@
                         "output": "{\"item\":\"laptop\",\"price\":999,\"store\":\"StoreA\"}",
                         "providerMetadata": {
                           "openai": {
-                            "itemId": "<itemId:1>"
+                            "itemId": "<itemId:2>"
                           }
                         },
+                        "toolCallId": "<toolCallId:1>",
                         "toolName": "get_store_price",
                         "type": "tool-result"
                       },
@@ -6095,9 +6582,10 @@
                         "output": "{\"item\":\"laptop\",\"price\":1099,\"store\":\"StoreB\"}",
                         "providerMetadata": {
                           "openai": {
-                            "itemId": "<itemId:2>"
+                            "itemId": "<itemId:4>"
                           }
                         },
+                        "toolCallId": "<toolCallId:3>",
                         "toolName": "get_store_price",
                         "type": "tool-result"
                       }
@@ -6105,7 +6593,7 @@
                     "finishReason": "tool-calls",
                     "providerMetadata": {
                       "openai": {
-                        "responseId": "<responseId:3>",
+                        "responseId": "<responseId:5>",
                         "serviceTier": "default"
                       }
                     },
@@ -6121,9 +6609,10 @@
                               },
                               "providerOptions": {
                                 "openai": {
-                                  "itemId": "<itemId:1>"
+                                  "itemId": "<itemId:2>"
                                 }
                               },
+                              "toolCallId": "<toolCallId:1>",
                               "toolName": "get_store_price",
                               "type": "tool-call"
                             },
@@ -6134,9 +6623,10 @@
                               },
                               "providerOptions": {
                                 "openai": {
-                                  "itemId": "<itemId:2>"
+                                  "itemId": "<itemId:4>"
                                 }
                               },
+                              "toolCallId": "<toolCallId:3>",
                               "toolName": "get_store_price",
                               "type": "tool-call"
                             }
@@ -6152,9 +6642,10 @@
                               },
                               "providerOptions": {
                                 "openai": {
-                                  "itemId": "<itemId:1>"
+                                  "itemId": "<itemId:2>"
                                 }
                               },
+                              "toolCallId": "<toolCallId:1>",
                               "toolName": "get_store_price",
                               "type": "tool-result"
                             },
@@ -6165,9 +6656,10 @@
                               },
                               "providerOptions": {
                                 "openai": {
-                                  "itemId": "<itemId:2>"
+                                  "itemId": "<itemId:4>"
                                 }
                               },
+                              "toolCallId": "<toolCallId:3>",
                               "toolName": "get_store_price",
                               "type": "tool-result"
                             }
@@ -6214,9 +6706,10 @@
                         },
                         "providerMetadata": {
                           "openai": {
-                            "itemId": "<itemId:4>"
+                            "itemId": "<itemId:7>"
                           }
                         },
+                        "toolCallId": "<toolCallId:6>",
                         "toolName": "apply_discount",
                         "type": "tool-call"
                       },
@@ -6229,9 +6722,10 @@
                         "output": "{\"discountCode\":\"SAVE20\",\"finalTotal\":799.2,\"originalTotal\":999}",
                         "providerMetadata": {
                           "openai": {
-                            "itemId": "<itemId:4>"
+                            "itemId": "<itemId:7>"
                           }
                         },
+                        "toolCallId": "<toolCallId:6>",
                         "toolName": "apply_discount",
                         "type": "tool-result"
                       }
@@ -6239,7 +6733,7 @@
                     "finishReason": "tool-calls",
                     "providerMetadata": {
                       "openai": {
-                        "responseId": "<responseId:5>",
+                        "responseId": "<responseId:8>",
                         "serviceTier": "default"
                       }
                     },
@@ -6255,9 +6749,10 @@
                               },
                               "providerOptions": {
                                 "openai": {
-                                  "itemId": "<itemId:1>"
+                                  "itemId": "<itemId:2>"
                                 }
                               },
+                              "toolCallId": "<toolCallId:1>",
                               "toolName": "get_store_price",
                               "type": "tool-call"
                             },
@@ -6268,9 +6763,10 @@
                               },
                               "providerOptions": {
                                 "openai": {
-                                  "itemId": "<itemId:2>"
+                                  "itemId": "<itemId:4>"
                                 }
                               },
+                              "toolCallId": "<toolCallId:3>",
                               "toolName": "get_store_price",
                               "type": "tool-call"
                             }
@@ -6286,9 +6782,10 @@
                               },
                               "providerOptions": {
                                 "openai": {
-                                  "itemId": "<itemId:1>"
+                                  "itemId": "<itemId:2>"
                                 }
                               },
+                              "toolCallId": "<toolCallId:1>",
                               "toolName": "get_store_price",
                               "type": "tool-result"
                             },
@@ -6299,9 +6796,10 @@
                               },
                               "providerOptions": {
                                 "openai": {
-                                  "itemId": "<itemId:2>"
+                                  "itemId": "<itemId:4>"
                                 }
                               },
+                              "toolCallId": "<toolCallId:3>",
                               "toolName": "get_store_price",
                               "type": "tool-result"
                             }
@@ -6317,9 +6815,10 @@
                               },
                               "providerOptions": {
                                 "openai": {
-                                  "itemId": "<itemId:4>"
+                                  "itemId": "<itemId:7>"
                                 }
                               },
+                              "toolCallId": "<toolCallId:6>",
                               "toolName": "apply_discount",
                               "type": "tool-call"
                             }
@@ -6335,9 +6834,10 @@
                               },
                               "providerOptions": {
                                 "openai": {
-                                  "itemId": "<itemId:4>"
+                                  "itemId": "<itemId:7>"
                                 }
                               },
+                              "toolCallId": "<toolCallId:6>",
                               "toolName": "apply_discount",
                               "type": "tool-result"
                             }
@@ -6380,7 +6880,7 @@
                       {
                         "providerMetadata": {
                           "openai": {
-                            "itemId": "<itemId:6>"
+                            "itemId": "<itemId:9>"
                           }
                         },
                         "text": "Here are the prices for the laptop:\n\n- **Store A**: $999\n- **Store B**: $1099\n\nThe cheaper price is from **Store A** at $999. After applying the discount code **SAVE20**, the final total is **$799.20**.",
@@ -6390,7 +6890,7 @@
                     "finishReason": "stop",
                     "providerMetadata": {
                       "openai": {
-                        "responseId": "<responseId:7>",
+                        "responseId": "<responseId:10>",
                         "serviceTier": "default"
                       }
                     },
@@ -6406,9 +6906,10 @@
                               },
                               "providerOptions": {
                                 "openai": {
-                                  "itemId": "<itemId:1>"
+                                  "itemId": "<itemId:2>"
                                 }
                               },
+                              "toolCallId": "<toolCallId:1>",
                               "toolName": "get_store_price",
                               "type": "tool-call"
                             },
@@ -6419,9 +6920,10 @@
                               },
                               "providerOptions": {
                                 "openai": {
-                                  "itemId": "<itemId:2>"
+                                  "itemId": "<itemId:4>"
                                 }
                               },
+                              "toolCallId": "<toolCallId:3>",
                               "toolName": "get_store_price",
                               "type": "tool-call"
                             }
@@ -6437,9 +6939,10 @@
                               },
                               "providerOptions": {
                                 "openai": {
-                                  "itemId": "<itemId:1>"
+                                  "itemId": "<itemId:2>"
                                 }
                               },
+                              "toolCallId": "<toolCallId:1>",
                               "toolName": "get_store_price",
                               "type": "tool-result"
                             },
@@ -6450,9 +6953,10 @@
                               },
                               "providerOptions": {
                                 "openai": {
-                                  "itemId": "<itemId:2>"
+                                  "itemId": "<itemId:4>"
                                 }
                               },
+                              "toolCallId": "<toolCallId:3>",
                               "toolName": "get_store_price",
                               "type": "tool-result"
                             }
@@ -6468,9 +6972,10 @@
                               },
                               "providerOptions": {
                                 "openai": {
-                                  "itemId": "<itemId:4>"
+                                  "itemId": "<itemId:7>"
                                 }
                               },
+                              "toolCallId": "<toolCallId:6>",
                               "toolName": "apply_discount",
                               "type": "tool-call"
                             }
@@ -6486,9 +6991,10 @@
                               },
                               "providerOptions": {
                                 "openai": {
-                                  "itemId": "<itemId:4>"
+                                  "itemId": "<itemId:7>"
                                 }
                               },
+                              "toolCallId": "<toolCallId:6>",
                               "toolName": "apply_discount",
                               "type": "tool-result"
                             }
@@ -6500,7 +7006,7 @@
                             {
                               "providerOptions": {
                                 "openai": {
-                                  "itemId": "<itemId:6>"
+                                  "itemId": "<itemId:9>"
                                 }
                               },
                               "text": "Here are the prices for the laptop:\n\n- **Store A**: $999\n- **Store B**: $1099\n\nThe cheaper price is from **Store A** at $999. After applying the discount code **SAVE20**, the final total is **$799.20**.",

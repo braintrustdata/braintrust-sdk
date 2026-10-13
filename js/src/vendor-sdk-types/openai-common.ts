@@ -87,10 +87,20 @@ interface OpenAIChatToolCallDelta {
   [key: string]: unknown;
 }
 
+interface OpenAIChatAudio {
+  id?: string;
+  data?: string;
+  expires_at?: number;
+  transcript?: string;
+  [key: string]: unknown;
+}
+
 export interface OpenAIChatMessage {
   role?: string;
   content?: unknown;
+  reasoning_content?: string | null;
   refusal?: string;
+  audio?: OpenAIChatAudio | null;
   tool_calls?: OpenAIChatToolCall[];
   [key: string]: unknown;
 }
@@ -126,7 +136,9 @@ export interface OpenAIChatCompletion {
 interface OpenAIChatDelta {
   role?: string;
   content?: string;
+  reasoning_content?: string | null;
   refusal?: string;
+  audio?: OpenAIChatAudio | null;
   tool_calls?: OpenAIChatToolCallDelta[];
   finish_reason?: string | null;
   [key: string]: unknown;
@@ -166,16 +178,17 @@ export interface OpenAIModerationResponse {
 export interface OpenAIResponse {
   output?: unknown;
   usage?: OpenAIUsage;
+  error?: { code: string; message: string } | null;
   [key: string]: unknown;
 }
 
-export interface OpenAIResponseCompletedEvent {
-  type: "response.completed";
+export interface OpenAIResponseTerminalEvent {
+  type: "response.completed" | "response.incomplete" | "response.failed";
   response: OpenAIResponse;
 }
 
 export type OpenAIResponseStreamEvent =
-  | OpenAIResponseCompletedEvent
+  | OpenAIResponseTerminalEvent
   | {
       type: string;
       response?: OpenAIResponse;

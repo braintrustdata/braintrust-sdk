@@ -1,15 +1,15 @@
-// Auto-generated file (content hash 719572142fc24803) -- do not modify
+// Auto-generated file (content hash 387034529ea006a9) -- do not modify
 
 export type AclObjectTypeType =
   /**
    * The object type that the ACL applies to
    *
-   * @enum organization, project, experiment, dataset, prompt, prompt_session, group, role, org_member, project_log, org_project, org_audit_logs, project_group, ai_secret, org_ai_secret
+   * @enum organization, project, experiment, dataset, prompt, prompt_session, group, role, org_member, project_log, org_project, org_audit_logs, project_group, project_group_projects, ai_secret, org_ai_secret, org_account
    */
   | /**
    * The object type that the ACL applies to
    *
-   * @enum organization, project, experiment, dataset, prompt, prompt_session, group, role, org_member, project_log, org_project, org_audit_logs, project_group, ai_secret, org_ai_secret
+   * @enum organization, project, experiment, dataset, prompt, prompt_session, group, role, org_member, project_log, org_project, org_audit_logs, project_group, project_group_projects, ai_secret, org_ai_secret, org_account
    */
   (| "organization"
       | "project"
@@ -24,13 +24,15 @@ export type AclObjectTypeType =
       | "org_project"
       | "org_audit_logs"
       | "project_group"
+      | "project_group_projects"
       | "ai_secret"
       | "org_ai_secret"
+      | "org_account"
     )
   /**
    * The object type that the ACL applies to
    *
-   * @enum organization, project, experiment, dataset, prompt, prompt_session, group, role, org_member, project_log, org_project, org_audit_logs, project_group, ai_secret, org_ai_secret
+   * @enum organization, project, experiment, dataset, prompt, prompt_session, group, role, org_member, project_log, org_project, org_audit_logs, project_group, project_group_projects, ai_secret, org_ai_secret, org_account
    */
   | null;
 export type PermissionType =
@@ -364,6 +366,15 @@ export type AnyModelParamsType = {
      */
     ("none" | "minimal" | "low" | "medium" | "high")
     | undefined;
+  chat_template_kwargs?:
+    | Partial<
+        {
+          enable_thinking: boolean;
+        } & {
+          [key: string]: any;
+        }
+      >
+    | undefined;
   verbosity?:
     | /**
      * @enum low, medium, high
@@ -630,6 +641,7 @@ export type AsyncScoringControlType =
               type: "trace";
             };
         idempotency_key?: string | undefined;
+        triggered_xact_id?: (string | number) | undefined;
       }>;
     }
   | {
@@ -1040,6 +1052,33 @@ export type ChatCompletionContentPartImageWithTitleType = {
       }
     | undefined;
 };
+export type ChatCompletionContentPartInputAudioWithTitleType = {
+  input_audio: {
+    data: string;
+    /**
+     * @enum wav, mp3
+     */
+    format: "wav" | "mp3";
+  };
+  /**
+   * @enum input_audio
+   */
+  type: "input_audio";
+  cache_control?:
+    | {
+        /**
+         * @enum ephemeral
+         */
+        type: "ephemeral";
+        ttl?:
+          | /**
+           * @enum 5m, 1h
+           */
+          ("5m" | "1h")
+          | undefined;
+      }
+    | undefined;
+};
 export type ChatCompletionContentPartFileFileType = Partial<{
   file_data: string;
   filename: string;
@@ -1069,6 +1108,7 @@ export type ChatCompletionContentPartFileWithTitleType = {
 export type ChatCompletionContentPartType =
   | ChatCompletionContentPartTextWithTitleType
   | ChatCompletionContentPartImageWithTitleType
+  | ChatCompletionContentPartInputAudioWithTitleType
   | ChatCompletionContentPartFileWithTitleType;
 export type ChatCompletionContentPartTextType = {
   /**
@@ -1750,9 +1790,9 @@ export type EnvVarType = {
   /**
    * The type of the object the environment variable is scoped for
    *
-   * @enum organization, project, function
+   * @enum organization, project, function, mcp_server
    */
-  object_type: "organization" | "project" | "function";
+  object_type: "organization" | "project" | "function" | "mcp_server";
   /**
    * The id of the object the environment variable is scoped for
    */
@@ -1863,9 +1903,13 @@ export type EnvVarType = {
    * The category of the secret: env_var for regular environment variables, ai_provider for AI provider API keys
    *
    * @default "env_var"
-   * @enum env_var, ai_provider, sandbox_provider
+   * @enum env_var, ai_provider, sandbox_provider, automation_integration
    */
-  secret_category: "env_var" | "ai_provider" | "sandbox_provider";
+  secret_category:
+    | "env_var"
+    | "ai_provider"
+    | "sandbox_provider"
+    | "automation_integration";
 };
 export type RepoInfoType =
   /**
@@ -2200,12 +2244,12 @@ export type SpanTypeType =
   /**
    * Type of the span, for display purposes only
    *
-   * @enum llm, score, function, eval, task, tool, automation, facet, preprocessor, classifier, review
+   * @enum llm, score, function, eval, task, tool, automation, facet, preprocessor, classifier, review, question, log
    */
   | /**
    * Type of the span, for display purposes only
    *
-   * @enum llm, score, function, eval, task, tool, automation, facet, preprocessor, classifier, review
+   * @enum llm, score, function, eval, task, tool, automation, facet, preprocessor, classifier, review, question, log
    */
   (| "llm"
       | "score"
@@ -2218,11 +2262,13 @@ export type SpanTypeType =
       | "preprocessor"
       | "classifier"
       | "review"
+      | "question"
+      | "log"
     )
   /**
    * Type of the span, for display purposes only
    *
-   * @enum llm, score, function, eval, task, tool, automation, facet, preprocessor, classifier, review
+   * @enum llm, score, function, eval, task, tool, automation, facet, preprocessor, classifier, review, question, log
    */
   | null;
 export type SpanAttributesType =
@@ -2262,6 +2308,24 @@ export type SpanAttributesType =
            * A special value that indicates the span was generated by a scoring automation
            *
            * @enum scorer
+           */
+          | null;
+        /**
+         * Severity level of a log
+         *
+         * @enum trace, debug, info, warn, error, fatal
+         */
+        log_level:
+          | /**
+           * Severity level of a log
+           *
+           * @enum trace, debug, info, warn, error, fatal
+           */
+          ("trace" | "debug" | "info" | "warn" | "error" | "fatal")
+          /**
+           * Severity level of a log
+           *
+           * @enum trace, debug, info, warn, error, fatal
            */
           | null;
       } & {
@@ -2668,6 +2732,13 @@ export type ModelParamsType =
          * @enum none, minimal, low, medium, high
          */
         reasoning_effort: "none" | "minimal" | "low" | "medium" | "high";
+        chat_template_kwargs: Partial<
+          {
+            enable_thinking: boolean;
+          } & {
+            [key: string]: any;
+          }
+        >;
         /**
          * @enum low, medium, high
          */
@@ -4149,6 +4220,17 @@ export type MessageRoleType =
    * @enum system, user, assistant, function, tool, model, developer
    */
   "system" | "user" | "assistant" | "function" | "tool" | "model" | "developer";
+export type NamedScoreType = {
+  name: string;
+  score?:
+    | /**
+     * @minimum 0
+     * @maximum 1
+     */
+    (number | boolean | null)
+    | undefined;
+  metadata?: {} | undefined;
+};
 export type NullableSavedFunctionIdType =
   /**
    * Default preprocessor for this project. When set, functions that use preprocessors will use this instead of their built-in default.
@@ -4343,6 +4425,8 @@ export type OrganizationType = {
         | null
       )
     | undefined;
+  archived_at?: (string | null) | undefined;
+  deleted_at?: (string | null) | undefined;
   image_rendering_mode?: ImageRenderingModeType | undefined;
 };
 export type RetentionObjectTypeType =
@@ -4515,6 +4599,17 @@ export type ProjectSettingsType = Partial<{
      */
     | null;
   /**
+   * If true, enable the agent insights dashboard for this project.
+   */
+  coding_agent_insights_dashboard: /**
+     * If true, enable the agent insights dashboard for this project.
+     */
+    | boolean
+    /**
+     * If true, enable the agent insights dashboard for this project.
+     */
+    | null;
+  /**
    * If true, hide peer review scores, comments, and aggregate results from reviewers without project update permissions until they submit their own review.
    */
   blind_reviews: /**
@@ -4523,6 +4618,17 @@ export type ProjectSettingsType = Partial<{
     | boolean
     /**
      * If true, hide peer review scores, comments, and aggregate results from reviewers without project update permissions until they submit their own review.
+     */
+    | null;
+  /**
+   * If true, automatically complete a review after every assigned reviewer fills all human review scores visible to them.
+   */
+  require_all_human_review_scores: /**
+     * If true, automatically complete a review after every assigned reviewer fills all human review scores visible to them.
+     */
+    | boolean
+    /**
+     * If true, automatically complete a review after every assigned reviewer fills all human review scores visible to them.
      */
     | null;
   default_preprocessor: NullableSavedFunctionIdType;
@@ -4816,11 +4922,15 @@ export type WindowedAutomationConfigType = {
         string>;
         harness?:
           | /**
-           * @enum native, codex, claude-code
+           * Required when saving a Loop automation. Currently only Codex is supported.
+           *
+           * @enum codex, native, claude-code
            */
-          ("native" | "codex" | "claude-code")
+          ("codex" | "native" | "claude-code")
           | undefined;
         model?: /**
+           * Required when saving a Loop automation.
+           *
            * @minLength 1
            */
           string | undefined;
@@ -4886,18 +4996,43 @@ export type WindowedAutomationConfigType = {
         formatting_prompt?: /**
          * Publish a Slack mrkdwn digest.
         
-        Include a complete "*Pattern outcomes*" section with one row for every selected Pattern from the run report, including created, updated, unchanged, failed, skipped, and newly inactive outcomes.
+        Pattern selection requirement: include every selected Pattern whose final status is active at the end of this automation run, plus every selected Pattern that changed from active to inactive during this run (a newly inactive outcome). Exclude Patterns that were already inactive before this run and remained inactive. Do not mention excluded Patterns anywhere in the digest, including Highlights. If no selected Patterns meet these criteria, say "No current pattern outcomes." This requirement overrides conflicting formatting guidance.
+        
+        Include a complete "*Pattern outcomes*" section with one row for every included Pattern.
         
         Use this row format exactly:
         • <pattern_url|Pattern title> — `outcome`
         
-        If a Pattern has no URL, use the plain title instead. Do not use GitHub Markdown tables or code-block tables, because links must remain clickable. Do not omit any selected Pattern. If there are no selected Patterns, say "No pattern outcomes."
+        If a Pattern has no URL, use the plain title instead. Do not use GitHub Markdown tables or code-block tables, because links must remain clickable. Do not omit any active selected Pattern.
         
-        After the outcome list, include a "*Highlights*" section with one very short paragraph, 2-3 sentences maximum. Summarize what changed or what broadly stands out from this run. Do not introduce new claims beyond the run report.
+        After the outcome list, include a "*Highlights*" section with one very short paragraph, 2-3 sentences maximum. Summarize what changed or what broadly stands out among the included active Patterns. Do not introduce new claims beyond the run report.
          *
          * @minLength 1
          * @maxLength 10000
          */
+          string | undefined;
+      }
+    | {
+        /**
+         * The type of action to take
+         *
+         * @enum pagerduty
+         */
+        type: "pagerduty";
+        /**
+         * The data-plane secret containing the PagerDuty routing key
+         */
+        routing_key_secret_name: string;
+        /**
+         * @enum critical, error, warning, info
+         */
+        severity: "critical" | "error" | "warning" | "info";
+        formatting_prompt?: /**
+           * Instructions for Loop to format content sent to this destination
+           *
+           * @minLength 1
+           * @maxLength 10000
+           */
           string | undefined;
       }
   >;
@@ -5031,18 +5166,18 @@ export type TopicAutomationConfigType = {
     | undefined;
   relabel_overlap_seconds?:
     | /**
-     * How much recent history to relabel after a new topic map version becomes active
+     * Deprecated. How much recent history to relabel after a new topic map version becomes active. Data planes v2.15.0 and later ignore this and apply a topic map version after the first only to traces classified once it is active.
      *
      * @minimum 60
      */
     /**
-     * How much recent history to relabel after a new topic map version becomes active
+     * Deprecated. How much recent history to relabel after a new topic map version becomes active. Data planes v2.15.0 and later ignore this and apply a topic map version after the first only to traces classified once it is active.
      *
      * @minimum 60
      */
     (| number
         /**
-         * How much recent history to relabel after a new topic map version becomes active
+         * Deprecated. How much recent history to relabel after a new topic map version becomes active. Data planes v2.15.0 and later ignore this and apply a topic map version after the first only to traces classified once it is active.
          *
          * @minimum 60
          */
@@ -5110,14 +5245,16 @@ export type TopicDigestAutomationConfigType = {
     formatting_prompt?: /**
          * Publish a Slack mrkdwn digest.
         
-        Include a complete "*Pattern outcomes*" section with one row for every selected Pattern from the run report, including created, updated, unchanged, failed, skipped, and newly inactive outcomes.
+        Pattern selection requirement: include every selected Pattern whose final status is active at the end of this automation run, plus every selected Pattern that changed from active to inactive during this run (a newly inactive outcome). Exclude Patterns that were already inactive before this run and remained inactive. Do not mention excluded Patterns anywhere in the digest, including Highlights. If no selected Patterns meet these criteria, say "No current pattern outcomes." This requirement overrides conflicting formatting guidance.
+        
+        Include a complete "*Pattern outcomes*" section with one row for every included Pattern.
         
         Use this row format exactly:
         • <pattern_url|Pattern title> — `outcome`
         
-        If a Pattern has no URL, use the plain title instead. Do not use GitHub Markdown tables or code-block tables, because links must remain clickable. Do not omit any selected Pattern. If there are no selected Patterns, say "No pattern outcomes."
+        If a Pattern has no URL, use the plain title instead. Do not use GitHub Markdown tables or code-block tables, because links must remain clickable. Do not omit any active selected Pattern.
         
-        After the outcome list, include a "*Highlights*" section with one very short paragraph, 2-3 sentences maximum. Summarize what changed or what broadly stands out from this run. Do not introduce new claims beyond the run report.
+        After the outcome list, include a "*Highlights*" section with one very short paragraph, 2-3 sentences maximum. Summarize what changed or what broadly stands out among the included active Patterns. Do not introduce new claims beyond the run report.
          *
          * @minLength 1
          * @maxLength 10000
@@ -5252,18 +5389,43 @@ export type ProjectAutomationType = {
               formatting_prompt?: /**
              * Publish a Slack mrkdwn digest.
             
-            Include a complete "*Pattern outcomes*" section with one row for every selected Pattern from the run report, including created, updated, unchanged, failed, skipped, and newly inactive outcomes.
+            Pattern selection requirement: include every selected Pattern whose final status is active at the end of this automation run, plus every selected Pattern that changed from active to inactive during this run (a newly inactive outcome). Exclude Patterns that were already inactive before this run and remained inactive. Do not mention excluded Patterns anywhere in the digest, including Highlights. If no selected Patterns meet these criteria, say "No current pattern outcomes." This requirement overrides conflicting formatting guidance.
+            
+            Include a complete "*Pattern outcomes*" section with one row for every included Pattern.
             
             Use this row format exactly:
             • <pattern_url|Pattern title> — `outcome`
             
-            If a Pattern has no URL, use the plain title instead. Do not use GitHub Markdown tables or code-block tables, because links must remain clickable. Do not omit any selected Pattern. If there are no selected Patterns, say "No pattern outcomes."
+            If a Pattern has no URL, use the plain title instead. Do not use GitHub Markdown tables or code-block tables, because links must remain clickable. Do not omit any active selected Pattern.
             
-            After the outcome list, include a "*Highlights*" section with one very short paragraph, 2-3 sentences maximum. Summarize what changed or what broadly stands out from this run. Do not introduce new claims beyond the run report.
+            After the outcome list, include a "*Highlights*" section with one very short paragraph, 2-3 sentences maximum. Summarize what changed or what broadly stands out among the included active Patterns. Do not introduce new claims beyond the run report.
              *
              * @minLength 1
              * @maxLength 10000
              */
+                string | undefined;
+            }
+          | {
+              /**
+               * The type of action to take
+               *
+               * @enum pagerduty
+               */
+              type: "pagerduty";
+              /**
+               * The data-plane secret containing the PagerDuty routing key
+               */
+              routing_key_secret_name: string;
+              /**
+               * @enum critical, error, warning, info
+               */
+              severity: "critical" | "error" | "warning" | "info";
+              formatting_prompt?: /**
+                 * Instructions for Loop to format content sent to this destination
+                 *
+                 * @minLength 1
+                 * @maxLength 10000
+                 */
                 string | undefined;
             };
       }
@@ -5348,6 +5510,12 @@ export type ProjectAutomationType = {
                * The GCP service account email to impersonate
                */
               service_account_email: string;
+              credential_name?: /**
+                 * The name of a Google workload identity federation credential configured in this organization's AI providers. Supported data planes can use it regardless of hosting environment. If omitted, the data plane's GCP identity is used.
+                 *
+                 * @minLength 1
+                 */
+                string | undefined;
             };
         batch_size?:
           | /**
@@ -5493,24 +5661,55 @@ export type ProjectAutomationType = {
               formatting_prompt?: /**
              * Publish a Slack mrkdwn digest.
             
-            Include a complete "*Pattern outcomes*" section with one row for every selected Pattern from the run report, including created, updated, unchanged, failed, skipped, and newly inactive outcomes.
+            Pattern selection requirement: include every selected Pattern whose final status is active at the end of this automation run, plus every selected Pattern that changed from active to inactive during this run (a newly inactive outcome). Exclude Patterns that were already inactive before this run and remained inactive. Do not mention excluded Patterns anywhere in the digest, including Highlights. If no selected Patterns meet these criteria, say "No current pattern outcomes." This requirement overrides conflicting formatting guidance.
+            
+            Include a complete "*Pattern outcomes*" section with one row for every included Pattern.
             
             Use this row format exactly:
             • <pattern_url|Pattern title> — `outcome`
             
-            If a Pattern has no URL, use the plain title instead. Do not use GitHub Markdown tables or code-block tables, because links must remain clickable. Do not omit any selected Pattern. If there are no selected Patterns, say "No pattern outcomes."
+            If a Pattern has no URL, use the plain title instead. Do not use GitHub Markdown tables or code-block tables, because links must remain clickable. Do not omit any active selected Pattern.
             
-            After the outcome list, include a "*Highlights*" section with one very short paragraph, 2-3 sentences maximum. Summarize what changed or what broadly stands out from this run. Do not introduce new claims beyond the run report.
+            After the outcome list, include a "*Highlights*" section with one very short paragraph, 2-3 sentences maximum. Summarize what changed or what broadly stands out among the included active Patterns. Do not introduce new claims beyond the run report.
              *
              * @minLength 1
              * @maxLength 10000
              */
+                string | undefined;
+            }
+          | {
+              /**
+               * The type of action to take
+               *
+               * @enum pagerduty
+               */
+              type: "pagerduty";
+              /**
+               * The data-plane secret containing the PagerDuty routing key
+               */
+              routing_key_secret_name: string;
+              /**
+               * @enum critical, error, warning, info
+               */
+              severity: "critical" | "error" | "warning" | "info";
+              formatting_prompt?: /**
+                 * Instructions for Loop to format content sent to this destination
+                 *
+                 * @minLength 1
+                 * @maxLength 10000
+                 */
                 string | undefined;
             };
       }
     | WindowedAutomationConfigType
     | TopicAutomationConfigType
     | TopicDigestAutomationConfigType;
+  runtime_block?:
+    | {
+        reason: string;
+        model: string;
+      }
+    | undefined;
 };
 export type ProjectGroupType = {
   /**
@@ -6664,6 +6863,34 @@ export type RunEvalType = {
       )
     | undefined;
 };
+export type ScoreObjectType = {
+  name?: /**
+     * The score name. Defaults to the function name for a single score.
+     */
+    string | undefined;
+  score: /**
+     * @minimum 0
+     * @maximum 1
+     */
+    number | boolean | null;
+  metadata?: {} | undefined;
+};
+export type ScoreResultType =
+  /**
+   * The return value of a scorer function.
+   */
+  | ScoreObjectType
+  | NamedScoreType
+  /**
+   * @minimum 0
+   * @maximum 1
+   */
+  | (number | boolean)
+  /**
+   * Multiple scores. Each score must have a unique name.
+   */
+  | Array<NamedScoreType>
+  | null;
 export type ServiceTokenType = {
   /**
    * Unique identifier for the service token
@@ -7104,15 +7331,15 @@ export type ViewOptionsType =
           }
         | null;
       /**
-       * @enum traces, spans, topics
+       * @enum traces, spans, logs, topics
        */
       queryShape:
         | /**
-         * @enum traces, spans, topics
+         * @enum traces, spans, logs, topics
          */
-        ("traces" | "spans" | "topics")
+        ("traces" | "spans" | "logs" | "topics")
         /**
-         * @enum traces, spans, topics
+         * @enum traces, spans, logs, topics
          */
         | null;
       cluster: string | null;

@@ -1,4 +1,3 @@
-import { z } from "zod/v3";
 import Ajv from "ajv";
 import { Prompt, RemoteEvalParameters } from "./logger";
 import {
@@ -19,16 +18,17 @@ export type EvalParameters = Record<
       default?: string;
       description?: string;
     }
-  | z.ZodTypeAny
+  | ZodSchema
 >;
+import type { ZodSchema } from "./zod/utils";
 
 // Type helper to infer the type of a parameter value
 type InferParameterValue<T> = T extends { type: "prompt" }
   ? Prompt
   : T extends { type: "model" }
     ? string
-    : T extends z.ZodType
-      ? z.infer<T>
+    : T extends ZodSchema
+      ? T["_output"]
       : never;
 
 // Type helper to infer the full parameters type
@@ -114,9 +114,7 @@ function validateParametersWithZod<
           }
           return [name, model];
         } else {
-          // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
-          const schemaCasted = schema as z.ZodSchema<unknown>;
-          return [name, schemaCasted.parse(value)];
+          return [name, schema.parse(value)];
         }
       } catch (e) {
         // eslint-disable-next-line no-restricted-properties -- preserving intentional console usage.

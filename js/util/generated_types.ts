@@ -1,4 +1,4 @@
-// Auto-generated file (content hash 719572142fc24803) -- do not modify
+// Auto-generated file (content hash 387034529ea006a9) -- do not modify
 
 import { z } from "zod/v3";
 
@@ -17,8 +17,10 @@ export const AclObjectType = z.union([
     "org_project",
     "org_audit_logs",
     "project_group",
+    "project_group_projects",
     "ai_secret",
     "org_ai_secret",
+    "org_account",
   ]),
   z.null(),
 ]);
@@ -128,6 +130,11 @@ export const AnyModelParams = z.object({
   reasoning_effort: z
     .enum(["none", "minimal", "low", "medium", "high"])
     .optional(),
+  chat_template_kwargs: z
+    .object({ enable_thinking: z.boolean() })
+    .partial()
+    .passthrough()
+    .optional(),
   verbosity: z.enum(["low", "medium", "high"]).optional(),
   top_k: z.number().optional(),
   stop_sequences: z.array(z.string()).optional(),
@@ -199,6 +206,7 @@ export const AsyncScoringControl = z.union([
             z.object({ type: z.literal("trace") }),
           ]),
           idempotency_key: z.string().optional(),
+          triggered_xact_id: z.union([z.string(), z.number()]).optional(),
         }),
       )
       .min(1),
@@ -424,6 +432,19 @@ export const ChatCompletionContentPartImageWithTitle = z.object({
 export type ChatCompletionContentPartImageWithTitleType = z.infer<
   typeof ChatCompletionContentPartImageWithTitle
 >;
+export const ChatCompletionContentPartInputAudioWithTitle = z.object({
+  input_audio: z.object({ data: z.string(), format: z.enum(["wav", "mp3"]) }),
+  type: z.literal("input_audio"),
+  cache_control: z
+    .object({
+      type: z.literal("ephemeral"),
+      ttl: z.enum(["5m", "1h"]).optional(),
+    })
+    .optional(),
+});
+export type ChatCompletionContentPartInputAudioWithTitleType = z.infer<
+  typeof ChatCompletionContentPartInputAudioWithTitle
+>;
 export const ChatCompletionContentPartFileFile = z
   .object({ file_data: z.string(), filename: z.string(), file_id: z.string() })
   .partial();
@@ -446,6 +467,7 @@ export type ChatCompletionContentPartFileWithTitleType = z.infer<
 export const ChatCompletionContentPart = z.union([
   ChatCompletionContentPartTextWithTitle,
   ChatCompletionContentPartImageWithTitle,
+  ChatCompletionContentPartInputAudioWithTitle,
   ChatCompletionContentPartFileWithTitle,
 ]);
 export type ChatCompletionContentPartType = z.infer<
@@ -718,7 +740,7 @@ export const DatasetSnapshot = z.object({
 export type DatasetSnapshotType = z.infer<typeof DatasetSnapshot>;
 export const EnvVar = z.object({
   id: z.string().uuid(),
-  object_type: z.enum(["organization", "project", "function"]),
+  object_type: z.enum(["organization", "project", "function", "mcp_server"]),
   object_id: z.string().uuid(),
   name: z.string(),
   created: z.union([z.string(), z.null()]).optional(),
@@ -731,7 +753,12 @@ export const EnvVar = z.object({
   preview_secret: z.union([z.string(), z.null()]).optional(),
   secret_type: z.union([z.string(), z.null()]).optional(),
   secret_category: z
-    .enum(["env_var", "ai_provider", "sandbox_provider"])
+    .enum([
+      "env_var",
+      "ai_provider",
+      "sandbox_provider",
+      "automation_integration",
+    ])
     .optional()
     .default("env_var"),
 });
@@ -802,6 +829,8 @@ export const SpanType = z.union([
     "preprocessor",
     "classifier",
     "review",
+    "question",
+    "log",
   ]),
   z.null(),
 ]);
@@ -812,6 +841,10 @@ export const SpanAttributes = z.union([
       name: z.union([z.string(), z.null()]),
       type: SpanType,
       purpose: z.union([z.literal("scorer"), z.null()]),
+      log_level: z.union([
+        z.enum(["trace", "debug", "info", "warn", "error", "fatal"]),
+        z.null(),
+      ]),
     })
     .partial()
     .passthrough(),
@@ -970,6 +1003,10 @@ export const ModelParams = z.union([
       n: z.number(),
       stop: z.array(z.string()),
       reasoning_effort: z.enum(["none", "minimal", "low", "medium", "high"]),
+      chat_template_kwargs: z
+        .object({ enable_thinking: z.boolean() })
+        .partial()
+        .passthrough(),
       verbosity: z.enum(["low", "medium", "high"]),
     })
     .partial()
@@ -1521,6 +1558,12 @@ export const MessageRole = z.enum([
   "developer",
 ]);
 export type MessageRoleType = z.infer<typeof MessageRole>;
+export const NamedScore = z.object({
+  name: z.string(),
+  score: z.union([z.number(), z.boolean(), z.null()]).optional(),
+  metadata: z.object({}).partial().passthrough().optional(),
+});
+export type NamedScoreType = z.infer<typeof NamedScore>;
 export const NullableSavedFunctionId = z.union([
   z.object({
     type: z.literal("function"),
@@ -1582,6 +1625,8 @@ export const Organization = z.object({
   proxy_url: z.union([z.string(), z.null()]).optional(),
   realtime_url: z.union([z.string(), z.null()]).optional(),
   created: z.union([z.string(), z.null()]).optional(),
+  archived_at: z.union([z.string(), z.null()]).optional(),
+  deleted_at: z.union([z.string(), z.null()]).optional(),
   image_rendering_mode: ImageRenderingMode.optional(),
 });
 export type OrganizationType = z.infer<typeof Organization>;
@@ -1635,7 +1680,9 @@ export const ProjectSettings = z.union([
       ]),
       disable_realtime_queries: z.union([z.boolean(), z.null()]),
       monitor_charts_use_metrics_start: z.union([z.boolean(), z.null()]),
+      coding_agent_insights_dashboard: z.union([z.boolean(), z.null()]),
       blind_reviews: z.union([z.boolean(), z.null()]),
+      require_all_human_review_scores: z.union([z.boolean(), z.null()]),
       default_preprocessor: NullableSavedFunctionId,
     })
     .partial(),
@@ -1701,7 +1748,7 @@ export const WindowedAutomationConfig = z.object({
       include_trigger_input: z.boolean().optional().default(false),
       agent_slug: z.string().min(1),
       auto_approve_tools: z.array(z.string().min(1)).optional().default([]),
-      harness: z.enum(["native", "codex", "claude-code"]).optional(),
+      harness: z.enum(["codex", "native", "claude-code"]).optional(),
       model: z.string().min(1).optional(),
       endpoint_name: z.string().min(1).optional(),
       reasoning_effort: z
@@ -1722,6 +1769,12 @@ export const WindowedAutomationConfig = z.object({
           workspace_id: z.string(),
           channel: z.string(),
           message_template: z.string().optional(),
+          formatting_prompt: z.string().min(1).max(10000).optional(),
+        }),
+        z.object({
+          type: z.literal("pagerduty"),
+          routing_key_secret_name: z.string().uuid(),
+          severity: z.enum(["critical", "error", "warning", "info"]),
           formatting_prompt: z.string().min(1).max(10000).optional(),
         }),
       ]),
@@ -1826,6 +1879,12 @@ export const ProjectAutomation = z.object({
           message_template: z.string().optional(),
           formatting_prompt: z.string().min(1).max(10000).optional(),
         }),
+        z.object({
+          type: z.literal("pagerduty"),
+          routing_key_secret_name: z.string().uuid(),
+          severity: z.enum(["critical", "error", "warning", "info"]),
+          formatting_prompt: z.string().min(1).max(10000).optional(),
+        }),
       ]),
     }),
     z.object({
@@ -1849,6 +1908,7 @@ export const ProjectAutomation = z.object({
         z.object({
           type: z.literal("gcp_service_account"),
           service_account_email: z.string(),
+          credential_name: z.string().min(1).optional(),
         }),
       ]),
       batch_size: z.union([z.number(), z.null()]).optional(),
@@ -1890,12 +1950,19 @@ export const ProjectAutomation = z.object({
           message_template: z.string().optional(),
           formatting_prompt: z.string().min(1).max(10000).optional(),
         }),
+        z.object({
+          type: z.literal("pagerduty"),
+          routing_key_secret_name: z.string().uuid(),
+          severity: z.enum(["critical", "error", "warning", "info"]),
+          formatting_prompt: z.string().min(1).max(10000).optional(),
+        }),
       ]),
     }),
     WindowedAutomationConfig,
     TopicAutomationConfig,
     TopicDigestAutomationConfig,
   ]),
+  runtime_block: z.object({ reason: z.string(), model: z.string() }).optional(),
 });
 export type ProjectAutomationType = z.infer<typeof ProjectAutomation>;
 export const ProjectGroup = z.object({
@@ -1906,7 +1973,7 @@ export const ProjectGroup = z.object({
   name: z.string(),
   description: z.union([z.string(), z.null()]).optional(),
   deleted_at: z.union([z.string(), z.null()]).optional(),
-  member_projects: z.array(z.string().uuid()).max(10000),
+  member_projects: z.array(z.string().uuid()),
 });
 export type ProjectGroupType = z.infer<typeof ProjectGroup>;
 export const ProjectLogsEvent = z.object({
@@ -2204,6 +2271,20 @@ export const RunEval = z.object({
   endpoint_name: z.union([z.string(), z.null()]).optional(),
 });
 export type RunEvalType = z.infer<typeof RunEval>;
+export const ScoreObject = z.object({
+  name: z.string().optional(),
+  score: z.union([z.number(), z.boolean(), z.null()]),
+  metadata: z.object({}).partial().passthrough().optional(),
+});
+export type ScoreObjectType = z.infer<typeof ScoreObject>;
+export const ScoreResult = z.union([
+  ScoreObject,
+  NamedScore,
+  z.union([z.number(), z.boolean()]),
+  z.array(NamedScore),
+  z.null(),
+]);
+export type ScoreResultType = z.infer<typeof ScoreResult>;
 export const ServiceToken = z.object({
   id: z.string().uuid(),
   created: z.union([z.string(), z.null()]).optional(),
@@ -2365,7 +2446,10 @@ export const ViewOptions = z.union([
         z.object({ from: z.string(), to: z.string() }),
         z.null(),
       ]),
-      queryShape: z.union([z.enum(["traces", "spans", "topics"]), z.null()]),
+      queryShape: z.union([
+        z.enum(["traces", "spans", "logs", "topics"]),
+        z.null(),
+      ]),
       cluster: z.union([z.string(), z.null()]),
       freezeColumns: z.union([z.boolean(), z.null()]),
     })
