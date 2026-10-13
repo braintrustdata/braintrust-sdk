@@ -44,7 +44,7 @@ type CallRow = {
     "voice.pipeline": "cascaded" | "realtime" | "half_cascade" // required; pipeline at call start
     "voice.origin_unix_ms"?: number                           // unix ms; required iff "audio.recordings" is absent
     "voice.server_vad_silence_ms"?: number                    // ms already subtracted from realtime caller speech_end
-    "voice.points"?: Points                                   // call_end, and points whose owner span does not exist
+    "voice.points"?: Points                                   // call_end, and turn points whose turn span does not exist
   }
 }
 type AudioRecording = {                                       // shared layer, unchanged
@@ -161,15 +161,15 @@ In the examples, `user_turn` spans hold 3–5 points, `assistant_turn` spans 4�
 
 Cascaded vs realtime: what changes in the payload
 
-|                            | Cascaded                                                                     | Realtime                                                                                                                  |
-| -------------------------- | ---------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
-| Call span                  | `voice.pipeline: "cascaded"`                                                 | `"realtime"`; `voice.server_vad_silence_ms` only when the integration is given it (not in the example)                    |
-| Tool reply handle          | same handle: `llm-1` and `llm-2` both start `speech_1`; playout `speech_1/0` | new handle `speech_2`, which continues `speech_1`'s `assistant_turn` span; playout `speech_2/0`                           |
-| Caller transcript          | `stt`, on the `user_turn` before it ends                                     | `provider` with `message_id`, written to the ended `user_turn` (4300), or a `missing` point at close                      |
-| `end_of_turn.at_ms`        | turn detector resolve time (3400)                                            | entry of the answering generation (3600)                                                                                  |
-| Interrupted agent speech   | `speech_end` with `played_ms` and `interrupted_by`                           | same, plus a `truncate` point equal to `played_ms` on the same `assistant_turn`                                           |
-| Talk-over without barge-in | `u3` under a non-interruptible reply (`ut-3`, no `end_of_turn`)              | not in the example: with server turn detection, LiveKit warns that `allowInterruptions` cannot be false (`aa.ts:712-716`) |
-| Step rows                  | `llm_response` + `tts` rows under the `assistant_turn`                       | `llm_response` rows only                                                                                                  |
+|                            | Cascaded                                                                                      | Realtime                                                                                                                  |
+| -------------------------- | --------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| Call span                  | `voice.pipeline: "cascaded"`                                                                  | `"realtime"`; `voice.server_vad_silence_ms` only when the integration is given it (not in the example)                    |
+| Tool reply handle          | same handle: `llm-1` and `llm-2` both start `speech_1`; playout `speech_1/0`                  | new handle `speech_2`, which continues `speech_1`'s `assistant_turn` span; playout `speech_2/0`                           |
+| Caller transcript          | `stt`, on the `user_turn` at 3450, after `end_of_turn` but before the span ends at the commit | `provider` with `message_id`, written to the ended `user_turn` (4300), or a `missing` point at close                      |
+| `end_of_turn.at_ms`        | turn detector resolve time (3400)                                                             | entry of the answering generation (3600)                                                                                  |
+| Interrupted agent speech   | `speech_end` with `played_ms` and `interrupted_by`                                            | same, plus a `truncate` point equal to `played_ms` on the same `assistant_turn`                                           |
+| Talk-over without barge-in | `u3` under a non-interruptible reply (`ut-3`, no `end_of_turn`)                               | not in the example: with server turn detection, LiveKit warns that `allowInterruptions` cannot be false (`aa.ts:712-716`) |
+| Step rows                  | `llm_response` + `tts` rows under the `assistant_turn`                                        | `llm_response` rows only                                                                                                  |
 
 Implemented: zod types (`js/src/instrumentation/livekit/voice-schema/span-points.ts`), the examples, and the test. Sketch: LiveKit and Pipecat emission. The Lingua mapping is implemented in the companion Lingua PR (`specs/voice-schema-span-points.md`, branch `kevchoi/voice-schema-span-points`).
 
@@ -188,7 +188,7 @@ Implemented: zod types (`js/src/instrumentation/livekit/voice-schema/span-points
 
 **SDK changes from #2612:**
 
-- **Replaced:** `timeline.ts` (buffer, flush and chunk rows) becomes `points.ts`. It owns the `seq` counter, the owner lookup and one `span.log` per point.
+- **Replaced:** #2612's planned `timeline.ts` (buffer, flush and chunk rows; no emission code exists yet) becomes a planned `points.ts`. It owns the `seq` counter, the owner lookup and one `span.log` per point.
 - **Renamed:** `voice.timeline_version` becomes `voice.points_version`, and `voice.timeline_origin_unix_ms` becomes `voice.origin_unix_ms`.
 - **Dropped fields:** points drop `span_id` and `name`.
 
@@ -204,24 +204,24 @@ The capture hooks are the same.
 
 The call span is the span that logs `audio.recordings`, or the session span when there is no recording.
 
-| Metadata key                  | Type                                         | Req.                                  | Meaning                                                                                                        |
-| ----------------------------- | -------------------------------------------- | ------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
-| `voice.points_version`        | `1`                                          | yes                                   | Marks the call as using this contract. Lingua then builds speech from points and ignores turn-span selections. |
-| `voice.pipeline`              | `"cascaded" \| "realtime" \| "half_cascade"` | yes                                   | As in #2612.                                                                                                   |
-| `voice.origin_unix_ms`        | number, unix ms                              | yes when `audio.recordings` is absent | Origin of the call clock when there is no recording.                                                           |
-| `voice.server_vad_silence_ms` | number, ms                                   | no                                    | As in #2612.                                                                                                   |
-| `voice.points`                | `Points`                                     | yes at close                          | `call_end` (always the highest `seq`), overflow `missing` points, and points whose owner span does not exist.  |
+| Metadata key                  | Type                                         | Req.                                  | Meaning                                                                                                           |
+| ----------------------------- | -------------------------------------------- | ------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
+| `voice.points_version`        | `1`                                          | yes                                   | Marks the call as using this contract. Lingua then builds speech from points and ignores turn-span selections.    |
+| `voice.pipeline`              | `"cascaded" \| "realtime" \| "half_cascade"` | yes                                   | As in #2612.                                                                                                      |
+| `voice.origin_unix_ms`        | number, unix ms                              | yes when `audio.recordings` is absent | Origin of the call clock when there is no recording.                                                              |
+| `voice.server_vad_silence_ms` | number, ms                                   | no                                    | As in #2612.                                                                                                      |
+| `voice.points`                | `Points`                                     | yes at close                          | `call_end` (always the highest `seq`), overflow `missing` points, and turn points whose turn span does not exist. |
 
 ### Owner spans
 
-| Point                                                                              | Owner span                                                                                                                                                               |
-| ---------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| caller `speech_start`, `speech_end`, `transcript`, `missing`                       | The `user_turn` that was open when the utterance **started**. Later points for that utterance, such as a late transcript or a close-time `missing`, go to the same span. |
-| `end_of_turn`, caller `message`                                                    | The `user_turn` of that turn                                                                                                                                             |
-| agent `speech_start`, `speech_end`, `transcript`, `truncate`, `message`, `missing` | The `assistant_turn` span of the speech handle that is playing (`SpeechHandle._agentTurnSpan` when playout starts)                                                       |
-| `response_start`                                                                   | The `llm_response` span itself                                                                                                                                           |
-| `tool_call`, `tool_result`                                                         | The tool span itself                                                                                                                                                     |
-| `call_end`; anything whose owner does not exist                                    | The call span                                                                                                                                                            |
+| Point                                                                              | Owner span                                                                                                                                                                                                                                 |
+| ---------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| caller `speech_start`, `speech_end`, `transcript`, `missing`                       | The `user_turn` that was open when the utterance **started**. Later points for that utterance, such as a late transcript or a close-time `missing`, go to the same span.                                                                   |
+| `end_of_turn`, caller `message`                                                    | The `user_turn` of that turn                                                                                                                                                                                                               |
+| agent `speech_start`, `speech_end`, `transcript`, `truncate`, `message`, `missing` | The `assistant_turn` span of the speech handle that is playing (`SpeechHandle._agentTurnSpan` when playout starts)                                                                                                                         |
+| `response_start`                                                                   | The `llm_response` span itself                                                                                                                                                                                                             |
+| `tool_call`, `tool_result`                                                         | The tool span itself                                                                                                                                                                                                                       |
+| `call_end`; caller or agent points whose turn span does not exist                  | The call span. Step points (`response_start`, `tool_*`) are written from their own span's hooks, so their owner always exists. If a step span is not exported, there is no step to link, and the SDK writes no point and assigns no `seq`. |
 
 Ownership follows **who observed the fact**, never which operation happened to be running.
 
@@ -242,15 +242,15 @@ Ownership follows **who observed the fact**, never which operation happened to b
 
 The fields and meanings are #2612's `VoiceEvent`, minus `seq` (the map key) and minus the owner-supplied `span_id` and `name`, plus:
 
-| Field                       | Type          | Req. | Meaning                                                                                                                                                                                                                                                                                                                                                                                                                               |
-| --------------------------- | ------------- | ---- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `speech_end.interrupted_by` | `UtteranceId` | no   | Agent speech only: the caller utterance whose speech caused the interruption. LiveKit records the first cause on the speech handle (`SpeechHandle._interruptSource`, `speech_handle.ts:96-100`). For `audio_activity`, the SDK sets the caller utterance open at that moment; for `user_turn`, the last utterance of the committed turn. It stays absent for `programmatic` interruptions and whenever the agent was not interrupted. |
+| Field                       | Type          | Req. | Meaning                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| --------------------------- | ------------- | ---- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `speech_end.interrupted_by` | `UtteranceId` | no   | Agent speech only: the caller utterance whose speech caused the interruption. LiveKit records the first cause on the speech handle (`SpeechHandle._interruptSource`, `speech_handle.ts:217`, set on the first interrupt only at `:401` and `:505`; values at `:96-100`). For `audio_activity`, the SDK sets the caller utterance open at that moment; for `user_turn`, the last utterance of the committed turn. It stays absent for `programmatic` interruptions and whenever the agent was not interrupted. |
 
 ## IDs and relationships
 
 The IDs are the same as in #2612: `u<n>` caller counters, `<SpeechHandle.id>/<n>` agent utterances, `SpeechHandle.id` response ids, and framework chat item ids. That README has the transcript-attachment and `message` rules, including decision E for realtime caller items. Two LiveKit 1.9.2 facts decide identity versus ownership here:
 
-- **Cascaded tool replies reuse the speech handle.** `_pipelineReplyTaskImpl` increments `speechHandle._numSteps` and reruns the reply task on the same handle (`aa.ts:4391-4421`). Both `llm-1` and `llm-2` therefore start `speech_1`, and playout is `speech_1/0`. Lingua links agent speech to the handle's **latest** generation that started before playback, which is `llm-2`. #2612's cascaded example gives the reply its own handle (`speech_2`), which LiveKit 1.9.2 does not do.
+- **Cascaded tool replies reuse the speech handle.** `_pipelineReplyTaskImpl` increments `speechHandle._numSteps` and reruns the reply task on the same handle (`aa.ts:4391-4421`). Both `llm-1` and `llm-2` therefore start `speech_1`, and playout is `speech_1/0`. Lingua links agent speech to the handle's **latest** generation that started at or before playback, which is `llm-2`. #2612's cascaded example gives the reply its own handle (`speech_2`), which LiveKit 1.9.2 does not do.
 - **Realtime tool replies get a new handle but continue the turn span.** `continueToolReplyTurn` (`aa.ts:492-496`, called at `aa.ts:5103`) moves `speech_1`'s open `agent_turn` to the reply handle `speech_2`. One `assistant_turn` span (`at-1`) therefore owns playout `speech_2/0`, while its children `rt-1` and `rt-2` start `speech_1` and `speech_2`.
 
 Identity always comes from the point's ids. The owner is only placement, and Lingua never infers an id from it, except the step `span_id` and tool `name` it supplies.
@@ -273,14 +273,14 @@ These are the same as in #2612: call clock, `basis`, `seq` for order, `at_ms` fo
   - **`user_turn`:** the row of the recognition's open `user_turn`. LiveKit opens it at the first speech or transcript (`audio_recognition.ts:1172-1194`, `ensureUserTurnSpan`), including a barge-in during agent playout. In realtime, the reference SDK's own `user_turn` (`realtime.ts`) is used.
   - **`assistant_turn`:** the row of `activity.currentSpeech._agentTurnSpan` when playout starts.
   - **`llm_response` and tool:** the row being started or ended in `onStart` / `onEnd`.
-  - **No row:** a span sampled out or not yet exported. The point goes on the call span.
+  - **No row:** a turn span sampled out or not yet exported. Caller and agent points go on the call span. A step with no row gets no point (see the owner table).
 - **Caller hooks:** VAD start and end, STT finals, and `onEndOfTurn` record a caller utterance's owner at `speech_start` and reuse it for that utterance's later points.
 - **Talk-over:** a dropped turn (`aa.ts:3328-3333`, the speech is not interruptible) leaves its `user_turn` without `end_of_turn`, which needs no extra point. LiveKit sees the caller only when `turnHandling.interruption.discardAudioIfUninterruptible` is `false`. The default `true` drops input audio while non-interruptible speech plays (`aa.ts:1795-1810`, `turn_config/interruption.ts:65`). The caller is then on recording channel 0, but there are no points. The cascaded example assumes `false`.
 - **`interrupted_by`:** read `speechHandle._interruptSource` at the agent's `playbackFinished`.
 
 ### Pipecat (Python, sketch against `sdk-python` `delner/pipecat-voice-recording`)
 
-The reference integration already opens its own `user_turn` and `assistant_turn` spans (`voice/turns.py:20-27`). It parents `llm_response` and `tts` / `pipecat.audio_output` under the assistant turn (`voice/instrumentation.py:405-407`, `496-497`), and the tool spans under their owner (`instrumentation.py:449`). The owner table therefore applies unchanged:
+The reference integration already opens its own `user_turn` and `assistant_turn` spans (`voice/turns.py:20-27`). It parents `llm_response` and `tts` / `pipecat.audio_output` under the assistant turn (`voice/instrumentation.py:405-407`, `496-497`), and each tool span under the `llm_response` that requested it, or the pipeline root without one (`voice/instrumentation.py:434-449`). The owner table therefore applies unchanged:
 
 - **Caller points:** on the user turn open when VAD started.
 - **Playout:** on the assistant turn whose `context_id` is being written to the output transport.
@@ -305,16 +305,16 @@ Conversion code that changes from #490:
 2. `voice_calls` finds each span's nearest versioned ancestor and calls `build_points`. `build_points` assembles events and then hands them to `timeline_speech`.
 3. In `timeline_speech`:
    - **Uncommitted utterances:** a caller utterance whose `user_turn` has no `end_of_turn` links to no step. #490 still puts such utterances in the open window.
-   - **Latest generation:** agent speech links to its handle's latest generation that started before playback. #490 took the first generation, which is the same result whenever a handle runs one generation, as in #490's own examples.
-4. `VoiceEvent::SpeechEnd` gains an optional `interrupted_by`. Trajectory types are otherwise unchanged.
+   - **Latest generation:** agent speech links to its handle's latest generation that started at or before the playback start. #490 took the first generation, which is the same result whenever a handle runs one generation, as in #490's own examples.
+4. `VoiceEventDetail::SpeechEnd` gains an optional `interrupted_by`. Trajectory types are otherwise unchanged.
 
 ## Trajectory and app mapping
 
 **Implemented in Lingua**, with the app as a sketch.
 
-`VoiceCall.events` and `Speech` have the same shape as in #490, so #22034, #22036 and the #490 latency strip work unchanged.
+`VoiceCall.events` and `Speech` have the same shape as in #490, so #22034 and #22036 work unchanged, and the latency strip sketched in #2612 applies as is.
 
-- **Turns:** the `user_turn` rows now come from the integration itself, so thread turns start at them. The cascaded example yields a third turn, `ut-3` "Mm-hm, perfect.", with no response.
+- **Turns:** the `user_turn` rows now come from the integration itself. A thread turn starts at a `user_turn` that logs the caller's text. The cascaded example therefore yields a third turn, `ut-3` "Mm-hm, perfect.", with no response. Realtime `ut-2` has no transcript, so, as in #490, that turn starts at `rt-3` with an empty user message.
 - **Overlap shading:** the app can draw it from intervals, as in #490. It can colour overlap ending in an agent `speech_end` with `interrupted_by` as barge-in, and other overlap as talk-over.
 
 ## Worked example
@@ -339,7 +339,7 @@ livekit.agent_session call-span   audio.recordings: call-0000 (13 s, ch 0 caller
 | Turn-1 latency        | 2900 → 5300 = 2400 ms: `ut-1` end → `ut-1` end_of_turn 3400 → `llm-1` 3450 → `at-1` playout                  | 3400 (padded) → 5000 = 1600 ms: `ut-1` → `rt-1` 3600 → `at-1` playout                          |
 | Barge-in              | `u2` 7600–8500 against `speech_1/0` 5300–7900: 300 ms overlap, `interrupted_by: "u2"`                        | `u2` 7600–9000 against `speech_2/0` 5000–7900: 300 ms, `interrupted_by: "u2"`, `truncate` 2900 |
 | Talk-over             | `u3` 10800–11500 against `speech_2/0` 9900–12600: 700 ms, `interrupted: false`; `ut-3` without `end_of_turn` | —                                                                                              |
-| Late evidence         | none                                                                                                         | `u1` transcript at 4300 on `ut-1`, which ended at 3600; `missing` for `u2` at close on `ut-2`  |
+| Late evidence         | `u1` transcript and `message` at 3450, after `end_of_turn` (3400) and before `ut-1` ends at the commit       | `u1` transcript at 4300 on `ut-1`, which ended at 3600; `missing` for `u2` at close on `ut-2`  |
 | Lingua speech → steps | `u1` → llm-1, llm-2; `speech_1/0` → llm-2; `u2` → llm-3, llm-4; `speech_2/0` → llm-4; `u3` → none            | `u1` → rt-1, rt-2; `speech_2/0` → rt-2; `u2` → rt-3, rt-4; `speech_4/0` → rt-4                 |
 
 ## Customer usefulness
@@ -349,13 +349,13 @@ The evidence is #2612's, so the answers match call timeline. The differences are
 - **What was said: good.** Same sources and `missing` points. Caller text sits on the turn span the customer clicks.
 - **Playing matching audio: good.** Same intervals, so Lingua cuts selections the same way.
 - **Diagnosing delays: strong.** The same subtraction on one clock, read across three or four spans instead of one log.
-- **Interruptions and overlap: strongest of the options.** `interrupted_by` separates barge-in from talk-over without a heuristic, and an unanswered `user_turn` shows why nothing replied.
+- **Interruptions and overlap: strong.** Option 2's intervals, and `interrupted_by` separates barge-in from talk-over without a heuristic, and an unanswered `user_turn` shows why nothing replied.
 - **Following tools: good.** Tool timing sits on the tool span next to its arguments and result.
-- **Missing or uncertain evidence: strong.** `basis`, `missing`, `seq` gaps and `call_end`. A missing owner degrades to the call span, never to a lost point.
+- **Missing or uncertain evidence: strong.** `basis`, `missing`, `seq` gaps and `call_end`. A missing turn span degrades to the call span, never to a lost point.
 
 ## Edge cases and weaknesses
 
-- **Owner spans missing or sampled out:** points fall back to the call span. That keeps them, but loses locality for that turn.
+- **Turn spans missing or sampled out:** caller and agent points fall back to the call span. That keeps them, but loses locality for that turn.
 - **Point limit:** 256 per span. A long monologue `user_turn` with very many VAD segments could reach it, and overflow is reported, as above.
 - **Index cost:** each `seq` key is a distinct JSON path under `metadata["voice.points"]`. Paths are bounded by the longest call's point count, but still more than #2612's one array per row. This needs a Brainstore owner's check (open question).
 - **Many small writes:** about 30 merges for a 13 s call instead of 2 chunk rows. They ride the logger's batching, but each lands as its own merge on the row.
@@ -366,7 +366,7 @@ The evidence is #2612's, so the answers match call timeline. The differences are
 
 ## Implementation starting point
 
-Step 1 is implemented (zod, examples, test). Steps 2, 3 and 5 are sketches. Step 4 is implemented in the companion Lingua PR.
+Step 1 is implemented (zod, examples, test). Steps 2, 3 and 5 are sketches. Step 4 is implemented in the companion Lingua PR, except the allow-list keys.
 
 1. Lock the schema in `span-points.ts`, including the owner table and the 256 limit.
 2. LiveKit: add `points.ts` beside `turns.ts`, with the per-session `seq`, owner lookup through `processor.ts` rows, one `span.log` per point and the fallback to the call span. Wire it to the #2612 hooks. Set `voice.points_version` and `voice.pipeline` at `_startImpl`.
