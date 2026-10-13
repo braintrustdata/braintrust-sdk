@@ -740,8 +740,10 @@ function readSpanReference(value: unknown): EveSpanReference | undefined {
   const exported = value["exported"];
   const rootSpanId = value["rootSpanId"];
   const spanId = value["spanId"];
+  const captureAttachments = value["captureAttachments"];
   if (
-    typeof value["captureAttachments"] !== "boolean" ||
+    (captureAttachments !== undefined &&
+      typeof captureAttachments !== "boolean") ||
     typeof exported !== "string" ||
     typeof rootSpanId !== "string" ||
     typeof spanId !== "string"
@@ -749,7 +751,9 @@ function readSpanReference(value: unknown): EveSpanReference | undefined {
     return undefined;
   }
   return {
-    captureAttachments: value["captureAttachments"],
+    // State written before attachment capture was configurable has no policy.
+    captureAttachments:
+      captureAttachments ?? _internalCaptureAttachmentsEnabled(),
     exported,
     rootSpanId,
     spanId,

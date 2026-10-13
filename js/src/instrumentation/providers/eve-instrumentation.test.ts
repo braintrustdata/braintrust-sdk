@@ -741,130 +741,139 @@ describe("braintrustEveInstrumentation", () => {
     expect(step?.root_span_id).toBe(parent?.root_span_id);
   });
 
-  it("resumes spans and turn metrics from Eve operation state", async () => {
-    const firstProvider = braintrustEveInstrumentation();
-    const turnContext = providerContext();
-    const modelContext = providerContext();
-    const scope = ATTEMPT_SCOPE;
+  it.each([false, true])(
+    "resumes spans and turn metrics from Eve operation state (legacy: %s)",
+    async (legacy) => {
+      const firstProvider = braintrustEveInstrumentation();
+      const turnContext = providerContext();
+      const modelContext = providerContext();
+      const scope = ATTEMPT_SCOPE;
 
-    await firstProvider.events["turn.started"](
-      {
-        idempotencyKey: "turn:session-root:turn-0",
-        rootSessionId: "session-root",
-        sequence: 0,
-        sessionId: "session-root",
-        turnId: "turn-0",
-        type: "turn.started",
-      },
-      turnContext,
-    );
-    await firstProvider.events["model.call.started"](
-      {
-        idempotencyKey: "model:attempt-0:0",
-        input: {
-          messages: [{ content: "Resume this call", role: "user" }],
+      await firstProvider.events["turn.started"](
+        {
+          idempotencyKey: "turn:session-root:turn-0",
+          rootSessionId: "session-root",
+          sequence: 0,
+          sessionId: "session-root",
+          turnId: "turn-0",
+          type: "turn.started",
         },
-        model: {
-          modelId: "gpt-5.4-mini",
-          provider: "openai.responses",
+        turnContext,
+      );
+      await firstProvider.events["model.call.started"](
+        {
+          idempotencyKey: "model:attempt-0:0",
+          input: {
+            messages: [{ content: "Resume this call", role: "user" }],
+          },
+          model: {
+            modelId: "gpt-5.4-mini",
+            provider: "openai.responses",
+          },
+          scope,
+          type: "model.call.started",
         },
-        scope,
-        type: "model.call.started",
-      },
-      modelContext,
-    );
+        modelContext,
+      );
 
-    const persisted = modelContext.state.get();
-    expect(persisted).toMatchObject({
-      exported: expect.any(String),
-      rootSpanId: expect.any(String),
-      spanId: expect.any(String),
-    });
+      const persisted = {
+        ...(modelContext.state.get() as Record<string, EveJsonValue>),
+      };
+      if (legacy) delete persisted.captureAttachments;
+      expect(persisted).toMatchObject({
+        exported: expect.any(String),
+        rootSpanId: expect.any(String),
+        spanId: expect.any(String),
+      });
 
-    const resumedProvider = braintrustEveInstrumentation();
-    await resumedProvider.events["model.call.completed"](
-      {
-        content: [{ text: "Resumed output", type: "text" }],
-        finishReason: "stop",
-        idempotencyKey: "model:attempt-0:0",
-        scope,
-        type: "model.call.completed",
-        usage: { inputTokens: 4, outputTokens: 2 },
-      },
-      providerContext(persisted),
-    );
-    const secondModelContext = providerContext();
-    await resumedProvider.events["model.call.started"](
-      {
-        idempotencyKey: "model:attempt-0:1",
-        input: {
-          messages: [{ content: "Continue this call", role: "user" }],
+      const resumedProvider = braintrustEveInstrumentation();
+      await resumedProvider.events["model.call.completed"](
+        {
+          content: [{ text: "Resumed output", type: "text" }],
+          finishReason: "stop",
+          idempotencyKey: "model:attempt-0:0",
+          scope,
+          type: "model.call.completed",
+          usage: { inputTokens: 4, outputTokens: 2 },
         },
-        model: {
-          modelId: "gpt-5.4-mini",
-          provider: "openai.responses",
+        providerContext(persisted),
+      );
+      const secondModelContext = providerContext();
+      await resumedProvider.events["model.call.started"](
+        {
+          idempotencyKey: "model:attempt-0:1",
+          input: {
+            messages: [{ content: "Continue this call", role: "user" }],
+          },
+          model: {
+            modelId: "gpt-5.4-mini",
+            provider: "openai.responses",
+          },
+          scope: { ...scope, stepIndex: 1 },
+          type: "model.call.started",
         },
-        scope: { ...scope, stepIndex: 1 },
-        type: "model.call.started",
-      },
-      secondModelContext,
-    );
-    const secondPersisted = secondModelContext.state.get();
-    expect(secondPersisted).toMatchObject({
-      turnMetricContributions: {
-        "model:attempt-0:0": {
+        secondModelContext,
+      );
+      const secondPersisted = {
+        ...(secondModelContext.state.get() as Record<string, EveJsonValue>),
+      };
+      if (legacy) delete secondPersisted.captureAttachments;
+      expect(secondPersisted).toMatchObject({
+        turnMetricContributions: {
+          "model:attempt-0:0": {
+            completion_tokens: 2,
+            prompt_tokens: 4,
+            tokens: 6,
+          },
+        },
+      });
+      const finalProvider = braintrustEveInstrumentation();
+      await finalProvider.events["model.call.completed"](
+        {
+          content: [{ text: "Final resumed output", type: "text" }],
+          finishReason: "stop",
+          idempotencyKey: "model:attempt-0:1",
+          scope: { ...scope, stepIndex: 1 },
+          type: "model.call.completed",
+          usage: { inputTokens: 3, outputTokens: 1 },
+        },
+        providerContext(secondPersisted),
+      );
+
+      const spans = (await backgroundLogger.drain()) as Array<
+        Record<string, any>
+      >;
+      const steps = spans.filter(
+        (span) => span.span_attributes?.name === "eve.step",
+      );
+      expect(steps).toHaveLength(2);
+      expect(steps[0]).toMatchObject({
+        input: [{ content: "Resume this call", role: "user" }],
+        metrics: {
           completion_tokens: 2,
           prompt_tokens: 4,
           tokens: 6,
         },
-      },
-    });
-    const finalProvider = braintrustEveInstrumentation();
-    await finalProvider.events["model.call.completed"](
-      {
-        content: [{ text: "Final resumed output", type: "text" }],
-        finishReason: "stop",
-        idempotencyKey: "model:attempt-0:1",
-        scope: { ...scope, stepIndex: 1 },
-        type: "model.call.completed",
-        usage: { inputTokens: 3, outputTokens: 1 },
-      },
-      providerContext(secondPersisted),
-    );
-
-    const spans = (await backgroundLogger.drain()) as Array<
-      Record<string, any>
-    >;
-    const steps = spans.filter(
-      (span) => span.span_attributes?.name === "eve.step",
-    );
-    expect(steps).toHaveLength(2);
-    expect(steps[0]).toMatchObject({
-      input: [{ content: "Resume this call", role: "user" }],
-      metrics: {
-        completion_tokens: 2,
-        prompt_tokens: 4,
-        tokens: 6,
-      },
-      output: [
-        {
-          finish_reason: "stop",
-          message: {
-            content: "Resumed output",
-            role: "assistant",
+        output: [
+          {
+            finish_reason: "stop",
+            message: {
+              content: "Resumed output",
+              role: "assistant",
+            },
           },
-        },
-      ],
-    });
-    const turn = spans.find(
-      (span) => span.span_attributes?.name === "eve.turn",
-    );
-    expect(turn?.metrics).toMatchObject({
-      completion_tokens: 3,
-      prompt_tokens: 7,
-      tokens: 10,
-    });
-  });
+        ],
+      });
+      const turn = spans.find(
+        (span) => span.span_attributes?.name === "eve.turn",
+      );
+      expect(turn?.metrics).toMatchObject({
+        completion_tokens: 3,
+        prompt_tokens: 7,
+        tokens: 10,
+      });
+    },
+  );
 
   it("does not double-count replayed model completions", async () => {
     const provider = braintrustEveInstrumentation();
@@ -1090,14 +1099,20 @@ describe("braintrustEveInstrumentation", () => {
     expect(JSON.stringify(step?.input)).not.toContain("secret");
   });
 
-  it.each([
-    { option: false, env: "true", enabled: false },
-    { option: true, env: "false", enabled: true },
-    { option: undefined, env: undefined, enabled: false },
-    { option: undefined, env: "true", enabled: true },
-  ])(
-    "applies the owning policy to model media and preserves action JSON ($option, $env)",
-    async ({ option, env, enabled: captureAttachments }) => {
+  it.each(
+    [
+      { option: false, env: "true", enabled: false },
+      { option: true, env: "false", enabled: true },
+      { option: undefined, env: undefined, enabled: false },
+      { option: undefined, env: "true", enabled: true },
+    ].flatMap((policy) => [
+      { ...policy, legacy: false },
+      { ...policy, legacy: true },
+    ]),
+  )(
+    "applies the persisted or current policy to model media and preserves action JSON ($option, $env, legacy: $legacy)",
+    async ({ option, env, enabled, legacy }) => {
+      const captureAttachments = legacy ? !enabled : enabled;
       vi.stubEnv("BRAINTRUST_CAPTURE_ATTACHMENTS", env);
       const logger = initLogger({
         projectName: "eve-instrumentation.test.ts",
@@ -1124,8 +1139,12 @@ describe("braintrustEveInstrumentation", () => {
       initLogger({
         projectName: "eve-instrumentation.test.ts",
         projectId: "test-project-id",
-        captureAttachments: !captureAttachments,
+        captureAttachments: !enabled,
       });
+      const persistedTurn = {
+        ...(turnContext.state.get() as Record<string, EveJsonValue>),
+      };
+      if (legacy) delete persistedTurn.captureAttachments;
       // Recreate the bridge from persisted state, as Eve does across workers.
       const resumedProvider = braintrustEveInstrumentation();
       await resumedProvider.events["turn.started"](
@@ -1137,7 +1156,7 @@ describe("braintrustEveInstrumentation", () => {
           turnId: "turn-0",
           type: "turn.started",
         },
-        providerContext(turnContext.state.get()),
+        providerContext(persistedTurn),
       );
       const decode = vi.spyOn(globalThis, "atob");
       await resumedProvider.events["model.call.started"](
@@ -1238,6 +1257,10 @@ describe("braintrustEveInstrumentation", () => {
       const step = spans.find(
         (span) => span.span_attributes?.name === "eve.step",
       );
+      expect(step).toMatchObject({
+        root_span_id: persistedTurn.rootSpanId,
+        span_parents: [persistedTurn.spanId],
+      });
       const inputAttachment = step?.input?.[0]?.content?.[0]?.data;
       const imageAttachment = step?.input?.[0]?.content?.[1]?.image;
       const unconvertedFile = step?.input?.[0]?.content?.[2]?.data;
