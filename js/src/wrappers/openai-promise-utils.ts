@@ -1,12 +1,12 @@
 import type {
   ArgsOf,
   InvocationAdditionalOf,
-} from "../instrumentation/core/channel-definitions";
+} from "../instrumentation/core/interceptor-definitions";
 import type { ResultOf } from "../instrumentation/core/tracing-types";
 import type {
   OpenAIAsyncChannel,
   OpenAIChannel,
-} from "../instrumentation/plugins/openai-channels";
+} from "../instrumentation/plugins/openai-interceptors";
 
 export type EnhancedResponse<T> = {
   response: Response;

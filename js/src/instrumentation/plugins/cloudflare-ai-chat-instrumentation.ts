@@ -3,7 +3,7 @@ import type {
   CloudflareAIChatAgent,
   CloudflareAIChatResponseResult,
 } from "../../vendor-sdk-types/cloudflare-ai-chat";
-import { cloudflareAIChatChannels } from "./cloudflare-ai-chat-channels";
+import { cloudflareAIChatChannels } from "./cloudflare-ai-chat-interceptors";
 
 const wrappedTurnRunners = new WeakSet<object>();
 const wrappedResponseHooks = new WeakSet<object>();

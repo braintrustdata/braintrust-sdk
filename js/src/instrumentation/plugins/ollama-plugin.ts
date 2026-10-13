@@ -21,9 +21,9 @@ import {
   traceAsyncCall,
   traceStreamingCall,
   unsubscribeAll,
-} from "../core/channel-tracing";
+} from "../core/tracing";
 import type { AsyncEndOf } from "../core/tracing-types";
-import { ollamaChannels } from "./ollama-channels";
+import { ollamaChannels } from "./ollama-interceptors";
 
 export class OllamaPlugin extends BasePlugin {
   protected onEnable(): void {

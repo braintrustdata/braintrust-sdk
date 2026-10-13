@@ -16,13 +16,13 @@ import {
   runWithAutoInstrumentationSuppressed,
 } from "../auto-instrumentation-suppression";
 import { BasePlugin } from "../core";
-import { unsubscribeAll } from "../core/channel-tracing";
+import { unsubscribeAll } from "../core/tracing";
 import {
   isAsyncIterable,
   observeByteStream,
   patchStreamIfNeeded,
 } from "../core/stream-patcher";
-import { elevenLabsChannels } from "./elevenlabs-channels";
+import { elevenLabsChannels } from "./elevenlabs-interceptors";
 
 export class ElevenLabsPlugin extends BasePlugin {
   protected onEnable(): void {

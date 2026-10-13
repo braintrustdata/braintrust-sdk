@@ -1,5 +1,5 @@
 import type { InstrumentationConfig } from "../orchestrion-js";
-import { huggingFaceTransformersChannels } from "../../instrumentation/plugins/huggingface-transformers-channels";
+import { huggingFaceTransformersChannels } from "../../instrumentation/plugins/huggingface-transformers-interceptors";
 
 const moduleFiles = [
   {

@@ -1,4 +1,4 @@
-import type { ReturnOf } from "../core/channel-definitions";
+import type { ReturnOf } from "../core/interceptor-definitions";
 import { debugLogger } from "../../debug-logger";
 import { BasePlugin, toLoggedError } from "../core";
 import {
@@ -6,7 +6,7 @@ import {
   traceStreamingCall,
   traceSyncStreamCall,
   unsubscribeAll,
-} from "../core/channel-tracing";
+} from "../core/tracing";
 import { observeResult, runInstrumentation } from "../core/observe-result";
 
 import {
@@ -85,7 +85,7 @@ import {
   BRAINTRUST_WRAPPED_AI_SDK_MODEL,
   aiSDKChannels,
   harnessAgentChannels,
-} from "./ai-sdk-channels";
+} from "./ai-sdk-interceptors";
 import { extractTokenMetrics } from "./ai-sdk-metrics";
 import { currentCloudflareThinkSpan } from "./cloudflare-think-context";
 

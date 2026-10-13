@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { wrapOpenRouterAgent } from "./openrouter-agent";
-import { openRouterAgentChannels } from "../instrumentation/plugins/openrouter-agent-channels";
+import { openRouterAgentChannels } from "../instrumentation/plugins/openrouter-agent-interceptors";
 
 describe("wrapOpenRouterAgent", () => {
   afterEach(() => {

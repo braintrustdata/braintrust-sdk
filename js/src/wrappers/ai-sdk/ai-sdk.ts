@@ -5,7 +5,7 @@ import {
   aiSDKChannels,
   BRAINTRUST_WRAPPED_AI_SDK_MODEL,
   harnessAgentChannels,
-} from "../../instrumentation/plugins/ai-sdk-channels";
+} from "../../instrumentation/plugins/ai-sdk-interceptors";
 import type {
   AISDK,
   AISDKAgentClass,

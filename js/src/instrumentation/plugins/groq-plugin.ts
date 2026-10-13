@@ -25,9 +25,9 @@ import {
   traceAsyncCall,
   traceStreamingCall,
   unsubscribeAll,
-} from "../core/channel-tracing";
+} from "../core/tracing";
 import { isAsyncIterable, observeByteStream } from "../core/stream-patcher";
-import { groqChannels } from "./groq-channels";
+import { groqChannels } from "./groq-interceptors";
 import {
   aggregateChatCompletionChunks,
   parseMetricsFromUsage,

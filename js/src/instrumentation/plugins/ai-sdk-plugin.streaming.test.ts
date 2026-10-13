@@ -22,7 +22,7 @@ import {
   harnessContinuationParent,
 } from "../../wrappers/ai-sdk/harness-agent-context";
 import { workflowAgentWrapperSpanCountForTesting } from "../../wrappers/ai-sdk/workflow-agent-context";
-import { aiSDKChannels } from "./ai-sdk-channels";
+import { aiSDKChannels } from "./ai-sdk-interceptors";
 import { AISDKPlugin } from "./ai-sdk-plugin";
 
 try {

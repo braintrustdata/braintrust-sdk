@@ -17,8 +17,8 @@ import {
   traceAsyncCall,
   traceStreamingCall,
   unsubscribeAll,
-} from "../core/channel-tracing";
-import { mistralChannels } from "./mistral-channels";
+} from "../core/tracing";
+import { mistralChannels } from "./mistral-interceptors";
 
 export class MistralPlugin extends BasePlugin {
   protected onEnable(): void {

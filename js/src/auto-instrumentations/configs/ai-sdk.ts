@@ -2,7 +2,7 @@ import type { InstrumentationConfig } from "../orchestrion-js";
 import {
   aiSDKChannels,
   harnessAgentChannels,
-} from "../../instrumentation/plugins/ai-sdk-channels";
+} from "../../instrumentation/plugins/ai-sdk-interceptors";
 
 /**
  * Instrumentation configurations for the Vercel AI SDK.

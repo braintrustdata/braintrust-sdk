@@ -1,4 +1,4 @@
-import { mistralChannels } from "../instrumentation/plugins/mistral-channels";
+import { mistralChannels } from "../instrumentation/plugins/mistral-interceptors";
 import type {
   MistralAgents,
   MistralAgentsCompletionResponse,

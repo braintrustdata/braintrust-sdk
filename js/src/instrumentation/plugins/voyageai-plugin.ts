@@ -18,8 +18,8 @@ import {
   runWithAutoInstrumentationSuppressed,
 } from "../auto-instrumentation-suppression";
 import { BasePlugin } from "../core";
-import { unsubscribeAll } from "../core/channel-tracing";
-import { voyageAIChannels } from "./voyageai-channels";
+import { unsubscribeAll } from "../core/tracing";
+import { voyageAIChannels } from "./voyageai-interceptors";
 
 const RERANK_METADATA_ALLOWLIST = new Set([
   "model",

@@ -15,7 +15,7 @@ import type {
   CloudflareAIChatTurnCallback,
 } from "../../vendor-sdk-types/cloudflare-ai-chat";
 import type { ChannelMessage } from "../core/tracing-types";
-import { cloudflareAIChatChannels } from "./cloudflare-ai-chat-channels";
+import { cloudflareAIChatChannels } from "./cloudflare-ai-chat-interceptors";
 import { instrumentCloudflareAIChatResponseHook } from "./cloudflare-ai-chat-instrumentation";
 
 type TurnChannel = typeof cloudflareAIChatChannels.runExclusiveChatTurn;

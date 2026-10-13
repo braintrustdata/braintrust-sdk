@@ -4,7 +4,7 @@ import {
   traceAsyncCall,
   traceSyncStreamCall,
   unsubscribeAll,
-} from "../core/channel-tracing";
+} from "../core/tracing";
 import { observeResult, runInstrumentation } from "../core/observe-result";
 import { isAsyncIterable, patchStreamIfNeeded } from "../core/stream-patcher";
 
@@ -29,7 +29,7 @@ import type {
 } from "../../vendor-sdk-types/genkit";
 import { processInputAttachments } from "../../wrappers/attachment-utils";
 import type { ChannelMessage } from "../core/tracing-types";
-import { genkitChannels, genkitCoreChannels } from "./genkit-channels";
+import { genkitChannels, genkitCoreChannels } from "./genkit-interceptors";
 
 type SpanState = {
   span: Span;

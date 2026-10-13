@@ -4,9 +4,9 @@ import type {
   OpenAIAgentsTrace,
 } from "../../vendor-sdk-types/openai-agents";
 import { BasePlugin } from "../core";
-import { unsubscribeAll } from "../core/channel-tracing";
+import { unsubscribeAll } from "../core/tracing";
 import { runInstrumentation } from "../core/observe-result";
-import { openAIAgentsCoreChannels } from "./openai-agents-channels";
+import { openAIAgentsCoreChannels } from "./openai-agents-interceptors";
 import { OpenAIAgentsTraceProcessor } from "./openai-agents-trace-processor";
 
 function firstArgument(args: unknown): unknown {

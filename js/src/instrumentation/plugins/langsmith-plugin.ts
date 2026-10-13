@@ -12,11 +12,11 @@ import type {
   LangSmithRun,
 } from "../../vendor-sdk-types/langsmith";
 import { BasePlugin } from "../core";
-import { unsubscribeAll } from "../core/channel-tracing";
+import { unsubscribeAll } from "../core/tracing";
 import { runInstrumentation } from "../core/observe-result";
 
 import type { ChannelMessage } from "../core/tracing-types";
-import { langSmithChannels } from "./langsmith-channels";
+import { langSmithChannels } from "./langsmith-interceptors";
 
 type ActiveRun = {
   run: LangSmithRun;

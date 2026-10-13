@@ -1,7 +1,7 @@
 import type {
   ArgsOf,
   InvocationAdditionalOf,
-} from "../core/channel-definitions";
+} from "../core/interceptor-definitions";
 import { Attachment, startSpan, withCurrent, type Span } from "../../logger";
 import { debugLogger } from "../../debug-logger";
 import { getCurrentUnixTimestamp } from "../../util";
@@ -26,11 +26,8 @@ import type {
   OpenAIMediaEvent,
   OpenAIMediaResponse,
 } from "../../vendor-sdk-types/openai-media";
-import { openAIChannels } from "./openai-channels";
-import {
-  buildStartSpanArgs,
-  mergeInputMetadata,
-} from "../core/channel-tracing-utils";
+import { openAIChannels } from "./openai-interceptors";
+import { buildStartSpanArgs, mergeInputMetadata } from "../core/tracing-utils";
 
 type MediaPart =
   | { type: "text"; text: string }

@@ -7,7 +7,7 @@ import {
   BraintrustLangChainCallbackHandler,
 } from "../../wrappers/langchain/callback-handler";
 import type { ChannelMessage } from "../core/tracing-types";
-import { langChainChannels } from "./langchain-channels";
+import { langChainChannels } from "./langchain-interceptors";
 
 type LangChainConfigureChannel =
   | typeof langChainChannels.configure

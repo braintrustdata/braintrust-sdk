@@ -35,7 +35,7 @@ import {
   runWithAutoInstrumentationSuppressed,
 } from "../auto-instrumentation-suppression";
 import type { ChannelMessage } from "../core/tracing-types";
-import { piCodingAgentChannels } from "./pi-coding-agent-channels";
+import { piCodingAgentChannels } from "./pi-coding-agent-interceptors";
 
 type PiPromptState = {
   activeLlmSpans: Set<PiLlmSpanState>;

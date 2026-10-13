@@ -1,5 +1,5 @@
 import type { InstrumentationConfig } from "../orchestrion-js";
-import { cloudflareAgentsChannels } from "../../instrumentation/plugins/cloudflare-agents-channels";
+import { cloudflareAgentsChannels } from "../../instrumentation/plugins/cloudflare-agents-interceptors";
 
 const cloudflareAgentsVersionRange = ">=0.17.0 <0.18.0";
 

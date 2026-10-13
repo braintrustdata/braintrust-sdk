@@ -9,7 +9,7 @@ import {
   withSpanInstrumentationName,
 } from "../../span-origin";
 import { BasePlugin, toLoggedError } from "../core";
-import { traceStreamingCall, unsubscribeAll } from "../core/channel-tracing";
+import { traceStreamingCall, unsubscribeAll } from "../core/tracing";
 import { observeResult, runInstrumentation } from "../core/observe-result";
 import { isAsyncIterable, patchStreamIfNeeded } from "../core/stream-patcher";
 
@@ -46,7 +46,7 @@ import { registerAnthropicSessionStreamCollector } from "../../wrappers/anthropi
 import { finalizeAnthropicTokens } from "../../wrappers/anthropic-tokens-util";
 import { isAutoInstrumentationSuppressed } from "../auto-instrumentation-suppression";
 import type { ChannelMessage } from "../core/tracing-types";
-import { anthropicChannels } from "./anthropic-channels";
+import { anthropicChannels } from "./anthropic-interceptors";
 
 type AnthropicToolRunnerState = {
   aggregatedMetrics: Record<string, number>;

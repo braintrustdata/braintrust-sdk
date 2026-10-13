@@ -42,7 +42,7 @@ import type {
   FlueTurnRequestEvent,
 } from "../../vendor-sdk-types/flue";
 import type { ChannelMessage } from "../core/tracing-types";
-import { flueChannels } from "./flue-channels";
+import { flueChannels } from "./flue-interceptors";
 
 type FlueObserver = (event: unknown, ctx?: unknown) => void;
 type BraintrustFlueObserver = FlueObserver & FlueInstrumentation;

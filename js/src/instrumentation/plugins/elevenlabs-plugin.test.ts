@@ -7,7 +7,7 @@ import {
 } from "node:stream/web";
 import { Attachment, _exportsForTestingOnly, initLogger } from "../../logger";
 import { configureNode } from "../../node/config";
-import { elevenLabsChannels } from "./elevenlabs-channels";
+import { elevenLabsChannels } from "./elevenlabs-interceptors";
 import { wrapElevenLabs } from "../../wrappers/elevenlabs";
 
 configureNode();

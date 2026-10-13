@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { langChainChannels } from "./langchain-channels";
+import { langChainChannels } from "./langchain-interceptors";
 import { LangChainPlugin } from "./langchain-plugin";
 
 function createManager(handlers: unknown[] = []) {

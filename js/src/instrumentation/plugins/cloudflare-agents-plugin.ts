@@ -10,7 +10,7 @@ import { BasePlugin } from "../core";
 import { observeResult, runInstrumentation } from "../core/observe-result";
 
 import type { ChannelMessage } from "../core/tracing-types";
-import { cloudflareAgentsChannels } from "./cloudflare-agents-channels";
+import { cloudflareAgentsChannels } from "./cloudflare-agents-interceptors";
 
 const CLOUDFLARE_WORKERS_CONTEXT = {
   span_origin: {

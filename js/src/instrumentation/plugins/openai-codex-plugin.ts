@@ -26,7 +26,7 @@ import type {
   OpenAICodexWebSearchItem,
 } from "../../vendor-sdk-types/openai-codex";
 import type { ChannelMessage } from "../core/tracing-types";
-import { openAICodexChannels } from "./openai-codex-channels";
+import { openAICodexChannels } from "./openai-codex-interceptors";
 
 type CodexRunState = {
   activeLlmSpan?: CodexLlmSpanState;

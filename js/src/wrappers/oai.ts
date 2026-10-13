@@ -4,9 +4,9 @@ import type {
   OpenAIMediaParams,
 } from "../vendor-sdk-types/openai-media";
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import type { ArgsOf } from "../instrumentation/core/channel-definitions";
+import type { ArgsOf } from "../instrumentation/core/interceptor-definitions";
 import type { ResultOf } from "../instrumentation/core/tracing-types";
-import { openAIChannels } from "../instrumentation/plugins/openai-channels";
+import { openAIChannels } from "../instrumentation/plugins/openai-interceptors";
 import type { CompiledPrompt } from "../logger";
 import {
   LEGACY_CACHED_HEADER,

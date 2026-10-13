@@ -15,9 +15,9 @@ import {
   traceAsyncCall,
   traceSyncStreamCall,
   unsubscribeAll,
-} from "../core/channel-tracing";
+} from "../core/tracing";
 import { isAsyncIterable, patchStreamIfNeeded } from "../core/stream-patcher";
-import { huggingFaceChannels } from "./huggingface-channels";
+import { huggingFaceChannels } from "./huggingface-interceptors";
 
 const REQUEST_METADATA_ALLOWLIST = new Set([
   "dimensions",

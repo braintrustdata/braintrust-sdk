@@ -1,7 +1,7 @@
-import type { ArgsOf } from "../instrumentation/core/channel-definitions";
+import type { ArgsOf } from "../instrumentation/core/interceptor-definitions";
 import type { ResultOf } from "../instrumentation/core/tracing-types";
 import type { ChannelSpanInfo } from "../instrumentation/core/types";
-import { openAIChannels } from "../instrumentation/plugins/openai-channels";
+import { openAIChannels } from "../instrumentation/plugins/openai-interceptors";
 import { parseMetricsFromUsage } from "../openai-utils";
 import {
   APIPromise,

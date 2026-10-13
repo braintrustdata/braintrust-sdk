@@ -1,4 +1,4 @@
-import { cloudflareThinkChannels } from "../instrumentation/plugins/cloudflare-think-channels";
+import { cloudflareThinkChannels } from "../instrumentation/plugins/cloudflare-think-interceptors";
 import type {
   CloudflareThinkConstructor,
   CloudflareThinkInstance,

@@ -2,7 +2,7 @@ import type { InstrumentationConfig } from "../orchestrion-js";
 import {
   smithyClientChannels,
   smithyCoreChannels,
-} from "../../instrumentation/plugins/bedrock-runtime-channels";
+} from "../../instrumentation/plugins/bedrock-runtime-interceptors";
 
 export const bedrockRuntimeConfigs: InstrumentationConfig[] = [
   {

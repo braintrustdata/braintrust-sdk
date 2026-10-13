@@ -25,9 +25,9 @@ import {
   runWithAutoInstrumentationSuppressed,
 } from "../auto-instrumentation-suppression";
 import { BasePlugin } from "../core";
-import { unsubscribeAll } from "../core/channel-tracing";
+import { unsubscribeAll } from "../core/tracing";
 import { patchStreamIfNeeded } from "../core/stream-patcher";
-import { googleGenerativeAIChannels } from "./google-generative-ai-channels";
+import { googleGenerativeAIChannels } from "./google-generative-ai-interceptors";
 
 const GENERATION_CONFIG_KEYS = [
   "temperature",

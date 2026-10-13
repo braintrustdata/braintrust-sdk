@@ -1,6 +1,6 @@
 import { INSTRUMENTATION_NAMES } from "../../span-origin";
 import { BasePlugin } from "../core";
-import { traceAsyncCall, unsubscribeAll } from "../core/channel-tracing";
+import { traceAsyncCall, unsubscribeAll } from "../core/tracing";
 import { observeResult } from "../core/observe-result";
 
 import { SpanTypeAttribute, isObject } from "../../../util";
@@ -12,7 +12,7 @@ import {
   isSupportedHuggingFaceTransformersTask,
   registerHuggingFaceTransformersPipeline,
   type HuggingFaceTransformersEventContext,
-} from "./huggingface-transformers-channels";
+} from "./huggingface-transformers-interceptors";
 
 const REQUEST_METADATA_KEYS = [
   "temperature",

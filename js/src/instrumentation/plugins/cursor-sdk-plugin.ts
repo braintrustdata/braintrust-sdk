@@ -28,7 +28,7 @@ import type {
   CursorSDKUserMessage,
 } from "../../vendor-sdk-types/cursor-sdk";
 import type { ChannelMessage } from "../core/tracing-types";
-import { cursorSDKChannels } from "./cursor-sdk-channels";
+import { cursorSDKChannels } from "./cursor-sdk-interceptors";
 
 const PATCHED_AGENT = Symbol.for("braintrust.cursor-sdk.auto-patched-agent");
 const PATCHED_RUN = Symbol.for("braintrust.cursor-sdk.patched-run");

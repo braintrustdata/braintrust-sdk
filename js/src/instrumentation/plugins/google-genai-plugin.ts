@@ -5,7 +5,7 @@ import {
   processInputAttachments,
 } from "../../wrappers/attachment-utils";
 import { BasePlugin } from "../core";
-import { traceStreamingCall, unsubscribeAll } from "../core/channel-tracing";
+import { traceStreamingCall, unsubscribeAll } from "../core/tracing";
 import { observeResult, runInstrumentation } from "../core/observe-result";
 
 import { SpanTypeAttribute } from "../../../util/index";
@@ -48,7 +48,7 @@ import {
   runWithAutoInstrumentationSuppressed,
 } from "../auto-instrumentation-suppression";
 import type { ChannelMessage, ErrorOf } from "../core/tracing-types";
-import { googleGenAIChannels } from "./google-genai-channels";
+import { googleGenAIChannels } from "./google-genai-interceptors";
 
 type GenerateContentChannel = typeof googleGenAIChannels.generateContent;
 type GenerateContentStreamChannel =

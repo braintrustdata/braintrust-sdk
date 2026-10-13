@@ -2,7 +2,7 @@ import type { InstrumentationConfig } from "../orchestrion-js";
 import {
   genkitChannels,
   genkitCoreChannels,
-} from "../../instrumentation/plugins/genkit-channels";
+} from "../../instrumentation/plugins/genkit-interceptors";
 
 const genkitVersionRange = ">=1.0.0 <2.0.0";
 

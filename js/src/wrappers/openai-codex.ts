@@ -1,4 +1,4 @@
-import { openAICodexChannels } from "../instrumentation/plugins/openai-codex-channels";
+import { openAICodexChannels } from "../instrumentation/plugins/openai-codex-interceptors";
 import type {
   OpenAICodexClass,
   OpenAICodexClient,

@@ -20,7 +20,7 @@ import type {
 } from "../../vendor-sdk-types/google-adk";
 import { isAsyncIterable, patchStreamIfNeeded } from "../core/stream-patcher";
 import type { ChannelMessage } from "../core/tracing-types";
-import { googleADKChannels } from "./google-adk-channels";
+import { googleADKChannels } from "./google-adk-interceptors";
 
 type RunnerState = {
   span: Span;

@@ -1,5 +1,5 @@
 import type { InstrumentationConfig } from "../orchestrion-js";
-import { langGraphSDKChannels } from "../../instrumentation/plugins/langgraph-sdk-channels";
+import { langGraphSDKChannels } from "../../instrumentation/plugins/langgraph-sdk-interceptors";
 
 // These public methods live in shared subclients for both package entrypoints.
 export const langGraphSDKConfigs: InstrumentationConfig[] = [

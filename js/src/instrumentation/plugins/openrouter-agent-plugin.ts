@@ -5,7 +5,7 @@ import {
   traceStreamingCall,
   traceSyncStreamCall,
   unsubscribeAll,
-} from "../core/channel-tracing";
+} from "../core/tracing";
 import { runInstrumentation } from "../core/observe-result";
 
 import { SpanTypeAttribute, isObject } from "../../../util/index";
@@ -23,7 +23,7 @@ import type {
 } from "../../vendor-sdk-types/openrouter-agent";
 import { zodToJsonSchema } from "../../zod/utils";
 import type { ChannelMessage } from "../core/tracing-types";
-import { openRouterAgentChannels } from "./openrouter-agent-channels";
+import { openRouterAgentChannels } from "./openrouter-agent-interceptors";
 
 export class OpenRouterAgentPlugin extends BasePlugin {
   protected onEnable(): void {

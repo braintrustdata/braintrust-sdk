@@ -1,5 +1,5 @@
 import { runWithAutoInstrumentationSuppressed } from "../instrumentation/auto-instrumentation-suppression";
-import { bedrockRuntimeChannels } from "../instrumentation/plugins/bedrock-runtime-channels";
+import { bedrockRuntimeChannels } from "../instrumentation/plugins/bedrock-runtime-interceptors";
 import {
   buildBedrockRuntimeSpanInfo,
   getBedrockRuntimeOperation,

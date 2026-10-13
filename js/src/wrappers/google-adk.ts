@@ -1,4 +1,4 @@
-import { googleADKChannels } from "../instrumentation/plugins/google-adk-channels";
+import { googleADKChannels } from "../instrumentation/plugins/google-adk-interceptors";
 import type {
   GoogleADKBaseAgent,
   GoogleADKBaseTool,

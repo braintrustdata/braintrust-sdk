@@ -1,7 +1,7 @@
 import { afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { _exportsForTestingOnly, initLogger } from "../../logger";
 import { configureNode } from "../../node/config";
-import { langSmithChannels } from "./langsmith-channels";
+import { langSmithChannels } from "./langsmith-interceptors";
 import { LangSmithPlugin } from "./langsmith-plugin";
 
 try {

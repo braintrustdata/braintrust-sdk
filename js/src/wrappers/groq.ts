@@ -1,4 +1,4 @@
-import { groqChannels } from "../instrumentation/plugins/groq-channels";
+import { groqChannels } from "../instrumentation/plugins/groq-interceptors";
 import type {
   GroqAudio,
   GroqAudioSpeech,

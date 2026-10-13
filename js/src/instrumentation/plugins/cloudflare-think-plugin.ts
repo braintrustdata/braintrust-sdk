@@ -19,14 +19,14 @@ import type { ChannelMessage } from "../core/tracing-types";
 // tool, output, and usage data that the outer Think call does not expose.
 import type { AISDKResult } from "../../vendor-sdk-types/ai-sdk";
 import type { CloudflareThinkMessage } from "../../vendor-sdk-types/cloudflare-think";
-import { aiSDKChannels } from "./ai-sdk-channels";
+import { aiSDKChannels } from "./ai-sdk-interceptors";
 import {
   DEFAULT_DENY_OUTPUT_PATHS,
   finalizeAISDKChildTracing,
   patchAISDKStreamingResult,
   prepareAISDKAgentCallInput,
 } from "./ai-sdk-plugin";
-import { cloudflareThinkChannels } from "./cloudflare-think-channels";
+import { cloudflareThinkChannels } from "./cloudflare-think-interceptors";
 import {
   registerCloudflareThinkSpan,
   unregisterCloudflareThinkSpan,

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { openAIChannels } from "./instrumentation/plugins/openai-channels";
+import { openAIChannels } from "./instrumentation/plugins/openai-interceptors";
 import { wrapOpenAI } from "./wrappers/oai";
 import {
   type APIPromise,

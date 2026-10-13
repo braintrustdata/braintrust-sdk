@@ -1,4 +1,4 @@
-import type { ArgsOf, ExtraOf, ReturnOf } from "./channel-definitions";
+import type { ArgsOf, ExtraOf, ReturnOf } from "./interceptor-definitions";
 import type {
   AsyncEndEventWith,
   EndEventWith,

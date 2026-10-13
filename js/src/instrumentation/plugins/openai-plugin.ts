@@ -18,7 +18,7 @@ import {
   traceStreamingCall,
   traceSyncStreamCall,
   unsubscribeAll,
-} from "../core/channel-tracing";
+} from "../core/tracing";
 import {
   interceptOpenAIAgentsTraceCapture,
   interceptOpenAIAgentsTraceFail,
@@ -29,7 +29,7 @@ import {
   interceptOpenAIBatchesRetrieveTraced,
   interceptOpenAIFilesCreateTraced,
 } from "./openai-batch-instrumentation";
-import { openAIChannels } from "./openai-channels";
+import { openAIChannels } from "./openai-interceptors";
 import { traceOpenAIMedia } from "./openai-media";
 import {
   extractOpenAIChatInput,

@@ -10,7 +10,7 @@ import {
 import { Attachment, _exportsForTestingOnly, initLogger } from "../../logger";
 import { configureNode } from "../../node/config";
 import { wrapGoogleGenerativeAI } from "../../wrappers/google-generative-ai";
-import { googleGenerativeAIChannels as channels } from "./google-generative-ai-channels";
+import { googleGenerativeAIChannels as channels } from "./google-generative-ai-interceptors";
 
 configureNode();
 

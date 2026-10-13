@@ -19,7 +19,7 @@ import {
 } from "../../wrappers/anthropic-tokens-util";
 import { BasePlugin } from "../core";
 import { observeResult, runInstrumentation } from "../core/observe-result";
-import { gitHubCopilotChannels } from "./github-copilot-channels";
+import { gitHubCopilotChannels } from "./github-copilot-interceptors";
 
 const ROOT_AGENT_KEY = "__root__";
 

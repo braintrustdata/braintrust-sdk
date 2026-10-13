@@ -14,8 +14,8 @@ import {
   traceAsyncCall,
   traceStreamingCall,
   unsubscribeAll,
-} from "../core/channel-tracing";
-import { cohereChannels } from "./cohere-channels";
+} from "../core/tracing";
+import { cohereChannels } from "./cohere-interceptors";
 
 export class CoherePlugin extends BasePlugin {
   protected onEnable(): void {

@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { ChannelMessage } from "../instrumentation/core/tracing-types";
-import { genkitChannels } from "../instrumentation/plugins/genkit-channels";
+import { genkitChannels } from "../instrumentation/plugins/genkit-interceptors";
 import { configureNode } from "../node/config";
 import type {
   GenkitAction,

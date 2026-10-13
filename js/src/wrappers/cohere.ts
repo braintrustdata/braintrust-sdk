@@ -1,4 +1,4 @@
-import { cohereChannels } from "../instrumentation/plugins/cohere-channels";
+import { cohereChannels } from "../instrumentation/plugins/cohere-interceptors";
 import type {
   CohereChatRequest,
   CohereChatResponse,

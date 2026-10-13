@@ -9,7 +9,7 @@ import {
 } from "vitest";
 import { _exportsForTestingOnly, initLogger } from "../../logger";
 import { configureNode } from "../../node/config";
-import { openRouterAgentChannels } from "./openrouter-agent-channels";
+import { openRouterAgentChannels } from "./openrouter-agent-interceptors";
 import {
   aggregateOpenRouterChatChunks,
   aggregateOpenRouterResponseStreamEvents,

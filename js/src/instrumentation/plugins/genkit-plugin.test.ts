@@ -1,6 +1,6 @@
 import { afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { _exportsForTestingOnly, initLogger } from "../../logger";
-import { genkitChannels } from "./genkit-channels";
+import { genkitChannels } from "./genkit-interceptors";
 import { GenkitPlugin } from "./genkit-plugin";
 
 function singleQueueStream<T>(

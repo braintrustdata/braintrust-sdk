@@ -4,7 +4,7 @@ import { configureNode } from "../../node/config";
 import {
   smithyClientChannels,
   smithyCoreChannels,
-} from "./bedrock-runtime-channels";
+} from "./bedrock-runtime-interceptors";
 import {
   aggregateBedrockConverseStreamChunks,
   aggregateInvokeModelResponseStreamChunks,

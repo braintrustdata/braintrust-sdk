@@ -1,11 +1,11 @@
-import type { ReturnOf } from "../core/channel-definitions";
+import type { ReturnOf } from "../core/interceptor-definitions";
 import type { StartOf } from "../core/tracing-types";
 import { SpanTypeAttribute, isObject } from "../../../util/index";
 import type { Span } from "../../logger";
 import { INSTRUMENTATION_NAMES } from "../../span-origin";
 import { getCurrentUnixTimestamp } from "../../util";
 import { BasePlugin } from "../core";
-import { traceStreamingCall, unsubscribeAll } from "../core/channel-tracing";
+import { traceStreamingCall, unsubscribeAll } from "../core/tracing";
 import { isAsyncIterable, patchStreamIfNeeded } from "../core/stream-patcher";
 
 import type {
@@ -20,7 +20,7 @@ import {
   bedrockRuntimeChannels,
   smithyClientChannels,
   smithyCoreChannels,
-} from "./bedrock-runtime-channels";
+} from "./bedrock-runtime-interceptors";
 import {
   buildBedrockRuntimeSpanInfo,
   getBedrockRuntimeCommandInput,

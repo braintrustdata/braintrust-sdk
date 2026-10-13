@@ -1,5 +1,5 @@
 import type { InstrumentationConfig } from "../orchestrion-js";
-import { openAICodexChannels } from "../../instrumentation/plugins/openai-codex-channels";
+import { openAICodexChannels } from "../../instrumentation/plugins/openai-codex-interceptors";
 
 const openAICodexVersionRange = ">=0.128.0 <1.0.0";
 
