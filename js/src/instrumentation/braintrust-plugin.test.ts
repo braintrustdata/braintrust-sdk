@@ -22,6 +22,7 @@ import { LangChainPlugin } from "./plugins/langchain-plugin";
 import { LangSmithPlugin } from "./plugins/langsmith-plugin";
 import { PiCodingAgentPlugin } from "./plugins/pi-coding-agent-plugin";
 import { StrandsAgentSDKPlugin } from "./plugins/strands-agent-sdk-plugin";
+import { LettaAgentSDKPlugin } from "./plugins/letta-agent-sdk-plugin";
 import { VoyageAIPlugin } from "./plugins/voyageai-plugin";
 import { TypeSafePlugin } from "./plugins/typesafe-plugin";
 import { CloudflareAIChatPlugin } from "./plugins/cloudflare-ai-chat-plugin";
@@ -36,6 +37,33 @@ function createPluginClassMock() {
     this.disable = vi.fn();
   });
 }
+
+vi.mock("./plugins/letta-agent-sdk-plugin", () => ({
+  LettaAgentSDKPlugin: createPluginClassMock(),
+}));
+
+describe("Letta Agent SDK registration", () => {
+  it("enables and disables the plugin with the registry", () => {
+    vi.mocked(LettaAgentSDKPlugin).mockClear();
+    const plugin = new BraintrustPlugin();
+    plugin.enable();
+    expect(LettaAgentSDKPlugin).toHaveBeenCalledOnce();
+    const instance = vi.mocked(LettaAgentSDKPlugin).mock.results[0].value;
+    expect(instance.enable).toHaveBeenCalledOnce();
+    plugin.disable();
+    expect(instance.disable).toHaveBeenCalledOnce();
+  });
+
+  it("honors the integration opt-out", () => {
+    vi.mocked(LettaAgentSDKPlugin).mockClear();
+    const plugin = new BraintrustPlugin({
+      integrations: { lettaAgentSDK: false },
+    });
+    plugin.enable();
+    expect(LettaAgentSDKPlugin).not.toHaveBeenCalled();
+    plugin.disable();
+  });
+});
 
 // Preserve the re-exported utility functions (parseMetricsFromUsage, etc.)
 // while mocking out the OpenAIPlugin class — those utilities are also

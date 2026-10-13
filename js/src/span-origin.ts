@@ -30,6 +30,7 @@ export const INSTRUMENTATION_NAMES = {
   HUGGINGFACE: "huggingface",
   LANGCHAIN: "langchain",
   LANGSMITH: "langsmith",
+  LETTA_AGENT_SDK: "letta-agent-sdk",
   MASTRA: "mastra",
   MISTRAL: "mistral",
   LANGGRAPH_SDK: "langgraph-sdk",

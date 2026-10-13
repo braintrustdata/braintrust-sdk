@@ -34,6 +34,7 @@ import { openRouterConfigs } from "./openrouter";
 import { openRouterAgentConfigs } from "./openrouter-agent";
 import { piCodingAgentConfigs } from "./pi-coding-agent";
 import { strandsAgentSDKConfigs } from "./strands-agent-sdk";
+import { lettaAgentSDKConfigs } from "./letta-agent-sdk";
 import { elevenLabsConfigs } from "./elevenlabs";
 import { voyageAIConfigs } from "./voyageai";
 import { typeSafeConfigs } from "./typesafe";
@@ -123,6 +124,10 @@ const defaultInstrumentationConfigGroups: readonly InstrumentationConfigGroup[] 
     {
       integrations: ["strandsAgentSDK"],
       configs: strandsAgentSDKConfigs,
+    },
+    {
+      integrations: ["lettaAgentSDK"],
+      configs: lettaAgentSDKConfigs,
     },
     {
       integrations: ["flue"],
