@@ -1,5 +1,6 @@
 import { defineConfig } from "tsup";
 import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 
 const packageJson = JSON.parse(
   readFileSync(new URL("./package.json", import.meta.url), "utf8"),
@@ -78,24 +79,52 @@ export default defineConfig([
     clean: true,
   },
   // Browser/edge entrypoints
-  {
+  ...(["cjs", "esm"] as const).map((format) => ({
     entry: {
       browser: "src/browser/index.ts",
       "edge-light": "src/edge-light/index.ts",
       workerd: "src/workerd/index.ts",
       "apply-auto-instrumentation.browser":
         "src/non-node/apply-auto-instrumentation-entry.ts",
+      ...(format === "esm" ? { "isomorphic-exports": "src/exports.ts" } : {}),
     },
-    format: ["cjs", "esm"],
+    format: [format],
     outDir: "dist",
     external: ["zod"],
     removeNodeProtocol: false,
-    platform: "browser",
-    splitting: false,
+    platform: "browser" as const,
+    splitting: format === "esm",
+    esbuildPlugins:
+      format === "esm"
+        ? [
+            {
+              name: "preserve-isomorphic-namespace",
+              setup(build: import("esbuild").PluginBuild) {
+                // Keep the default namespace as an ESM re-export. Bundling it
+                // lowers it to an impure __export() call which retains every
+                // API even when consumers only use a named export.
+                // Splitting shares logger/isomorph state with the API module.
+                const entrypoints = new Set(
+                  ["browser", "edge-light", "workerd"].map((runtime) =>
+                    resolve(`src/${runtime}/index.ts`),
+                  ),
+                );
+                build.onResolve({ filter: /^\.\.\/exports$/ }, (args) => {
+                  if (entrypoints.has(args.importer)) {
+                    return {
+                      path: "./isomorphic-exports.mjs",
+                      external: true,
+                    };
+                  }
+                });
+              },
+            },
+          ]
+        : [],
     dts: true,
     define,
     clean: false,
-  },
+  })),
   {
     entry: ["src/instrumentation/index.ts"],
     format: ["cjs", "esm"],
