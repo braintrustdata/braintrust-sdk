@@ -8,6 +8,7 @@ import type { ArgsOf } from "../instrumentation/core/interceptor-definitions";
 import type { ResultOf } from "../instrumentation/core/tracing-types";
 import { openAIChannels } from "../instrumentation/plugins/openai-interceptors";
 import type { CompiledPrompt } from "../logger";
+import type { OpenAIDecisionCreateParams } from "../vendor-sdk-types/openai-decisions";
 import {
   LEGACY_CACHED_HEADER,
   parseCachedHeader,
@@ -44,7 +45,7 @@ declare global {
  * not configured, nothing will be traced. If this is not an `OpenAI` object, this function is
  * a no-op.
  *
- * Currently, this supports the `v4`, `v5`, and `v6` API.
+ * Currently, this supports the `v4`, `v5`, `v6`, and `v7` API.
  *
  * @param openai
  * @returns The wrapped `OpenAI` object.
@@ -117,6 +118,34 @@ export function wrapOpenAIv4<T extends OpenAILike>(openai: T): T {
     OpenAIModerationCreateParams,
     OpenAIModerationResponse
   >(typedOpenai.moderations, wrapModerations);
+  const decisionsProxy =
+    typedOpenai.decisions &&
+    new Proxy(typedOpenai.decisions, {
+      get(target, key) {
+        const value = Reflect.get(target, key, target);
+        if (key === "create") {
+          return (
+            allParams: OpenAIDecisionCreateParams & SpanInfo,
+            options?: unknown,
+          ) => {
+            const { span_info, params } =
+              "span_info" in allParams
+                ? splitSpanInfo<
+                    OpenAIDecisionCreateParams,
+                    SpanInfo["span_info"]
+                  >(allParams)
+                : { params: allParams, span_info: undefined };
+            return openAIChannels.decisionsCreate.invoke(
+              value,
+              target,
+              [params, options],
+              { span_info },
+            );
+          };
+        }
+        return typeof value === "function" ? value.bind(target) : value;
+      },
+    });
   let betaProxy: OpenAIClient["beta"];
   if (typedOpenai.beta?.chat?.completions?.stream) {
     const betaChatCompletionProxy = new Proxy(
@@ -209,6 +238,8 @@ export function wrapOpenAIv4<T extends OpenAILike>(openai: T): T {
   const topLevelProxy = new Proxy(typedOpenai, {
     get(target, name) {
       switch (name) {
+        case "decisions":
+          return decisionsProxy;
         case "images":
           return imagesProxy;
         case "audio":

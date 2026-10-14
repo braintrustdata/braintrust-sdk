@@ -1,5 +1,6 @@
 import { Attachment } from "../logger";
 import iso from "../isomorph";
+import { automaticAttachmentOriginals } from "../automatic-attachments";
 
 const CAPTURE_ATTACHMENTS_ENV_VAR = "BRAINTRUST_CAPTURE_ATTACHMENTS";
 
@@ -123,14 +124,24 @@ export function processInputAttachments(
     });
   };
 
-  const processNode = (node: any): any => {
+  const processNode = (node: any, depth = 0): any => {
+    if (depth >= 128) return captureAttachments ? node : "<omitted>";
     if (Array.isArray(node)) {
-      return node.map(processNode);
+      return node.map((item) => processNode(item, depth + 1));
     }
 
     if (!node || typeof node !== "object") {
       return node;
     }
+    if (
+      node instanceof Attachment ||
+      [
+        "braintrust_attachment",
+        "external_attachment",
+        "inline_attachment",
+      ].includes(node.type)
+    )
+      return node;
 
     // OpenAI chat image_url content format
     if (
@@ -158,6 +169,36 @@ export function processInputAttachments(
           },
         };
       }
+    }
+
+    // OpenAI Responses and Decisions image content format.
+    if (
+      node.type === "input_image" &&
+      typeof node.image_url === "string" &&
+      node.image_url.startsWith("data:")
+    ) {
+      if (!captureAttachments) return { ...node, image_url: "<omitted>" };
+      // Decisions accepts inline images only. Do not guess a MIME type or
+      // reinterpret an unsupported format as PNG.
+      const mediaType = node.image_url
+        .match(/^data:(image\/(?:png|jpeg|gif|webp));base64,/i)?.[1]
+        .toLowerCase();
+      if (!mediaType) return node;
+      let binary: string;
+      try {
+        binary = atob(node.image_url.slice(node.image_url.indexOf(",") + 1));
+      } catch {
+        return node; // Malformed media is not an attachment.
+      }
+      if (!binary.length) return node;
+      const bytes = Uint8Array.from(binary, (char) => char.charCodeAt(0));
+      const attachment = new Attachment({
+        data: new Blob([bytes], { type: mediaType }),
+        contentType: mediaType,
+        filename: `attachment.${getExtensionFromMediaType(mediaType)}`,
+      });
+      automaticAttachmentOriginals.set(attachment, node.image_url);
+      return { ...node, image_url: attachment };
     }
 
     // Voyage AI multimodal image_base64/video_base64 content format
@@ -275,16 +316,20 @@ export function processInputAttachments(
       }
     }
 
-    const processed: Record<string, unknown> = {};
-    for (const [key, value] of Object.entries(node)) {
-      processed[key] = processNode(value);
-    }
-    return processed;
+    return Object.fromEntries(
+      Object.entries(node).map(([key, value]) => [
+        key,
+        processNode(value, depth + 1),
+      ]),
+    );
   };
 
-  if (Array.isArray(input)) {
-    return input.map(processNode);
+  try {
+    return processNode(input);
+  } catch (error) {
+    // Conversion is an optimization. Abort the entire rewrite on failure.
+    // Capture-disabled redaction must never fall back to exporting inline bytes.
+    if (!captureAttachments) throw error;
+    return input;
   }
-
-  return processNode(input);
 }

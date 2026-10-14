@@ -1,3 +1,7 @@
+import type {
+  OpenAIDecision,
+  OpenAIDecisionCreateParams,
+} from "../../vendor-sdk-types/openai-decisions";
 import type { CompiledPrompt } from "../../logger";
 import type {
   OpenAIMediaParams,
@@ -44,6 +48,11 @@ type OpenAIChatChannelExtras = OpenAIChannelExtras<OpenAIChatSpanInfo>;
 type OpenAIResponsesChannelExtras = OpenAIChannelExtras;
 
 export const openAIChannels = defineInterceptor("openai", {
+  decisionsCreate: channel<
+    [OpenAIDecisionCreateParams, unknown?],
+    PromiseLike<OpenAIDecision>,
+    OpenAIChannelExtras
+  >({ channelName: "decisions.create" }),
   imagesGenerate: channel<
     [OpenAIMediaParams, unknown?],
     PromiseLike<OpenAIMediaResponse>,

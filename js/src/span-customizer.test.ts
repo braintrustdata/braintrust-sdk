@@ -31,6 +31,7 @@ import {
   mergeCustomizedSpanRecords,
   resetSpanCustomizerFailureLoggingForTests,
 } from "./span-customizer";
+import { processInputAttachments } from "./wrappers/attachment-utils";
 import { SpanCache } from "./span-cache";
 import { LazyValue } from "./util";
 import { SpanObjectTypeV3 } from "../util";
@@ -1179,6 +1180,123 @@ describe("onSpanExport", () => {
       ),
     ).toEqual([[undefined], [true]]);
   });
+
+  test.each(["done", "error", "throw"])(
+    "automatic decision attachments export safely on %s",
+    async (result) => {
+      const image =
+        "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8DwHwAFBQIAX8jx0gAAAABJRU5ErkJggg==";
+      const input = {
+        state: [
+          {
+            role: "user",
+            content: [
+              { type: "input_text", text: "inspect" },
+              { type: "input_image", image_url: image },
+              { type: "input_image", image_url: image },
+              { type: "input_image", image_url: image },
+            ],
+          },
+        ],
+        questions: [
+          { id: "visible", type: "boolean", instructions: "Visible?" },
+        ],
+      };
+      const processed = processInputAttachments(input, true);
+      const uploads = processed.state[0].content
+        .slice(1)
+        .map((part: { image_url: Attachment }, index: number) =>
+          vi.spyOn(part.image_url, "upload").mockImplementation(async () => {
+            if (index === 2 && result === "throw")
+              throw new Error("upload failed");
+            return {
+              upload_status:
+                index === 2 && result === "error" ? "error" : "done",
+            };
+          }),
+        );
+      configureInstrumentation({
+        spanCustomizers: [
+          {
+            onSpanExport(data) {
+              if (data.input) {
+                const value = data.input as typeof input;
+                value.state[0].content[1].image_url = "[redacted]";
+              }
+              return data;
+            },
+          },
+        ],
+      });
+      const rows: SpanExportData[] = [];
+      const { logger } = initHttpLogger((batch) => {
+        rows.push(...batch);
+        return Response.json({});
+      });
+      const span = logger.startSpan({
+        name: "openai.decisions.create",
+        spanAttributes: { type: "question" },
+      });
+      span.log({
+        input: processed,
+        output: {
+          answers: [{ id: "visible", type: "boolean", probability: 1 }],
+        },
+      });
+      span.end();
+      await logger.flush();
+      const exported = rows.find((row) => row.id === span.id)!;
+      const expected = structuredClone(input);
+      expected.state[0].content[1].image_url = "[redacted]";
+      if (result === "done") {
+        expect(exported.input).toMatchObject({
+          state: [
+            {
+              content: [
+                { type: "input_text", text: "inspect" },
+                { type: "input_image", image_url: "[redacted]" },
+                {
+                  type: "input_image",
+                  image_url: {
+                    type: "braintrust_attachment",
+                    content_type: "image/png",
+                  },
+                },
+                {
+                  type: "input_image",
+                  image_url: {
+                    type: "braintrust_attachment",
+                    content_type: "image/png",
+                  },
+                },
+              ],
+            },
+          ],
+        });
+      } else {
+        expect(exported.input).toEqual(expected);
+        // A failed pipeline skips uploads for subsequent spans and keeps inline data.
+        const later = processInputAttachments(input, true);
+        const laterUpload = vi.spyOn(
+          later.state[0].content[2].image_url,
+          "upload",
+        );
+        const next = logger.startSpan({ name: "next" });
+        next.log({ input: later });
+        next.end();
+        await logger.flush();
+        expect(laterUpload).not.toHaveBeenCalled();
+        expect(rows.find((row) => row.id === next.id)?.input).toEqual(expected);
+      }
+      expect(uploads[0]).not.toHaveBeenCalled();
+      expect(uploads[1]).toHaveBeenCalledOnce();
+      expect(uploads[2]).toHaveBeenCalledOnce();
+      expect(exported.output).toEqual({
+        answers: [{ id: "visible", type: "boolean", probability: 1 }],
+      });
+      expect(input.state[0].content[1].image_url).toBe(image);
+    },
+  );
 
   test("does not upload attachments whose references were masked away", async () => {
     const masked = new Attachment({

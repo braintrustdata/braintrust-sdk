@@ -30,6 +30,7 @@ import {
   interceptOpenAIFilesCreateTraced,
 } from "./openai-batch-instrumentation";
 import { openAIChannels } from "./openai-interceptors";
+import { traceOpenAIDecisions } from "./openai-decisions";
 import { traceOpenAIMedia } from "./openai-media";
 import {
   extractOpenAIChatInput,
@@ -54,6 +55,16 @@ export class OpenAIPlugin extends BasePlugin {
   }
 
   protected onEnable(): void {
+    this.unsubscribers.push(
+      openAIChannels.decisionsCreate.intercept(
+        (target, receiver, args, additional) =>
+          traceOpenAIDecisions(() => Reflect.apply(target, receiver, args), {
+            arguments: args,
+            self: receiver,
+            additional,
+          }),
+      ),
+    );
     this.unsubscribers.push(
       openAIChannels.agentsTraceStart.intercept(
         interceptOpenAIAgentsTraceStart,
