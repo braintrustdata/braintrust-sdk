@@ -1278,6 +1278,23 @@ export class BraintrustState {
       if (generation !== this.loginGeneration) {
         throw new Error("Login cancelled by a reset.");
       }
+      // A non-forced login may have been queued while another login was in
+      // flight. Recheck the active credentials after that login completes so
+      // a queued caller cannot silently replace the shared state's identity.
+      if (this.apiUrl && !loginParams.forceLogin) {
+        if (
+          this.appUrl !== appUrl ||
+          this.loginToken !==
+            (apiKey && HTTPConnection.sanitize_token(apiKey)) ||
+          this.activeLoginOrgNameSelector !== orgName ||
+          this.fetch !== fetch
+        ) {
+          throw new Error(
+            "Another login completed with different options. To force re-login, pass `forceLogin: true`.",
+          );
+        }
+        return;
+      }
       const newState = await loginToState({
         ...options,
         appUrl,
