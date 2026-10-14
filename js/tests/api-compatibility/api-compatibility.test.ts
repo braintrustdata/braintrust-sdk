@@ -51,15 +51,9 @@ import type { Options } from "tsup";
  * Extracts entrypoints from tsup.config.ts
  * Reads the config and identifies all builds that generate .d.ts files
  */
-async function getEntrypointsFromTsupConfig(): Promise<
-  Array<{ name: string; typesPath: string }>
-> {
-  const configPath = path.join(__dirname, "..", "..", "tsup.config.ts");
-
-  // Dynamically import the tsup config
-  const configModule = await import(configPath);
-  const config: Options | Options[] = configModule.default;
-
+function getEntrypointsFromTsupConfig(
+  config: Options | Options[],
+): Array<{ name: string; typesPath: string }> {
   const configs = Array.isArray(config) ? config : [config];
   const entrypoints: Array<{ name: string; typesPath: string }> = [];
 
@@ -86,8 +80,48 @@ async function getEntrypointsFromTsupConfig(): Promise<
     }
   }
 
-  return entrypoints;
+  // Separate CJS and ESM builds can emit the same declaration entrypoint.
+  return entrypoints.filter(
+    (entrypoint, index) =>
+      entrypoints.findIndex(
+        (other) =>
+          other.name === entrypoint.name &&
+          other.typesPath === entrypoint.typesPath,
+      ) === index,
+  );
 }
+
+describe("getEntrypointsFromTsupConfig", () => {
+  test("deduplicates formats while preserving distinct entrypoints", () => {
+    expect(
+      getEntrypointsFromTsupConfig([
+        {
+          entry: { browser: "src/browser/index.ts" },
+          format: ["cjs"],
+          dts: true,
+        },
+        {
+          entry: { browser: "src/browser/index.ts" },
+          format: ["esm"],
+          dts: true,
+        },
+        {
+          entry: { browser: "src/browser/index.ts" },
+          outDir: "other/dist",
+          dts: true,
+        },
+        {
+          entry: { workerd: "src/workerd/index.ts" },
+          dts: true,
+        },
+      ]),
+    ).toEqual([
+      { name: "browser", typesPath: "dist/index.d.ts" },
+      { name: "browser", typesPath: "other/dist/index.d.ts" },
+      { name: "workerd", typesPath: "dist/index.d.ts" },
+    ]);
+  });
+});
 
 /**
  * Determines the entrypoint name from the entry file path
@@ -2830,7 +2864,9 @@ describe("API Compatibility", () => {
 
   beforeAll(async () => {
     // Load entrypoints from tsup config
-    ENTRYPOINTS = await getEntrypointsFromTsupConfig();
+    const configPath = path.join(__dirname, "..", "..", "tsup.config.ts");
+    const configModule = await import(configPath);
+    ENTRYPOINTS = getEntrypointsFromTsupConfig(configModule.default);
     console.log(
       `Loaded ${ENTRYPOINTS.length} entrypoints from tsup.config.ts:`,
       ENTRYPOINTS.map((e) => e.name).join(", "),
