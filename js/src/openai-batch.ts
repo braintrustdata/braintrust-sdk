@@ -1,4 +1,4 @@
-import { openAIChannels } from "./instrumentation/plugins/openai-channels";
+import { openAIChannels } from "./instrumentation/plugins/openai-interceptors";
 import { getSpanParentObject } from "./logger";
 import {
   createLazyAPIPromise,

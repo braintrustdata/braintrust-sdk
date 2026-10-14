@@ -15,9 +15,9 @@ import {
   runWithAutoInstrumentationSuppressed,
 } from "../auto-instrumentation-suppression";
 import { BasePlugin } from "../core";
-import { unsubscribeAll } from "../core/channel-tracing";
+import { unsubscribeAll } from "../core/tracing";
 import { patchStreamIfNeeded } from "../core/stream-patcher";
-import { langGraphSDKChannels } from "./langgraph-sdk-channels";
+import { langGraphSDKChannels } from "./langgraph-sdk-interceptors";
 
 export class LangGraphSDKPlugin extends BasePlugin {
   protected onEnable(): void {

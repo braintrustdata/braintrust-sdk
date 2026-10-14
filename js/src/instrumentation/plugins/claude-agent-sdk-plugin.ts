@@ -15,7 +15,7 @@ import {
   toNumericMetrics,
   type AnthropicTokenMetrics,
 } from "../../wrappers/anthropic-tokens-util";
-import { claudeAgentSDKChannels } from "./claude-agent-sdk-channels";
+import { claudeAgentSDKChannels } from "./claude-agent-sdk-interceptors";
 import { CLAUDE_AGENT_SDK_SKIP_LOCAL_TOOL_HOOKS_OPTION } from "./claude-agent-sdk-instrumentation-constants";
 import {
   collectLocalMcpServerToolHookNames,

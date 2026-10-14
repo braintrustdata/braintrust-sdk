@@ -150,38 +150,23 @@ const defaultInstrumentationConfigGroups: readonly InstrumentationConfigGroup[] 
   ];
 
 export function getDefaultInstrumentationConfigs({
-  additionalInstrumentations,
   disabledIntegrationConfig,
-  disabledIntegrations,
 }: {
-  additionalInstrumentations?: readonly InstrumentationConfig[];
   disabledIntegrationConfig?: InstrumentationIntegrationsConfig;
-  disabledIntegrations?: ReadonlySet<string>;
 } = {}): InstrumentationConfig[] {
-  const disabledConfig =
-    disabledIntegrationConfig ??
-    (disabledIntegrations
-      ? readDisabledInstrumentationEnvConfig(
-          [...disabledIntegrations].join(","),
-        ).integrations
-      : undefined);
-
-  return [
-    ...defaultInstrumentationConfigGroups.flatMap(
-      ({ configs, integrations }) =>
-        isInstrumentationIntegrationDisabled(disabledConfig, ...integrations)
-          ? []
-          : configs,
-    ),
-    ...(additionalInstrumentations ?? []),
-  ];
+  return defaultInstrumentationConfigGroups.flatMap(
+    ({ configs, integrations }) =>
+      isInstrumentationIntegrationDisabled(
+        disabledIntegrationConfig,
+        ...integrations,
+      )
+        ? []
+        : configs,
+  );
 }
 
-export function getDefaultAutoInstrumentationConfigs(
-  additionalInstrumentations?: readonly InstrumentationConfig[],
-): InstrumentationConfig[] {
+export function getDefaultAutoInstrumentationConfigs(): InstrumentationConfig[] {
   return getDefaultInstrumentationConfigs({
-    additionalInstrumentations,
     disabledIntegrationConfig: readDisabledInstrumentationEnvConfig(
       process.env.BRAINTRUST_DISABLE_INSTRUMENTATION,
     ).integrations,

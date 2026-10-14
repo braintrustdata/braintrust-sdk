@@ -2,7 +2,7 @@ import { Readable } from "node:stream";
 import { afterEach, beforeAll, beforeEach, expect, it } from "vitest";
 import { Attachment, _exportsForTestingOnly, initLogger } from "../../logger";
 import { configureNode } from "../../node/config";
-import { openAIChannels } from "./openai-channels";
+import { openAIChannels } from "./openai-interceptors";
 configureNode();
 const originalAutoCaptureAttachments =
   process.env.BRAINTRUST_CAPTURE_ATTACHMENTS;

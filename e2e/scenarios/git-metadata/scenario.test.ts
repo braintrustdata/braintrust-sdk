@@ -29,12 +29,16 @@ test("preserves git metadata on experiment spans", async () => {
           ancestor_commits: [baseCommit],
           experiment_name: "git-metadata-base",
           repo_info: {
-            author_email: "git-regression@braintrust.dev",
-            author_name: "Braintrust Git Regression",
+            author_email:
+              process.env.GIT_AUTHOR_EMAIL || "git-regression@braintrust.dev",
+            author_name:
+              process.env.GIT_AUTHOR_NAME || "Braintrust Git Regression",
             branch: "main",
             commit: baseCommit,
             commit_message: "Deterministic base commit",
-            commit_time: "2024-02-01T12:00:00Z",
+            commit_time: expect.stringMatching(
+              /^2024-02-01T12:00:00(?:Z|\+00:00)$/,
+            ),
             dirty: false,
             tag: "git-regression-base",
           },
@@ -46,12 +50,16 @@ test("preserves git metadata on experiment spans", async () => {
           ancestor_commits: [featureCommit],
           experiment_name: "git-metadata-feature",
           repo_info: {
-            author_email: "git-regression@braintrust.dev",
-            author_name: "Braintrust Git Regression",
+            author_email:
+              process.env.GIT_AUTHOR_EMAIL || "git-regression@braintrust.dev",
+            author_name:
+              process.env.GIT_AUTHOR_NAME || "Braintrust Git Regression",
             branch: "feature/git-metadata-regression",
             commit: featureCommit,
             commit_message: "Deterministic feature commit",
-            commit_time: "2024-02-02T12:00:00Z",
+            commit_time: expect.stringMatching(
+              /^2024-02-02T12:00:00(?:Z|\+00:00)$/,
+            ),
             dirty: true,
             tag: "git-regression-feature",
           },
