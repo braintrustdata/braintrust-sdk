@@ -799,6 +799,40 @@ describe("login deduplication", () => {
     expect(state.getDebugLogLevel()).toBe("warn");
   });
 
+  test("restores the environment debug level for a queued login without an override", async () => {
+    const originalDebugLevel = process.env.BRAINTRUST_DEBUG_LOG_LEVEL;
+    process.env.BRAINTRUST_DEBUG_LOG_LEVEL = "warn";
+    try {
+      const { fetch } = createState();
+      const state = new BraintrustState({
+        apiKey: "matching-credential",
+        appUrl: "https://app.test",
+        fetch,
+        noExitFlush: true,
+      });
+      let resolveFirst!: (value: Response) => void;
+      fetch.mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            resolveFirst = resolve;
+          }),
+      );
+      const first = state.login({ debugLogLevel: "debug" });
+      const queued = state.login({});
+      resolveFirst(loginResponse());
+      await Promise.all([first, queued]);
+      expect(fetch).toHaveBeenCalledTimes(1);
+      expect(state.getDebugLogLevel()).toBe("warn");
+      expect(state.hasDebugLogLevelOverride()).toBe(false);
+    } finally {
+      if (originalDebugLevel === undefined) {
+        delete process.env.BRAINTRUST_DEBUG_LOG_LEVEL;
+      } else {
+        process.env.BRAINTRUST_DEBUG_LOG_LEVEL = originalDebugLevel;
+      }
+    }
+  });
+
   test("allows a queued login to proceed when the preceding login fails", async () => {
     const { state, fetch } = createState();
     fetch.mockRejectedValueOnce(new Error("first login failed"));

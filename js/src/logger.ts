@@ -1294,9 +1294,15 @@ export class BraintrustState {
             "Another login completed with different options. To force re-login, pass `forceLogin: true`.",
           );
         }
-        // copyLoginInfo() may have replaced this queued caller's debug level
-        // while its login was waiting.
-        this.setDebugLogLevel(options.debugLogLevel);
+        // copyLoginInfo() may have replaced this queued caller's effective
+        // debug level while its login was waiting.
+        if (options.debugLogLevel === undefined) {
+          this.debugLogLevelConfigured = false;
+          this.debugLogLevel = getEnvDebugLogLevel();
+          setGlobalDebugLogLevel(undefined);
+        } else {
+          this.setDebugLogLevel(options.debugLogLevel);
+        }
         return;
       }
       const newState = await loginToState({
