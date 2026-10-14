@@ -30,6 +30,7 @@ describe("groq wrapper", () => {
   beforeEach(() => {
     backgroundLogger = _exportsForTestingOnly.useTestBackgroundLogger();
     initLogger({
+      captureAttachments: true,
       projectId: "test-project-id",
       projectName: "groq.test.ts",
     });
@@ -426,39 +427,54 @@ describe("groq wrapper", () => {
     });
   });
 
-  test("captures speech consumed through a cloned response", async () => {
-    const wrapped = wrapGroq({
-      audio: {
-        speech: {
-          create: vi.fn(async (_request: Record<string, unknown>) =>
-            Promise.resolve(
-              new Response(new Uint8Array([1, 2, 3]), {
-                headers: { "content-type": "audio/wav" },
-              }),
+  test.each([false, true])(
+    "applies capture=%s to speech consumed through a cloned response",
+    async (captureAttachments) => {
+      initLogger({
+        projectName: "groq.test.ts",
+        projectId: "test-project-id",
+        captureAttachments,
+      });
+      const wrapped = wrapGroq({
+        audio: {
+          speech: {
+            create: vi.fn(async (_request: Record<string, unknown>) =>
+              Promise.resolve(
+                new Response(new Uint8Array([1, 2, 3]), {
+                  headers: { "content-type": "audio/wav" },
+                }),
+              ),
             ),
-          ),
+          },
         },
-      },
-    });
+      });
 
-    const response = await wrapped.audio.speech.create({
-      input: "Hello from Braintrust.",
-      model: "playai-tts",
-      voice: "Fritz-PlayAI",
-    });
-    expect(new Uint8Array(await response.clone().arrayBuffer())).toEqual(
-      new Uint8Array([1, 2, 3]),
-    );
-    expect(response.bodyUsed).toBe(false);
+      const response = await wrapped.audio.speech.create({
+        input: "Hello from Braintrust.",
+        model: "playai-tts",
+        voice: "Fritz-PlayAI",
+      });
+      expect(new Uint8Array(await response.clone().arrayBuffer())).toEqual(
+        new Uint8Array([1, 2, 3]),
+      );
+      expect(response.bodyUsed).toBe(false);
 
-    const spans = (await backgroundLogger.drain()) as Record<string, any>[];
-    const speechSpan = spans.find(
-      (span) => span.span_attributes?.name === "groq.audio.speech.create",
-    )!;
-    const attachment = speechSpan.output.content[0].file
-      .file_data as Attachment;
-    expect(
-      new Uint8Array(await (await attachment.data()).arrayBuffer()),
-    ).toEqual(new Uint8Array([1, 2, 3]));
-  });
+      const spans = (await backgroundLogger.drain()) as Record<string, any>[];
+      const speechSpan = spans.find(
+        (span) => span.span_attributes?.name === "groq.audio.speech.create",
+      )!;
+      if (!captureAttachments) {
+        expect(speechSpan.output.content).toEqual([]);
+        expect(speechSpan.metrics.time_to_first_token).toEqual(
+          expect.any(Number),
+        );
+        return;
+      }
+      const attachment = speechSpan.output.content[0].file
+        .file_data as Attachment;
+      expect(
+        new Uint8Array(await (await attachment.data()).arrayBuffer()),
+      ).toEqual(new Uint8Array([1, 2, 3]));
+    },
+  );
 });

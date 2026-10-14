@@ -1,3 +1,4 @@
+import { _internalCaptureAttachmentsEnabled } from "../../logger";
 import { SpanTypeAttribute } from "../../../util/index";
 import { debugLogger } from "../../debug-logger";
 import { startSpan, withCurrent, type Span } from "../../logger";
@@ -6,7 +7,10 @@ import {
   withSpanInstrumentationName,
 } from "../../span-origin";
 import { getCurrentUnixTimestamp, isObject } from "../../util";
-import { processInputAttachments } from "../../wrappers/attachment-utils";
+import {
+  omitMediaData,
+  processInputAttachments,
+} from "../../wrappers/attachment-utils";
 import type {
   GenerativeAIChat,
   GenerativeAIConfig,
@@ -381,10 +385,13 @@ function extractInput(
 // Convert Google's inlineData to the shared attachment processor's file shape,
 // then restore the native payload shape. Any conversion failure keeps all input.
 function convertAttachments<T>(value: T): T {
+  const captureAttachments = _internalCaptureAttachmentsEnabled();
   const convert = (node: unknown): unknown => {
-    if (Array.isArray(node)) return node.map(convert);
+    if (Array.isArray(node))
+      return node.map(convert).filter((item) => item !== undefined);
     if (!isObject(node)) return node;
     if (isObject(node.inlineData)) {
+      if (!captureAttachments) return omitMediaData(node, "inlineData");
       const { data, mimeType } = node.inlineData;
       const processed = processInputAttachments({
         type: "file",

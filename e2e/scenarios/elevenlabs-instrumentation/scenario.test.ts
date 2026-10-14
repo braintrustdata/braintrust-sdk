@@ -30,6 +30,7 @@ for (const variant of ["elevenlabs-v2", "elevenlabs-v2-latest"]) {
                 ? ["--import", "braintrust/hook.mjs"]
                 : [],
               env: {
+                BRAINTRUST_CAPTURE_ATTACHMENTS: "true",
                 ELEVENLABS_PACKAGE_NAME: variant.replace(
                   "elevenlabs-",
                   "elevenlabs-sdk-",

@@ -7,7 +7,12 @@ import {
   isObject,
   SpanTypeAttribute,
 } from "../../../util/index";
-import { Attachment, withCurrent, type Span } from "../../logger";
+import {
+  _internalCaptureAttachmentsEnabled,
+  Attachment,
+  withCurrent,
+  type Span,
+} from "../../logger";
 import {
   convertDataToBlob,
   getExtensionFromMediaType,
@@ -126,7 +131,10 @@ function extractGroqAudioInput(
   span: Span,
 ): { input: unknown; metadata: Record<string, unknown> } {
   const source = params.file ?? params.url;
-  const filePart = groqAudioFilePart(source);
+  const filePart = groqAudioFilePart(
+    source,
+    _internalCaptureAttachmentsEnabled(span),
+  );
   const input = {
     operation,
     ...(params.prompt !== undefined ? { prompt: params.prompt } : {}),
@@ -149,11 +157,15 @@ function extractGroqAudioInput(
   };
 }
 
-function groqAudioFilePart(source: unknown): unknown | undefined {
+function groqAudioFilePart(
+  source: unknown,
+  captureAttachments: boolean,
+): unknown | undefined {
   if (source === undefined || source === null) return undefined;
 
   if (typeof source === "string") {
     if (source.startsWith("data:")) {
+      if (!captureAttachments) return undefined;
       const contentType = source.match(/^data:([^;,]+)/)?.[1];
       const blob = contentType ? convertDataToBlob(source, contentType) : null;
       if (contentType && blob) {
@@ -175,7 +187,7 @@ function groqAudioFilePart(source: unknown): unknown | undefined {
     };
   }
 
-  if (!isObject(source)) return undefined;
+  if (!captureAttachments || !isObject(source)) return undefined;
   const filename =
     typeof source.name === "string" && source.name
       ? filenameFromPath(source.name)
@@ -209,7 +221,7 @@ function observeGroqAudioInput(
   input: Record<string, unknown>,
   span: Span,
 ): void {
-  if (!isObject(source)) return;
+  if (!_internalCaptureAttachmentsEnabled(span) || !isObject(source)) return;
 
   const body = isObject(source.body)
     ? source.body
@@ -361,6 +373,7 @@ function captureGroqSpeechResponse(
   startTime: number,
 ): boolean {
   if (!isObject(response)) return false;
+  const captureAttachments = _internalCaptureAttachmentsEnabled(span);
 
   const headerContentType = responseHeader(response, "content-type")?.split(
     ";",
@@ -399,7 +412,7 @@ function captureGroqSpeechResponse(
       });
       firstChunk = false;
     }
-    chunks.push(new Uint8Array(chunk));
+    if (captureAttachments) chunks.push(new Uint8Array(chunk));
   };
   const complete = () => {
     if (finished) return;

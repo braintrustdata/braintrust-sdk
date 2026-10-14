@@ -25,6 +25,7 @@ export {
   Prompt,
   ReadonlyAttachment,
   ReadonlyExperiment,
+  _internalCaptureAttachmentsEnabled,
   currentExperiment,
   currentLogger,
   currentSpan,

@@ -2,7 +2,12 @@ import { toLoggedError } from "../core";
 import type { ChannelMessage } from "../core/channel-definitions";
 import iso, { type IsoAsyncLocalStorage } from "../../isomorph";
 import { debugLogger } from "../../debug-logger";
-import { _internalStartSpan as startBaseSpan, withCurrent } from "../../logger";
+import {
+  _internalCaptureAttachmentsEnabled,
+  CAPTURE_ATTACHMENTS,
+  withCurrent,
+  _internalStartSpan as startBaseSpan,
+} from "../../logger";
 import type { Span } from "../../logger";
 import {
   INSTRUMENTATION_NAMES,
@@ -363,14 +368,19 @@ async function startPiLlmSpan(
     ...extractToolMetadata(context.tools),
     "pi_coding_agent.operation": `agent.${property}`,
   };
+  const captureAttachments = _internalCaptureAttachmentsEnabled(state.span);
   const span = startBaseSpan(
     withSpanInstrumentationName(
       {
         event: {
-          input: processInputAttachments(normalizePiContextInput(context)),
+          input: processInputAttachments(
+            normalizePiContextInput(context),
+            captureAttachments,
+          ),
           metadata,
         },
         name: getLlmSpanName(model),
+        [CAPTURE_ATTACHMENTS]: captureAttachments,
         parent: await state.span.export(),
         spanAttributes: { type: SpanTypeAttribute.LLM },
       },
@@ -535,13 +545,19 @@ async function handlePiAgentEvent(
   switch (event.type) {
     case "message_end":
       if (isPiAssistantMessage(event.message)) {
-        state.output = extractAssistantOutput(event.message);
+        state.output = extractAssistantOutput(
+          event.message,
+          _internalCaptureAttachmentsEnabled(state.span),
+        );
       }
       return;
     case "turn_end":
       state.turnEnded = true;
       if (isPiAssistantMessage(event.message)) {
-        state.output = extractAssistantOutput(event.message);
+        state.output = extractAssistantOutput(
+          event.message,
+          _internalCaptureAttachmentsEnabled(state.span),
+        );
         if (!state.collectedLlmUsageMetrics) {
           addMetrics(state.metrics, extractUsageMetrics(event.message.usage));
         }
@@ -582,6 +598,7 @@ async function startPiToolSpan(
           metadata,
         },
         name: event.toolName || "tool",
+        [CAPTURE_ATTACHMENTS]: _internalCaptureAttachmentsEnabled(state.span),
         parent: await state.span.export(),
         spanAttributes: { type: SpanTypeAttribute.TOOL },
       },
@@ -689,7 +706,14 @@ function finishPiLlmSpan(
         ...(message ? extractAssistantMetadata(message) : {}),
       },
       metrics,
-      ...(message ? { output: extractAssistantOutput(message) } : {}),
+      ...(message
+        ? {
+            output: extractAssistantOutput(
+              message,
+              _internalCaptureAttachmentsEnabled(llmState.span),
+            ),
+          }
+        : {}),
     });
   } finally {
     llmState.span.end();
@@ -797,14 +821,20 @@ function normalizeToolCall(toolCall: PiToolCall): unknown {
   };
 }
 
-function extractAssistantOutput(message: PiAssistantMessage): unknown {
-  return processInputAttachments([
-    {
-      finish_reason: normalizeStopReason(message.stopReason),
-      index: 0,
-      message: normalizeAssistantMessage(message),
-    },
-  ]);
+function extractAssistantOutput(
+  message: PiAssistantMessage,
+  captureAttachments: boolean,
+): unknown {
+  return processInputAttachments(
+    [
+      {
+        finish_reason: normalizeStopReason(message.stopReason),
+        index: 0,
+        message: normalizeAssistantMessage(message),
+      },
+    ],
+    captureAttachments,
+  );
 }
 
 function isPiUserMessage(
