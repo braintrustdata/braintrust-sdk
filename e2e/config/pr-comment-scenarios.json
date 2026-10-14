@@ -618,7 +618,7 @@
       },
       {
         "variantKey": "ai-sdk-v7-latest",
-        "label": "v7 latest (including evaluate)"
+        "label": "v7 latest (including decide)"
       }
     ]
   },

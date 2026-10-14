@@ -1,7 +1,7 @@
 span_tree:
 └── ai-sdk-instrumentation-root [task]
     metadata: {
-      "aiSdkVersion": "7.0.108",
+      "aiSdkVersion": "7.0.138",
       "scenario": "ai-sdk-instrumentation",
       "testRunId": "<run:1>"
     }
@@ -73,7 +73,8 @@ span_tree:
     │             "output_tokens": 3,
     │             "output_tokens_details": {
     │               "reasoning_tokens": 0
-    │             }
+    │             },
+    │             "total_tokens": 21
     │           }
     │         },
     │         "warnings": []
@@ -228,7 +229,8 @@ span_tree:
     │   │             "output_tokens": 3,
     │   │             "output_tokens_details": {
     │   │               "reasoning_tokens": 0
-    │   │             }
+    │   │             },
+    │   │             "total_tokens": 21
     │   │           },
     │   │           "totalTokens": 21
     │   │         },
@@ -250,6 +252,18 @@ span_tree:
     │   │         "textTokens": 3
     │   │       },
     │   │       "outputTokens": 3,
+    │   │       "raw": {
+    │   │         "input_tokens": 18,
+    │   │         "input_tokens_details": {
+    │   │           "cache_write_tokens": 0,
+    │   │           "cached_tokens": 0
+    │   │         },
+    │   │         "output_tokens": 3,
+    │   │         "output_tokens_details": {
+    │   │           "reasoning_tokens": 0
+    │   │         },
+    │   │         "total_tokens": 21
+    │   │       },
     │   │       "totalTokens": 21
     │   │     },
     │   │     "usage": {
@@ -264,6 +278,18 @@ span_tree:
     │   │         "textTokens": 3
     │   │       },
     │   │       "outputTokens": 3,
+    │   │       "raw": {
+    │   │         "input_tokens": 18,
+    │   │         "input_tokens_details": {
+    │   │           "cache_write_tokens": 0,
+    │   │           "cached_tokens": 0
+    │   │         },
+    │   │         "output_tokens": 3,
+    │   │         "output_tokens_details": {
+    │   │           "reasoning_tokens": 0
+    │   │         },
+    │   │         "total_tokens": 21
+    │   │       },
     │   │       "totalTokens": 21
     │   │     },
     │   │     "warnings": []
@@ -332,7 +358,8 @@ span_tree:
     │   │             "output_tokens": 3,
     │   │             "output_tokens_details": {
     │   │               "reasoning_tokens": 0
-    │   │             }
+    │   │             },
+    │   │             "total_tokens": 21
     │   │           },
     │   │           "totalTokens": 21
     │   │         }
@@ -418,7 +445,8 @@ span_tree:
     │             "output_tokens": 3,
     │             "output_tokens_details": {
     │               "reasoning_tokens": 0
-    │             }
+    │             },
+    │             "total_tokens": 21
     │           }
     │         },
     │         "warnings": []
@@ -506,19 +534,15 @@ span_tree:
     │                 },
     │                 {
     │                   "type": "url",
-    │                   "url": "https://www.usebraintrust.com/?utm_source=openai"
-    │                 },
-    │                 {
-    │                   "type": "url",
-    │                   "url": "https://www.usebraintrust.com/about?utm_source=openai"
-    │                 },
-    │                 {
-    │                   "type": "url",
-    │                   "url": "https://www.usebraintrust.com/for-talent?utm_source=openai"
+    │                   "url": "https://www.braintrust.dev/home?utm_source=openai"
     │                 },
     │                 {
     │                   "type": "url",
     │                   "url": "https://www.braintrustgroup.com/?utm_source=openai"
+    │                 },
+    │                 {
+    │                   "type": "url",
+    │                   "url": "https://www.usebraintrust.com/about?utm_source=openai"
     │                 },
     │                 {
     │                   "type": "url",
@@ -538,11 +562,15 @@ span_tree:
     │                 },
     │                 {
     │                   "type": "url",
-    │                   "url": "https://builtin.com/company/braintrust?utm_source=openai"
+    │                   "url": "https://www.builtinsf.com/company/braintrust?utm_source=openai"
     │                 },
     │                 {
     │                   "type": "url",
     │                   "url": "https://digitalintelligence.review/company/braintrust?utm_source=openai"
+    │                 },
+    │                 {
+    │                   "type": "url",
+    │                   "url": "https://braintrust-website.vercel.app/?utm_source=openai"
     │                 }
     │               ]
     │             },
@@ -552,12 +580,72 @@ span_tree:
     │             "type": "tool-result"
     │           },
     │           {
+    │             "sourceType": "url",
+    │             "type": "source",
+    │             "url": "https://www.braintrust.com/?utm_source=openai"
+    │           },
+    │           {
+    │             "sourceType": "url",
+    │             "type": "source",
+    │             "url": "https://www.braintrust.dev/?utm_source=openai"
+    │           },
+    │           {
+    │             "sourceType": "url",
+    │             "type": "source",
+    │             "url": "https://www.braintrust.dev/home?utm_source=openai"
+    │           },
+    │           {
+    │             "sourceType": "url",
+    │             "type": "source",
+    │             "url": "https://www.braintrustgroup.com/?utm_source=openai"
+    │           },
+    │           {
+    │             "sourceType": "url",
+    │             "type": "source",
+    │             "url": "https://www.usebraintrust.com/about?utm_source=openai"
+    │           },
+    │           {
+    │             "sourceType": "url",
+    │             "type": "source",
+    │             "url": "https://braintrustagency.com/?utm_source=openai"
+    │           },
+    │           {
+    │             "sourceType": "url",
+    │             "type": "source",
+    │             "url": "https://ai.engineer/orgs/braintrust?utm_source=openai"
+    │           },
+    │           {
+    │             "sourceType": "url",
+    │             "type": "source",
+    │             "url": "https://braintrusttutors.com/?utm_source=openai"
+    │           },
+    │           {
+    │             "sourceType": "url",
+    │             "type": "source",
+    │             "url": "https://www.aiexplore.io/explore/braintrust?utm_source=openai"
+    │           },
+    │           {
+    │             "sourceType": "url",
+    │             "type": "source",
+    │             "url": "https://www.builtinsf.com/company/braintrust?utm_source=openai"
+    │           },
+    │           {
+    │             "sourceType": "url",
+    │             "type": "source",
+    │             "url": "https://digitalintelligence.review/company/braintrust?utm_source=openai"
+    │           },
+    │           {
+    │             "sourceType": "url",
+    │             "type": "source",
+    │             "url": "https://braintrust-website.vercel.app/?utm_source=openai"
+    │           },
+    │           {
     │             "providerMetadata": {
     │               "openai": {
     │                 "itemId": "<itemId:3>"
     │               }
     │             },
-    │             "text": "https://www.usebraintrust.com/ ",
+    │             "text": "https://www.usebraintrust.com ",
     │             "type": "text"
     │           }
     │         ],
@@ -614,7 +702,7 @@ span_tree:
     │                       "itemId": "<itemId:3>"
     │                     }
     │                   },
-    │                   "text": "https://www.usebraintrust.com/ ",
+    │                   "text": "https://www.usebraintrust.com ",
     │                   "type": "text"
     │                 }
     │               ],
@@ -657,19 +745,15 @@ span_tree:
     │                     },
     │                     {
     │                       "type": "url",
-    │                       "url": "https://www.usebraintrust.com/?utm_source=openai"
-    │                     },
-    │                     {
-    │                       "type": "url",
-    │                       "url": "https://www.usebraintrust.com/about?utm_source=openai"
-    │                     },
-    │                     {
-    │                       "type": "url",
-    │                       "url": "https://www.usebraintrust.com/for-talent?utm_source=openai"
+    │                       "url": "https://www.braintrust.dev/home?utm_source=openai"
     │                     },
     │                     {
     │                       "type": "url",
     │                       "url": "https://www.braintrustgroup.com/?utm_source=openai"
+    │                     },
+    │                     {
+    │                       "type": "url",
+    │                       "url": "https://www.usebraintrust.com/about?utm_source=openai"
     │                     },
     │                     {
     │                       "type": "url",
@@ -689,11 +773,15 @@ span_tree:
     │                     },
     │                     {
     │                       "type": "url",
-    │                       "url": "https://builtin.com/company/braintrust?utm_source=openai"
+    │                       "url": "https://www.builtinsf.com/company/braintrust?utm_source=openai"
     │                     },
     │                     {
     │                       "type": "url",
     │                       "url": "https://digitalintelligence.review/company/braintrust?utm_source=openai"
+    │                     },
+    │                     {
+    │                       "type": "url",
+    │                       "url": "https://braintrust-website.vercel.app/?utm_source=openai"
     │                     }
     │                   ]
     │                 },
@@ -703,12 +791,72 @@ span_tree:
     │                 "type": "tool-result"
     │               },
     │               {
+    │                 "sourceType": "url",
+    │                 "type": "source",
+    │                 "url": "https://www.braintrust.com/?utm_source=openai"
+    │               },
+    │               {
+    │                 "sourceType": "url",
+    │                 "type": "source",
+    │                 "url": "https://www.braintrust.dev/?utm_source=openai"
+    │               },
+    │               {
+    │                 "sourceType": "url",
+    │                 "type": "source",
+    │                 "url": "https://www.braintrust.dev/home?utm_source=openai"
+    │               },
+    │               {
+    │                 "sourceType": "url",
+    │                 "type": "source",
+    │                 "url": "https://www.braintrustgroup.com/?utm_source=openai"
+    │               },
+    │               {
+    │                 "sourceType": "url",
+    │                 "type": "source",
+    │                 "url": "https://www.usebraintrust.com/about?utm_source=openai"
+    │               },
+    │               {
+    │                 "sourceType": "url",
+    │                 "type": "source",
+    │                 "url": "https://braintrustagency.com/?utm_source=openai"
+    │               },
+    │               {
+    │                 "sourceType": "url",
+    │                 "type": "source",
+    │                 "url": "https://ai.engineer/orgs/braintrust?utm_source=openai"
+    │               },
+    │               {
+    │                 "sourceType": "url",
+    │                 "type": "source",
+    │                 "url": "https://braintrusttutors.com/?utm_source=openai"
+    │               },
+    │               {
+    │                 "sourceType": "url",
+    │                 "type": "source",
+    │                 "url": "https://www.aiexplore.io/explore/braintrust?utm_source=openai"
+    │               },
+    │               {
+    │                 "sourceType": "url",
+    │                 "type": "source",
+    │                 "url": "https://www.builtinsf.com/company/braintrust?utm_source=openai"
+    │               },
+    │               {
+    │                 "sourceType": "url",
+    │                 "type": "source",
+    │                 "url": "https://digitalintelligence.review/company/braintrust?utm_source=openai"
+    │               },
+    │               {
+    │                 "sourceType": "url",
+    │                 "type": "source",
+    │                 "url": "https://braintrust-website.vercel.app/?utm_source=openai"
+    │               },
+    │               {
     │                 "providerMetadata": {
     │                   "openai": {
     │                     "itemId": "<itemId:3>"
     │                   }
     │                 },
-    │                 "text": "https://www.usebraintrust.com/ ",
+    │                 "text": "https://www.usebraintrust.com ",
     │                 "type": "text"
     │               }
     │             ],
@@ -769,7 +917,7 @@ span_tree:
     │                           "itemId": "<itemId:3>"
     │                         }
     │                       },
-    │                       "text": "https://www.usebraintrust.com/ ",
+    │                       "text": "https://www.usebraintrust.com ",
     │                       "type": "text"
     │                     }
     │                   ],
@@ -791,26 +939,27 @@ span_tree:
     │               "inputTokens": 8517,
     │               "outputTokenDetails": {
     │                 "reasoningTokens": 0,
-    │                 "textTokens": 9
+    │                 "textTokens": 8
     │               },
-    │               "outputTokens": 9,
+    │               "outputTokens": 8,
     │               "raw": {
     │                 "input_tokens": 8517,
     │                 "input_tokens_details": {
     │                   "cache_write_tokens": 0,
     │                   "cached_tokens": 0
     │                 },
-    │                 "output_tokens": 9,
+    │                 "output_tokens": 8,
     │                 "output_tokens_details": {
     │                   "reasoning_tokens": 0
-    │                 }
+    │                 },
+    │                 "total_tokens": 8525
     │               },
-    │               "totalTokens": 8526
+    │               "totalTokens": 8525
     │             },
     │             "warnings": []
     │           }
     │         ],
-    │         "text": "https://www.usebraintrust.com/ ",
+    │         "text": "https://www.usebraintrust.com ",
     │         "toolCalls": [
     │           {
     │             "input": {},
@@ -842,19 +991,15 @@ span_tree:
     │                 },
     │                 {
     │                   "type": "url",
-    │                   "url": "https://www.usebraintrust.com/?utm_source=openai"
-    │                 },
-    │                 {
-    │                   "type": "url",
-    │                   "url": "https://www.usebraintrust.com/about?utm_source=openai"
-    │                 },
-    │                 {
-    │                   "type": "url",
-    │                   "url": "https://www.usebraintrust.com/for-talent?utm_source=openai"
+    │                   "url": "https://www.braintrust.dev/home?utm_source=openai"
     │                 },
     │                 {
     │                   "type": "url",
     │                   "url": "https://www.braintrustgroup.com/?utm_source=openai"
+    │                 },
+    │                 {
+    │                   "type": "url",
+    │                   "url": "https://www.usebraintrust.com/about?utm_source=openai"
     │                 },
     │                 {
     │                   "type": "url",
@@ -874,11 +1019,15 @@ span_tree:
     │                 },
     │                 {
     │                   "type": "url",
-    │                   "url": "https://builtin.com/company/braintrust?utm_source=openai"
+    │                   "url": "https://www.builtinsf.com/company/braintrust?utm_source=openai"
     │                 },
     │                 {
     │                   "type": "url",
     │                   "url": "https://digitalintelligence.review/company/braintrust?utm_source=openai"
+    │                 },
+    │                 {
+    │                   "type": "url",
+    │                   "url": "https://braintrust-website.vercel.app/?utm_source=openai"
     │                 }
     │               ]
     │             },
@@ -897,10 +1046,22 @@ span_tree:
     │           "inputTokens": 8517,
     │           "outputTokenDetails": {
     │             "reasoningTokens": 0,
-    │             "textTokens": 9
+    │             "textTokens": 8
     │           },
-    │           "outputTokens": 9,
-    │           "totalTokens": 8526
+    │           "outputTokens": 8,
+    │           "raw": {
+    │             "input_tokens": 8517,
+    │             "input_tokens_details": {
+    │               "cache_write_tokens": 0,
+    │               "cached_tokens": 0
+    │             },
+    │             "output_tokens": 8,
+    │             "output_tokens_details": {
+    │               "reasoning_tokens": 0
+    │             },
+    │             "total_tokens": 8525
+    │           },
+    │           "totalTokens": 8525
     │         },
     │         "usage": {
     │           "inputTokenDetails": {
@@ -911,10 +1072,22 @@ span_tree:
     │           "inputTokens": 8517,
     │           "outputTokenDetails": {
     │             "reasoningTokens": 0,
-    │             "textTokens": 9
+    │             "textTokens": 8
     │           },
-    │           "outputTokens": 9,
-    │           "totalTokens": 8526
+    │           "outputTokens": 8,
+    │           "raw": {
+    │             "input_tokens": 8517,
+    │             "input_tokens_details": {
+    │               "cache_write_tokens": 0,
+    │               "cached_tokens": 0
+    │             },
+    │             "output_tokens": 8,
+    │             "output_tokens_details": {
+    │               "reasoning_tokens": 0
+    │             },
+    │             "total_tokens": 8525
+    │           },
+    │           "totalTokens": 8525
     │         },
     │         "warnings": []
     │       }
@@ -979,19 +1152,15 @@ span_tree:
     │       │             },
     │       │             {
     │       │               "type": "url",
-    │       │               "url": "https://www.usebraintrust.com/?utm_source=openai"
-    │       │             },
-    │       │             {
-    │       │               "type": "url",
-    │       │               "url": "https://www.usebraintrust.com/about?utm_source=openai"
-    │       │             },
-    │       │             {
-    │       │               "type": "url",
-    │       │               "url": "https://www.usebraintrust.com/for-talent?utm_source=openai"
+    │       │               "url": "https://www.braintrust.dev/home?utm_source=openai"
     │       │             },
     │       │             {
     │       │               "type": "url",
     │       │               "url": "https://www.braintrustgroup.com/?utm_source=openai"
+    │       │             },
+    │       │             {
+    │       │               "type": "url",
+    │       │               "url": "https://www.usebraintrust.com/about?utm_source=openai"
     │       │             },
     │       │             {
     │       │               "type": "url",
@@ -1011,11 +1180,15 @@ span_tree:
     │       │             },
     │       │             {
     │       │               "type": "url",
-    │       │               "url": "https://builtin.com/company/braintrust?utm_source=openai"
+    │       │               "url": "https://www.builtinsf.com/company/braintrust?utm_source=openai"
     │       │             },
     │       │             {
     │       │               "type": "url",
     │       │               "url": "https://digitalintelligence.review/company/braintrust?utm_source=openai"
+    │       │             },
+    │       │             {
+    │       │               "type": "url",
+    │       │               "url": "https://braintrust-website.vercel.app/?utm_source=openai"
     │       │             }
     │       │           ]
     │       │         },
@@ -1025,12 +1198,72 @@ span_tree:
     │       │         "type": "tool-result"
     │       │       },
     │       │       {
+    │       │         "sourceType": "url",
+    │       │         "type": "source",
+    │       │         "url": "https://www.braintrust.com/?utm_source=openai"
+    │       │       },
+    │       │       {
+    │       │         "sourceType": "url",
+    │       │         "type": "source",
+    │       │         "url": "https://www.braintrust.dev/?utm_source=openai"
+    │       │       },
+    │       │       {
+    │       │         "sourceType": "url",
+    │       │         "type": "source",
+    │       │         "url": "https://www.braintrust.dev/home?utm_source=openai"
+    │       │       },
+    │       │       {
+    │       │         "sourceType": "url",
+    │       │         "type": "source",
+    │       │         "url": "https://www.braintrustgroup.com/?utm_source=openai"
+    │       │       },
+    │       │       {
+    │       │         "sourceType": "url",
+    │       │         "type": "source",
+    │       │         "url": "https://www.usebraintrust.com/about?utm_source=openai"
+    │       │       },
+    │       │       {
+    │       │         "sourceType": "url",
+    │       │         "type": "source",
+    │       │         "url": "https://braintrustagency.com/?utm_source=openai"
+    │       │       },
+    │       │       {
+    │       │         "sourceType": "url",
+    │       │         "type": "source",
+    │       │         "url": "https://ai.engineer/orgs/braintrust?utm_source=openai"
+    │       │       },
+    │       │       {
+    │       │         "sourceType": "url",
+    │       │         "type": "source",
+    │       │         "url": "https://braintrusttutors.com/?utm_source=openai"
+    │       │       },
+    │       │       {
+    │       │         "sourceType": "url",
+    │       │         "type": "source",
+    │       │         "url": "https://www.aiexplore.io/explore/braintrust?utm_source=openai"
+    │       │       },
+    │       │       {
+    │       │         "sourceType": "url",
+    │       │         "type": "source",
+    │       │         "url": "https://www.builtinsf.com/company/braintrust?utm_source=openai"
+    │       │       },
+    │       │       {
+    │       │         "sourceType": "url",
+    │       │         "type": "source",
+    │       │         "url": "https://digitalintelligence.review/company/braintrust?utm_source=openai"
+    │       │       },
+    │       │       {
+    │       │         "sourceType": "url",
+    │       │         "type": "source",
+    │       │         "url": "https://braintrust-website.vercel.app/?utm_source=openai"
+    │       │       },
+    │       │       {
     │       │         "providerMetadata": {
     │       │           "openai": {
     │       │             "itemId": "<itemId:3>"
     │       │           }
     │       │         },
-    │       │         "text": "https://www.usebraintrust.com/ ",
+    │       │         "text": "https://www.usebraintrust.com ",
     │       │         "type": "text"
     │       │       }
     │       │     ],
@@ -1051,21 +1284,22 @@ span_tree:
     │       │       "inputTokens": 8517,
     │       │       "outputTokenDetails": {
     │       │         "reasoningTokens": 0,
-    │       │         "textTokens": 9
+    │       │         "textTokens": 8
     │       │       },
-    │       │       "outputTokens": 9,
+    │       │       "outputTokens": 8,
     │       │       "raw": {
     │       │         "input_tokens": 8517,
     │       │         "input_tokens_details": {
     │       │           "cache_write_tokens": 0,
     │       │           "cached_tokens": 0
     │       │         },
-    │       │         "output_tokens": 9,
+    │       │         "output_tokens": 8,
     │       │         "output_tokens_details": {
     │       │           "reasoning_tokens": 0
-    │       │         }
+    │       │         },
+    │       │         "total_tokens": 8525
     │       │       },
-    │       │       "totalTokens": 8526
+    │       │       "totalTokens": 8525
     │       │     }
     │       │   }
     │       │   metadata: {
@@ -1077,11 +1311,11 @@ span_tree:
     │       │     "provider": "openai.responses"
     │       │   }
     │       │   metrics: {
-    │       │     "completion_tokens": 9,
+    │       │     "completion_tokens": 8,
     │       │     "prompt_cache_creation_tokens": 0,
     │       │     "prompt_cached_tokens": 0,
     │       │     "prompt_tokens": 8517,
-    │       │     "tokens": 8526
+    │       │     "tokens": 8525
     │       │   }
     │       └── web_search [tool]
     │           output: {
@@ -1103,19 +1337,15 @@ span_tree:
     │               },
     │               {
     │                 "type": "url",
-    │                 "url": "https://www.usebraintrust.com/?utm_source=openai"
-    │               },
-    │               {
-    │                 "type": "url",
-    │                 "url": "https://www.usebraintrust.com/about?utm_source=openai"
-    │               },
-    │               {
-    │                 "type": "url",
-    │                 "url": "https://www.usebraintrust.com/for-talent?utm_source=openai"
+    │                 "url": "https://www.braintrust.dev/home?utm_source=openai"
     │               },
     │               {
     │                 "type": "url",
     │                 "url": "https://www.braintrustgroup.com/?utm_source=openai"
+    │               },
+    │               {
+    │                 "type": "url",
+    │                 "url": "https://www.usebraintrust.com/about?utm_source=openai"
     │               },
     │               {
     │                 "type": "url",
@@ -1135,11 +1365,15 @@ span_tree:
     │               },
     │               {
     │                 "type": "url",
-    │                 "url": "https://builtin.com/company/braintrust?utm_source=openai"
+    │                 "url": "https://www.builtinsf.com/company/braintrust?utm_source=openai"
     │               },
     │               {
     │                 "type": "url",
     │                 "url": "https://digitalintelligence.review/company/braintrust?utm_source=openai"
+    │               },
+    │               {
+    │                 "type": "url",
+    │                 "url": "https://braintrust-website.vercel.app/?utm_source=openai"
     │               }
     │             ]
     │           }
@@ -1215,19 +1449,15 @@ span_tree:
     │                 },
     │                 {
     │                   "type": "url",
-    │                   "url": "https://www.usebraintrust.com/?utm_source=openai"
-    │                 },
-    │                 {
-    │                   "type": "url",
-    │                   "url": "https://www.usebraintrust.com/about?utm_source=openai"
-    │                 },
-    │                 {
-    │                   "type": "url",
-    │                   "url": "https://www.usebraintrust.com/for-talent?utm_source=openai"
+    │                   "url": "https://www.braintrust.dev/home?utm_source=openai"
     │                 },
     │                 {
     │                   "type": "url",
     │                   "url": "https://www.braintrustgroup.com/?utm_source=openai"
+    │                 },
+    │                 {
+    │                   "type": "url",
+    │                   "url": "https://www.usebraintrust.com/about?utm_source=openai"
     │                 },
     │                 {
     │                   "type": "url",
@@ -1247,11 +1477,15 @@ span_tree:
     │                 },
     │                 {
     │                   "type": "url",
-    │                   "url": "https://builtin.com/company/braintrust?utm_source=openai"
+    │                   "url": "https://www.builtinsf.com/company/braintrust?utm_source=openai"
     │                 },
     │                 {
     │                   "type": "url",
     │                   "url": "https://digitalintelligence.review/company/braintrust?utm_source=openai"
+    │                 },
+    │                 {
+    │                   "type": "url",
+    │                   "url": "https://braintrust-website.vercel.app/?utm_source=openai"
     │                 }
     │               ]
     │             },
@@ -1261,12 +1495,72 @@ span_tree:
     │             "type": "tool-result"
     │           },
     │           {
+    │             "sourceType": "url",
+    │             "type": "source",
+    │             "url": "https://www.braintrust.com/?utm_source=openai"
+    │           },
+    │           {
+    │             "sourceType": "url",
+    │             "type": "source",
+    │             "url": "https://www.braintrust.dev/?utm_source=openai"
+    │           },
+    │           {
+    │             "sourceType": "url",
+    │             "type": "source",
+    │             "url": "https://www.braintrust.dev/home?utm_source=openai"
+    │           },
+    │           {
+    │             "sourceType": "url",
+    │             "type": "source",
+    │             "url": "https://www.braintrustgroup.com/?utm_source=openai"
+    │           },
+    │           {
+    │             "sourceType": "url",
+    │             "type": "source",
+    │             "url": "https://www.usebraintrust.com/about?utm_source=openai"
+    │           },
+    │           {
+    │             "sourceType": "url",
+    │             "type": "source",
+    │             "url": "https://braintrustagency.com/?utm_source=openai"
+    │           },
+    │           {
+    │             "sourceType": "url",
+    │             "type": "source",
+    │             "url": "https://ai.engineer/orgs/braintrust?utm_source=openai"
+    │           },
+    │           {
+    │             "sourceType": "url",
+    │             "type": "source",
+    │             "url": "https://braintrusttutors.com/?utm_source=openai"
+    │           },
+    │           {
+    │             "sourceType": "url",
+    │             "type": "source",
+    │             "url": "https://www.aiexplore.io/explore/braintrust?utm_source=openai"
+    │           },
+    │           {
+    │             "sourceType": "url",
+    │             "type": "source",
+    │             "url": "https://www.builtinsf.com/company/braintrust?utm_source=openai"
+    │           },
+    │           {
+    │             "sourceType": "url",
+    │             "type": "source",
+    │             "url": "https://digitalintelligence.review/company/braintrust?utm_source=openai"
+    │           },
+    │           {
+    │             "sourceType": "url",
+    │             "type": "source",
+    │             "url": "https://braintrust-website.vercel.app/?utm_source=openai"
+    │           },
+    │           {
     │             "providerMetadata": {
     │               "openai": {
     │                 "itemId": "<itemId:3>"
     │               }
     │             },
-    │             "text": "https://www.usebraintrust.com/ ",
+    │             "text": "www.usebraintrust.com ",
     │             "type": "text"
     │           }
     │         ],
@@ -1323,7 +1617,7 @@ span_tree:
     │                       "itemId": "<itemId:3>"
     │                     }
     │                   },
-    │                   "text": "https://www.usebraintrust.com/ ",
+    │                   "text": "www.usebraintrust.com ",
     │                   "type": "text"
     │                 }
     │               ],
@@ -1366,19 +1660,15 @@ span_tree:
     │                     },
     │                     {
     │                       "type": "url",
-    │                       "url": "https://www.usebraintrust.com/?utm_source=openai"
-    │                     },
-    │                     {
-    │                       "type": "url",
-    │                       "url": "https://www.usebraintrust.com/about?utm_source=openai"
-    │                     },
-    │                     {
-    │                       "type": "url",
-    │                       "url": "https://www.usebraintrust.com/for-talent?utm_source=openai"
+    │                       "url": "https://www.braintrust.dev/home?utm_source=openai"
     │                     },
     │                     {
     │                       "type": "url",
     │                       "url": "https://www.braintrustgroup.com/?utm_source=openai"
+    │                     },
+    │                     {
+    │                       "type": "url",
+    │                       "url": "https://www.usebraintrust.com/about?utm_source=openai"
     │                     },
     │                     {
     │                       "type": "url",
@@ -1398,11 +1688,15 @@ span_tree:
     │                     },
     │                     {
     │                       "type": "url",
-    │                       "url": "https://builtin.com/company/braintrust?utm_source=openai"
+    │                       "url": "https://www.builtinsf.com/company/braintrust?utm_source=openai"
     │                     },
     │                     {
     │                       "type": "url",
     │                       "url": "https://digitalintelligence.review/company/braintrust?utm_source=openai"
+    │                     },
+    │                     {
+    │                       "type": "url",
+    │                       "url": "https://braintrust-website.vercel.app/?utm_source=openai"
     │                     }
     │                   ]
     │                 },
@@ -1412,12 +1706,72 @@ span_tree:
     │                 "type": "tool-result"
     │               },
     │               {
+    │                 "sourceType": "url",
+    │                 "type": "source",
+    │                 "url": "https://www.braintrust.com/?utm_source=openai"
+    │               },
+    │               {
+    │                 "sourceType": "url",
+    │                 "type": "source",
+    │                 "url": "https://www.braintrust.dev/?utm_source=openai"
+    │               },
+    │               {
+    │                 "sourceType": "url",
+    │                 "type": "source",
+    │                 "url": "https://www.braintrust.dev/home?utm_source=openai"
+    │               },
+    │               {
+    │                 "sourceType": "url",
+    │                 "type": "source",
+    │                 "url": "https://www.braintrustgroup.com/?utm_source=openai"
+    │               },
+    │               {
+    │                 "sourceType": "url",
+    │                 "type": "source",
+    │                 "url": "https://www.usebraintrust.com/about?utm_source=openai"
+    │               },
+    │               {
+    │                 "sourceType": "url",
+    │                 "type": "source",
+    │                 "url": "https://braintrustagency.com/?utm_source=openai"
+    │               },
+    │               {
+    │                 "sourceType": "url",
+    │                 "type": "source",
+    │                 "url": "https://ai.engineer/orgs/braintrust?utm_source=openai"
+    │               },
+    │               {
+    │                 "sourceType": "url",
+    │                 "type": "source",
+    │                 "url": "https://braintrusttutors.com/?utm_source=openai"
+    │               },
+    │               {
+    │                 "sourceType": "url",
+    │                 "type": "source",
+    │                 "url": "https://www.aiexplore.io/explore/braintrust?utm_source=openai"
+    │               },
+    │               {
+    │                 "sourceType": "url",
+    │                 "type": "source",
+    │                 "url": "https://www.builtinsf.com/company/braintrust?utm_source=openai"
+    │               },
+    │               {
+    │                 "sourceType": "url",
+    │                 "type": "source",
+    │                 "url": "https://digitalintelligence.review/company/braintrust?utm_source=openai"
+    │               },
+    │               {
+    │                 "sourceType": "url",
+    │                 "type": "source",
+    │                 "url": "https://braintrust-website.vercel.app/?utm_source=openai"
+    │               },
+    │               {
     │                 "providerMetadata": {
     │                   "openai": {
     │                     "itemId": "<itemId:3>"
     │                   }
     │                 },
-    │                 "text": "https://www.usebraintrust.com/ ",
+    │                 "text": "www.usebraintrust.com ",
     │                 "type": "text"
     │               }
     │             ],
@@ -1478,7 +1832,7 @@ span_tree:
     │                           "itemId": "<itemId:3>"
     │                         }
     │                       },
-    │                       "text": "https://www.usebraintrust.com/ ",
+    │                       "text": "www.usebraintrust.com ",
     │                       "type": "text"
     │                     }
     │                   ],
@@ -1500,26 +1854,27 @@ span_tree:
     │               "inputTokens": 8517,
     │               "outputTokenDetails": {
     │                 "reasoningTokens": 0,
-    │                 "textTokens": 9
+    │                 "textTokens": 6
     │               },
-    │               "outputTokens": 9,
+    │               "outputTokens": 6,
     │               "raw": {
     │                 "input_tokens": 8517,
     │                 "input_tokens_details": {
     │                   "cache_write_tokens": 0,
     │                   "cached_tokens": 0
     │                 },
-    │                 "output_tokens": 9,
+    │                 "output_tokens": 6,
     │                 "output_tokens_details": {
     │                   "reasoning_tokens": 0
-    │                 }
+    │                 },
+    │                 "total_tokens": 8523
     │               },
-    │               "totalTokens": 8526
+    │               "totalTokens": 8523
     │             },
     │             "warnings": []
     │           }
     │         ],
-    │         "text": "https://www.usebraintrust.com/ ",
+    │         "text": "www.usebraintrust.com ",
     │         "toolCalls": [
     │           {
     │             "input": {},
@@ -1551,19 +1906,15 @@ span_tree:
     │                 },
     │                 {
     │                   "type": "url",
-    │                   "url": "https://www.usebraintrust.com/?utm_source=openai"
-    │                 },
-    │                 {
-    │                   "type": "url",
-    │                   "url": "https://www.usebraintrust.com/about?utm_source=openai"
-    │                 },
-    │                 {
-    │                   "type": "url",
-    │                   "url": "https://www.usebraintrust.com/for-talent?utm_source=openai"
+    │                   "url": "https://www.braintrust.dev/home?utm_source=openai"
     │                 },
     │                 {
     │                   "type": "url",
     │                   "url": "https://www.braintrustgroup.com/?utm_source=openai"
+    │                 },
+    │                 {
+    │                   "type": "url",
+    │                   "url": "https://www.usebraintrust.com/about?utm_source=openai"
     │                 },
     │                 {
     │                   "type": "url",
@@ -1583,11 +1934,15 @@ span_tree:
     │                 },
     │                 {
     │                   "type": "url",
-    │                   "url": "https://builtin.com/company/braintrust?utm_source=openai"
+    │                   "url": "https://www.builtinsf.com/company/braintrust?utm_source=openai"
     │                 },
     │                 {
     │                   "type": "url",
     │                   "url": "https://digitalintelligence.review/company/braintrust?utm_source=openai"
+    │                 },
+    │                 {
+    │                   "type": "url",
+    │                   "url": "https://braintrust-website.vercel.app/?utm_source=openai"
     │                 }
     │               ]
     │             },
@@ -1606,10 +1961,22 @@ span_tree:
     │           "inputTokens": 8517,
     │           "outputTokenDetails": {
     │             "reasoningTokens": 0,
-    │             "textTokens": 9
+    │             "textTokens": 6
     │           },
-    │           "outputTokens": 9,
-    │           "totalTokens": 8526
+    │           "outputTokens": 6,
+    │           "raw": {
+    │             "input_tokens": 8517,
+    │             "input_tokens_details": {
+    │               "cache_write_tokens": 0,
+    │               "cached_tokens": 0
+    │             },
+    │             "output_tokens": 6,
+    │             "output_tokens_details": {
+    │               "reasoning_tokens": 0
+    │             },
+    │             "total_tokens": 8523
+    │           },
+    │           "totalTokens": 8523
     │         },
     │         "usage": {
     │           "inputTokenDetails": {
@@ -1620,10 +1987,22 @@ span_tree:
     │           "inputTokens": 8517,
     │           "outputTokenDetails": {
     │             "reasoningTokens": 0,
-    │             "textTokens": 9
+    │             "textTokens": 6
     │           },
-    │           "outputTokens": 9,
-    │           "totalTokens": 8526
+    │           "outputTokens": 6,
+    │           "raw": {
+    │             "input_tokens": 8517,
+    │             "input_tokens_details": {
+    │               "cache_write_tokens": 0,
+    │               "cached_tokens": 0
+    │             },
+    │             "output_tokens": 6,
+    │             "output_tokens_details": {
+    │               "reasoning_tokens": 0
+    │             },
+    │             "total_tokens": 8523
+    │           },
+    │           "totalTokens": 8523
     │         },
     │         "warnings": []
     │       }
@@ -1691,19 +2070,15 @@ span_tree:
     │       │             },
     │       │             {
     │       │               "type": "url",
-    │       │               "url": "https://www.usebraintrust.com/?utm_source=openai"
-    │       │             },
-    │       │             {
-    │       │               "type": "url",
-    │       │               "url": "https://www.usebraintrust.com/about?utm_source=openai"
-    │       │             },
-    │       │             {
-    │       │               "type": "url",
-    │       │               "url": "https://www.usebraintrust.com/for-talent?utm_source=openai"
+    │       │               "url": "https://www.braintrust.dev/home?utm_source=openai"
     │       │             },
     │       │             {
     │       │               "type": "url",
     │       │               "url": "https://www.braintrustgroup.com/?utm_source=openai"
+    │       │             },
+    │       │             {
+    │       │               "type": "url",
+    │       │               "url": "https://www.usebraintrust.com/about?utm_source=openai"
     │       │             },
     │       │             {
     │       │               "type": "url",
@@ -1723,11 +2098,15 @@ span_tree:
     │       │             },
     │       │             {
     │       │               "type": "url",
-    │       │               "url": "https://builtin.com/company/braintrust?utm_source=openai"
+    │       │               "url": "https://www.builtinsf.com/company/braintrust?utm_source=openai"
     │       │             },
     │       │             {
     │       │               "type": "url",
     │       │               "url": "https://digitalintelligence.review/company/braintrust?utm_source=openai"
+    │       │             },
+    │       │             {
+    │       │               "type": "url",
+    │       │               "url": "https://braintrust-website.vercel.app/?utm_source=openai"
     │       │             }
     │       │           ]
     │       │         },
@@ -1737,12 +2116,72 @@ span_tree:
     │       │         "type": "tool-result"
     │       │       },
     │       │       {
+    │       │         "sourceType": "url",
+    │       │         "type": "source",
+    │       │         "url": "https://www.braintrust.com/?utm_source=openai"
+    │       │       },
+    │       │       {
+    │       │         "sourceType": "url",
+    │       │         "type": "source",
+    │       │         "url": "https://www.braintrust.dev/?utm_source=openai"
+    │       │       },
+    │       │       {
+    │       │         "sourceType": "url",
+    │       │         "type": "source",
+    │       │         "url": "https://www.braintrust.dev/home?utm_source=openai"
+    │       │       },
+    │       │       {
+    │       │         "sourceType": "url",
+    │       │         "type": "source",
+    │       │         "url": "https://www.braintrustgroup.com/?utm_source=openai"
+    │       │       },
+    │       │       {
+    │       │         "sourceType": "url",
+    │       │         "type": "source",
+    │       │         "url": "https://www.usebraintrust.com/about?utm_source=openai"
+    │       │       },
+    │       │       {
+    │       │         "sourceType": "url",
+    │       │         "type": "source",
+    │       │         "url": "https://braintrustagency.com/?utm_source=openai"
+    │       │       },
+    │       │       {
+    │       │         "sourceType": "url",
+    │       │         "type": "source",
+    │       │         "url": "https://ai.engineer/orgs/braintrust?utm_source=openai"
+    │       │       },
+    │       │       {
+    │       │         "sourceType": "url",
+    │       │         "type": "source",
+    │       │         "url": "https://braintrusttutors.com/?utm_source=openai"
+    │       │       },
+    │       │       {
+    │       │         "sourceType": "url",
+    │       │         "type": "source",
+    │       │         "url": "https://www.aiexplore.io/explore/braintrust?utm_source=openai"
+    │       │       },
+    │       │       {
+    │       │         "sourceType": "url",
+    │       │         "type": "source",
+    │       │         "url": "https://www.builtinsf.com/company/braintrust?utm_source=openai"
+    │       │       },
+    │       │       {
+    │       │         "sourceType": "url",
+    │       │         "type": "source",
+    │       │         "url": "https://digitalintelligence.review/company/braintrust?utm_source=openai"
+    │       │       },
+    │       │       {
+    │       │         "sourceType": "url",
+    │       │         "type": "source",
+    │       │         "url": "https://braintrust-website.vercel.app/?utm_source=openai"
+    │       │       },
+    │       │       {
     │       │         "providerMetadata": {
     │       │           "openai": {
     │       │             "itemId": "<itemId:3>"
     │       │           }
     │       │         },
-    │       │         "text": "https://www.usebraintrust.com/ ",
+    │       │         "text": "www.usebraintrust.com ",
     │       │         "type": "text"
     │       │       }
     │       │     ],
@@ -1763,21 +2202,22 @@ span_tree:
     │       │       "inputTokens": 8517,
     │       │       "outputTokenDetails": {
     │       │         "reasoningTokens": 0,
-    │       │         "textTokens": 9
+    │       │         "textTokens": 6
     │       │       },
-    │       │       "outputTokens": 9,
+    │       │       "outputTokens": 6,
     │       │       "raw": {
     │       │         "input_tokens": 8517,
     │       │         "input_tokens_details": {
     │       │           "cache_write_tokens": 0,
     │       │           "cached_tokens": 0
     │       │         },
-    │       │         "output_tokens": 9,
+    │       │         "output_tokens": 6,
     │       │         "output_tokens_details": {
     │       │           "reasoning_tokens": 0
-    │       │         }
+    │       │         },
+    │       │         "total_tokens": 8523
     │       │       },
-    │       │       "totalTokens": 8526
+    │       │       "totalTokens": 8523
     │       │     }
     │       │   }
     │       │   metadata: {
@@ -1789,11 +2229,11 @@ span_tree:
     │       │     "provider": "openai.responses"
     │       │   }
     │       │   metrics: {
-    │       │     "completion_tokens": 9,
+    │       │     "completion_tokens": 6,
     │       │     "prompt_cache_creation_tokens": 0,
     │       │     "prompt_cached_tokens": 0,
     │       │     "prompt_tokens": 8517,
-    │       │     "tokens": 8526
+    │       │     "tokens": 8523
     │       │   }
     │       └── web_search [tool]
     │           output: {
@@ -1815,19 +2255,15 @@ span_tree:
     │               },
     │               {
     │                 "type": "url",
-    │                 "url": "https://www.usebraintrust.com/?utm_source=openai"
-    │               },
-    │               {
-    │                 "type": "url",
-    │                 "url": "https://www.usebraintrust.com/about?utm_source=openai"
-    │               },
-    │               {
-    │                 "type": "url",
-    │                 "url": "https://www.usebraintrust.com/for-talent?utm_source=openai"
+    │                 "url": "https://www.braintrust.dev/home?utm_source=openai"
     │               },
     │               {
     │                 "type": "url",
     │                 "url": "https://www.braintrustgroup.com/?utm_source=openai"
+    │               },
+    │               {
+    │                 "type": "url",
+    │                 "url": "https://www.usebraintrust.com/about?utm_source=openai"
     │               },
     │               {
     │                 "type": "url",
@@ -1847,11 +2283,15 @@ span_tree:
     │               },
     │               {
     │                 "type": "url",
-    │                 "url": "https://builtin.com/company/braintrust?utm_source=openai"
+    │                 "url": "https://www.builtinsf.com/company/braintrust?utm_source=openai"
     │               },
     │               {
     │                 "type": "url",
     │                 "url": "https://digitalintelligence.review/company/braintrust?utm_source=openai"
+    │               },
+    │               {
+    │                 "type": "url",
+    │                 "url": "https://braintrust-website.vercel.app/?utm_source=openai"
     │               }
     │             ]
     │           }
@@ -1945,6 +2385,150 @@ span_tree:
     │         "completion_tokens": 62,
     │         "prompt_tokens": 382,
     │         "tokens": 444
+    │       }
+    ├── ai-sdk-experimental_decide-images-operation
+    │   metadata: {
+    │     "operation": "decision-images",
+    │     "testRunId": "<run:1>"
+    │   }
+    │   └── evaluate [question]
+    │       input: {
+    │         "questions": [
+    │           {
+    │             "instructions": "Do both images show the same color?",
+    │             "type": "boolean"
+    │           }
+    │         ],
+    │         "state": [
+    │           {
+    │             "text": "Compare these two pixels.",
+    │             "type": "text"
+    │           },
+    │           {
+    │             "data": {
+    │               "content_type": "image/png",
+    │               "filename": "first.png",
+    │               "key": "<uuid:1>",
+    │               "type": "braintrust_attachment"
+    │             },
+    │             "filename": "first.png",
+    │             "mediaType": "image/png",
+    │             "type": "file"
+    │           },
+    │           {
+    │             "type": "json",
+    │             "value": {
+    │               "label": "two pixels"
+    │             }
+    │           },
+    │           {
+    │             "data": {
+    │               "data": {
+    │                 "content_type": "image/png",
+    │                 "filename": "second.png",
+    │                 "key": "<uuid:2>",
+    │                 "type": "braintrust_attachment"
+    │               },
+    │               "type": "data"
+    │             },
+    │             "filename": "second.png",
+    │             "mediaType": "image/png",
+    │             "type": "file"
+    │           }
+    │         ]
+    │       }
+    │       output: {
+    │         "answers": [
+    │           {
+    │             "probability": 1,
+    │             "type": "boolean"
+    │           }
+    │         ]
+    │       }
+    │       metadata: {
+    │         "braintrust": {
+    │           "integration_name": "ai-sdk",
+    │           "sdk_language": "typescript"
+    │         },
+    │         "model": "gpt-6-luna",
+    │         "provider": "openai"
+    │       }
+    │       metrics: {
+    │         "completion_tokens": 0,
+    │         "prompt_tokens": 171,
+    │         "tokens": 171
+    │       }
+    ├── ai-sdk-experimental_evaluate-images-operation
+    │   metadata: {
+    │     "operation": "decision-images",
+    │     "testRunId": "<run:1>"
+    │   }
+    │   └── evaluate [question]
+    │       input: {
+    │         "questions": [
+    │           {
+    │             "instructions": "Do both images show the same color?",
+    │             "type": "boolean"
+    │           }
+    │         ],
+    │         "state": [
+    │           {
+    │             "text": "Compare these two pixels.",
+    │             "type": "text"
+    │           },
+    │           {
+    │             "data": {
+    │               "content_type": "image/png",
+    │               "filename": "first.png",
+    │               "key": "<uuid:1>",
+    │               "type": "braintrust_attachment"
+    │             },
+    │             "filename": "first.png",
+    │             "mediaType": "image/png",
+    │             "type": "file"
+    │           },
+    │           {
+    │             "type": "json",
+    │             "value": {
+    │               "label": "two pixels"
+    │             }
+    │           },
+    │           {
+    │             "data": {
+    │               "data": {
+    │                 "content_type": "image/png",
+    │                 "filename": "second.png",
+    │                 "key": "<uuid:2>",
+    │                 "type": "braintrust_attachment"
+    │               },
+    │               "type": "data"
+    │             },
+    │             "filename": "second.png",
+    │             "mediaType": "image/png",
+    │             "type": "file"
+    │           }
+    │         ]
+    │       }
+    │       output: {
+    │         "answers": [
+    │           {
+    │             "probability": 1,
+    │             "type": "boolean"
+    │           }
+    │         ]
+    │       }
+    │       metadata: {
+    │         "braintrust": {
+    │           "integration_name": "ai-sdk",
+    │           "sdk_language": "typescript"
+    │         },
+    │         "model": "gpt-6-luna",
+    │         "provider": "openai"
+    │       }
+    │       metrics: {
+    │         "completion_tokens": 0,
+    │         "prompt_tokens": 171,
+    │         "tokens": 171
     │       }
     ├── ai-sdk-evaluate-string-operation
     │   metadata: {
@@ -2112,7 +2696,8 @@ span_tree:
     │                 "output_tokens": 3,
     │                 "output_tokens_details": {
     │                   "reasoning_tokens": 0
-    │                 }
+    │                 },
+    │                 "total_tokens": 21
     │               },
     │               "totalTokens": 21
     │             },
@@ -2134,6 +2719,18 @@ span_tree:
     │             "textTokens": 3
     │           },
     │           "outputTokens": 3,
+    │           "raw": {
+    │             "input_tokens": 18,
+    │             "input_tokens_details": {
+    │               "cache_write_tokens": 0,
+    │               "cached_tokens": 0
+    │             },
+    │             "output_tokens": 3,
+    │             "output_tokens_details": {
+    │               "reasoning_tokens": 0
+    │             },
+    │             "total_tokens": 21
+    │           },
     │           "totalTokens": 21
     │         },
     │         "usage": {
@@ -2148,6 +2745,18 @@ span_tree:
     │             "textTokens": 3
     │           },
     │           "outputTokens": 3,
+    │           "raw": {
+    │             "input_tokens": 18,
+    │             "input_tokens_details": {
+    │               "cache_write_tokens": 0,
+    │               "cached_tokens": 0
+    │             },
+    │             "output_tokens": 3,
+    │             "output_tokens_details": {
+    │               "reasoning_tokens": 0
+    │             },
+    │             "total_tokens": 21
+    │           },
     │           "totalTokens": 21
     │         },
     │         "warnings": []
@@ -2216,7 +2825,8 @@ span_tree:
     │                 "output_tokens": 3,
     │                 "output_tokens_details": {
     │                   "reasoning_tokens": 0
-    │                 }
+    │                 },
+    │                 "total_tokens": 21
     │               },
     │               "totalTokens": 21
     │             }
@@ -2389,7 +2999,8 @@ span_tree:
     │                 "output_tokens": 6,
     │                 "output_tokens_details": {
     │                   "reasoning_tokens": 0
-    │                 }
+    │                 },
+    │                 "total_tokens": 51
     │               },
     │               "totalTokens": 51
     │             },
@@ -2411,6 +3022,18 @@ span_tree:
     │             "textTokens": 6
     │           },
     │           "outputTokens": 6,
+    │           "raw": {
+    │             "input_tokens": 45,
+    │             "input_tokens_details": {
+    │               "cache_write_tokens": 0,
+    │               "cached_tokens": 0
+    │             },
+    │             "output_tokens": 6,
+    │             "output_tokens_details": {
+    │               "reasoning_tokens": 0
+    │             },
+    │             "total_tokens": 51
+    │           },
     │           "totalTokens": 51
     │         },
     │         "usage": {
@@ -2425,6 +3048,18 @@ span_tree:
     │             "textTokens": 6
     │           },
     │           "outputTokens": 6,
+    │           "raw": {
+    │             "input_tokens": 45,
+    │             "input_tokens_details": {
+    │               "cache_write_tokens": 0,
+    │               "cached_tokens": 0
+    │             },
+    │             "output_tokens": 6,
+    │             "output_tokens_details": {
+    │               "reasoning_tokens": 0
+    │             },
+    │             "total_tokens": 51
+    │           },
     │           "totalTokens": 51
     │         },
     │         "warnings": []
@@ -2493,7 +3128,8 @@ span_tree:
     │                 "output_tokens": 6,
     │                 "output_tokens_details": {
     │                   "reasoning_tokens": 0
-    │                 }
+    │                 },
+    │                 "total_tokens": 51
     │               },
     │               "totalTokens": 51
     │             }
@@ -2643,7 +3279,8 @@ span_tree:
     │                 "output_tokens": 7,
     │                 "output_tokens_details": {
     │                   "reasoning_tokens": 0
-    │                 }
+    │                 },
+    │                 "total_tokens": 29
     │               },
     │               "totalTokens": 29
     │             },
@@ -2665,6 +3302,18 @@ span_tree:
     │             "textTokens": 7
     │           },
     │           "outputTokens": 7,
+    │           "raw": {
+    │             "input_tokens": 22,
+    │             "input_tokens_details": {
+    │               "cache_write_tokens": 0,
+    │               "cached_tokens": 0
+    │             },
+    │             "output_tokens": 7,
+    │             "output_tokens_details": {
+    │               "reasoning_tokens": 0
+    │             },
+    │             "total_tokens": 29
+    │           },
     │           "totalTokens": 29
     │         },
     │         "usage": {
@@ -2679,6 +3328,18 @@ span_tree:
     │             "textTokens": 7
     │           },
     │           "outputTokens": 7,
+    │           "raw": {
+    │             "input_tokens": 22,
+    │             "input_tokens_details": {
+    │               "cache_write_tokens": 0,
+    │               "cached_tokens": 0
+    │             },
+    │             "output_tokens": 7,
+    │             "output_tokens_details": {
+    │               "reasoning_tokens": 0
+    │             },
+    │             "total_tokens": 29
+    │           },
     │           "totalTokens": 29
     │         },
     │         "warnings": []
@@ -2750,7 +3411,8 @@ span_tree:
     │                 "output_tokens": 7,
     │                 "output_tokens_details": {
     │                   "reasoning_tokens": 0
-    │                 }
+    │                 },
+    │                 "total_tokens": 29
     │               },
     │               "totalTokens": 29
     │             }
@@ -2903,7 +3565,7 @@ span_tree:
     │       output: [
     │         {
     │           "index": 1,
-    │           "relevance_score": 0.06664825
+    │           "relevance_score": 0.06657539
     │         },
     │         {
     │           "index": 0,
@@ -2931,7 +3593,7 @@ span_tree:
     │           output: [
     │             {
     │               "index": 1,
-    │               "relevance_score": 0.06664825
+    │               "relevance_score": 0.06657539
     │             },
     │             {
     │               "index": 0,
@@ -3265,7 +3927,8 @@ span_tree:
     │                 "output_tokens": 8,
     │                 "output_tokens_details": {
     │                   "reasoning_tokens": 0
-    │                 }
+    │                 },
+    │                 "total_tokens": 102
     │               },
     │               "totalTokens": 102
     │             },
@@ -3381,7 +4044,8 @@ span_tree:
     │                 "output_tokens": 8,
     │                 "output_tokens_details": {
     │                   "reasoning_tokens": 0
-    │                 }
+    │                 },
+    │                 "total_tokens": 141
     │               },
     │               "totalTokens": 141
     │             },
@@ -3497,7 +4161,8 @@ span_tree:
     │                 "output_tokens": 8,
     │                 "output_tokens_details": {
     │                   "reasoning_tokens": 0
-    │                 }
+    │                 },
+    │                 "total_tokens": 180
     │               },
     │               "totalTokens": 180
     │             },
@@ -3613,7 +4278,8 @@ span_tree:
     │                 "output_tokens": 8,
     │                 "output_tokens_details": {
     │                   "reasoning_tokens": 0
-    │                 }
+    │                 },
+    │                 "total_tokens": 219
     │               },
     │               "totalTokens": 219
     │             },
@@ -3857,7 +4523,8 @@ span_tree:
     │       │         "output_tokens": 8,
     │       │         "output_tokens_details": {
     │       │           "reasoning_tokens": 0
-    │       │         }
+    │       │         },
+    │       │         "total_tokens": 102
     │       │       },
     │       │       "totalTokens": 102
     │       │     }
@@ -4009,7 +4676,8 @@ span_tree:
     │       │         "output_tokens": 8,
     │       │         "output_tokens_details": {
     │       │           "reasoning_tokens": 0
-    │       │         }
+    │       │         },
+    │       │         "total_tokens": 141
     │       │       },
     │       │       "totalTokens": 141
     │       │     }
@@ -4198,7 +4866,8 @@ span_tree:
     │       │         "output_tokens": 8,
     │       │         "output_tokens_details": {
     │       │           "reasoning_tokens": 0
-    │       │         }
+    │       │         },
+    │       │         "total_tokens": 180
     │       │       },
     │       │       "totalTokens": 180
     │       │     }
@@ -4424,7 +5093,8 @@ span_tree:
     │       │         "output_tokens": 8,
     │       │         "output_tokens_details": {
     │       │           "reasoning_tokens": 0
-    │       │         }
+    │       │         },
+    │       │         "total_tokens": 219
     │       │       },
     │       │       "totalTokens": 219
     │       │     }
@@ -4502,10 +5172,10 @@ span_tree:
     │         "usage": {
     │           "cache_creation": {
     │             "ephemeral_1h_input_tokens": 0,
-    │             "ephemeral_5m_input_tokens": 0
+    │             "ephemeral_5m_input_tokens": 4516
     │           },
-    │           "cache_creation_input_tokens": 0,
-    │           "cache_read_input_tokens": 4516,
+    │           "cache_creation_input_tokens": 4516,
+    │           "cache_read_input_tokens": 0,
     │           "inference_geo": "not_available",
     │           "input_tokens": 3,
     │           "output_tokens": 7,
@@ -4552,10 +5222,10 @@ span_tree:
     │             "usage": {
     │               "cache_creation": {
     │                 "ephemeral_1h_input_tokens": 0,
-    │                 "ephemeral_5m_input_tokens": 0
+    │                 "ephemeral_5m_input_tokens": 4516
     │               },
-    │               "cache_creation_input_tokens": 0,
-    │               "cache_read_input_tokens": 4516,
+    │               "cache_creation_input_tokens": 4516,
+    │               "cache_read_input_tokens": 0,
     │               "inference_geo": "not_available",
     │               "input_tokens": 3,
     │               "output_tokens": 7,
@@ -4584,8 +5254,8 @@ span_tree:
     │         "toolsContext": {},
     │         "usage": {
     │           "inputTokenDetails": {
-    │             "cacheReadTokens": 4516,
-    │             "cacheWriteTokens": 0,
+    │             "cacheReadTokens": 0,
+    │             "cacheWriteTokens": 4516,
     │             "noCacheTokens": 3
     │           },
     │           "inputTokens": 4519,
@@ -4594,10 +5264,10 @@ span_tree:
     │           "raw": {
     │             "cache_creation": {
     │               "ephemeral_1h_input_tokens": 0,
-    │               "ephemeral_5m_input_tokens": 0
+    │               "ephemeral_5m_input_tokens": 4516
     │             },
-    │             "cache_creation_input_tokens": 0,
-    │             "cache_read_input_tokens": 4516,
+    │             "cache_creation_input_tokens": 4516,
+    │             "cache_read_input_tokens": 0,
     │             "inference_geo": "not_available",
     │             "input_tokens": 3,
     │             "output_tokens": 7,
@@ -4613,24 +5283,48 @@ span_tree:
     │     "toolResults": [],
     │     "totalUsage": {
     │       "inputTokenDetails": {
-    │         "cacheReadTokens": 4516,
-    │         "cacheWriteTokens": 0,
+    │         "cacheReadTokens": 0,
+    │         "cacheWriteTokens": 4516,
     │         "noCacheTokens": 3
     │       },
     │       "inputTokens": 4519,
     │       "outputTokenDetails": {},
     │       "outputTokens": 7,
+    │       "raw": {
+    │         "cache_creation": {
+    │           "ephemeral_1h_input_tokens": 0,
+    │           "ephemeral_5m_input_tokens": 4516
+    │         },
+    │         "cache_creation_input_tokens": 4516,
+    │         "cache_read_input_tokens": 0,
+    │         "inference_geo": "not_available",
+    │         "input_tokens": 3,
+    │         "output_tokens": 7,
+    │         "service_tier": "standard"
+    │       },
     │       "totalTokens": 4526
     │     },
     │     "usage": {
     │       "inputTokenDetails": {
-    │         "cacheReadTokens": 4516,
-    │         "cacheWriteTokens": 0,
+    │         "cacheReadTokens": 0,
+    │         "cacheWriteTokens": 4516,
     │         "noCacheTokens": 3
     │       },
     │       "inputTokens": 4519,
     │       "outputTokenDetails": {},
     │       "outputTokens": 7,
+    │       "raw": {
+    │         "cache_creation": {
+    │           "ephemeral_1h_input_tokens": 0,
+    │           "ephemeral_5m_input_tokens": 4516
+    │         },
+    │         "cache_creation_input_tokens": 4516,
+    │         "cache_read_input_tokens": 0,
+    │         "inference_geo": "not_available",
+    │         "input_tokens": 3,
+    │         "output_tokens": 7,
+    │         "service_tier": "standard"
+    │       },
     │       "totalTokens": 4526
     │     },
     │     "warnings": []
@@ -4687,10 +5381,10 @@ span_tree:
     │             "usage": {
     │               "cache_creation": {
     │                 "ephemeral_1h_input_tokens": 0,
-    │                 "ephemeral_5m_input_tokens": 0
+    │                 "ephemeral_5m_input_tokens": 4516
     │               },
-    │               "cache_creation_input_tokens": 0,
-    │               "cache_read_input_tokens": 4516,
+    │               "cache_creation_input_tokens": 4516,
+    │               "cache_read_input_tokens": 0,
     │               "inference_geo": "not_available",
     │               "input_tokens": 3,
     │               "output_tokens": 7,
@@ -4701,8 +5395,8 @@ span_tree:
     │         "response": {},
     │         "usage": {
     │           "inputTokenDetails": {
-    │             "cacheReadTokens": 4516,
-    │             "cacheWriteTokens": 0,
+    │             "cacheReadTokens": 0,
+    │             "cacheWriteTokens": 4516,
     │             "noCacheTokens": 3
     │           },
     │           "inputTokens": 4519,
@@ -4711,10 +5405,10 @@ span_tree:
     │           "raw": {
     │             "cache_creation": {
     │               "ephemeral_1h_input_tokens": 0,
-    │               "ephemeral_5m_input_tokens": 0
+    │               "ephemeral_5m_input_tokens": 4516
     │             },
-    │             "cache_creation_input_tokens": 0,
-    │             "cache_read_input_tokens": 4516,
+    │             "cache_creation_input_tokens": 4516,
+    │             "cache_read_input_tokens": 0,
     │             "inference_geo": "not_available",
     │             "input_tokens": 3,
     │             "output_tokens": 7,
@@ -4733,8 +5427,8 @@ span_tree:
     │       }
     │       metrics: {
     │         "completion_tokens": 7,
-    │         "prompt_cache_creation_tokens": 0,
-    │         "prompt_cached_tokens": 4516,
+    │         "prompt_cache_creation_tokens": 4516,
+    │         "prompt_cached_tokens": 0,
     │         "prompt_tokens": 4519,
     │         "tokens": 4526
     │       }
@@ -4906,6 +5600,18 @@ span_tree:
     │   │       "inputTokens": 4519,
     │   │       "outputTokenDetails": {},
     │   │       "outputTokens": 7,
+    │   │       "raw": {
+    │   │         "cache_creation": {
+    │   │           "ephemeral_1h_input_tokens": 0,
+    │   │           "ephemeral_5m_input_tokens": 0
+    │   │         },
+    │   │         "cache_creation_input_tokens": 0,
+    │   │         "cache_read_input_tokens": 4516,
+    │   │         "inference_geo": "not_available",
+    │   │         "input_tokens": 3,
+    │   │         "output_tokens": 7,
+    │   │         "service_tier": "standard"
+    │   │       },
     │   │       "totalTokens": 4526
     │   │     },
     │   │     "usage": {
@@ -4917,6 +5623,18 @@ span_tree:
     │   │       "inputTokens": 4519,
     │   │       "outputTokenDetails": {},
     │   │       "outputTokens": 7,
+    │   │       "raw": {
+    │   │         "cache_creation": {
+    │   │           "ephemeral_1h_input_tokens": 0,
+    │   │           "ephemeral_5m_input_tokens": 0
+    │   │         },
+    │   │         "cache_creation_input_tokens": 0,
+    │   │         "cache_read_input_tokens": 4516,
+    │   │         "inference_geo": "not_available",
+    │   │         "input_tokens": 3,
+    │   │         "output_tokens": 7,
+    │   │         "service_tier": "standard"
+    │   │       },
     │   │       "totalTokens": 4526
     │   │     },
     │   │     "warnings": []
@@ -5187,6 +5905,18 @@ span_tree:
     │           "inputTokens": 4519,
     │           "outputTokenDetails": {},
     │           "outputTokens": 7,
+    │           "raw": {
+    │             "cache_creation": {
+    │               "ephemeral_1h_input_tokens": 0,
+    │               "ephemeral_5m_input_tokens": 0
+    │             },
+    │             "cache_creation_input_tokens": 0,
+    │             "cache_read_input_tokens": 4516,
+    │             "inference_geo": "not_available",
+    │             "input_tokens": 3,
+    │             "output_tokens": 7,
+    │             "service_tier": "standard"
+    │           },
     │           "totalTokens": 4526
     │         },
     │         "usage": {
@@ -5198,6 +5928,18 @@ span_tree:
     │           "inputTokens": 4519,
     │           "outputTokenDetails": {},
     │           "outputTokens": 7,
+    │           "raw": {
+    │             "cache_creation": {
+    │               "ephemeral_1h_input_tokens": 0,
+    │               "ephemeral_5m_input_tokens": 0
+    │             },
+    │             "cache_creation_input_tokens": 0,
+    │             "cache_read_input_tokens": 4516,
+    │             "inference_geo": "not_available",
+    │             "input_tokens": 3,
+    │             "output_tokens": 7,
+    │             "service_tier": "standard"
+    │           },
     │           "totalTokens": 4526
     │         },
     │         "warnings": []
@@ -5372,7 +6114,8 @@ span_tree:
     │             "output_tokens": 6,
     │             "output_tokens_details": {
     │               "reasoning_tokens": 0
-    │             }
+    │             },
+    │             "total_tokens": 44
     │           },
     │           "totalTokens": 44
     │         },
@@ -5435,7 +6178,8 @@ span_tree:
     │                 "output_tokens": 6,
     │                 "output_tokens_details": {
     │                   "reasoning_tokens": 0
-    │                 }
+    │                 },
+    │                 "total_tokens": 44
     │               },
     │               "totalTokens": 44
     │             },
@@ -5522,7 +6266,8 @@ span_tree:
     │             "output_tokens": 6,
     │             "output_tokens_details": {
     │               "reasoning_tokens": 0
-    │             }
+    │             },
+    │             "total_tokens": 44
     │           },
     │           "totalTokens": 44
     │         },
@@ -5584,7 +6329,8 @@ span_tree:
     │                 "output_tokens": 6,
     │                 "output_tokens_details": {
     │                   "reasoning_tokens": 0
-    │                 }
+    │                 },
+    │                 "total_tokens": 44
     │               },
     │               "totalTokens": 44
     │             },
@@ -5735,7 +6481,8 @@ span_tree:
     │                 "output_tokens": 3,
     │                 "output_tokens_details": {
     │                   "reasoning_tokens": 0
-    │                 }
+    │                 },
+    │                 "total_tokens": 29
     │               },
     │               "totalTokens": 29
     │             },
@@ -5757,6 +6504,18 @@ span_tree:
     │             "textTokens": 3
     │           },
     │           "outputTokens": 3,
+    │           "raw": {
+    │             "input_tokens": 26,
+    │             "input_tokens_details": {
+    │               "cache_write_tokens": 0,
+    │               "cached_tokens": 0
+    │             },
+    │             "output_tokens": 3,
+    │             "output_tokens_details": {
+    │               "reasoning_tokens": 0
+    │             },
+    │             "total_tokens": 29
+    │           },
     │           "totalTokens": 29
     │         },
     │         "usage": {
@@ -5771,6 +6530,18 @@ span_tree:
     │             "textTokens": 3
     │           },
     │           "outputTokens": 3,
+    │           "raw": {
+    │             "input_tokens": 26,
+    │             "input_tokens_details": {
+    │               "cache_write_tokens": 0,
+    │               "cached_tokens": 0
+    │             },
+    │             "output_tokens": 3,
+    │             "output_tokens_details": {
+    │               "reasoning_tokens": 0
+    │             },
+    │             "total_tokens": 29
+    │           },
     │           "totalTokens": 29
     │         },
     │         "warnings": []
@@ -5839,7 +6610,8 @@ span_tree:
     │                 "output_tokens": 3,
     │                 "output_tokens_details": {
     │                   "reasoning_tokens": 0
-    │                 }
+    │                 },
+    │                 "total_tokens": 29
     │               },
     │               "totalTokens": 29
     │             }
@@ -5989,7 +6761,8 @@ span_tree:
     │                 "output_tokens": 4,
     │                 "output_tokens_details": {
     │                   "reasoning_tokens": 0
-    │                 }
+    │                 },
+    │                 "total_tokens": 31
     │               },
     │               "totalTokens": 31
     │             },
@@ -6011,6 +6784,18 @@ span_tree:
     │             "textTokens": 4
     │           },
     │           "outputTokens": 4,
+    │           "raw": {
+    │             "input_tokens": 27,
+    │             "input_tokens_details": {
+    │               "cache_write_tokens": 0,
+    │               "cached_tokens": 0
+    │             },
+    │             "output_tokens": 4,
+    │             "output_tokens_details": {
+    │               "reasoning_tokens": 0
+    │             },
+    │             "total_tokens": 31
+    │           },
     │           "totalTokens": 31
     │         },
     │         "usage": {
@@ -6025,6 +6810,18 @@ span_tree:
     │             "textTokens": 4
     │           },
     │           "outputTokens": 4,
+    │           "raw": {
+    │             "input_tokens": 27,
+    │             "input_tokens_details": {
+    │               "cache_write_tokens": 0,
+    │               "cached_tokens": 0
+    │             },
+    │             "output_tokens": 4,
+    │             "output_tokens_details": {
+    │               "reasoning_tokens": 0
+    │             },
+    │             "total_tokens": 31
+    │           },
     │           "totalTokens": 31
     │         },
     │         "warnings": []
@@ -6096,7 +6893,8 @@ span_tree:
     │                 "output_tokens": 4,
     │                 "output_tokens_details": {
     │                   "reasoning_tokens": 0
-    │                 }
+    │                 },
+    │                 "total_tokens": 31
     │               },
     │               "totalTokens": 31
     │             }
@@ -6290,7 +7088,7 @@ span_tree:
                       "itemId": "<itemId:10>"
                     }
                   },
-                  "text": "Here are the prices for the laptop:\n\n- **Store A**: $999\n- **Store B**: $1099\n\nThe cheaper price is from **Store A** at $999. After applying the discount code **SAVE20**, the final total is **$799.20**.",
+                  "text": "Here are the prices for the laptop:\n\n- **Store A**: $999\n- **Store B**: $1099\n\nThe cheaper price is from **Store A**. After applying the discount code **SAVE20**, the final total is **$799.20**.",
                   "type": "text"
                 }
               ],
@@ -6311,7 +7109,7 @@ span_tree:
                             "itemId": "<itemId:10>"
                           }
                         },
-                        "text": "Here are the prices for the laptop:\n\n- **Store A**: $999\n- **Store B**: $1099\n\nThe cheaper price is from **Store A** at $999. After applying the discount code **SAVE20**, the final total is **$799.20**.",
+                        "text": "Here are the prices for the laptop:\n\n- **Store A**: $999\n- **Store B**: $1099\n\nThe cheaper price is from **Store A**. After applying the discount code **SAVE20**, the final total is **$799.20**.",
                         "type": "text"
                       }
                     ],
@@ -6494,7 +7292,8 @@ span_tree:
                       "output_tokens": 59,
                       "output_tokens_details": {
                         "reasoning_tokens": 0
-                      }
+                      },
+                      "total_tokens": 232
                     },
                     "totalTokens": 232
                   },
@@ -6613,7 +7412,8 @@ span_tree:
                       "output_tokens": 21,
                       "output_tokens_details": {
                         "reasoning_tokens": 0
-                      }
+                      },
+                      "total_tokens": 281
                     },
                     "totalTokens": 281
                   },
@@ -6628,7 +7428,7 @@ span_tree:
                           "itemId": "<itemId:10>"
                         }
                       },
-                      "text": "Here are the prices for the laptop:\n\n- **Store A**: $999\n- **Store B**: $1099\n\nThe cheaper price is from **Store A** at $999. After applying the discount code **SAVE20**, the final total is **$799.20**.",
+                      "text": "Here are the prices for the laptop:\n\n- **Store A**: $999\n- **Store B**: $1099\n\nThe cheaper price is from **Store A**. After applying the discount code **SAVE20**, the final total is **$799.20**.",
                       "type": "text"
                     }
                   ],
@@ -6653,7 +7453,7 @@ span_tree:
                                 "itemId": "<itemId:10>"
                               }
                             },
-                            "text": "Here are the prices for the laptop:\n\n- **Store A**: $999\n- **Store B**: $1099\n\nThe cheaper price is from **Store A** at $999. After applying the discount code **SAVE20**, the final total is **$799.20**.",
+                            "text": "Here are the prices for the laptop:\n\n- **Store A**: $999\n- **Store B**: $1099\n\nThe cheaper price is from **Store A**. After applying the discount code **SAVE20**, the final total is **$799.20**.",
                             "type": "text"
                           }
                         ],
@@ -6675,26 +7475,27 @@ span_tree:
                     "inputTokens": 305,
                     "outputTokenDetails": {
                       "reasoningTokens": 0,
-                      "textTokens": 62
+                      "textTokens": 59
                     },
-                    "outputTokens": 62,
+                    "outputTokens": 59,
                     "raw": {
                       "input_tokens": 305,
                       "input_tokens_details": {
                         "cache_write_tokens": 0,
                         "cached_tokens": 0
                       },
-                      "output_tokens": 62,
+                      "output_tokens": 59,
                       "output_tokens_details": {
                         "reasoning_tokens": 0
-                      }
+                      },
+                      "total_tokens": 364
                     },
-                    "totalTokens": 367
+                    "totalTokens": 364
                   },
                   "warnings": []
                 }
               ],
-              "text": "Here are the prices for the laptop:\n\n- **Store A**: $999\n- **Store B**: $1099\n\nThe cheaper price is from **Store A** at $999. After applying the discount code **SAVE20**, the final total is **$799.20**.",
+              "text": "Here are the prices for the laptop:\n\n- **Store A**: $999\n- **Store B**: $1099\n\nThe cheaper price is from **Store A**. After applying the discount code **SAVE20**, the final total is **$799.20**.",
               "toolCalls": [
                 {
                   "input": {
@@ -6798,10 +7599,10 @@ span_tree:
                 "inputTokens": 738,
                 "outputTokenDetails": {
                   "reasoningTokens": 0,
-                  "textTokens": 142
+                  "textTokens": 139
                 },
-                "outputTokens": 142,
-                "totalTokens": 880
+                "outputTokens": 139,
+                "totalTokens": 877
               },
               "usage": {
                 "inputTokenDetails": {
@@ -6812,10 +7613,10 @@ span_tree:
                 "inputTokens": 738,
                 "outputTokenDetails": {
                   "reasoningTokens": 0,
-                  "textTokens": 142
+                  "textTokens": 139
                 },
-                "outputTokens": 142,
-                "totalTokens": 880
+                "outputTokens": 139,
+                "totalTokens": 877
               },
               "warnings": []
             }
@@ -6961,7 +7762,8 @@ span_tree:
             │         "output_tokens": 59,
             │         "output_tokens_details": {
             │           "reasoning_tokens": 0
-            │         }
+            │         },
+            │         "total_tokens": 232
             │       },
             │       "totalTokens": 232
             │     }
@@ -7195,7 +7997,8 @@ span_tree:
             │         "output_tokens": 21,
             │         "output_tokens_details": {
             │           "reasoning_tokens": 0
-            │         }
+            │         },
+            │         "total_tokens": 281
             │       },
             │       "totalTokens": 281
             │     }
@@ -7415,7 +8218,7 @@ span_tree:
                           "itemId": "<itemId:2>"
                         }
                       },
-                      "text": "Here are the prices for the laptop:\n\n- **Store A**: $999\n- **Store B**: $1099\n\nThe cheaper price is from **Store A** at $999. After applying the discount code **SAVE20**, the final total is **$799.20**.",
+                      "text": "Here are the prices for the laptop:\n\n- **Store A**: $999\n- **Store B**: $1099\n\nThe cheaper price is from **Store A**. After applying the discount code **SAVE20**, the final total is **$799.20**.",
                       "type": "text"
                     }
                   ],
@@ -7436,21 +8239,22 @@ span_tree:
                     "inputTokens": 305,
                     "outputTokenDetails": {
                       "reasoningTokens": 0,
-                      "textTokens": 62
+                      "textTokens": 59
                     },
-                    "outputTokens": 62,
+                    "outputTokens": 59,
                     "raw": {
                       "input_tokens": 305,
                       "input_tokens_details": {
                         "cache_write_tokens": 0,
                         "cached_tokens": 0
                       },
-                      "output_tokens": 62,
+                      "output_tokens": 59,
                       "output_tokens_details": {
                         "reasoning_tokens": 0
-                      }
+                      },
+                      "total_tokens": 364
                     },
-                    "totalTokens": 367
+                    "totalTokens": 364
                   }
                 }
                 metadata: {
@@ -7462,9 +8266,9 @@ span_tree:
                   "provider": "openai.responses"
                 }
                 metrics: {
-                  "completion_tokens": 62,
+                  "completion_tokens": 59,
                   "prompt_cache_creation_tokens": 0,
                   "prompt_cached_tokens": 0,
                   "prompt_tokens": 305,
-                  "tokens": 367
+                  "tokens": 364
                 }

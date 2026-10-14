@@ -1005,6 +1005,74 @@ export function defineAISDKInstrumentationAssertions(options: {
       );
     }
 
+    if (options.snapshotName.startsWith("ai-sdk-v7-latest")) {
+      test(
+        "captures multiple decision images for both API names",
+        testConfig,
+        () => {
+          for (const method of [
+            "experimental_decide",
+            "experimental_evaluate",
+          ]) {
+            const operation = findLatestSpan(
+              events,
+              `ai-sdk-${method}-images-operation`,
+            );
+            const spans = findChildSpans(
+              events,
+              "evaluate",
+              operation?.span.id,
+            );
+            expect(spans).toHaveLength(1);
+            const [span] = spans;
+            expect(span.span.type).toBe("question");
+            const ref = {
+              type: "braintrust_attachment",
+              content_type: "image/png",
+              key: expect.any(String),
+            };
+            expect(span.input).toEqual({
+              state: [
+                { type: "text", text: "Compare these two pixels." },
+                {
+                  type: "file",
+                  mediaType: "image/png",
+                  filename: "first.png",
+                  data: { ...ref, filename: "first.png" },
+                },
+                { type: "json", value: { label: "two pixels" } },
+                {
+                  type: "file",
+                  mediaType: "image/png",
+                  filename: "second.png",
+                  data: {
+                    type: "data",
+                    data: { ...ref, filename: "second.png" },
+                  },
+                },
+              ],
+              questions: [
+                {
+                  id: "same",
+                  type: "boolean",
+                  instructions: "Do both images show the same color?",
+                },
+              ],
+            });
+            expect(span.output).toEqual({
+              answers: [
+                {
+                  id: "same",
+                  type: "boolean",
+                  probability: expect.any(Number),
+                },
+              ],
+            });
+          }
+        },
+      );
+    }
+
     if (options.supportsRerank) {
       test("captures trace for rerank()", testConfig, () => {
         const root = findLatestSpan(events, ROOT_NAME);

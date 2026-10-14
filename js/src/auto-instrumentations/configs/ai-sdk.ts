@@ -16,12 +16,13 @@ import {
  * "orchestrion:ai-sdk:generateText"
  */
 export const aiSDKConfigs: InstrumentationConfig[] = [
-  // Evaluation does not emit v7 telemetry callbacks. Instrument its public export.
+  // Older evaluation releases have no telemetry callbacks. Newer versions use
+  // the telemetry dispatcher below, including the renamed decision API.
   {
     channelName: aiSDKChannels.evaluate.channelName,
     module: {
       name: "ai",
-      versionRange: ">=7.0.103 <8.0.0",
+      versionRange: ">=7.0.103 <7.0.111",
       filePath: "dist/index.js",
     },
     functionQuery: {

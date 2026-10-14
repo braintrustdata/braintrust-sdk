@@ -255,13 +255,30 @@ function createOutputObjectIfSupported(ai) {
   return undefined;
 }
 
-function createTypeSafeEvaluationModel(modelId = "jev-latest") {
+function createTypeSafeEvaluationModel(
+  modelId = "jev-latest",
+  supportsDecide = false,
+) {
   return {
     specificationVersion: "v4",
     provider: "typesafe",
     modelId,
     supportedQuestionTypes: ["choice", "score", "boolean"],
-    async doEvaluate({ state, questions, abortSignal, headers }) {
+    async [supportsDecide ? "doDecide" : "doEvaluate"]({
+      state,
+      questions,
+      abortSignal,
+      headers,
+    }) {
+      if (supportsDecide) {
+        // The v4 decision interface normalizes public state to ordered parts.
+        if (state.length !== 1 || !["text", "json"].includes(state[0].type)) {
+          throw new Error(
+            "TypeSafe scenario requires one text or JSON state part",
+          );
+        }
+        state = state[0].type === "json" ? state[0].value : state[0].text;
+      }
       const apiKey = process.env.TYPESAFE_API_KEY;
       if (!apiKey) {
         throw new Error(
@@ -593,13 +610,20 @@ async function runAISDKInstrumentationScenario(
 
       if (options.supportsEvaluate) {
         const evaluate =
-          options.evaluate ?? instrumentedAI.experimental_evaluate;
+          options.evaluate ??
+          instrumentedAI.experimental_decide ??
+          instrumentedAI.experimental_evaluate;
+        const supportsDecide =
+          typeof instrumentedAI.experimental_decide === "function";
         await runOperation(
           "ai-sdk-evaluate-operation",
           "evaluate",
           async () => {
             await evaluate({
-              model: createTypeSafeEvaluationModel(),
+              model: createTypeSafeEvaluationModel(
+                "jev-latest",
+                supportsDecide,
+              ),
               state: {
                 message:
                   "I was charged twice for my subscription. Please refund the duplicate charge.",
@@ -626,20 +650,79 @@ async function runAISDKInstrumentationScenario(
             });
           },
         );
+        if (supportsDecide) {
+          const png =
+            "iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAIAAAD8GO2jAAAAKElEQVR4nO3NsQ0AAAzCMP5/un0CNkuZ41wybXsHAAAAAAAAAAAAxR4yw/wuPL6QkAAAAABJRU5ErkJggg==";
+          for (const method of [
+            "experimental_decide",
+            "experimental_evaluate",
+          ]) {
+            await runOperation(
+              `ai-sdk-${method}-images-operation`,
+              "decision-images",
+              async () => {
+                const state = [
+                  { type: "text", text: "Compare these two pixels." },
+                  {
+                    type: "file",
+                    mediaType: "image/png",
+                    filename: "first.png",
+                    data: Buffer.from(png, "base64"),
+                  },
+                  { type: "json", value: { label: "two pixels" } },
+                  {
+                    type: "file",
+                    mediaType: "image/png",
+                    filename: "second.png",
+                    data: { type: "data", data: png },
+                  },
+                ];
+                const before = JSON.stringify(state);
+                // The renamed API exercises native telemetry; the deprecated
+                // alias also exercises the manual wrapper with telemetry enabled.
+                const decide =
+                  method === "experimental_decide"
+                    ? evaluate
+                    : wrapAISDK(instrumentedAI)[method];
+                await decide({
+                  model: openai.decisionModel("gpt-6-luna"),
+                  state,
+                  questions: {
+                    same: {
+                      type: "boolean",
+                      instructions: "Do both images show the same color?",
+                    },
+                  },
+                });
+                if (JSON.stringify(state) !== before)
+                  throw new Error(
+                    "Decision instrumentation mutated provider input",
+                  );
+              },
+            );
+          }
+        }
         if (options.supportsEvaluateStringModel !== false) {
           const originalProvider = globalThis.AI_SDK_DEFAULT_PROVIDER;
           try {
             globalThis.AI_SDK_DEFAULT_PROVIDER = {
-              evaluationModel: (modelId) =>
+              [supportsDecide ? "decisionModel" : "evaluationModel"]: (
+                modelId,
+              ) =>
                 createTypeSafeEvaluationModel(
                   modelId === "typesafe-ai/jev" ? "jev-latest" : modelId,
+                  supportsDecide,
                 ),
             };
             await runOperation(
               "ai-sdk-evaluate-string-operation",
               "evaluate-string",
               async () => {
-                await evaluate({
+                // Verify wrapping composes with registered telemetry and auto hooks.
+                const wrappedDecide = supportsDecide
+                  ? wrapAISDK(instrumentedAI).experimental_decide
+                  : evaluate;
+                await wrappedDecide({
                   model: "typesafe-ai/jev",
                   state: "The package arrived intact and on time.",
                   questions: {

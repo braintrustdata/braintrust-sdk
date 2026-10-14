@@ -1,5 +1,7 @@
 /// <reference lib="dom" />
 
+import { DecisionAttachmentProcessor } from "./decision-attachments";
+
 import { v4 as uuidv4 } from "uuid";
 
 import { Queue, DEFAULT_QUEUE_SIZE } from "./queue";
@@ -3444,6 +3446,7 @@ interface QueuedLogEvent {
 }
 
 class HTTPBackgroundLogger implements BackgroundLogger {
+  private readonly decisionAttachments = new DecisionAttachmentProcessor();
   private apiConn: LazyValue<HTTPConnection>;
   private queue: Queue<QueuedLogEvent>;
   private activeFlush: Promise<void> = Promise.resolve();
@@ -3704,6 +3707,16 @@ class HTTPBackgroundLogger implements BackgroundLogger {
     }
 
     const [allItems, attachments] = await this.unwrapLazyValues(wrappedItems);
+    // Decision media is converted only after customizers/masking. Commit each
+    // record's references only after every automatic upload succeeds, so errors
+    // retain the customized original payload and never prevent span export.
+    for (const group of allItems) {
+      for (let i = 0; i < group.length; i++) {
+        if ("span_id" in group[i]) {
+          group[i] = await this.decisionAttachments.process(group[i]);
+        }
+      }
+    }
 
     // Upload automatic conversions in the background before serialization so
     // pipeline failures can export inline media. Customizers and masking have

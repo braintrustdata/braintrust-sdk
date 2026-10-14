@@ -56,6 +56,7 @@ describeVariants("variants", () => {
             entry: scenario.wrapperEntry,
             env: {
               AI_SDK_PACKAGE_NAME: scenario.packageName,
+              BRAINTRUST_CAPTURE_ATTACHMENTS: "true",
               AI_SDK_OPENAI_PACKAGE_NAME: scenario.openaiModuleName,
               AI_SDK_SUPPORTS_EVALUATE_STRING_MODEL: String(
                 scenario.supportsEvaluateStringModel !== false,
@@ -117,6 +118,7 @@ describeVariants("variants", () => {
             entry: scenario.autoEntry,
             env: {
               AI_SDK_PACKAGE_NAME: scenario.packageName,
+              BRAINTRUST_CAPTURE_ATTACHMENTS: "true",
               AI_SDK_OPENAI_PACKAGE_NAME: scenario.openaiModuleName,
               AI_SDK_SUPPORTS_EVALUATE_STRING_MODEL: String(
                 scenario.supportsEvaluateStringModel !== false,
