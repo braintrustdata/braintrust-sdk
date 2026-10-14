@@ -10,7 +10,6 @@ import {
 } from "../util/db_fields";
 import { mergeRowBatch } from "../util/merge_row_batch";
 import { isPromiseLike } from "../util/type_util";
-import { isOtelCompatMode } from "./id-gen";
 import type { SpanCustomizer, SpanExportData } from "./instrumentation/config";
 
 // Configuration can precede platform initialization and must be shared across
@@ -20,10 +19,17 @@ const CUSTOMIZER_FAILURE_LOGGED_KEY = Symbol.for(
   "braintrust.spanCustomizerFailureLogged",
 );
 const STRIPPED_RECORDS_KEY = Symbol.for("braintrust.strippedSpanRecords");
+// Integrations with a different export shape find the shared policy through a
+// global symbol rather than a public export. The first loaded SDK copy wins; all
+// policy state is global, so copies are interchangeable.
+const SPAN_CUSTOMIZER_RUNTIME_KEY = Symbol.for(
+  "braintrust.spanCustomizerRuntime",
+);
 const shared: typeof globalThis & {
   [SPAN_CUSTOMIZERS_KEY]?: readonly SpanCustomizer[];
   [CUSTOMIZER_FAILURE_LOGGED_KEY]?: boolean;
   [STRIPPED_RECORDS_KEY]?: WeakSet<object>;
+  [SPAN_CUSTOMIZER_RUNTIME_KEY]?: object;
 } = globalThis;
 
 const PROTECTED_FIELDS = new Set([
@@ -216,14 +222,6 @@ export function mergeCustomizedSpanRecords<
 export function setSpanCustomizers(
   customizers: readonly SpanCustomizer[] | undefined,
 ): void {
-  if (customizers?.length && isOtelCompatMode()) {
-    // Keep in sync with setupOtelCompat() in @braintrust/otel.
-    // eslint-disable-next-line no-restricted-properties -- intentional always-visible configuration error.
-    console.error(
-      "Braintrust span customizers are not supported with OpenTelemetry compat mode yet.",
-    );
-    return;
-  }
   shared[SPAN_CUSTOMIZERS_KEY] = customizers;
 }
 
@@ -237,29 +235,44 @@ export function customizeSpanExport(
   // user content for downstream masking to replace.
   if (!customizers?.length || shared[STRIPPED_RECORDS_KEY]?.has(data))
     return data;
+  const protectedFields: SpanExportData = {};
+  return runSpanCustomizers(data, customizers, {
+    snapshot(original) {
+      const snapshot = copyPlainRecord(original);
+      for (const key of PROTECTED_FIELDS) {
+        if (Object.prototype.hasOwnProperty.call(snapshot, key)) {
+          protectedFields[key] = copyProtocolValue(snapshot[key]);
+        }
+      }
+      return snapshot;
+    },
+    restore: (result) => restoreProtocolFields(result, protectedFields),
+    strip: stripFailedRecord,
+  });
+}
 
-  const original = data;
-  let protectedFields: SpanExportData | undefined;
+interface SpanExportAdapter {
+  snapshot(data: SpanExportData): SpanExportData;
+  restore(data: SpanExportData): SpanExportData;
+  strip(data: SpanExportData): SpanExportData;
+}
 
+function runSpanCustomizers(
+  original: SpanExportData,
+  customizers: readonly SpanCustomizer[],
+  adapter: SpanExportAdapter,
+): SpanExportData {
+  let data = original;
+  let initialized = false;
   for (const customizer of customizers) {
     try {
       if (!customizer.onSpanExport) continue;
-      if (!protectedFields) {
-        // Records share nested payload objects with the local span cache, so
-        // hooks get their own plain containers to mutate.
-        data = copyPlainRecord(data);
-        protectedFields = {};
-        for (const key of PROTECTED_FIELDS) {
-          if (Object.prototype.hasOwnProperty.call(data, key)) {
-            protectedFields[key] = copyProtocolValue(data[key]);
-          }
-        }
+      if (!initialized) {
+        data = adapter.snapshot(original);
+        initialized = true;
       }
-
       const result: unknown = customizer.onSpanExport(data);
       if (isPromiseLike(result)) {
-        // Hooks are synchronous, but accidental async hooks must not leak an
-        // unhandled rejection or replace the record with a promise.
         void Promise.resolve(result).catch(() => {});
         throw new TypeError("Span export customizers must be synchronous");
       }
@@ -268,12 +281,26 @@ export function customizeSpanExport(
           "Span export customizers must return a plain object",
         );
       }
-      // Always copy: hooks may freeze their input or return a frozen record.
-      data = restoreProtocolFields(result, protectedFields);
+      data = adapter.restore(result);
     } catch {
       registerCustomizerFailure();
-      return stripFailedRecord(original);
+      return adapter.strip(original);
     }
   }
   return data;
 }
+
+shared[SPAN_CUSTOMIZER_RUNTIME_KEY] ??= {
+  isPlainRecord,
+  hasCustomizers: () =>
+    !!shared[SPAN_CUSTOMIZERS_KEY]?.some(
+      (customizer) => customizer.onSpanExport,
+    ),
+  customize(data: SpanExportData, adapter: SpanExportAdapter): SpanExportData {
+    return runSpanCustomizers(
+      data,
+      shared[SPAN_CUSTOMIZERS_KEY] ?? [],
+      adapter,
+    );
+  },
+};

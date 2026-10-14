@@ -85,10 +85,10 @@ Rebuild bundles transformed with the previous SDK when upgrading; the old combin
 ## Export Customizers
 
 Configure `spanCustomizers` through the standalone instrumentation entrypoint
-before importing the main SDK, which enables instrumentation during platform
-initialization. Use a bootstrap module before any auto-instrumentation preload
-that initializes the SDK. Static imports of the main SDK are hoisted; use a
-dynamic import after configuration:
+before importing `braintrust` or `@braintrust/otel`. The main SDK enables
+instrumentation during platform initialization. Use a bootstrap module before
+any auto-instrumentation preload that initializes the SDK. Static imports are
+hoisted; use a dynamic import after configuration:
 
 ```ts
 import { configureInstrumentation } from "braintrust/instrumentation";
@@ -121,17 +121,18 @@ Dataset rows and feedback records are not customized.
 Callbacks run synchronously in registration order. Mutate and return the record,
 or return a replacement plain object for the next callback. If a callback throws
 or returns an invalid value (including a promise), the SDK logs a safe error,
-stops the callback chain, and drops that outgoing record. Diagnostics do not
-include the exception message, stack, or span payload, and are throttled to
-the first failure plus at most one report per minute with a suppressed count. Promise rejections are
-consumed without awaiting the result. Handle recovery inside the callback if
-export should continue, and do not mutate the record after returning.
-Export retries reuse the transformed record or drop result without invoking
-callbacks or logging the failure again. Unrelated records and future records
-from the same span are evaluated independently; previously exported records
-cannot be retracted. Dropping a span's first record, which carries
-`span_attributes` and `created`, while later merge records succeed can leave a
-partial row without a name or type. Configuration is shared across SDK bundles.
+stops the callback chain, and exports only original identity, routing, and
+duration timestamps plus `context: { customizer_error: true }`. No attachments
+from that record upload. Diagnostics do not include the exception message,
+stack, or span payload, and are logged at most once per JavaScript global
+environment. Promise rejections are consumed without awaiting the result.
+Handle recovery inside the callback to retain span content, and do not mutate
+the record after returning. Export retries reuse the transformed or stripped
+record without invoking callbacks or logging the failure again. Stripped
+records bypass downstream masking and remain separate from other updates
+with the same ID in ordered export requests. Unrelated records and future
+records from the same span are evaluated independently; previously exported
+records cannot be retracted. Configuration is shared across SDK bundles.
 
 The SDK restores these fields after every callback, including removing injected
 fields that were absent from the original record:
@@ -158,13 +159,79 @@ that guarantee.
 Customizers receive only the outgoing record, not a live span or provider
 instrumentation context.
 
-Span customizers are not yet supported with OpenTelemetry compat mode
-(`BRAINTRUST_OTEL_COMPAT` or `setupOtelCompat()`). Registering a non-empty list
-while compat mode is active logs an error and leaves the previous registration
-unchanged. Calling `setupOtelCompat()` after registering customizers logs an error
-and continues enabling compat mode without clearing the registered list. Each
-explicit registration or setup attempt logs once, not once per span or export.
-Clearing customizers is always allowed and silent.
+### OpenTelemetry spans
+
+The same registration applies to spans exported through `@braintrust/otel`'s
+`BraintrustSpanProcessor` or `BraintrustExporter`, including compatibility mode
+(`BRAINTRUST_OTEL_COMPAT` or `setupOtelCompat()`). Compatibility mode is not
+required to customize OTel exports. Native spans still use the native record
+shape above; OTel hooks receive an isolated plain snapshot, not a live
+`ReadableSpan` or a converted native record:
+
+- `name`, `kind`, `attributes`, `status: { code, message? }`, `events`, `links`.
+- `spanContext: { traceId, spanId, traceFlags, traceState?, isRemote? }`,
+  `parentSpanId`, `parentSpanContext`, `startTime`, `endTime`, `duration`.
+  `spanContext` is an object, not a method. Times are OTel
+  `[seconds, nanoseconds]` arrays; trace state is a string.
+- `resource: { attributes, schemaUrl? }`, `instrumentationScope:
+{ name, version?, schemaUrl?, attributes? }`, and dropped attribute/event/link
+  counts. OTel 1.x's instrumentation library is exposed as `instrumentationScope`.
+- Events contain `name`, `time`, optional attributes and dropped count; links
+  contain a plain `context` (the same shape as `spanContext`), optional attributes
+  and dropped count.
+
+Hooks run after AI filtering and SDK origin enrichment, before OTLP
+serialization. Pending resource attributes are awaited before taking the
+snapshot. Plain nested containers are copied, so hook mutations do not affect
+the original span or another exporter. Replacement objects are not merged with
+the original: omitted content is removed, with empty OTLP defaults where
+required. Original identity, parent relationships, timestamps and
+`braintrust.parent` routing are restored after each callback.
+
+For example, register one synchronous hook that handles both payload shapes:
+
+```ts
+import { configureInstrumentation } from "braintrust/instrumentation";
+
+configureInstrumentation({
+  spanCustomizers: [
+    {
+      onSpanExport(data) {
+        if ("attributes" in data) {
+          const attributes = data.attributes as Record<string, unknown>;
+          delete attributes["braintrust.input_json"];
+          delete attributes["braintrust.output_json"];
+          delete attributes["gen_ai.prompt"];
+          delete attributes["gen_ai.completion"];
+          data.events = [];
+        } else {
+          delete data.input;
+          delete data.output;
+        }
+        return data;
+      },
+    },
+  ],
+});
+
+// Import the application and its tracing setup only after registration.
+await import("./app.js");
+```
+
+This example removes common prompt/output attributes and events, not every
+possible sensitive field. Adjust redaction to the instrumentation you use,
+including resource/scope metadata, links and status descriptions as needed.
+
+Thrown exceptions, promises, non-plain returns and invalid OTel serialization
+shapes stop the callback chain and fail closed. The failed span keeps only
+original identity, timestamps, routing and `braintrust.context_json` exactly
+`{"customizer_error":true}`. Names, status descriptions, events, links,
+resource/scope metadata and original context/origin are removed. Malformed spans
+that cannot be safely adapted are dropped instead. The safe once-only diagnostic
+is shared with the native pipeline across ESM/CJS bundles. Composing the
+Braintrust processor and exporter does not invoke hooks twice; retries of the
+prepared transport data do not rerun hooks. Submitting the original span again
+is a new export.
 
 ## Testing
 
