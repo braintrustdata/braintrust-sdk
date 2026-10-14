@@ -43,19 +43,15 @@ test("exports only intentional extension types", () => {
   expectTypeOf<EvalScorer<unknown, unknown, unknown>>().toBeFunction();
 });
 
-test("does not expose deprecated tools or saved configurations", () => {
-  expect(publicExports).not.toHaveProperty("loadParameters");
+test("keeps parameters while removing deprecated tools", () => {
+  expect(publicExports.loadParameters).toBeTypeOf("function");
   const project = publicExports.projects.create({ name: "test-project" });
   expect(project).not.toHaveProperty("tools");
-  expect(project).not.toHaveProperty("parameters");
+  expect(project.parameters.create).toBeTypeOf("function");
 
   if (false) {
-    // @ts-expect-error Saved configurations are no longer supported.
-    publicExports.loadParameters;
     // @ts-expect-error Saved tools are no longer supported.
     project.tools;
-    // @ts-expect-error Configuration builders are no longer supported.
-    project.parameters;
 
     const evaluator = {
       data: [{ input: 1 }],
@@ -69,8 +65,10 @@ test("does not expose deprecated tools or saved configurations", () => {
     });
     publicExports.Eval("test", {
       ...evaluator,
-      // @ts-expect-error Only inline schemas are supported, not remote configuration promises.
-      parameters: Promise.resolve(evaluator.parameters),
+      parameters: publicExports.loadParameters({
+        projectName: "test",
+        slug: "settings",
+      }),
     });
 
     project.prompts.create({

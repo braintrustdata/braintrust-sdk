@@ -87,7 +87,7 @@ test("prompt metadata preserves required and optional identifiers", () => {
     "log_id" | "org_id" | "project_id" | "id" | "_xact_id" | "function_type"
   > & {
     project_id?: string;
-    function_type?: Exclude<PromptType["function_type"], "tool" | "parameters">;
+    function_type?: Exclude<PromptType["function_type"], "tool">;
   };
   type RequiredRow = Metadata & { id: string; _xact_id: string };
   type OptionalRow = Metadata & { id?: string; _xact_id?: string };

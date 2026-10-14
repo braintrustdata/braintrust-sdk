@@ -6,7 +6,7 @@ import type * as SDK from "./sdk-types";
 import type * as schemas from "./sdk-schemas";
 
 // Backend definitions are compatibility fixtures, never production dependencies.
-// Function contracts intentionally exclude the deprecated tool and parameters kinds.
+// Function contracts intentionally exclude the deprecated tool kind.
 test("SDK-owned contracts remain compatible with the backend", () => {
   expectTypeOf<SDK.IfExists>().toEqualTypeOf<Backend.IfExistsType>();
   expectTypeOf<SDK.GitMetadataSettings>().toEqualTypeOf<Backend.GitMetadataSettingsType>();
@@ -14,7 +14,7 @@ test("SDK-owned contracts remain compatible with the backend", () => {
   expectTypeOf<SDK.RepoInfo>().toEqualTypeOf<Backend.RepoInfoType>();
   expectTypeOf<SDK.SSEProgressEventData>().toExtend<Backend.SSEProgressEventDataType>();
   expectTypeOf<SDK.FunctionObjectType>().toEqualTypeOf<
-    Exclude<Backend.FunctionObjectTypeType, "tool" | "parameters">
+    Exclude<Backend.FunctionObjectTypeType, "tool">
   >();
   expectTypeOf<
     Exclude<SDK.SSEProgressEventData["origin"], undefined>
@@ -22,7 +22,7 @@ test("SDK-owned contracts remain compatible with the backend", () => {
   expectTypeOf<SDK.FunctionFormat>().toEqualTypeOf<Backend.FunctionFormatType>();
   expectTypeOf<SDK.FunctionOutputType>().toEqualTypeOf<Backend.FunctionOutputTypeType>();
   expectTypeOf<SDK.FunctionTypeEnum>().toEqualTypeOf<
-    Exclude<Backend.FunctionTypeEnumType, "tool" | "parameters">
+    Exclude<Backend.FunctionTypeEnumType, "tool">
   >();
   expectTypeOf<SDK.PromptBlockData>().toEqualTypeOf<Backend.PromptBlockDataType>();
   expectTypeOf<SDK.ChatCompletionMessageParam>().toEqualTypeOf<Backend.ChatCompletionMessageParamType>();
@@ -63,7 +63,7 @@ test("SDK-owned contracts remain compatible with the backend", () => {
     "tool_functions"
   > | null>();
   expectTypeOf<SDK.FunctionTypeEnum | null>().toEqualTypeOf<
-    Exclude<Backend.FunctionTypeEnumNullishType, "tool" | "parameters">
+    Exclude<Backend.FunctionTypeEnumNullishType, "tool">
   >();
   expectTypeOf<SDK.PromptSessionEvent>().toExtend<Backend.PromptSessionEventType>();
   expectTypeOf<SDK.InvokeFunction>().toExtend<Backend.InvokeFunctionType>();

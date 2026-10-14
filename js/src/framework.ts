@@ -21,7 +21,7 @@ import { v5 as uuidv5 } from "uuid";
 import iso from "./isomorph";
 import { debugLogger } from "./debug-logger";
 import { GenericFunction } from "./framework-types";
-import { CodeFunction, CodePrompt } from "./framework2";
+import { CodeFunction, CodePrompt, CodeParameters } from "./framework2";
 import { Trace, LocalTrace } from "./trace";
 import {
   BaseMetadata,
@@ -33,6 +33,8 @@ import {
   ExperimentSummary,
   FullInitOptions,
   NOOP_SPAN,
+  type ParametersRef,
+  RemoteEvalParameters,
   Span,
   StartSpanArgs,
   init as _initExperiment,
@@ -54,8 +56,8 @@ import type {
 } from "./reporters/types";
 import { isEmpty, InternalAbortError } from "./util";
 import {
-  type EvalParameters,
-  type InferParameters,
+  EvalParameters,
+  InferParameters,
   validateParameters,
 } from "./eval-parameters";
 
@@ -140,6 +142,7 @@ export interface EvalHooks<
   span: Span;
   /**
    * The current parameters being used for this specific task execution.
+   * Array parameters are converted to single values.
    */
   parameters: InferParameters<Parameters>;
   /**
@@ -249,10 +252,18 @@ export interface Evaluator<
   classifiers?: EvalClassifier<Input, Output, Expected, Metadata>[];
 
   /**
-   * Inline parameter schemas whose validated values are passed to task hooks.
-   * Use Zod schemas, prompt definitions, or model identifiers with optional defaults.
+   * A set of parameters that will be passed to the evaluator.
+   * Can be:
+   * - A raw EvalParameters schema (Zod schemas)
+   * - A Parameters instance from loadParameters()
+   * - A Promise<Parameters> from loadParameters()
    */
-  parameters?: Parameters;
+  parameters?:
+    | Parameters
+    | RemoteEvalParameters<boolean, boolean, InferParameters<Parameters>>
+    | Promise<
+        RemoteEvalParameters<boolean, boolean, InferParameters<Parameters>>
+      >;
 
   /**
    * An optional name for the experiment.
@@ -418,6 +429,7 @@ type EvaluatorFile = {
     GenericFunction<unknown, unknown>
   >[];
   prompts: CodePrompt[];
+  parameters?: CodeParameters[];
   evaluators: {
     [evalName: string]: {
       evaluator: EvaluatorDef<
@@ -444,6 +456,34 @@ function initExperiment<IsOpen extends boolean = false>(
   });
 }
 
+async function getExperimentParametersRef(
+  parameters:
+    | EvalParameters
+    | RemoteEvalParameters<boolean, boolean>
+    | Promise<RemoteEvalParameters<boolean, boolean>>
+    | undefined,
+): Promise<ParametersRef | undefined> {
+  if (!parameters) {
+    return undefined;
+  }
+
+  const resolvedParameters =
+    parameters instanceof Promise ? await parameters : parameters;
+
+  if (!RemoteEvalParameters.isParameters(resolvedParameters)) {
+    return undefined;
+  }
+
+  if (resolvedParameters.id === undefined) {
+    return undefined;
+  }
+
+  return {
+    id: resolvedParameters.id,
+    version: resolvedParameters.version,
+  };
+}
+
 export async function _internalInitEvaluatorExperiment(
   projectName: string,
   evaluator: Evaluator<any, any, any, any, any>,
@@ -456,6 +496,7 @@ export async function _internalInitEvaluatorExperiment(
 ): Promise<Experiment | null> {
   if (options.disabled) return null;
   const { baseExperiment } = callEvaluatorData(data);
+  const parameters = await getExperimentParametersRef(evaluator.parameters);
   return initExperiment(evaluator.state, {
     ...(evaluator.projectId
       ? { projectId: evaluator.projectId }
@@ -471,6 +512,7 @@ export async function _internalInitEvaluatorExperiment(
     gitMetadataSettings: evaluator.gitMetadataSettings,
     repoInfo: evaluator.repoInfo,
     dataset: Dataset.isDataset(data) ? data : undefined,
+    parameters,
   });
 }
 
@@ -592,6 +634,7 @@ declare global {
 globalThis._evals = {
   functions: [],
   prompts: [],
+  parameters: [],
   evaluators: {},
   reporters: {},
 };
@@ -696,14 +739,13 @@ export async function Eval<
     | string
     | EvalOptions<EvalReport, Parameters>,
 ): Promise<EvalResultWithSummary<Input, Output, Expected, Metadata>> {
-  let options: EvalOptions<EvalReport, Parameters>;
-  if (isEmpty(reporterOrOpts)) {
-    options = {};
-  } else if (typeof reporterOrOpts === "string" || "name" in reporterOrOpts) {
-    options = { reporter: reporterOrOpts };
-  } else {
-    options = reporterOrOpts;
-  }
+  const options: EvalOptions<EvalReport, Parameters> = isEmpty(reporterOrOpts)
+    ? {}
+    : typeof reporterOrOpts === "string"
+      ? { reporter: reporterOrOpts }
+      : "name" in reporterOrOpts
+        ? { reporter: reporterOrOpts }
+        : reporterOrOpts;
 
   let evalName = makeEvalName(name, evaluator.experimentName);
   if (globalThis._evals.evaluators[evalName]) {
@@ -1096,16 +1138,6 @@ function logScoringFailures(
   return Object.keys(errorMap);
 }
 
-export const defaultErrorScoreHandler: ErrorScoreHandler = ({
-  rootSpan,
-  data: _,
-  unhandledScores,
-}) => {
-  const scores = Object.fromEntries(unhandledScores.map((s) => [s, 0]));
-  rootSpan.log({ scores });
-  return scores;
-};
-
 export async function runEvaluator(
   experiment: Experiment | null,
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -1122,13 +1154,45 @@ export async function runEvaluator(
       "Evaluator must include at least one of `scores` or `classifiers`",
     );
   }
+  return await runEvaluatorInternal(
+    experiment,
+    evaluator,
+    progressReporter,
+    stream,
+    parameters,
+    collectResults,
+    enableCache,
+  );
+}
+
+export const defaultErrorScoreHandler: ErrorScoreHandler = ({
+  rootSpan,
+  data: _,
+  unhandledScores,
+}) => {
+  const scores = Object.fromEntries(unhandledScores.map((s) => [s, 0]));
+  rootSpan.log({ scores });
+  return scores;
+};
+
+async function runEvaluatorInternal(
+  experiment: Experiment | null,
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  evaluator: EvaluatorDef<any, any, any, any>,
+  progressReporter: ProgressReporter,
+  stream: ((data: SSEProgressEventData) => void) | undefined,
+  parameters: InferParameters<EvalParameters> | undefined,
+  collectResults: boolean,
+  enableCache: boolean,
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+): Promise<EvalResultWithSummary<any, any, any, any>> {
   // Start span cache for this eval (it's disabled by default to avoid temp files outside of evals)
   // Only start if enableCache is true (default)
   if (enableCache) {
     (evaluator.state ?? _internalGetGlobalState())?.spanCache?.start();
   }
   try {
-    const validatedParameters = validateParameters(
+    parameters = await validateParameters(
       parameters ?? {},
       evaluator.parameters,
     );
@@ -1280,7 +1344,7 @@ export async function runEvaluator(
                   evaluator.task,
                   datum,
                   trialIndex,
-                  validatedParameters,
+                  parameters ?? {},
                   span,
                   (event) => {
                     stream?.({
@@ -1668,7 +1732,7 @@ function ensureScoreAccumulator(
 
 export function buildLocalSummary(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  evaluator: EvaluatorDef<any, any, any, any, any>,
+  evaluator: EvaluatorDef<any, any, any, any>,
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   results: EvalResult<any, any, any, any>[],
   precomputedScores?: ScoreAccumulator,
@@ -1745,7 +1809,7 @@ const defaultReporter: ReporterDef<boolean> = {
   name: "Braintrust default reporter",
   async reportEval(
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    evaluator: EvaluatorDef<any, any, any, any, any>,
+    evaluator: EvaluatorDef<any, any, any, any>,
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     result: EvalResultWithSummary<any, any, any, any>,
     { verbose, jsonl }: ReporterOpts,

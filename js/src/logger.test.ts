@@ -17,9 +17,11 @@ import {
   initLogger,
   extractTraceContextFromHeaders,
   Prompt,
+  RemoteEvalParameters,
   BraintrustState,
   FailedHTTPResponse,
   loadPrompt,
+  loadParameters,
   wrapTraced,
   traced,
   currentSpan,
@@ -46,6 +48,10 @@ import {
   type PromptDiskCacheEntry,
   type PromptMemoryCacheEntry,
 } from "./prompt-cache/prompt-cache";
+import {
+  ParametersCache,
+  type ParametersMemoryCacheEntry,
+} from "./prompt-cache/parameters-cache";
 import { DiskCache } from "./prompt-cache/disk-cache";
 import { LRUCache } from "./lru-cache";
 
@@ -2198,7 +2204,7 @@ test("init surfaces dataset environment lookup errors instead of falling back to
   vi.restoreAllMocks();
 });
 
-describe("prompt loaders", () => {
+describe("prompt and parameters loaders", () => {
   let state: BraintrustState;
   let getJson: ReturnType<typeof vi.spyOn>;
   const promptRow = {
@@ -2236,6 +2242,44 @@ describe("prompt loaders", () => {
       options: { model: string };
     };
   };
+  const parametersRow = {
+    id: "44444444-4444-4444-8444-444444444444",
+    _xact_id: "v1",
+    project_id: "55555555-5555-4555-8555-555555555555",
+    name: "Saved parameters",
+    slug: "saved-parameters",
+    description: null,
+    function_type: "parameters",
+    function_data: {
+      type: "parameters",
+      data: { prefix: "hello" },
+      __schema: {
+        type: "object",
+        properties: {
+          prefix: { type: "string", default: "hello" },
+        },
+        additionalProperties: true,
+      },
+    },
+  } satisfies {
+    id: string;
+    _xact_id: string;
+    project_id: string;
+    name: string;
+    slug: string;
+    description: null;
+    function_type: "parameters";
+    function_data: {
+      type: "parameters";
+      data: { prefix: string };
+      __schema: {
+        type: string;
+        properties: { prefix: { type: string; default: string } };
+        additionalProperties: boolean;
+      };
+    };
+  };
+
   function jsonResponse(data: unknown): Response {
     return new Response(JSON.stringify(data), {
       headers: { "Content-Type": "application/json" },
@@ -2949,6 +2993,135 @@ describe("prompt loaders", () => {
       ).rejects.toThrow(
         "Organization prompt-org-name not found. Must be one of other-org-name",
       );
+    });
+
+    test("loadParameters uses request-local credentials and isolated caches", async () => {
+      state.parametersCache = new ParametersCache({
+        memoryCache: new LRUCache<string, ParametersMemoryCacheEntry>({
+          max: 10,
+        }),
+      });
+      const fetchMock = vi
+        .fn()
+        .mockResolvedValueOnce(
+          loginResponse({
+            id: "parameters-org-id",
+            name: "test-org-name",
+            apiUrl: "https://parameters-api.test",
+          }),
+        )
+        .mockResolvedValueOnce(jsonResponse({ objects: [parametersRow] }))
+        .mockResolvedValueOnce(
+          loginResponse({
+            id: "parameters-org-id",
+            name: "test-org-name",
+            apiUrl: "https://parameters-api.test",
+          }),
+        )
+        .mockResolvedValueOnce(serverErrorResponse());
+
+      await loadParameters({
+        projectName: "test-project",
+        slug: "saved-parameters",
+        apiKey: "first-parameters-api-key",
+        fetch: fetchMock,
+        state,
+      });
+
+      await expect(
+        loadParameters({
+          projectName: "test-project",
+          slug: "saved-parameters",
+          apiKey: "second-parameters-api-key",
+          fetch: fetchMock,
+          state,
+        }),
+      ).rejects.toThrow("not found on server or in local cache");
+      expect(state.loginToken).toBe("___TEST_API_KEY__THIS_IS_NOT_REAL___");
+    });
+
+    test("loadParameters never falls back on ambient authentication rejection", async () => {
+      getJson
+        .mockResolvedValueOnce({ objects: [parametersRow] })
+        .mockRejectedValueOnce(
+          new FailedHTTPResponse(403, "Forbidden", "Revoked API key"),
+        );
+
+      await loadParameters({
+        projectName: "test-project",
+        slug: "saved-parameters",
+        state,
+      });
+
+      await expect(
+        loadParameters({
+          projectName: "test-project",
+          slug: "saved-parameters",
+          state,
+        }),
+      ).rejects.toThrow("403: Forbidden");
+    });
+
+    test("resolved parameter caches validate the organization identity", async () => {
+      const cache = new ParametersCache({
+        memoryCache: new LRUCache<string, ParametersMemoryCacheEntry>({
+          max: 10,
+        }),
+      });
+      const parameters = new RemoteEvalParameters(parametersRow);
+      const key = {
+        projectName: "test-project",
+        slug: "saved-parameters",
+        version: "latest",
+      };
+
+      await cache.withNamespace("credential", "first-org").set(key, parameters);
+
+      expect(
+        await cache.withNamespace("credential", "first-org").get(key),
+      ).toBe(parameters);
+      expect(await cache.withNamespace("credential").get(key)).toBe(parameters);
+      expect(
+        await cache.withNamespace("credential", "second-org").get(key),
+      ).toBeUndefined();
+    });
+  });
+
+  test("loadParameters prefers version over environment for project lookup", async () => {
+    getJson.mockResolvedValue({ objects: [parametersRow] });
+
+    await loadParameters({
+      projectName: "test-project",
+      slug: "saved-parameters",
+      version: "v1",
+      environment: "production",
+      state,
+    });
+
+    expect(getJson).toHaveBeenCalledWith(
+      "v1/function",
+      expect.objectContaining({
+        project_name: "test-project",
+        slug: "saved-parameters",
+        version: "v1",
+        function_type: "parameters",
+      }),
+    );
+    expect(getJson.mock.calls[0][1]).not.toHaveProperty("environment");
+  });
+
+  test("loadParameters prefers version over environment for id lookup", async () => {
+    getJson.mockResolvedValue(parametersRow);
+
+    await loadParameters({
+      id: parametersRow.id,
+      version: "v1",
+      environment: "production",
+      state,
+    });
+
+    expect(getJson).toHaveBeenCalledWith(`v1/function/${parametersRow.id}`, {
+      version: "v1",
     });
   });
 });

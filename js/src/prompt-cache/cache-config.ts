@@ -2,11 +2,6 @@ import { debugLogger } from "../debug-logger";
 import iso from "../isomorph";
 import { canUseDiskCache, DiskCache } from "./disk-cache";
 import { LRUCache } from "../lru-cache";
-import {
-  PromptCache,
-  type PromptMemoryCacheEntry,
-  type PromptDiskCacheEntry,
-} from "./prompt-cache";
 
 type CacheMode = "mixed" | "memory" | "disk" | "none";
 
@@ -33,7 +28,7 @@ function warnUnavailableDiskCache() {
   }
   warnedUnavailableDiskCacheMode = true;
   debugLogger.warn(
-    `Disk cache is not supported on this platform, so ${CACHE_LOCATION_ENV_VAR}="disk" disables prompt caching.`,
+    `Disk cache is not supported on this platform, so ${CACHE_LOCATION_ENV_VAR}="disk" disables prompt and parameters caching.`,
   );
 }
 
@@ -60,34 +55,45 @@ function parsePositiveIntegerEnv(envVar: string, defaultValue: number): number {
   return Number.isInteger(value) && value > 0 ? value : defaultValue;
 }
 
-export function createPromptCache(): PromptCache {
+export function createCacheLayers<MemoryEntry, DiskEntry = MemoryEntry>({
+  memoryMaxEnvVar,
+  diskCacheDirEnvVar,
+  diskMaxEnvVar,
+  getDefaultDiskCacheDir,
+}: {
+  memoryMaxEnvVar: string;
+  diskCacheDirEnvVar: string;
+  diskMaxEnvVar: string;
+  getDefaultDiskCacheDir: () => string;
+}): {
+  memoryCache?: LRUCache<string, MemoryEntry>;
+  diskCache?: DiskCache<DiskEntry>;
+} {
   const mode = parseCacheMode();
   const memoryCache =
     mode === "mixed" || mode === "memory"
-      ? new LRUCache<string, PromptMemoryCacheEntry>({
+      ? new LRUCache<string, MemoryEntry>({
           max: parsePositiveIntegerEnv(
-            "BRAINTRUST_PROMPT_CACHE_MEMORY_MAX",
+            memoryMaxEnvVar,
             DEFAULT_CACHE_MEMORY_MAX,
           ),
         })
       : undefined;
 
-  let diskCache: DiskCache<PromptDiskCacheEntry> | undefined;
+  let diskCache: DiskCache<DiskEntry> | undefined;
   if (mode === "mixed" || mode === "disk") {
     if (canUseDiskCache()) {
-      diskCache = new DiskCache<PromptDiskCacheEntry>({
-        cacheDir:
-          iso.getEnv("BRAINTRUST_PROMPT_CACHE_DIR") ??
-          `${iso.getEnv("HOME") ?? iso.homedir!()}/.braintrust/prompt_cache`,
-        max: parsePositiveIntegerEnv(
-          "BRAINTRUST_PROMPT_CACHE_DISK_MAX",
-          DEFAULT_CACHE_DISK_MAX,
-        ),
+      diskCache = new DiskCache<DiskEntry>({
+        cacheDir: iso.getEnv(diskCacheDirEnvVar) ?? getDefaultDiskCacheDir(),
+        max: parsePositiveIntegerEnv(diskMaxEnvVar, DEFAULT_CACHE_DISK_MAX),
       });
     } else if (mode === "disk") {
       warnUnavailableDiskCache();
     }
   }
 
-  return new PromptCache({ memoryCache, diskCache });
+  if (diskCache) {
+    return { memoryCache, diskCache };
+  }
+  return { memoryCache };
 }

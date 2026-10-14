@@ -58,6 +58,7 @@ const FunctionTypeEnum = z.enum([
   "facet",
   "classifier",
   "tag",
+  "parameters",
   "sandbox",
 ]);
 
@@ -456,6 +457,7 @@ const FunctionObjectType = z.enum([
   "preprocessor",
   "facet",
   "classifier",
+  "parameters",
   "sandbox",
 ]);
 

@@ -22,7 +22,14 @@ import {
   promptDefinitionToPromptData,
   type PromptDefinition,
 } from "./prompt-schemas";
-import type { ZodSchema } from "./zod/utils";
+import { zodToJsonSchema, type ZodSchema } from "./zod/utils";
+import type { EvalParameters } from "./eval-parameters";
+type ParametersSchema = {
+  type: "object";
+  properties: Record<string, Record<string, unknown>>;
+  required?: string[];
+  additionalProperties?: boolean;
+};
 
 // Safe access to __filename (only exists in Node.js CJS)
 const currentFilename =
@@ -50,6 +57,7 @@ class Project {
   public readonly id?: string;
   public readonly projectGroupName?: string;
   public prompts: PromptBuilder;
+  public parameters: ParametersBuilder;
   public scorers: ScorerBuilder;
   public classifiers: ClassifierBuilder;
 
@@ -62,6 +70,7 @@ class Project {
     GenericFunction<any, any>
   >[] = [];
   private _publishablePrompts: CodePrompt[] = [];
+  private _publishableParameters: CodeParameters[] = [];
 
   constructor(args: CreateProjectOpts) {
     _initializeSpanContext();
@@ -69,6 +78,7 @@ class Project {
     this.id = "id" in args ? args.id : undefined;
     this.projectGroupName = "name" in args ? args.projectGroupName : undefined;
     this.prompts = new PromptBuilder(this);
+    this.parameters = new ParametersBuilder(this);
     this.scorers = new ScorerBuilder(this);
     this.classifiers = new ClassifierBuilder(this);
   }
@@ -77,6 +87,16 @@ class Project {
     this._publishablePrompts.push(prompt);
     if (globalThis._lazy_load) {
       globalThis._evals.prompts.push(prompt);
+    }
+  }
+
+  public addParameters(parameters: CodeParameters) {
+    this._publishableParameters.push(parameters);
+    if (globalThis._lazy_load) {
+      if (globalThis._evals.parameters == null)
+        globalThis._evals.parameters = [];
+
+      globalThis._evals.parameters.push(parameters);
     }
   }
 
@@ -443,9 +463,153 @@ class PromptBuilder {
   }
 }
 
-interface PromptFunctionEvent {
-  prompt_data: PromptData;
-  function_data: { type: "prompt" };
+interface ParametersOpts<S extends EvalParameters> {
+  name: string;
+  slug?: string;
+  description?: string;
+  schema: S;
+  ifExists?: IfExists;
+  metadata?: Record<string, unknown>;
+}
+
+export class CodeParameters {
+  public readonly project: Project;
+  public readonly name: string;
+  public readonly slug: string;
+  public readonly description?: string;
+  public readonly schema: EvalParameters;
+  public readonly ifExists?: IfExists;
+  public readonly metadata?: Record<string, unknown>;
+
+  constructor(
+    project: Project,
+    opts: {
+      name: string;
+      slug: string;
+      description?: string;
+      schema: EvalParameters;
+      ifExists?: IfExists;
+      metadata?: Record<string, unknown>;
+    },
+  ) {
+    this.project = project;
+    this.name = opts.name;
+    this.slug = opts.slug;
+    this.description = opts.description;
+    this.schema = opts.schema;
+    this.ifExists = opts.ifExists;
+    this.metadata = opts.metadata;
+  }
+
+  async toFunctionDefinition(
+    projectNameToId: ProjectNameIdMap,
+  ): Promise<ParametersFunctionEvent> {
+    const schema = serializeEvalParameterstoParametersSchema(this.schema);
+    return {
+      project_id: await projectNameToId.resolve(this.project),
+      name: this.name,
+      slug: this.slug,
+      description: this.description ?? "",
+      function_type: "parameters",
+      function_data: {
+        type: "parameters",
+        data: getDefaultDataFromParametersSchema(schema),
+        __schema: schema,
+      },
+      if_exists: this.ifExists,
+      metadata: this.metadata,
+    };
+  }
+}
+
+class ParametersBuilder {
+  constructor(private readonly project: Project) {}
+
+  public create<S extends EvalParameters>(opts: ParametersOpts<S>): S {
+    const slug = opts.slug ?? slugify(opts.name, { lower: true, strict: true });
+
+    const codeParameters = new CodeParameters(this.project, {
+      name: opts.name,
+      slug,
+      description: opts.description,
+      schema: opts.schema,
+      ifExists: opts.ifExists,
+      metadata: opts.metadata,
+    });
+
+    this.project.addParameters(codeParameters);
+
+    return opts.schema;
+  }
+}
+
+function serializeEvalParameterstoParametersSchema(
+  parameters: EvalParameters,
+): ParametersSchema {
+  const properties: Record<string, Record<string, unknown>> = {};
+  const required: string[] = [];
+
+  for (const [name, value] of Object.entries(parameters)) {
+    if ("type" in value && value.type === "prompt") {
+      const defaultPromptData = value.default
+        ? promptDefinitionToPromptData(value.default)
+        : undefined;
+
+      properties[name] = {
+        type: "object",
+        "x-bt-type": "prompt",
+        ...(value.description ? { description: value.description } : {}),
+        ...(defaultPromptData ? { default: defaultPromptData } : {}),
+      };
+
+      if (!defaultPromptData) {
+        required.push(name);
+      }
+    } else if ("type" in value && value.type === "model") {
+      properties[name] = {
+        type: "string",
+        "x-bt-type": "model",
+        ...(value.description ? { description: value.description } : {}),
+        ...("default" in value ? { default: value.default } : {}),
+      };
+
+      if (!("default" in value)) {
+        required.push(name);
+      }
+    } else {
+      const jsonSchema = zodToJsonSchema(value);
+
+      properties[name] = jsonSchema;
+
+      if (!("default" in jsonSchema)) {
+        required.push(name);
+      }
+    }
+  }
+
+  return {
+    type: "object",
+    properties,
+    ...(required.length > 0 ? { required } : {}),
+    additionalProperties: true,
+  };
+}
+
+function getDefaultDataFromParametersSchema(
+  schema: ParametersSchema,
+): Record<string, unknown> {
+  return Object.fromEntries(
+    Object.entries(schema.properties).flatMap(([name, value]) => {
+      if (!("default" in value)) {
+        return [];
+      }
+
+      return [[name, value.default]];
+    }),
+  );
+}
+
+interface FunctionEventBase {
   project_id: string;
   slug: string;
   name: string;
@@ -455,4 +619,68 @@ interface PromptFunctionEvent {
   tags?: string[];
   metadata?: Record<string, unknown>;
   environments?: { slug: string }[];
+}
+
+interface PromptFunctionEvent extends FunctionEventBase {
+  prompt_data: PromptData;
+  function_data: { type: "prompt" };
+}
+
+interface ParametersFunctionEvent extends FunctionEventBase {
+  function_type: "parameters";
+  function_data: {
+    type: "parameters";
+    data: Record<string, unknown>;
+    __schema: ParametersSchema;
+  };
+}
+
+export class ProjectNameIdMap {
+  private nameToId: Record<string, string> = {};
+  private idToName: Record<string, string> = {};
+
+  async getId(projectName: string, projectGroupName?: string): Promise<string> {
+    if (!(projectName in this.nameToId)) {
+      const response = await _internalGetGlobalState()
+        .appConn()
+        .post_json("api/project/register", {
+          project_name: projectName,
+          ...(projectGroupName ? { project_group_name: projectGroupName } : {}),
+        });
+
+      const result = z
+        .object({
+          project: projectSchema,
+        })
+        .parse(response);
+
+      const projectId = result.project.id;
+
+      this.nameToId[projectName] = projectId;
+      this.idToName[projectId] = projectName;
+    }
+    return this.nameToId[projectName];
+  }
+
+  async getName(projectId: string): Promise<string> {
+    if (!(projectId in this.idToName)) {
+      const response = await _internalGetGlobalState()
+        .appConn()
+        .post_json("api/project/get", {
+          id: projectId,
+        });
+      const result = z.array(projectSchema).nonempty().parse(response);
+      const projectName = result[0].name;
+      this.idToName[projectId] = projectName;
+      this.nameToId[projectName] = projectId;
+    }
+    return this.idToName[projectId];
+  }
+
+  async resolve(project: Project): Promise<string> {
+    if (project.id) {
+      return project.id;
+    }
+    return this.getId(project.name!, project.projectGroupName);
+  }
 }

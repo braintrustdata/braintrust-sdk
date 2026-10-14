@@ -2119,6 +2119,125 @@ describe("framework2 metadata support", () => {
     });
   });
 
+  describe("CodeParameters defaults", () => {
+    test("toFunctionDefinition initializes data with schema defaults", async () => {
+      const project = projects.create({ name: "test-project" });
+      project.parameters.create({
+        name: "test-parameters",
+        schema: {
+          title: z.string().default("default-title"),
+          numSamples: z.number().default(10),
+          enabled: z.boolean().default(true),
+          tags: z.array(z.string()).default(["default-tag"]),
+          config: z
+            .object({
+              retryCount: z.number(),
+              strategy: z.string(),
+            })
+            .default({
+              retryCount: 3,
+              strategy: "balanced",
+            }),
+          datasetName: z.string(),
+          main: {
+            type: "prompt",
+            default: {
+              messages: [{ role: "user", content: "{{input}}" }],
+              model: "gpt-4",
+            },
+          },
+          model: {
+            type: "model",
+            default: "gpt-5-mini",
+          },
+        },
+      });
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const parameters = (project as any)._publishableParameters;
+      expect(parameters).toHaveLength(1);
+
+      const mockProjectMap = {
+        resolve: vi.fn().mockResolvedValue("project-123"),
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      } as any;
+
+      const funcDef = await parameters[0].toFunctionDefinition(mockProjectMap);
+
+      expect(funcDef.function_data.type).toBe("parameters");
+      expect(funcDef.function_data.data).toMatchObject({
+        title: "default-title",
+        numSamples: 10,
+        enabled: true,
+        tags: ["default-tag"],
+        config: {
+          retryCount: 3,
+          strategy: "balanced",
+        },
+        main: {
+          prompt: {
+            type: "chat",
+            messages: [{ role: "user", content: "{{input}}" }],
+          },
+          options: {
+            model: "gpt-4",
+          },
+        },
+        model: "gpt-5-mini",
+      });
+      expect(funcDef.function_data.__schema.properties.model).toMatchObject({
+        type: "string",
+        "x-bt-type": "model",
+        default: "gpt-5-mini",
+      });
+      expect(funcDef.function_data.data).not.toHaveProperty("datasetName");
+    });
+
+    test("toFunctionDefinition does not initialize data when schema has no defaults", async () => {
+      const project = projects.create({ name: "test-project" });
+      project.parameters.create({
+        name: "test-parameters-no-defaults",
+        schema: {
+          title: z.string(),
+          numSamples: z.number(),
+          enabled: z.boolean(),
+          tags: z.array(z.string()),
+          config: z.object({
+            retryCount: z.number(),
+            strategy: z.string(),
+          }),
+          main: {
+            type: "prompt",
+          },
+          model: {
+            type: "model",
+          },
+        },
+      });
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const parameters = (project as any)._publishableParameters;
+      expect(parameters).toHaveLength(1);
+
+      const mockProjectMap = {
+        resolve: vi.fn().mockResolvedValue("project-123"),
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      } as any;
+
+      const funcDef = await parameters[0].toFunctionDefinition(mockProjectMap);
+
+      expect(funcDef.function_data.type).toBe("parameters");
+      expect(funcDef.function_data.data).toEqual({});
+      expect(funcDef.function_data.data).not.toHaveProperty("title");
+      expect(funcDef.function_data.data).not.toHaveProperty("numSamples");
+      expect(funcDef.function_data.data).not.toHaveProperty("enabled");
+      expect(funcDef.function_data.data).not.toHaveProperty("tags");
+      expect(funcDef.function_data.data).not.toHaveProperty("config");
+      expect(funcDef.function_data.data).not.toHaveProperty("main");
+      expect(funcDef.function_data.data).not.toHaveProperty("model");
+    });
+  });
+
   describe("Scorer metadata", () => {
     test("code scorer stores metadata correctly", () => {
       const project = projects.create({ name: "test-project" });

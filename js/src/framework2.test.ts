@@ -1,7 +1,12 @@
 import { afterEach, beforeAll, expect, expectTypeOf, test, vi } from "vitest";
 import * as z3 from "zod/v3";
 import * as z4 from "zod/v4";
-import { CodeFunction, projects } from "./framework2";
+import {
+  CodeFunction,
+  projects,
+  CodeParameters,
+  ProjectNameIdMap,
+} from "./framework2";
 import { _internalGetGlobalState } from "./logger";
 import { configureNode } from "./node/config";
 import { zodToJsonSchema } from "./zod/utils";
@@ -106,4 +111,30 @@ test.each([
     required: ["text"],
   });
   expect(zodToJsonSchema(fn.returns!)).toMatchObject({ type: "number" });
+});
+
+test("parameter builders serialize mixed Zod v3 and v4 schemas", async () => {
+  const project = projects.create({ id: "test-zod-parameters" });
+  const schema = project.parameters.create({
+    name: "mixed",
+    schema: {
+      prefix: z3.string().default("start:"),
+      suffix: z4.string().default(":end"),
+    },
+  });
+  expectTypeOf(schema.suffix).toEqualTypeOf<z4.ZodDefault<z4.ZodString>>();
+  const definition = await new CodeParameters(project, {
+    name: "mixed",
+    slug: "mixed",
+    schema,
+  }).toFunctionDefinition(new ProjectNameIdMap());
+  expect(definition.function_data).toMatchObject({
+    data: { prefix: "start:", suffix: ":end" },
+    __schema: {
+      properties: {
+        prefix: { type: "string", default: "start:" },
+        suffix: { type: "string", default: ":end" },
+      },
+    },
+  });
 });

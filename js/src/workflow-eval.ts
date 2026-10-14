@@ -37,9 +37,6 @@ import {
   type Experiment,
   type ExperimentSummary,
   NOOP_SPAN,
-  Prompt,
-  serializePromptForCache,
-  type SerializedPrompt,
   type Span,
   _internalResumeSpan,
   _internalStartSpanWithInitialMerge,
@@ -987,18 +984,9 @@ async function startWorkflowEval<
   const runId = newId();
   const key = runKey(definition.projectName, definition.evalName, runId);
   const { data } = callEvaluatorData(definition.evaluator.data);
-  const parameters = validateParameters(
+  const parameters = await validateParameters(
     options.parameters ?? {},
     definition.evaluator.parameters,
-  );
-  const serializedParameters = assertJsonValue(
-    Object.fromEntries(
-      Object.entries(parameters).map(([name, value]) => [
-        name,
-        Prompt.isPrompt(value) ? serializePromptForCache(value) : value,
-      ]),
-    ),
-    "eval parameters",
   );
   const experimentName =
     definition.evaluator.experimentName ?? `${definition.evalName}-${runId}`;
@@ -1029,8 +1017,6 @@ async function startWorkflowEval<
         projectName: definition.projectName,
         evalName: definition.evalName,
         data,
-        // Parameters were already validated above, including Zod transforms.
-        parameters: undefined,
       } as unknown as EvaluatorDef<
         Input,
         Output,
@@ -1052,7 +1038,7 @@ async function startWorkflowEval<
       runId,
       experimentName,
       noSendLogs: options.noSendLogs ?? false,
-      parameters: serializedParameters,
+      parameters: assertJsonValue(parameters, "eval parameters"),
       status: "completed",
       summary: result.summary,
       caseCount: 0,
@@ -1068,7 +1054,7 @@ async function startWorkflowEval<
     runId,
     experimentName,
     noSendLogs: options.noSendLogs ?? false,
-    parameters: serializedParameters,
+    parameters: assertJsonValue(parameters, "eval parameters"),
     status: "running",
     caseCount: cases.length,
     cases,
@@ -1489,7 +1475,7 @@ async function logTaskResult(
             task,
             datum,
             record.trialIndex,
-            taskParameters(definition, state),
+            state.parameters as Record<string, unknown>,
             span,
           ),
         {
@@ -2022,11 +2008,9 @@ async function submitAndRecord(
     submission.kind,
     submission.scorerName,
   );
-  const parameters =
-    submission.kind === "task" ? taskParameters(definition, state) : {};
   const items = records.map((record) =>
     submission.kind === "task"
-      ? taskSubmissionItem(record, parameters)
+      ? taskSubmissionItem(record, state.parameters)
       : scorerSubmissionItem(record),
   );
   const context = { runId: state.runId, submissionId: submission.id };
@@ -2319,31 +2303,7 @@ async function materializeCases<
   return records;
 }
 
-function taskParameters(
-  definition: WorkflowEvalRuntimeDefinition<any, any, any, any, any>,
-  state: WorkflowRunState,
-): Record<string, unknown> {
-  return Object.fromEntries(
-    Object.entries(state.parameters as Record<string, unknown>).map(
-      ([name, value]) => {
-        const schema = definition.evaluator.parameters?.[name];
-        if (schema && "type" in schema && schema.type === "prompt") {
-          const prompt = value as SerializedPrompt;
-          return [
-            name,
-            new Prompt(prompt.metadata, prompt.defaults, prompt.noTrace),
-          ];
-        }
-        return [name, value];
-      },
-    ),
-  );
-}
-
-function taskSubmissionItem(
-  record: WorkflowCaseRecord,
-  parameters: Record<string, unknown>,
-) {
+function taskSubmissionItem(record: WorkflowCaseRecord, parameters: JsonValue) {
   const datum = record.datum as EvalCase<unknown, unknown, BaseMetadata>;
   return {
     id: record.id,

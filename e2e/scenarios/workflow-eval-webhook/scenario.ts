@@ -1,5 +1,3 @@
-import assert from "node:assert/strict";
-import { z } from "zod/v3";
 import {
   WorkflowScorer,
   WorkflowTask,
@@ -16,15 +14,9 @@ async function main() {
   const testRunId = getTestRunId();
   const scenario = "workflow-eval-webhook";
   const store = new WorkflowEvalMemoryStore();
-  const parameters = { factor: z.number().default(3) };
   const jobs = new Map<
     string,
-    {
-      input: number;
-      output?: number;
-      expected: number;
-      parameters?: { factor: number };
-    }
+    { input: number; output?: number; expected: number }
   >();
   const webhookCompletion = {
     mode: "webhook" as const,
@@ -35,19 +27,17 @@ async function main() {
     number,
     number,
     { testRunId: string; kind: string },
-    typeof parameters,
+    Record<string, never>,
     { id: string }
   >({
     async submit(item) {
-      assert.equal(item.parameters.factor, 2);
       const id = `task-${jobs.size + 1}`;
       jobs.set(id, item);
       return { id };
     },
     completion: webhookCompletion,
     async collect(submissionData) {
-      const item = jobs.get(submissionData.id)!;
-      return { output: item.input * item.parameters!.factor };
+      return { output: jobs.get(submissionData.id)!.input * 2 };
     },
   });
   const scorer = new WorkflowScorer<
@@ -78,7 +68,6 @@ async function main() {
     scopedName("e2e-workflow-eval-webhook-project", testRunId),
     {
       store,
-      parameters,
       maxConcurrency: 2,
       experimentName: `${scenario}-${testRunId}`,
       data: [1, 2, 3].map((input) => ({
@@ -113,7 +102,7 @@ async function main() {
 
   let localScoreCount = 0;
   let classifierCount = 0;
-  const waiting = await definition.start({ parameters: { factor: 2 } });
+  const waiting = await definition.start();
   if (waiting.status !== "waiting" || jobs.size !== 3) {
     throw new Error(
       "Workflow eval did not pause with three webhook submissions",

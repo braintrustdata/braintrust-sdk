@@ -1,7 +1,7 @@
-import { expect, expectTypeOf, test, beforeAll, vi } from "vitest";
+import { expect, expectTypeOf, test, beforeAll } from "vitest";
 import { type InferParameters, validateParameters } from "./eval-parameters";
-import { runEvaluator } from "./framework";
-import { Eval, type Prompt } from "./exports";
+import { Eval, runEvaluator } from "./framework";
+import { RemoteEvalParameters } from "./logger";
 import { z } from "zod/v3";
 import * as z4 from "zod/v4";
 import { type ProgressReporter } from "./reporters/types";
@@ -34,9 +34,9 @@ test("mixed Zod v3 and v4 parameters validate and infer parsed outputs", async (
     optional: boolean | undefined;
     model: string;
   }>();
-  expect(
+  await expect(
     validateParameters({ v3Length: "abc", v4Length: "abcd" }, schema),
-  ).toEqual({
+  ).resolves.toEqual({
     prefix: "start:",
     suffix: ":end",
     v3Length: 3,
@@ -44,12 +44,12 @@ test("mixed Zod v3 and v4 parameters validate and infer parsed outputs", async (
     optional: undefined,
     model: "test-model",
   });
-  expect(() =>
+  await expect(
     validateParameters(
       { suffix: 42, v3Length: "abc", v4Length: "abcd" },
       schema,
     ),
-  ).toThrow("Invalid parameter 'suffix'");
+  ).rejects.toThrow("Invalid parameter 'suffix'");
 });
 
 test("mixed Zod v3 and v4 parameters are inferred and passed to tasks", async () => {
@@ -147,6 +147,59 @@ test("prompt parameter is passed correctly", async () => {
 
   expect(result.results).toHaveLength(1);
   expect(result.results[0].output).toBe("test input");
+});
+
+test("remote prompt parameter is rehydrated correctly", async () => {
+  const parameters = new RemoteEvalParameters<
+    true,
+    true,
+    {
+      main: {
+        build: (args: { input: string }) => {
+          messages: Array<{ role: string; content: string }>;
+          model?: string;
+        };
+      };
+    }
+  >({
+    id: "11111111-1111-4111-8111-111111111111",
+    _xact_id: "v1",
+    project_id: "22222222-2222-4222-8222-222222222222",
+    name: "Saved parameters",
+    slug: "saved-parameters",
+    function_type: "parameters",
+    function_data: {
+      type: "parameters",
+      data: {
+        main: {
+          prompt: {
+            type: "chat",
+            messages: [{ role: "user", content: "{{input}}" }],
+          },
+          options: {
+            model: "gpt-5-mini",
+          },
+        },
+      },
+      __schema: {
+        type: "object",
+        properties: {
+          main: {
+            type: "object",
+            "x-bt-type": "prompt",
+          },
+        },
+        additionalProperties: true,
+      },
+    },
+  });
+
+  const validated = await validateParameters({}, parameters);
+
+  expect((validated.main as any).build({ input: "test input" })).toMatchObject({
+    messages: [{ role: "user", content: "test input" }],
+    model: "gpt-5-mini",
+  });
 });
 
 test("custom parameter values override defaults", async () => {
@@ -299,98 +352,4 @@ test("model parameter is required when default is missing", async () => {
       true,
     ),
   ).rejects.toThrow("Parameter 'model' is required");
-});
-
-test("Eval infers inline parameter types and applies value overrides", async () => {
-  const result = await Eval(
-    "inline-parameters",
-    {
-      data: [{ input: "hello" }],
-      parameters: {
-        prefix: z.string().default("default:"),
-        count: z.number().default(1),
-        model: { type: "model", default: "test-model" },
-        prompt: {
-          type: "prompt",
-          default: { prompt: "{{input}}", model: "test-model" },
-        },
-      },
-      task: (input, { parameters }) => {
-        expectTypeOf(parameters.prefix).toEqualTypeOf<string>();
-        expectTypeOf(parameters.count).toEqualTypeOf<number>();
-        expectTypeOf(parameters.model).toEqualTypeOf<string>();
-        expectTypeOf(parameters.prompt).toEqualTypeOf<
-          Prompt<boolean, boolean>
-        >();
-        expect(
-          parameters.prompt.build({ input }, { flavor: "completion" }).prompt,
-        ).toBe("hello");
-        return `${parameters.prefix}${input}`.repeat(parameters.count);
-      },
-      scores: [],
-    },
-    { noSendLogs: true },
-  );
-  expect(result.results[0].output).toBe("default:hello");
-
-  const overridden = await Eval(
-    "inline-overrides",
-    {
-      data: [{ input: "hello" }],
-      parameters: { prefix: z.string().default("default:") },
-      task: (input, { parameters }) => `${parameters.prefix}${input}`,
-      scores: [],
-    },
-    { noSendLogs: true, parameters: { prefix: "custom:" } },
-  );
-  expect(overridden.results[0].output).toBe("custom:hello");
-});
-
-test("invalid inline parameters reject before the task runs", async () => {
-  const task = vi.fn((input: string) => input);
-  await expect(
-    Eval(
-      "invalid-parameters",
-      {
-        data: [{ input: "hello" }],
-        parameters: { count: z.number().positive() },
-        task,
-        scores: [],
-      },
-      { noSendLogs: true, parameters: { count: -1 } },
-    ),
-  ).rejects.toThrow("Invalid parameter 'count'");
-  expect(task).not.toHaveBeenCalled();
-});
-
-test("prompt parameters preserve inline provider tools and accept prompt values", () => {
-  const schema = {
-    main: {
-      type: "prompt" as const,
-      default: {
-        model: "test-model",
-        messages: [{ role: "user" as const, content: "{{input}}" }],
-        tools: [{ type: "function" as const, function: { name: "weather" } }],
-      },
-    },
-  };
-  const defaults = validateParameters({}, schema);
-  expect(defaults.main.build({ input: "hello" }).tools).toEqual(
-    schema.main.default.tools,
-  );
-  expect(validateParameters({ main: defaults.main }, schema).main).toBe(
-    defaults.main,
-  );
-  const override = validateParameters(
-    {
-      main: {
-        prompt: { type: "completion", content: "Hi {{input}}" },
-        options: { model: "other-model" },
-      },
-    },
-    schema,
-  );
-  expect(
-    override.main.build({ input: "world" }, { flavor: "completion" }).prompt,
-  ).toBe("Hi world");
 });

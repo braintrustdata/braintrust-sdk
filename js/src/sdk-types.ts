@@ -103,6 +103,7 @@ export type FunctionTypeEnum =
   | "facet"
   | "classifier"
   | "tag"
+  | "parameters"
   | "sandbox";
 export type CallEvent =
   | {
@@ -445,6 +446,7 @@ export type FunctionObjectType =
   | "preprocessor"
   | "facet"
   | "classifier"
+  | "parameters"
   | "sandbox";
 export type FunctionOutputType =
   | "completion"
