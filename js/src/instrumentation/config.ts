@@ -2,9 +2,10 @@ export type SpanExportData = Record<string, unknown>;
 
 export interface SpanCustomizer {
   /**
-   * Customize each outgoing native SDK span record, including manual, instrumented,
-   * logger, and experiment spans, after lazy values resolve and before JSON
-   * serialization. Records are incremental and may not contain every span field.
+   * Customize outgoing native SDK records and Braintrust OpenTelemetry snapshots,
+   * including manual, instrumented, logger, and experiment spans, before transport
+   * serialization. Native records are incremental; OTel snapshots contain
+   * attributes, events, links, resource, instrumentationScope and spanContext.
    * Dataset rows and feedback records are not customized.
    *
    * Callbacks are synchronous. Add, change, or delete payload fields, then return
@@ -12,8 +13,9 @@ export interface SpanCustomizer {
    * Attachment objects; attachment processing and serialization happen later.
    * Throwing or returning an invalid value (including a promise) stops the chain
    * and exports only original identity, routing, and duration timestamps, plus
-   * context: { customizer_error: true }. No attachments from that record upload.
-   * A safe error is logged at most once per JavaScript global environment.
+   * context: { customizer_error: true } (OTel: braintrust.context_json string
+   * attribute). No attachments from that record upload. A safe error is logged
+   * at most once per JavaScript global environment across both pipelines.
    * Later records are evaluated independently; already exported records cannot
    * be retracted. Handle recovery inside the callback to retain span content.
    */
@@ -70,11 +72,10 @@ export interface InstrumentationConfig {
   integrations?: InstrumentationIntegrationsConfig;
 
   /**
-   * Customizers for all native SDK spans, in callback execution order.
+   * Customizers for all native SDK and Braintrust OpenTelemetry spans, in order.
+   * Native hooks receive span records; OTel hooks receive plain snapshots with
+   * attributes, events, links, resource, instrumentationScope and spanContext.
    * Configure before initializing the SDK or enabling instrumentation.
-   * Not yet supported with OpenTelemetry compat mode; registering a non-empty
-   * list while compat mode is active logs an error and leaves the previous
-   * registration unchanged. Clearing customizers is always allowed and silent.
    */
   spanCustomizers?: readonly SpanCustomizer[];
 }

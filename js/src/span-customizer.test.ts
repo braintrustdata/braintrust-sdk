@@ -1461,7 +1461,9 @@ describe("onSpanExport", () => {
 });
 
 describe("OpenTelemetry compat mode", () => {
-  const customizer = { onSpanExport: (data: SpanExportData) => data };
+  const customizer = {
+    onSpanExport: (data: SpanExportData) => ({ ...data, output: "redacted" }),
+  };
 
   beforeEach(() => registry.disable());
 
@@ -1480,47 +1482,26 @@ describe("OpenTelemetry compat mode", () => {
         globalThis.BRAINTRUST_CONTEXT_MANAGER = class {} as never;
       },
     ],
-  ])("rejects registering customizers under %s", (_name, enableCompat) => {
+  ])("registers and clears customizers under %s", (_name, enableCompat) => {
     const errorLog = vi.spyOn(console, "error").mockImplementation(() => {});
     enableCompat();
     configureInstrumentation({ spanCustomizers: [customizer] });
-    expect(errorLog).toHaveBeenCalledTimes(1);
-    const record = { id: "row", output: "original" };
-    expect(customizeSpanExport(record)).toBe(record);
-    expect(customizeSpanExport({ ...record, id: "row-2" })).toEqual({
-      ...record,
-      id: "row-2",
+    expect(customizeSpanExport({ id: "row", output: "private" })).toEqual({
+      id: "row",
+      output: "redacted",
     });
-    expect(errorLog).toHaveBeenCalledTimes(1);
-
-    configureInstrumentation({ spanCustomizers: [customizer] });
-    expect(errorLog).toHaveBeenCalledTimes(2);
-
-    configureInstrumentation({ spanCustomizers: [] });
-    configureInstrumentation({ spanCustomizers: undefined });
-    expect(errorLog).toHaveBeenCalledTimes(2);
-  });
-
-  test("keeps the previous registration after rejecting a replacement", () => {
-    const errorLog = vi.spyOn(console, "error").mockImplementation(() => {});
     configureInstrumentation({
       spanCustomizers: [
-        {
-          onSpanExport: (data) => ({ ...data, output: "previous customizer" }),
-        },
+        { onSpanExport: (data) => ({ ...data, output: "replacement" }) },
       ],
     });
-    vi.stubEnv("BRAINTRUST_OTEL_COMPAT", "1");
-
-    configureInstrumentation({ spanCustomizers: [customizer] });
-    expect(errorLog).toHaveBeenCalledTimes(1);
-    expect(customizeSpanExport({ output: "original" })).toEqual({
-      output: "previous customizer",
+    expect(customizeSpanExport({ output: "private" })).toEqual({
+      output: "replacement",
     });
-
-    configureInstrumentation({ spanCustomizers: undefined });
+    configureInstrumentation({ spanCustomizers: [] });
     const record = { output: "original" };
     expect(customizeSpanExport(record)).toBe(record);
-    expect(errorLog).toHaveBeenCalledTimes(1);
+    configureInstrumentation({ spanCustomizers: undefined });
+    expect(errorLog).not.toHaveBeenCalled();
   });
 });
