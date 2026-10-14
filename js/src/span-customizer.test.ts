@@ -1180,6 +1180,128 @@ describe("onSpanExport", () => {
     ).toEqual([[undefined], [true]]);
   });
 
+  test("decision customizer removal uploads only surviving media", async () => {
+    vi.stubEnv("BRAINTRUST_CAPTURE_ATTACHMENTS", "true");
+    const upload = vi
+      .spyOn(Attachment.prototype, "upload")
+      .mockResolvedValue({ upload_status: "done" });
+    const rows: SpanExportData[] = [];
+    const { logger } = initHttpLogger((batch) => {
+      rows.push(...batch);
+      return Response.json({});
+    });
+    configureInstrumentation({
+      spanCustomizers: [
+        {
+          onSpanExport(data) {
+            if (
+              data.input &&
+              typeof data.input === "object" &&
+              "state" in data.input &&
+              Array.isArray(data.input.state)
+            ) {
+              data.input.state.splice(0, 1);
+            }
+            return data;
+          },
+        },
+      ],
+    });
+    const input = {
+      state: [
+        {
+          type: "file",
+          mediaType: "text/plain",
+          filename: "private.txt",
+          data: "cHJpdmF0ZQ==",
+        },
+        {
+          type: "file",
+          mediaType: "text/plain",
+          filename: "kept.txt",
+          data: "a2VwdA==",
+        },
+      ],
+      questions: [],
+    };
+    const span = logger.startSpan({
+      name: "evaluate",
+      spanAttributes: { type: "question" },
+      event: { input },
+    });
+    span.end();
+    await logger.flush();
+    expect(upload).toHaveBeenCalledTimes(1);
+    expect(upload.mock.instances[0]).toMatchObject({
+      reference: { filename: "kept.txt" },
+    });
+    expect(rows.find((row) => row.id === span.id)).toMatchObject({
+      input: {
+        state: [
+          {
+            ...input.state[1],
+            data: { type: "braintrust_attachment", filename: "kept.txt" },
+          },
+        ],
+        questions: [],
+      },
+    });
+    expect(input.state).toHaveLength(2);
+  });
+
+  test.each(["customizer", "masking", "upload failure"])(
+    "decision media survives export with %s and never uploads redacted media",
+    async (mode) => {
+      vi.stubEnv("BRAINTRUST_CAPTURE_ATTACHMENTS", "true");
+      const media =
+        "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAIAAAD8GO2jAAAAKElEQVR4nO3NsQ0AAAzCMP5/un0CNkuZ41wybXsHAAAAAAAAAAAAxR4yw/wuPL6QkAAAAABJRU5ErkJggg==";
+      const upload = vi
+        .spyOn(Attachment.prototype, "upload")
+        .mockRejectedValue(new Error("injected upload failure"));
+      const rows: SpanExportData[] = [];
+      const { state, logger } = initHttpLogger((batch) => {
+        rows.push(...batch);
+        return Response.json({});
+      });
+      const redact = (value: unknown) =>
+        JSON.parse(JSON.stringify(value).replaceAll(media, "[redacted]"));
+      if (mode === "customizer") {
+        configureInstrumentation({
+          spanCustomizers: [
+            {
+              onSpanExport(data) {
+                if (data.input) data.input = redact(data.input);
+                return data;
+              },
+            },
+          ],
+        });
+      } else if (mode === "masking") {
+        state.setMaskingFunction(redact);
+      }
+      const input = {
+        state: [{ type: "file", data: media, mediaType: "image/png" }],
+        questions: [{ id: "q", type: "boolean", instructions: "Inspect" }],
+      };
+      const span = logger.startSpan({
+        name: "evaluate",
+        spanAttributes: { type: "question" },
+      });
+      span.log({
+        input,
+        output: { answers: [{ id: "q", type: "boolean", probability: 0.9 }] },
+      });
+      span.end();
+      await logger.flush();
+      expect(rows.find((row) => row.id === span.id)).toMatchObject({
+        input: mode === "upload failure" ? input : redact(input),
+        output: { answers: [{ id: "q", type: "boolean", probability: 0.9 }] },
+      });
+      expect(upload).toHaveBeenCalledTimes(mode === "upload failure" ? 1 : 0);
+      expect(input.state[0].data).toBe(media);
+    },
+  );
+
   test("does not upload attachments whose references were masked away", async () => {
     const masked = new Attachment({
       data: new ArrayBuffer(1),

@@ -137,18 +137,24 @@ export function wrapAISDK<T>(aiSDK: T, options: WrapAISDKOptions = {}): T {
     get(target, prop, receiver) {
       const original = Reflect.get(target, prop, receiver);
       switch (prop) {
+        case "experimental_decide":
         case "experimental_evaluate": {
-          const evaluate = typedAISDK.experimental_evaluate;
+          const evaluate = typedAISDK[prop];
           return typeof evaluate === "function"
             ? function (
                 this: unknown,
                 allParams: AISDKEvaluateParams & SpanInfo,
               ) {
                 const { span_info, ...params } = allParams;
-                return aiSDKChannels.evaluate.invoke(evaluate, this, [params], {
-                  denyOutputPaths: options.denyOutputPaths,
-                  span_info,
-                });
+                return aiSDKChannels.evaluate.invoke(
+                  evaluate,
+                  this,
+                  ["span_info" in allParams ? params : allParams],
+                  {
+                    denyOutputPaths: options.denyOutputPaths,
+                    span_info,
+                  },
+                );
               }
             : original;
         }

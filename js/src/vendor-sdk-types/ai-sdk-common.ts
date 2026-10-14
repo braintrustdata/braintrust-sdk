@@ -80,6 +80,11 @@ export interface AISDKGeneratedFile {
 }
 
 export interface AISDKEvaluateParams {
+  telemetry?: {
+    isEnabled?: boolean;
+    recordInputs?: boolean;
+    recordOutputs?: boolean;
+  };
   model: string | { modelId: string; provider: string };
   state: unknown;
   questions: Record<string, unknown>;
@@ -392,6 +397,7 @@ export interface AISDKProviderResolver {
 
 export interface AISDKNamespaceBase {
   experimental_evaluate?: AISDKEvaluateFunction;
+  experimental_decide?: AISDKEvaluateFunction;
   generateText: AISDKGenerateFunction;
   generateImage?: AISDKGenerateImageFunction;
   experimental_generateImage?: AISDKGenerateImageFunction;

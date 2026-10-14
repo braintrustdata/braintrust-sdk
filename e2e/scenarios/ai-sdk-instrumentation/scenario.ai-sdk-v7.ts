@@ -41,7 +41,7 @@ runMain(async () => {
     supportsEvaluate: true,
     supportsEvaluateStringModel:
       process.env.AI_SDK_SUPPORTS_EVALUATE_STRING_MODEL !== "false",
-    evaluate: wrapAISDK(ai).experimental_evaluate,
+    evaluate: ai.experimental_decide ?? wrapAISDK(ai).experimental_evaluate,
     supportsGenerateObject: true,
     supportsGenerateImage: false,
     supportsOpenAICacheScenario: false,

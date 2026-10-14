@@ -1,3 +1,4 @@
+import { isAutoInstrumentationSuppressed } from "../../instrumentation/auto-instrumentation-suppression";
 import {
   SpanTypeAttribute,
   getCurrentUnixTimestamp,
@@ -14,6 +15,8 @@ import {
   extractWorkflowMetadataFromCallParams,
   extractTokenMetrics,
   processAISDKCallInput,
+  processAISDKDecisionInput,
+  processAISDKDecisionResult,
   processAISDKEmbeddingOutput,
   processAISDKOutput,
   processAISDKRerankOutput,
@@ -23,6 +26,7 @@ import {
 } from "../../instrumentation/plugins/ai-sdk-plugin";
 import type {
   AISDKCallParams,
+  AISDKEvaluationResult,
   AISDKEmbeddingResult,
   AISDKModel,
   AISDKResult,
@@ -30,6 +34,7 @@ import type {
 } from "../../vendor-sdk-types/ai-sdk";
 import type {
   AISDKV7LanguageModelCallStartEvent,
+  AISDKV7DecisionStartEvent,
   AISDKV7OperationEvent,
   AISDKV7ProviderToolPart,
   AISDKV7Telemetry,
@@ -449,6 +454,23 @@ export function braintrustAISDKTelemetry(): any {
         return;
       }
 
+      if (state.operationName === "evaluate") {
+        const { output, ...resultLog } = processAISDKDecisionResult(
+          event as AISDKV7OperationEvent & AISDKEvaluationResult,
+          { modelId: event.modelId ?? "", provider: event.provider ?? "" },
+          DEFAULT_DENY_OUTPUT_PATHS,
+        );
+        state.span.log({
+          ...resultLog,
+          ...(state.recordOutputs !== false && shouldRecordOutputs(event)
+            ? { output }
+            : {}),
+        });
+        state.span.end();
+        deleteOperation(state.operationKey);
+        return;
+      }
+
       const result = finishResult(event, state.operationName);
       const metrics: Record<string, number> = state.hadModelChild
         ? {}
@@ -474,7 +496,51 @@ export function braintrustAISDKTelemetry(): any {
     });
   };
 
+  const onDecisionStart = (event: AISDKV7DecisionStartEvent) => {
+    if (isAutoInstrumentationSuppressed()) return;
+    runSafely("onDecisionStart", () => {
+      // Keep question span names stable across the evaluate -> decide rename.
+      const operationKey = createOperationKey(event, "evaluate");
+      const span = startSpan(
+        withSpanInstrumentationName(
+          {
+            name: "evaluate",
+            spanAttributes: { type: "question" },
+            event: {
+              ...(shouldRecordInputs(event)
+                ? { input: processAISDKDecisionInput(event) }
+                : {}),
+              metadata: {
+                ...createAISDKIntegrationMetadata(),
+                model: event.modelId,
+                provider: event.provider,
+              },
+            },
+          },
+          INSTRUMENTATION_NAMES.AI_SDK,
+        ),
+      );
+      registerOperation({
+        callId: event.callId,
+        operationKey,
+        operationName: "evaluate",
+        ownsSpan: true,
+        span,
+        hadModelChild: false,
+        loggedInput: shouldRecordInputs(event),
+        startTime: getCurrentUnixTimestamp(),
+        providerTools: new Map(),
+        recordInputs: event.recordInputs,
+        recordOutputs: event.recordOutputs,
+      });
+    });
+  };
+
   return {
+    experimental_onEvaluateStart: onDecisionStart,
+    experimental_onEvaluateEnd: onEnd,
+    experimental_onDecideStart: onDecisionStart,
+    experimental_onDecideEnd: onEnd,
     onStart(event) {
       runSafely("onStart", () => {
         const operationName = operationNameFromId(event.operationId);

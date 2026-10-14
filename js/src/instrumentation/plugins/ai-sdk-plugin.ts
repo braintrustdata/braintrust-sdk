@@ -1,3 +1,4 @@
+import { prepareDecisionAttachments } from "../../decision-attachments";
 import { BasePlugin, toLoggedError } from "../core";
 import { debugLogger } from "../../debug-logger";
 import {
@@ -64,6 +65,8 @@ import type {
   AISDK,
   AISDKCallParams,
   AISDKEmbedParams,
+  AISDKEvaluateParams,
+  AISDKEvaluationResult,
   AISDKEmbeddingResult,
   AISDKGeneratedFile,
   AISDKHarnessAgentCallParams,
@@ -156,6 +159,10 @@ const AI_SDK_V7_TELEMETRY_CALLBACKS = [
   "onEmbedEnd",
   "onRerankStart",
   "onRerankEnd",
+  "experimental_onEvaluateStart",
+  "experimental_onEvaluateEnd",
+  "experimental_onDecideStart",
+  "experimental_onDecideEnd",
   "onEnd",
   "onAbort",
   "onError",
@@ -696,7 +703,10 @@ export class AISDKPlugin extends BasePlugin {
 function interceptAISDKEvaluate(defaultDenyOutputPaths: string[]): () => void {
   return aiSDKChannels.evaluate.intercept(
     (target, thisArg, args, additional) => {
-      if (isAutoInstrumentationSuppressed()) {
+      if (
+        isAutoInstrumentationSuppressed() ||
+        args[0].telemetry?.isEnabled === false
+      ) {
         return Reflect.apply(target, thisArg, args);
       }
 
@@ -718,10 +728,9 @@ function interceptAISDKEvaluate(defaultDenyOutputPaths: string[]): () => void {
                 ...spanInfo?.spanAttributes,
               },
               event: {
-                input: {
-                  state: params.state,
-                  questions: addEvaluationIds(params.questions),
-                },
+                ...(params.telemetry?.recordInputs !== false
+                  ? { input: processAISDKDecisionInput(params) }
+                  : {}),
                 metadata: {
                   ...extractBaseMetadata(params.model),
                   ...spanInfo?.metadata,
@@ -742,11 +751,7 @@ function interceptAISDKEvaluate(defaultDenyOutputPaths: string[]): () => void {
         } catch (error) {
           debugLogger.error("Error logging span for evaluate:", error);
         }
-        try {
-          span.end();
-        } catch (error) {
-          debugLogger.error("Error ending span for evaluate:", error);
-        }
+        span.end();
       };
 
       try {
@@ -758,37 +763,16 @@ function interceptAISDKEvaluate(defaultDenyOutputPaths: string[]): () => void {
         void Promise.resolve(result).then(
           (value) =>
             finish(() => {
-              const confidence = value.providerMetadata?.typesafe?.confidence;
-              const gatewayRouting = extractGatewayRoutingInfo(value);
-              const requestMetadata = serializeModelWithProvider(args[0].model);
-              const providerMetadataKeys = Object.keys(
-                value.providerMetadata ?? {},
-              ).filter((key) => key !== "gateway");
-              const resolvedModel = serializeModelWithProvider(
-                gatewayRouting?.model ?? value.response?.modelId,
+              const { output, ...resultLog } = processAISDKDecisionResult(
+                value,
+                args[0].model,
+                denyOutputPaths,
               );
-              const resolvedProvider =
-                gatewayRouting?.provider ??
-                (providerMetadataKeys.length === 1
-                  ? providerMetadataKeys[0]
-                  : (resolvedModel.provider ?? requestMetadata.provider));
               span.log({
-                output: omit(
-                  {
-                    answers: addEvaluationIds(value.answers, confidence),
-                  },
-                  denyOutputPaths,
-                ),
-                metrics: extractTokenMetrics(value),
-                metadata: {
-                  ...(resolvedModel.model
-                    ? { model: resolvedModel.model }
-                    : {}),
-                  ...(resolvedProvider ? { provider: resolvedProvider } : {}),
-                  ...(confidence
-                    ? { providerMetadata: { typesafe: { confidence } } }
-                    : {}),
-                },
+                ...resultLog,
+                ...(args[0].telemetry?.recordOutputs !== false
+                  ? { output }
+                  : {}),
               });
             }),
           (error) => finish(() => span.log({ error })),
@@ -800,6 +784,51 @@ function interceptAISDKEvaluate(defaultDenyOutputPaths: string[]): () => void {
       }
     },
   );
+}
+
+/** Keep the decision envelope intact; automatic uploads run after customizers. */
+export function processAISDKDecisionInput(
+  params: Pick<AISDKEvaluateParams, "state" | "questions">,
+) {
+  return prepareDecisionAttachments({
+    state: params.state,
+    questions: addEvaluationIds(params.questions),
+  }) as { state: unknown; questions: unknown };
+}
+
+export function processAISDKDecisionResult(
+  value: AISDKEvaluationResult,
+  model: AISDKEvaluateParams["model"],
+  denyOutputPaths: string[],
+) {
+  const confidence = value.providerMetadata?.typesafe?.confidence;
+  const gatewayRouting = extractGatewayRoutingInfo(value);
+  const requestMetadata = serializeModelWithProvider(model);
+  const providerMetadataKeys = Object.keys(value.providerMetadata ?? {}).filter(
+    (key) => key !== "gateway",
+  );
+  const resolvedModel = serializeModelWithProvider(
+    gatewayRouting?.model ?? value.response?.modelId,
+  );
+  const resolvedProvider =
+    gatewayRouting?.provider ??
+    (providerMetadataKeys.length === 1
+      ? providerMetadataKeys[0]
+      : (resolvedModel.provider ?? requestMetadata.provider));
+  return {
+    output: prepareDecisionAttachments(
+      omit(
+        { answers: addEvaluationIds(value.answers, confidence) },
+        denyOutputPaths,
+      ),
+    ),
+    metrics: extractTokenMetrics(value),
+    metadata: {
+      ...(resolvedModel.model ? { model: resolvedModel.model } : {}),
+      ...(resolvedProvider ? { provider: resolvedProvider } : {}),
+      ...(confidence ? { providerMetadata: { typesafe: { confidence } } } : {}),
+    },
+  };
 }
 
 function addEvaluationIds(
