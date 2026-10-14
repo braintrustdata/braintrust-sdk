@@ -740,14 +740,10 @@ describe("login deduplication", () => {
           resolveFirst = resolve;
         }),
     );
-    const options = {
-      apiKey: " matching-credential ",
-      orgName: "matching-org-id",
-    };
-    const first = state.login(options);
+    const first = state.login({ apiKey: " matching-credential " });
     const matching = state.login({
-      ...options,
       apiKey: "matching-credential",
+      orgName: "matching-org-id",
     });
     resolveFirst(loginResponse("matching-org-id"));
     await Promise.all([first, matching]);
@@ -777,6 +773,30 @@ describe("login deduplication", () => {
     await Promise.all([first, queued]);
     expect(fetch).toHaveBeenCalledTimes(1);
     expect(state.getDebugLogLevel()).toBe("debug");
+  });
+
+  test("restores the constructor debug level for a queued login without an override", async () => {
+    const { fetch } = createState();
+    const state = new BraintrustState({
+      apiKey: "matching-credential",
+      appUrl: "https://app.test",
+      fetch,
+      debugLogLevel: "warn",
+      noExitFlush: true,
+    });
+    let resolveFirst!: (value: Response) => void;
+    fetch.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          resolveFirst = resolve;
+        }),
+    );
+    const first = state.login({ debugLogLevel: "debug" });
+    const queued = state.login({});
+    resolveFirst(loginResponse());
+    await Promise.all([first, queued]);
+    expect(fetch).toHaveBeenCalledTimes(1);
+    expect(state.getDebugLogLevel()).toBe("warn");
   });
 
   test("allows a queued login to proceed when the preceding login fails", async () => {

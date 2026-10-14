@@ -1286,7 +1286,8 @@ export class BraintrustState {
           this.appUrl !== appUrl ||
           this.loginToken !==
             (apiKey && HTTPConnection.sanitize_token(apiKey)) ||
-          this.activeLoginOrgNameSelector !== orgName ||
+          (this.activeLoginOrgNameSelector !== orgName &&
+            (this.orgName === undefined || this.orgName !== orgName)) ||
           this.fetch !== fetch
         ) {
           throw new Error(
@@ -1295,7 +1296,7 @@ export class BraintrustState {
         }
         // copyLoginInfo() may have replaced this queued caller's debug level
         // while its login was waiting.
-        this.setDebugLogLevel(loginParams.debugLogLevel);
+        this.setDebugLogLevel(options.debugLogLevel);
         return;
       }
       const newState = await loginToState({
