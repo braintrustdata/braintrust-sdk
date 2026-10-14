@@ -14,7 +14,7 @@ import type {
 } from "../../vendor-sdk-types/pi-coding-agent";
 import { isAutoInstrumentationSuppressed } from "../auto-instrumentation-suppression";
 import { registry } from "../registry";
-import { piCodingAgentChannels } from "./pi-coding-agent-channels";
+import { piCodingAgentChannels } from "./pi-coding-agent-interceptors";
 import { PiCodingAgentPlugin } from "./pi-coding-agent-plugin";
 
 // Use real Braintrust spans and async context, capturing all log writes in memory.

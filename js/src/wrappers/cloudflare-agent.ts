@@ -1,5 +1,5 @@
 import { debugLogger } from "../debug-logger";
-import { cloudflareAgentsChannels } from "../instrumentation/plugins/cloudflare-agents-channels";
+import { cloudflareAgentsChannels } from "../instrumentation/plugins/cloudflare-agents-interceptors";
 import type { CloudflareAgent } from "../vendor-sdk-types/cloudflare-agents";
 
 const WRAPPED_RUN_AGENT_TOOL = Symbol.for(
@@ -54,9 +54,11 @@ export function wrapCloudflareAgent<T>(Agent: T): T {
         return Reflect.apply(originalRunAgentTool, this, args);
       }
 
-      return cloudflareAgentsChannels.runAgentTool.tracePromise(
-        () => Reflect.apply(originalRunAgentTool, this, args),
-        { arguments: args, self: this },
+      return cloudflareAgentsChannels.runAgentTool.invoke(
+        originalRunAgentTool,
+        this,
+        args,
+        {},
       );
     },
   });

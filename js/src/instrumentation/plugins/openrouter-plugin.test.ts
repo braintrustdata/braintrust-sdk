@@ -7,9 +7,9 @@ import {
   it,
   vi,
 } from "vitest";
-import { configureNode } from "../../node/config";
 import { _exportsForTestingOnly, initLogger } from "../../logger";
-import { openRouterChannels } from "./openrouter-channels";
+import { configureNode } from "../../node/config";
+import { openRouterChannels } from "./openrouter-interceptors";
 import {
   aggregateOpenRouterChatChunks,
   aggregateOpenRouterResponseStreamEvents,
@@ -460,7 +460,7 @@ describe("OpenRouter Plugin", () => {
         model: "openai/gpt-4.1-mini",
         tools: [tool],
       };
-      const result = openRouterChannels.callModel.traceSync(
+      const result = openRouterChannels.callModel.invoke(
         () => {
           const modelResult = {
             allToolExecutionRounds: [] as any[],
@@ -516,7 +516,9 @@ describe("OpenRouter Plugin", () => {
 
           return modelResult;
         },
-        { arguments: [request as any] },
+        undefined,
+        [request as any],
+        {},
       );
       expect(request.tools[0]).not.toBe(tool);
 
@@ -623,7 +625,7 @@ describe("OpenRouter Plugin", () => {
         },
       };
 
-      await openRouterChannels.rerankRerank.tracePromise(
+      await openRouterChannels.rerankRerank.invoke(
         async () => ({
           id: "rerank_123",
           model: `${TEST_RERANK_PROVIDER}/${TEST_RERANK_MODEL}`,
@@ -644,7 +646,9 @@ describe("OpenRouter Plugin", () => {
             totalTokens: 5,
           },
         }),
-        { arguments: [request] },
+        undefined,
+        [request],
+        {},
       );
 
       const spans = await backgroundLogger.drain();

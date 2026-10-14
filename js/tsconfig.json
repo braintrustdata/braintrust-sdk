@@ -6,11 +6,6 @@
     "target": "es2022",
     "moduleResolution": "node",
     "baseUrl": ".",
-    "paths": {
-      "@apm-js-collab/code-transformer": [
-        "src/auto-instrumentations/orchestrion-js/index.ts"
-      ]
-    },
     "strict": true,
     "noUnusedLocals": true,
     "esModuleInterop": true,
@@ -31,7 +26,6 @@
     "src/auto-instrumentations/bundler/**",
     "src/auto-instrumentations/configs/**",
     "src/auto-instrumentations/loader/**",
-    "src/auto-instrumentations/index.ts",
     "tests/auto-instrumentations/**",
     "./playground.ts"
   ]

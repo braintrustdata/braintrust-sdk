@@ -1,4 +1,4 @@
-import { typeSafeChannels } from "../instrumentation/plugins/typesafe-channels";
+import { typeSafeChannels } from "../instrumentation/plugins/typesafe-interceptors";
 import type {
   TypeSafeClient,
   TypeSafeSystemOneRequest,

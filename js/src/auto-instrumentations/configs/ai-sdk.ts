@@ -2,7 +2,7 @@ import type { InstrumentationConfig } from "../orchestrion-js";
 import {
   aiSDKChannels,
   harnessAgentChannels,
-} from "../../instrumentation/plugins/ai-sdk-channels";
+} from "../../instrumentation/plugins/ai-sdk-interceptors";
 
 /**
  * Instrumentation configurations for the Vercel AI SDK.
@@ -27,7 +27,6 @@ export const aiSDKConfigs: InstrumentationConfig[] = [
     functionQuery: {
       functionName: "experimental_evaluate",
       isExportAlias: true,
-      kind: "Async",
     },
   },
   // HarnessAgent turn methods are published only from the package's ESM
@@ -49,7 +48,6 @@ export const aiSDKConfigs: InstrumentationConfig[] = [
     functionQuery: {
       className: "HarnessAgent",
       methodName,
-      kind: "Async" as const,
       index: 0,
     },
   })),
@@ -64,7 +62,6 @@ export const aiSDKConfigs: InstrumentationConfig[] = [
     },
     functionQuery: {
       functionName: "generateText",
-      kind: "Async",
     },
   },
   {
@@ -76,7 +73,6 @@ export const aiSDKConfigs: InstrumentationConfig[] = [
     },
     functionQuery: {
       functionName: "generateText",
-      kind: "Async",
     },
   },
 
@@ -102,7 +98,6 @@ export const aiSDKConfigs: InstrumentationConfig[] = [
       },
       functionQuery: {
         functionName,
-        kind: "Async" as const,
         ...(isExportAlias ? { isExportAlias } : {}),
       },
     })),
@@ -118,7 +113,6 @@ export const aiSDKConfigs: InstrumentationConfig[] = [
     },
     functionQuery: {
       functionName: "streamText",
-      kind: "Async",
     },
   },
 
@@ -132,7 +126,6 @@ export const aiSDKConfigs: InstrumentationConfig[] = [
     },
     functionQuery: {
       functionName: "streamText",
-      kind: "Sync",
     },
   },
   {
@@ -144,7 +137,6 @@ export const aiSDKConfigs: InstrumentationConfig[] = [
     },
     functionQuery: {
       functionName: "streamText",
-      kind: "Async",
     },
   },
   {
@@ -156,7 +148,6 @@ export const aiSDKConfigs: InstrumentationConfig[] = [
     },
     functionQuery: {
       functionName: "streamText",
-      kind: "Sync",
     },
   },
 
@@ -170,7 +161,6 @@ export const aiSDKConfigs: InstrumentationConfig[] = [
     },
     functionQuery: {
       functionName: "generateObject",
-      kind: "Async",
     },
   },
   {
@@ -182,7 +172,6 @@ export const aiSDKConfigs: InstrumentationConfig[] = [
     },
     functionQuery: {
       functionName: "generateObject",
-      kind: "Async",
     },
   },
 
@@ -196,7 +185,6 @@ export const aiSDKConfigs: InstrumentationConfig[] = [
     },
     functionQuery: {
       functionName: "embed",
-      kind: "Async",
     },
   },
   {
@@ -208,7 +196,6 @@ export const aiSDKConfigs: InstrumentationConfig[] = [
     },
     functionQuery: {
       functionName: "embed",
-      kind: "Async",
     },
   },
 
@@ -222,7 +209,6 @@ export const aiSDKConfigs: InstrumentationConfig[] = [
     },
     functionQuery: {
       functionName: "embedMany",
-      kind: "Async",
     },
   },
   {
@@ -234,7 +220,6 @@ export const aiSDKConfigs: InstrumentationConfig[] = [
     },
     functionQuery: {
       functionName: "embedMany",
-      kind: "Async",
     },
   },
 
@@ -248,7 +233,6 @@ export const aiSDKConfigs: InstrumentationConfig[] = [
     },
     functionQuery: {
       functionName: "rerank",
-      kind: "Async",
     },
   },
   {
@@ -260,7 +244,6 @@ export const aiSDKConfigs: InstrumentationConfig[] = [
     },
     functionQuery: {
       functionName: "rerank",
-      kind: "Async",
     },
   },
 
@@ -276,7 +259,6 @@ export const aiSDKConfigs: InstrumentationConfig[] = [
     },
     functionQuery: {
       functionName: "createTelemetryDispatcher",
-      kind: "Sync",
     },
   },
   {
@@ -288,7 +270,6 @@ export const aiSDKConfigs: InstrumentationConfig[] = [
     },
     functionQuery: {
       functionName: "createTelemetryDispatcher",
-      kind: "Sync",
     },
   },
 
@@ -302,7 +283,6 @@ export const aiSDKConfigs: InstrumentationConfig[] = [
     },
     functionQuery: {
       functionName: "streamObject",
-      kind: "Async",
     },
   },
 
@@ -316,7 +296,6 @@ export const aiSDKConfigs: InstrumentationConfig[] = [
     },
     functionQuery: {
       functionName: "streamObject",
-      kind: "Sync",
     },
   },
   {
@@ -328,7 +307,6 @@ export const aiSDKConfigs: InstrumentationConfig[] = [
     },
     functionQuery: {
       functionName: "streamObject",
-      kind: "Async",
     },
   },
   {
@@ -340,7 +318,6 @@ export const aiSDKConfigs: InstrumentationConfig[] = [
     },
     functionQuery: {
       functionName: "streamObject",
-      kind: "Sync",
     },
   },
 
@@ -356,7 +333,6 @@ export const aiSDKConfigs: InstrumentationConfig[] = [
     },
     functionQuery: {
       methodName: "generate",
-      kind: "Async",
       index: 0,
     },
   },
@@ -369,7 +345,6 @@ export const aiSDKConfigs: InstrumentationConfig[] = [
     },
     functionQuery: {
       methodName: "generate",
-      kind: "Async",
       index: 0,
     },
   },
@@ -386,7 +361,6 @@ export const aiSDKConfigs: InstrumentationConfig[] = [
     },
     functionQuery: {
       methodName: "stream",
-      kind: "Sync",
       index: 0,
     },
   },
@@ -399,7 +373,6 @@ export const aiSDKConfigs: InstrumentationConfig[] = [
     },
     functionQuery: {
       methodName: "stream",
-      kind: "Sync",
       index: 0,
     },
   },
@@ -416,7 +389,6 @@ export const aiSDKConfigs: InstrumentationConfig[] = [
     },
     functionQuery: {
       methodName: "generate",
-      kind: "Async",
       index: 0,
     },
   },
@@ -429,7 +401,6 @@ export const aiSDKConfigs: InstrumentationConfig[] = [
     },
     functionQuery: {
       methodName: "generate",
-      kind: "Async",
       index: 0,
     },
   },
@@ -446,7 +417,6 @@ export const aiSDKConfigs: InstrumentationConfig[] = [
     },
     functionQuery: {
       methodName: "stream",
-      kind: "Async",
       index: 0,
     },
   },
@@ -459,7 +429,6 @@ export const aiSDKConfigs: InstrumentationConfig[] = [
     },
     functionQuery: {
       methodName: "stream",
-      kind: "Async",
       index: 0,
     },
   },

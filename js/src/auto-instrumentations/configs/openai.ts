@@ -1,5 +1,5 @@
 import type { InstrumentationConfig } from "../orchestrion-js";
-import { openAIChannels } from "../../instrumentation/plugins/openai-channels";
+import { openAIChannels } from "../../instrumentation/plugins/openai-interceptors";
 
 /**
  * Instrumentation configurations for the OpenAI SDK.
@@ -24,7 +24,6 @@ export const openaiConfigs: InstrumentationConfig[] = [
       functionQuery: {
         className: "Decisions",
         methodName: "create",
-        kind: "Async",
       },
     }),
   ),
@@ -38,7 +37,6 @@ export const openaiConfigs: InstrumentationConfig[] = [
     functionQuery: {
       className: "Images",
       methodName: "generate",
-      kind: "Async",
     },
   },
   {
@@ -48,7 +46,7 @@ export const openaiConfigs: InstrumentationConfig[] = [
       versionRange: ">=4.0.0",
       filePath: "resources/images.mjs",
     },
-    functionQuery: { className: "Images", methodName: "edit", kind: "Async" },
+    functionQuery: { className: "Images", methodName: "edit" },
   },
   {
     channelName: openAIChannels.imagesCreateVariation.channelName,
@@ -60,7 +58,6 @@ export const openaiConfigs: InstrumentationConfig[] = [
     functionQuery: {
       className: "Images",
       methodName: "createVariation",
-      kind: "Async",
     },
   },
   {
@@ -70,7 +67,7 @@ export const openaiConfigs: InstrumentationConfig[] = [
       versionRange: ">=4.0.0",
       filePath: "resources/audio/speech.mjs",
     },
-    functionQuery: { className: "Speech", methodName: "create", kind: "Async" },
+    functionQuery: { className: "Speech", methodName: "create" },
   },
   {
     channelName: openAIChannels.audioTranscriptionsCreate.channelName,
@@ -82,7 +79,6 @@ export const openaiConfigs: InstrumentationConfig[] = [
     functionQuery: {
       className: "Transcriptions",
       methodName: "create",
-      kind: "Async",
     },
   },
   {
@@ -95,7 +91,6 @@ export const openaiConfigs: InstrumentationConfig[] = [
     functionQuery: {
       className: "Translations",
       methodName: "create",
-      kind: "Async",
     },
   },
   // Chat Completions
@@ -109,7 +104,6 @@ export const openaiConfigs: InstrumentationConfig[] = [
     functionQuery: {
       className: "Completions",
       methodName: "create",
-      kind: "Async",
     },
   },
 
@@ -123,7 +117,6 @@ export const openaiConfigs: InstrumentationConfig[] = [
     functionQuery: {
       className: "Completions",
       methodName: "create",
-      kind: "Async",
     },
   },
 
@@ -137,7 +130,6 @@ export const openaiConfigs: InstrumentationConfig[] = [
     functionQuery: {
       className: "Completions",
       methodName: "create",
-      kind: "Async",
     },
   },
 
@@ -152,7 +144,6 @@ export const openaiConfigs: InstrumentationConfig[] = [
     functionQuery: {
       className: "Embeddings",
       methodName: "create",
-      kind: "Async",
     },
   },
 
@@ -167,7 +158,6 @@ export const openaiConfigs: InstrumentationConfig[] = [
     functionQuery: {
       className: "Completions",
       methodName: "parse",
-      kind: "Async",
     },
   },
 
@@ -181,7 +171,6 @@ export const openaiConfigs: InstrumentationConfig[] = [
     functionQuery: {
       className: "Completions",
       methodName: "parse",
-      kind: "Async",
     },
   },
 
@@ -196,7 +185,6 @@ export const openaiConfigs: InstrumentationConfig[] = [
     functionQuery: {
       className: "Moderations",
       methodName: "create",
-      kind: "Async",
     },
   },
 
@@ -211,7 +199,6 @@ export const openaiConfigs: InstrumentationConfig[] = [
     functionQuery: {
       className: "Completions",
       methodName: "stream",
-      kind: "Sync",
     },
   },
 
@@ -225,7 +212,6 @@ export const openaiConfigs: InstrumentationConfig[] = [
     functionQuery: {
       className: "Completions",
       methodName: "stream",
-      kind: "Sync",
     },
   },
 
@@ -240,7 +226,6 @@ export const openaiConfigs: InstrumentationConfig[] = [
     functionQuery: {
       className: "Responses",
       methodName: "create",
-      kind: "Async",
     },
   },
 
@@ -254,7 +239,6 @@ export const openaiConfigs: InstrumentationConfig[] = [
     functionQuery: {
       className: "Responses",
       methodName: "stream",
-      kind: "Sync",
     },
   },
 
@@ -268,7 +252,6 @@ export const openaiConfigs: InstrumentationConfig[] = [
     functionQuery: {
       className: "Responses",
       methodName: "parse",
-      kind: "Async",
     },
   },
 
@@ -282,7 +265,6 @@ export const openaiConfigs: InstrumentationConfig[] = [
     functionQuery: {
       className: "Responses",
       methodName: "compact",
-      kind: "Async",
     },
   },
 ];

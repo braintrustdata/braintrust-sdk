@@ -12,7 +12,7 @@ import {
 import { configureNode } from "../../node/config";
 import { wrapOpenAI } from "../../wrappers/oai";
 import { registry } from "../registry";
-import { openAIChannels } from "./openai-channels";
+import { openAIChannels } from "./openai-interceptors";
 import type {
   OpenAIDecision,
   OpenAIDecisionCreateParams,

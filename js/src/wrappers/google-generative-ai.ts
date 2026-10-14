@@ -1,4 +1,4 @@
-import { googleGenerativeAIChannels } from "../instrumentation/plugins/google-generative-ai-channels";
+import { googleGenerativeAIChannels } from "../instrumentation/plugins/google-generative-ai-interceptors";
 import { isObject } from "../util";
 import type {
   GenerativeAIClient,

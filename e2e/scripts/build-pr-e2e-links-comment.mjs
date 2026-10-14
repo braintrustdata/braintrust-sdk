@@ -57,15 +57,6 @@ function btqlFilterClause(predicate) {
   };
 }
 
-function buildSearchParam(metadataScenario, testRunIds) {
-  return JSON.stringify({
-    filter: [
-      btqlFilterClause(scenarioPredicate(metadataScenario)),
-      btqlFilterClause(testRunIdPredicate(testRunIds)),
-    ],
-  });
-}
-
 async function readScenarioConfig(configPath) {
   const raw = await readFile(configPath, "utf8");
   const parsed = JSON.parse(raw);
@@ -230,6 +221,8 @@ async function readRunContextRecords(runContextDir) {
           : DEFAULT_VARIANT_KEY;
       records.push({
         entry: typeof parsed.entry === "string" ? parsed.entry : null,
+        logRootSpanIds: parsed.logRootSpanIds,
+        experimentNames: parsed.experimentNames ?? [],
         scenarioDirName,
         testRunId: parsed.testRunId,
         variantKey,
@@ -395,7 +388,7 @@ function buildCommentBody(options) {
     lines.push("");
   }
 
-  lines.push("| Scenario | Braintrust Logs | Status |");
+  lines.push("| Scenario | Braintrust Traces | Status |");
   lines.push("| --- | --- | --- |");
 
   const pushScenarioRow = ({
@@ -414,20 +407,65 @@ function buildCommentBody(options) {
       return;
     }
 
-    const search = buildSearchParam(metadataScenario, observedRunIds);
-    const logsUrl = buildLogsUrl({
-      appUrl: options.appPublicUrl,
-      orgName: options.orgName,
-      projectName: options.projectName,
-      search,
-    });
+    const records = options.runContextRecords.filter((record) =>
+      observedRunIds.includes(record.testRunId),
+    );
+    const rootSpanIds = [
+      ...new Set(records.flatMap((record) => record.logRootSpanIds ?? [])),
+    ];
+    const experimentNames = [
+      ...new Set(records.flatMap((record) => record.experimentNames)),
+    ];
+    const legacyRunIds = records
+      .filter((record) => record.logRootSpanIds === undefined)
+      .map((record) => record.testRunId);
+    const links = [];
+    if (rootSpanIds.length > 0 || legacyRunIds.length > 0) {
+      const predicates = [];
+      if (rootSpanIds.length > 0) {
+        predicates.push(
+          `root_span_id IN (${rootSpanIds.map(quoteFilterValue).join(", ")})`,
+        );
+      }
+      if (legacyRunIds.length > 0) {
+        predicates.push(
+          `(${scenarioPredicate(metadataScenario)}) AND (${testRunIdPredicate(legacyRunIds)})`,
+        );
+      }
+      const logsUrl = buildLogsUrl({
+        appUrl: options.appPublicUrl,
+        orgName: options.orgName,
+        projectName: options.projectName,
+        search: JSON.stringify({
+          filter: [
+            btqlFilterClause(
+              predicates.map((predicate) => `(${predicate})`).join(" OR "),
+            ),
+          ],
+        }),
+      });
+      links.push(`[Open logs](${logsUrl})`);
+    }
+    for (const [index, experimentName] of experimentNames.entries()) {
+      const experimentUrl = buildExperimentUrl({
+        appUrl: options.appPublicUrl,
+        orgName: options.orgName,
+        projectName: options.projectName,
+        experimentName,
+      });
+      links.push(
+        `[Open eval${experimentNames.length > 1 ? ` ${index + 1}` : ""}](${experimentUrl})`,
+      );
+    }
     const runCount = observedRunIds.length;
     const runWord = runCount === 1 ? "run" : "runs";
     const status = statusSuffix
       ? `Observed (${runCount} ${runWord}, ${statusSuffix})`
       : `Observed (${runCount} ${runWord})`;
 
-    lines.push(`| ${rowLabel} | [Open logs](${logsUrl}) | ${status} |`);
+    lines.push(
+      `| ${rowLabel} | ${links.join("<br>") || "N/A"} | ${links.length ? status : "Observed (no captured traces)"} |`,
+    );
   };
 
   for (const scenario of options.scenarios) {

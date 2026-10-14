@@ -7,21 +7,22 @@
  * IMPORTANT: Tests use a mock OpenAI package structure in test/fixtures/node_modules/openai.
  */
 
-import { describe, it, expect, beforeAll, afterAll, vi } from "vitest";
 import * as esbuild from "esbuild";
 import * as fs from "node:fs";
 import * as path from "node:path";
+import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
 import { runInNewContext } from "node:vm";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import {
-  create,
+  InstrumentationMatcher,
   type InstrumentationConfig,
 } from "../../src/auto-instrumentations/orchestrion-js";
 import {
   GLOBAL_INSTRUMENTATION_HOOKS_KEY,
   GLOBAL_INSTRUMENTATION_HOOKS_PROTOCOL_VERSION,
   GLOBAL_INSTRUMENTATION_HOOKS_REGISTRY_BRAND,
-  newGlobalTracingChannel,
+  newGlobalInvocationHook,
 } from "../../src/global-instrumentation-hooks";
 import { bundleFixture, fixturesDir } from "./test-bundle";
 
@@ -48,9 +49,8 @@ const openAIPromiseEntryPoint = path.join(
 
 function testConfig(
   functionQuery: InstrumentationConfig["functionQuery"],
-  astQuery?: string,
 ): InstrumentationConfig {
-  const config: InstrumentationConfig = {
+  return {
     channelName: "test",
     module: {
       name: "test-sdk",
@@ -59,21 +59,14 @@ function testConfig(
     },
     functionQuery,
   };
-
-  if (astQuery) {
-    config.astQuery = astQuery;
-  }
-
-  return config;
 }
 
 function transformTestCode(
   functionQuery: InstrumentationConfig["functionQuery"],
   code: string,
   moduleType: "esm" | "cjs" = "esm",
-  astQuery?: string,
 ) {
-  const matcher = create([testConfig(functionQuery, astQuery)]);
+  const matcher = new InstrumentationMatcher([testConfig(functionQuery)]);
   const transformer = matcher.getTransformer("test-sdk", "1.0.0", "index.mjs");
 
   expect(transformer).toBeDefined();
@@ -81,14 +74,16 @@ function transformTestCode(
 }
 
 function expectGlobalHookTransform(output: string): void {
-  expect(output).toContain("__braintrust_instrumentation_hooks");
+  expect(output).toContain("__braintrust_invocation_hooks_v2");
   expect(output).toContain("braintrust.global-instrumentation-hooks.registry");
-  expect(output).toContain("braintrust.global-instrumentation-hooks.hook");
+  expect(output).toContain(
+    "braintrust.global-instrumentation-hooks.invocation-hook",
+  );
   expect(output).toContain("orchestrion:openai:chat.completions.create");
-  expect(output).toContain("__bt$hook.traceInvocation");
+  expect(output).toContain("__bt$hook.invoke");
   expect(output).not.toContain("__bt$hook.hasSubscribers");
   expect(output).not.toContain("__bt$hook.hasInterceptors");
-  expect(output).not.toContain("__bt$hook.invoke");
+  expect(output).not.toContain("__bt$hook.traceInvocation");
   expect(output).not.toContain("__bt$hook.tracePromise");
   expect(output).not.toContain("__apm$");
   expect(output).not.toContain("tr_ch_apm$");
@@ -158,7 +153,7 @@ describe("Orchestrion Transformation Tests", () => {
   describe("internal transformer query surface", () => {
     it("supports class method configs", () => {
       const result = transformTestCode(
-        { className: "Client", methodName: "create", kind: "Async" },
+        { className: "Client", methodName: "create" },
         `
           export class Client {
             async create(input) {
@@ -169,12 +164,12 @@ describe("Orchestrion Transformation Tests", () => {
       );
 
       expect(result.code).toContain("orchestrion:test-sdk:test");
-      expect(result.code).toContain("__bt$hook.traceInvocation");
+      expect(result.code).toContain("__bt$hook.invoke");
     });
 
     it("supports method-only configs", () => {
       const result = transformTestCode(
-        { methodName: "create", kind: "Async" },
+        { methodName: "create" },
         `
           export const client = {
             create: async function (input) {
@@ -185,12 +180,12 @@ describe("Orchestrion Transformation Tests", () => {
       );
 
       expect(result.code).toContain("orchestrion:test-sdk:test");
-      expect(result.code).toContain("__bt$hook.traceInvocation");
+      expect(result.code).toContain("__bt$hook.invoke");
     });
 
     it("supports function declaration configs", () => {
       const result = transformTestCode(
-        { functionName: "query", kind: "Sync" },
+        { functionName: "query" },
         `
           export function query(input) {
             return input;
@@ -199,12 +194,12 @@ describe("Orchestrion Transformation Tests", () => {
       );
 
       expect(result.code).toContain("orchestrion:test-sdk:test");
-      expect(result.code).toContain("__bt$hook.traceInvocation");
+      expect(result.code).toContain("__bt$hook.invoke");
     });
 
     it("ignores malformed global hook entries at runtime", () => {
       const result = transformTestCode(
-        { functionName: "query", kind: "Sync" },
+        { functionName: "query" },
         `
           let calls = 0;
           function query(input) {
@@ -245,7 +240,7 @@ describe("Orchestrion Transformation Tests", () => {
 
     it("supports export-alias function configs", () => {
       const result = transformTestCode(
-        { functionName: "query", kind: "Sync", isExportAlias: true },
+        { functionName: "query", isExportAlias: true },
         `
           function queryImpl(input) {
             return input;
@@ -255,7 +250,7 @@ describe("Orchestrion Transformation Tests", () => {
       );
 
       expect(result.code).toContain("orchestrion:test-sdk:test");
-      expect(result.code).toContain("__bt$hook.traceInvocation");
+      expect(result.code).toContain("__bt$hook.invoke");
     });
 
     it("supports export-alias class method configs", () => {
@@ -263,7 +258,6 @@ describe("Orchestrion Transformation Tests", () => {
         {
           className: "Client",
           methodName: "create",
-          kind: "Async",
           isExportAlias: true,
         },
         `
@@ -277,34 +271,12 @@ describe("Orchestrion Transformation Tests", () => {
       );
 
       expect(result.code).toContain("orchestrion:test-sdk:test");
-      expect(result.code).toContain("__bt$hook.traceInvocation");
-    });
-
-    it("supports private class method configs", () => {
-      const result = transformTestCode(
-        { className: "Client", privateMethodName: "create", kind: "Async" },
-        `
-          class Client {
-            async #create(input) {
-              return input;
-            }
-
-            async run(input) {
-              return this.#create(input);
-            }
-          }
-          module.exports = Client;
-        `,
-        "cjs",
-      );
-
-      expect(result.code).toContain("orchestrion:test-sdk:test");
-      expect(result.code).toContain("__bt$hook.traceInvocation");
+      expect(result.code).toContain("__bt$hook.invoke");
     });
 
     it("supports object/property configs", () => {
       const result = transformTestCode(
-        { objectName: "this", propertyName: "create", kind: "Async" },
+        { propertyName: "create" },
         `
           function Client() {
             this.create = async () => {
@@ -317,12 +289,12 @@ describe("Orchestrion Transformation Tests", () => {
       );
 
       expect(result.code).toContain("orchestrion:test-sdk:test");
-      expect(result.code).toContain("__bt$hook.traceInvocation");
+      expect(result.code).toContain("__bt$hook.invoke");
     });
 
     it("supports callback configs", () => {
       const result = transformTestCode(
-        { functionName: "request", kind: "Callback" },
+        { functionName: "request" },
         `
           export function request(input, callback) {
             callback(null, input);
@@ -331,28 +303,12 @@ describe("Orchestrion Transformation Tests", () => {
       );
 
       expect(result.code).toContain("orchestrion:test-sdk:test");
-      expect(result.code).toContain("__bt$hook.traceInvocation");
-    });
-
-    it("supports raw AST query configs", () => {
-      const result = transformTestCode(
-        { kind: "Async" },
-        `
-          export async function request(input) {
-            return input;
-          }
-        `,
-        "esm",
-        'FunctionDeclaration[id.name="request"][async]',
-      );
-
-      expect(result.code).toContain("orchestrion:test-sdk:test");
-      expect(result.code).toContain("__bt$hook.traceInvocation");
+      expect(result.code).toContain("__bt$hook.invoke");
     });
 
     it("supports index selection", () => {
       const result = transformTestCode(
-        { methodName: "create", kind: "Async", index: 1 },
+        { methodName: "create", index: 1 },
         `
           export const first = {
             create: async function firstCreate() {
@@ -367,23 +323,21 @@ describe("Orchestrion Transformation Tests", () => {
         `,
       );
 
-      const wrapperCount = result.code.match(
-        /return __bt\$hook\.traceInvocation/g,
-      );
+      const wrapperCount = result.code.match(/return __bt\$hook\.invoke/g);
       expect(wrapperCount).toHaveLength(1);
       expect(result.code.indexOf("secondCreate")).toBeLessThan(
-        result.code.indexOf("return __bt$hook.traceInvocation"),
+        result.code.indexOf("return __bt$hook.invoke"),
       );
     });
 
     it("injects one shared global hook lookup for multiple channels", () => {
-      const matcher = create([
+      const matcher = new InstrumentationMatcher([
         {
-          ...testConfig({ functionName: "first", kind: "Sync" }),
+          ...testConfig({ functionName: "first" }),
           channelName: "first",
         },
         {
-          ...testConfig({ functionName: "second", kind: "Async" }),
+          ...testConfig({ functionName: "second" }),
           channelName: "second",
         },
       ]);
@@ -414,16 +368,14 @@ describe("Orchestrion Transformation Tests", () => {
       ).toHaveLength(1);
       expect(result.code).toContain("orchestrion:test-sdk:first");
       expect(result.code).toContain("orchestrion:test-sdk:second");
-      expect(
-        result.code.match(/return __bt\$hook\.traceInvocation/g),
-      ).toHaveLength(2);
-      expect(result.code).toContain('"traceSync"');
-      expect(result.code).toContain('"tracePromise"');
+      expect(result.code.match(/return __bt\$hook\.invoke/g)).toHaveLength(2);
+      expect(result.code).not.toContain('"traceSync"');
+      expect(result.code).not.toContain('"tracePromise"');
     });
 
     it("generates source maps", () => {
       const result = transformTestCode(
-        { functionName: "query", kind: "Sync" },
+        { functionName: "query" },
         `
           export function query(input) {
             return input;
@@ -440,7 +392,7 @@ describe("Orchestrion Transformation Tests", () => {
 
     it("observes hooks registered after the transformed module loads", () => {
       const result = transformTestCode(
-        { functionName: "query", kind: "Sync" },
+        { functionName: "query" },
         `
           function query(input) {
             return input;
@@ -461,18 +413,20 @@ describe("Orchestrion Transformation Tests", () => {
       expect(loadedModule.exports.query("before")).toBe("before");
 
       const events: unknown[] = [];
-      const hook = newGlobalTracingChannel("orchestrion:test-sdk:test");
-      const handlers = { start: (event: unknown) => events.push(event) };
-      hook.subscribe(handlers);
+      const hook = newGlobalInvocationHook("orchestrion:test-sdk:test");
+      const remove = hook.intercept((target, receiver, args) => {
+        events.push(args);
+        return Reflect.apply(target, receiver, args);
+      });
 
       expect(loadedModule.exports.query("after")).toBe("after");
       expect(events).toHaveLength(1);
-      hook.unsubscribe(handlers);
+      remove();
     });
 
-    it("invokes generic interceptors inside tracing hooks", () => {
+    it("invokes generic interceptors with receiver, arguments, and version metadata", () => {
       const result = transformTestCode(
-        { className: "Client", methodName: "query", kind: "Sync" },
+        { className: "Client", methodName: "query" },
         `
           class Client {
             constructor(prefix) {
@@ -497,19 +451,10 @@ describe("Orchestrion Transformation Tests", () => {
         result.code,
       )(loadedModule, loadedModule.exports);
 
-      const hook = newGlobalTracingChannel<Record<string, unknown>>(
+      const hook = newGlobalInvocationHook<{ moduleVersion: string }>(
         "orchestrion:test-sdk:test",
       );
       const lifecycle: string[] = [];
-      const handlers = {
-        start: (event: Record<string, unknown>) =>
-          lifecycle.push(
-            `start:${Array.from(event.arguments as ArrayLike<unknown>)[0]}`,
-          ),
-        end: (event: Record<string, unknown>) =>
-          lifecycle.push(`end:${event.result}`),
-      };
-      hook.subscribe(handlers);
       const removeInterceptor = hook.intercept(
         (target, _thisArg, args, additional: { moduleVersion: string }) => {
           lifecycle.push(`intercept:${additional.moduleVersion}`);
@@ -521,19 +466,14 @@ describe("Orchestrion Transformation Tests", () => {
 
       const client = new loadedModule.exports("original");
       expect(client.query("value")).toBe("patched:VALUE!");
-      expect(lifecycle).toEqual([
-        "start:value",
-        "intercept:1.0.0",
-        "end:patched:VALUE!",
-      ]);
+      expect(lifecycle).toEqual(["intercept:1.0.0"]);
 
       removeInterceptor();
-      hook.unsubscribe(handlers);
     });
 
     it("supports asynchronous invocation interceptors", async () => {
       const result = transformTestCode(
-        { functionName: "query", kind: "Async" },
+        { functionName: "query" },
         `
           async function query(input) {
             await Promise.resolve();
@@ -551,7 +491,7 @@ describe("Orchestrion Transformation Tests", () => {
         "exports",
         result.code,
       )(loadedModule, loadedModule.exports);
-      const hook = newGlobalTracingChannel("orchestrion:test-sdk:test");
+      const hook = newGlobalInvocationHook("orchestrion:test-sdk:test");
       const removeInterceptor = hook.intercept(async (target, thisArg, args) =>
         String(await target.apply(thisArg, [String(args[0]).toUpperCase()])),
       );
@@ -562,7 +502,7 @@ describe("Orchestrion Transformation Tests", () => {
 
     it("supports callback invocation interceptors", () => {
       const result = transformTestCode(
-        { functionName: "query", kind: "Callback", callbackIndex: 1 },
+        { functionName: "query" },
         `
           function query(input, callback) {
             callback(null, input);
@@ -585,7 +525,7 @@ describe("Orchestrion Transformation Tests", () => {
         "exports",
         result.code,
       )(loadedModule, loadedModule.exports);
-      const hook = newGlobalTracingChannel("orchestrion:test-sdk:test");
+      const hook = newGlobalInvocationHook("orchestrion:test-sdk:test");
       const removeInterceptor = hook.intercept((target, thisArg, args) => {
         const callback = args[1] as (error: unknown, value: string) => void;
         return target.apply(thisArg, [String(args[0]).toUpperCase(), callback]);
@@ -721,6 +661,59 @@ describe("Orchestrion Transformation Tests", () => {
       __dirname,
       "../../dist/auto-instrumentations/bundler/webpack-loader.cjs",
     );
+    it.each([
+      "",
+      path.join(fixturesDir, "test-app.js"),
+      path.join(nodeModulesDir, "openai", "index.mjs"),
+    ])(
+      "preserves input source maps when no transformation matches: %s",
+      (resourcePath) => {
+        const loader = createRequire(import.meta.url)(webpackLoaderPath);
+        const callback = vi.fn();
+        const code = "const value = 1;";
+        const sourceMap = {
+          version: 3,
+          sources: ["input.ts"],
+          mappings: "AAAA",
+        };
+
+        loader.call(
+          { async: () => callback, getOptions: () => ({}), resourcePath },
+          code,
+          sourceMap,
+        );
+
+        expect(callback).toHaveBeenCalledExactlyOnceWith(null, code, sourceMap);
+      },
+    );
+
+    it("discards stale input source maps when applying a source patch", () => {
+      const loader = createRequire(import.meta.url)(webpackLoaderPath);
+      const callback = vi.fn();
+      const code = "class APIPromise extends Promise {}";
+
+      loader.call(
+        {
+          async: () => callback,
+          getOptions: () => ({}),
+          resourcePath: path.join(
+            openAIPromisePackageDir,
+            "core",
+            "api-promise.mjs",
+          ),
+        },
+        code,
+        { version: 3, sources: ["input.ts"], mappings: "AAAA" },
+      );
+
+      expect(callback).toHaveBeenCalledTimes(1);
+      const [error, transformed, sourceMap] = callback.mock.calls[0];
+      expect(error).toBeNull();
+      expect(transformed).not.toBe(code);
+      expect(transformed).toContain(code);
+      expect(sourceMap).toBeUndefined();
+    });
+
     async function runWebpackWithLoader(
       config: object,
     ): Promise<{ errors: string[]; output: string }> {
@@ -773,41 +766,44 @@ describe("Orchestrion Transformation Tests", () => {
       },
     );
 
-    it("should respect instrumentation opt-outs in loader-only mode", async () => {
-      vi.stubEnv("BRAINTRUST_DISABLE_INSTRUMENTATION", "openai");
-      try {
-        const { errors, output } = await runWebpackWithLoader({
-          entry: path.join(fixturesDir, "test-app.js"),
-          output: {
-            path: outputDir,
-            filename: "turbopack-opt-out-bundle.js",
-            library: { type: "module" },
-          },
-          experiments: { outputModule: true },
-          mode: "development",
-          resolve: { modules: [nodeModulesDir, "node_modules"] },
-          module: {
-            rules: [
-              {
-                use: [
-                  {
-                    loader: webpackLoaderPath,
-                    options: { browser: false },
-                  },
-                ],
-              },
-            ],
-          },
-        });
+    it.each(["openai", ""])(
+      "respects changed instrumentation opt-outs in loader-only mode (%s)",
+      async (disabled) => {
+        vi.stubEnv("BRAINTRUST_DISABLE_INSTRUMENTATION", disabled);
+        try {
+          const { errors, output } = await runWebpackWithLoader({
+            entry: path.join(fixturesDir, "test-app.js"),
+            output: {
+              path: outputDir,
+              filename: "turbopack-opt-out-bundle.js",
+              library: { type: "module" },
+            },
+            experiments: { outputModule: true },
+            mode: "development",
+            resolve: { modules: [nodeModulesDir, "node_modules"] },
+            module: {
+              rules: [
+                {
+                  use: [
+                    {
+                      loader: webpackLoaderPath,
+                      options: { browser: false },
+                    },
+                  ],
+                },
+              ],
+            },
+          });
 
-        expect(errors).toHaveLength(0);
-        expect(output).not.toContain(
-          "orchestrion:openai:chat.completions.create",
-        );
-      } finally {
-        vi.unstubAllEnvs();
-      }
-    });
+          expect(errors).toHaveLength(0);
+          expect(
+            output.includes("orchestrion:openai:chat.completions.create"),
+          ).toBe(disabled !== "openai");
+        } finally {
+          vi.unstubAllEnvs();
+        }
+      },
+    );
 
     it.each([
       [

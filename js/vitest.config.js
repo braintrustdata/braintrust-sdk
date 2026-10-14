@@ -13,10 +13,6 @@ const config = {
   resolve: {
     extensions: [".ts", ".tsx", ".mts", ".js", ".mjs", ".jsx", ".json"],
     alias: {
-      "@apm-js-collab/code-transformer": path.resolve(
-        __dirname,
-        "src/auto-instrumentations/orchestrion-js/index.ts",
-      ),
       // Prevent resolution into vendor directories
       vendor: false,
     },

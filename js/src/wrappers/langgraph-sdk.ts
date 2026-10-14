@@ -1,6 +1,6 @@
 import { isObject } from "../../util";
 import { debugLogger } from "../debug-logger";
-import { langGraphSDKChannels } from "../instrumentation/plugins/langgraph-sdk-channels";
+import { langGraphSDKChannels } from "../instrumentation/plugins/langgraph-sdk-interceptors";
 import type { LangGraphSDKClient } from "../vendor-sdk-types/langgraph-sdk";
 
 const clients = new WeakMap<LangGraphSDKClient, LangGraphSDKClient>();

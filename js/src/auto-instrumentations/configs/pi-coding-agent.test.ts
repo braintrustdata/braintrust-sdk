@@ -18,7 +18,6 @@ describe("piCodingAgentConfigs", () => {
       functionQuery: {
         className: "AgentSession",
         methodName: "prompt",
-        kind: "Async",
       },
     });
     expect(piCodingAgentConfigs[0].module.filePath).not.toContain("cli");

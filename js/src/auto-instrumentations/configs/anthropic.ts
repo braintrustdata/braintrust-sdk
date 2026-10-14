@@ -1,5 +1,5 @@
 import type { InstrumentationConfig } from "../orchestrion-js";
-import { anthropicChannels } from "../../instrumentation/plugins/anthropic-channels";
+import { anthropicChannels } from "../../instrumentation/plugins/anthropic-interceptors";
 
 /**
  * Instrumentation configurations for the Anthropic SDK.
@@ -29,7 +29,6 @@ export const anthropicConfigs: InstrumentationConfig[] = [
     functionQuery: {
       className: "Messages",
       methodName: "create",
-      kind: "Async",
     },
   },
   {
@@ -42,7 +41,6 @@ export const anthropicConfigs: InstrumentationConfig[] = [
     functionQuery: {
       className: "Messages",
       methodName: "create",
-      kind: "Async",
     },
   },
 
@@ -57,7 +55,6 @@ export const anthropicConfigs: InstrumentationConfig[] = [
     functionQuery: {
       className: "Messages",
       methodName: "create",
-      kind: "Async",
     },
   },
   {
@@ -70,7 +67,6 @@ export const anthropicConfigs: InstrumentationConfig[] = [
     functionQuery: {
       className: "Messages",
       methodName: "create",
-      kind: "Async",
     },
   },
 
@@ -85,7 +81,6 @@ export const anthropicConfigs: InstrumentationConfig[] = [
     functionQuery: {
       className: "Messages",
       methodName: "create",
-      kind: "Async",
     },
   },
   {
@@ -98,7 +93,6 @@ export const anthropicConfigs: InstrumentationConfig[] = [
     functionQuery: {
       className: "Messages",
       methodName: "create",
-      kind: "Async",
     },
   },
 
@@ -113,7 +107,6 @@ export const anthropicConfigs: InstrumentationConfig[] = [
     functionQuery: {
       className: "Messages",
       methodName: "toolRunner",
-      kind: "Sync",
     },
   },
   {
@@ -126,7 +119,6 @@ export const anthropicConfigs: InstrumentationConfig[] = [
     functionQuery: {
       className: "Messages",
       methodName: "toolRunner",
-      kind: "Sync",
     },
   },
 
@@ -144,7 +136,6 @@ export const anthropicConfigs: InstrumentationConfig[] = [
       functionQuery: {
         className: "Events",
         methodName: "stream",
-        kind: "Async",
       },
     }),
   ),
@@ -160,7 +151,6 @@ export const anthropicConfigs: InstrumentationConfig[] = [
       functionQuery: {
         className: "Events",
         methodName: "stream",
-        kind: "Async",
       },
     }),
   ),

@@ -1,4 +1,4 @@
-import { cloudflareThinkChannels } from "../instrumentation/plugins/cloudflare-think-channels";
+import { cloudflareThinkChannels } from "../instrumentation/plugins/cloudflare-think-interceptors";
 import type {
   CloudflareThinkConstructor,
   CloudflareThinkInstance,
@@ -58,12 +58,11 @@ function patchThinkClass(Think: CloudflareThinkConstructor): void {
       input: CloudflareThinkTurnInput,
     ) {
       const args = [input] as [CloudflareThinkTurnInput];
-      return cloudflareThinkChannels.runInferenceLoop.tracePromise(
-        () => Reflect.apply(original, this, args),
-        {
-          arguments: args,
-          self: this,
-        },
+      return cloudflareThinkChannels.runInferenceLoop.invoke(
+        original,
+        this,
+        args,
+        {},
       );
     },
   });
