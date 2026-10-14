@@ -3,6 +3,10 @@ import type {
   OpenAIMediaResponse,
 } from "../../vendor-sdk-types/openai-media";
 import type { CompiledPrompt } from "../../logger";
+import type {
+  OpenAIDecision,
+  OpenAIDecisionCreateParams,
+} from "../../vendor-sdk-types/openai-decisions";
 import { channel, defineChannels } from "../core/channel-definitions";
 import { INSTRUMENTATION_NAMES } from "../../span-origin";
 import type { StartOf } from "../core/channel-definitions";
@@ -46,6 +50,11 @@ type OpenAIResponsesChannelExtras = OpenAIChannelExtras;
 export const openAIChannels = defineChannels(
   "openai",
   {
+    decisionsCreate: channel<
+      [OpenAIDecisionCreateParams, unknown?],
+      OpenAIDecision,
+      OpenAIChannelExtras
+    >({ channelName: "decisions.create", kind: "async" }),
     imagesGenerate: channel<
       [OpenAIMediaParams, unknown?],
       OpenAIMediaResponse,

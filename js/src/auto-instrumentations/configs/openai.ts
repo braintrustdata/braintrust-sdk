@@ -13,6 +13,21 @@ import { openAIChannels } from "../../instrumentation/plugins/openai-channels";
  * "orchestrion:openai:chat.completions.create"
  */
 export const openaiConfigs: InstrumentationConfig[] = [
+  ...["resources/decisions.mjs", "resources/decisions.js"].map(
+    (filePath): InstrumentationConfig => ({
+      channelName: openAIChannels.decisionsCreate.channelName,
+      module: {
+        name: "openai",
+        versionRange: ">=7.30.0",
+        filePath,
+      },
+      functionQuery: {
+        className: "Decisions",
+        methodName: "create",
+        kind: "Async",
+      },
+    }),
+  ),
   {
     channelName: openAIChannels.imagesGenerate.channelName,
     module: {

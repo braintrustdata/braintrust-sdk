@@ -1,4 +1,5 @@
 import { interceptOpenAIMedia } from "./openai-media";
+import { interceptOpenAIDecisions } from "./openai-decisions";
 import { BasePlugin } from "../core";
 import {
   traceAsyncChannel,
@@ -53,6 +54,7 @@ export class OpenAIPlugin extends BasePlugin {
   }
 
   protected onEnable(): void {
+    this.unsubscribers.push(interceptOpenAIDecisions());
     this.unsubscribers.push(
       openAIChannels.agentsTraceStart.intercept(
         interceptOpenAIAgentsTraceStart,

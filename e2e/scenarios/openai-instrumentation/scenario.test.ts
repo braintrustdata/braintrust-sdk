@@ -54,6 +54,18 @@ const openaiScenarios = await Promise.all(
       snapshotName: "openai-v6-latest",
       wrapperEntry: "scenario.ts",
     },
+    {
+      autoEntry: "scenario.mjs",
+      dependencyName: "openai-v7",
+      snapshotName: "openai-v7",
+      wrapperEntry: "scenario.ts",
+    },
+    {
+      autoEntry: "scenario.mjs",
+      dependencyName: "openai-v7-latest",
+      snapshotName: "openai-v7-latest",
+      wrapperEntry: "scenario.ts",
+    },
   ].map(async (scenario) => ({
     ...scenario,
     version: await readInstalledPackageVersion(
