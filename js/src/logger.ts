@@ -214,6 +214,10 @@ import {
   mergeCustomizedSpanRecords,
 } from "./span-customizer";
 import type { SpanCustomizer, SpanExportData } from "./instrumentation/config";
+import {
+  automaticAttachmentOriginals,
+  restoreAutomaticAttachments,
+} from "./automatic-attachments";
 
 // Manual type definition for inline attachments (not in generated_types)
 const InlineAttachmentReferenceSchema = z.object({
@@ -1967,6 +1971,17 @@ export class Attachment extends BaseAttachment {
   }
 
   private initUploader(): LazyValue<AttachmentStatus> {
+    const withRetry = async <T>(request: () => Promise<T>): Promise<T> => {
+      const retries = automaticAttachmentOriginals.has(this) ? 8 : 0;
+      for (let attempt = 0; ; attempt++) {
+        try {
+          return await request();
+        } catch (error) {
+          if (attempt >= retries || !isRetryableHTTPError(error)) throw error;
+          await waitForRetry(500 * 2 ** attempt);
+        }
+      }
+    };
     const doUpload = async (conn: HTTPConnection, orgId: string) => {
       const requestParams = {
         key: this.reference.key,
@@ -1976,7 +1991,7 @@ export class Attachment extends BaseAttachment {
       };
       const [metadataPromiseResult, dataPromiseResult] =
         await Promise.allSettled([
-          conn.post("/attachment", requestParams),
+          withRetry(() => conn.post("/attachment", requestParams)),
           this._data.get(),
         ]);
       if (metadataPromiseResult.status === "rejected") {
@@ -2014,12 +2029,14 @@ export class Attachment extends BaseAttachment {
       // TODO multipart upload.
       let objectStoreResponse: Response | undefined;
       try {
-        objectStoreResponse = await checkResponse(
-          await fetch(signedUrl, {
-            method: "PUT" satisfies RequestInit["method"],
-            headers,
-            body: data,
-          }),
+        objectStoreResponse = await withRetry(async () =>
+          checkResponse(
+            await fetch(signedUrl, {
+              method: "PUT" satisfies RequestInit["method"],
+              headers,
+              body: data,
+            }),
+          ),
         );
         await objectStoreResponse.body?.cancel();
       } catch (error) {
@@ -2039,7 +2056,7 @@ export class Attachment extends BaseAttachment {
       const status: AttachmentStatus = { upload_status: "done" };
 
       const state = this.state ?? _globalState;
-      await state.login({});
+      await withRetry(() => state.login({}));
 
       const conn = state.apiConn();
       const orgId = state.orgId ?? "";
@@ -2057,9 +2074,8 @@ export class Attachment extends BaseAttachment {
         org_id: orgId,
         status,
       };
-      const statusResponse = await conn.post(
-        "/attachment/status",
-        requestParams,
+      const statusResponse = await withRetry(() =>
+        conn.post("/attachment/status", requestParams),
       );
       await statusResponse.body?.cancel();
       if (!statusResponse.ok) {
@@ -3458,6 +3474,7 @@ class HTTPBackgroundLogger implements BackgroundLogger {
   private _pendingBytes: number = 0;
 
   private _disabled = false;
+  private automaticAttachmentsDisabled = false;
 
   private queueDropLoggingState = {
     numDropped: 0,
@@ -3701,6 +3718,42 @@ class HTTPBackgroundLogger implements BackgroundLogger {
       }
     }
 
+    // Upload automatic conversions in the background before serialization so
+    // pipeline failures can export inline media. Customizers and masking have
+    // already removed any private media; fallback must not resurrect it.
+    const originals = new Map<string, unknown>();
+    const automatic = attachments.filter((attachment) => {
+      if (!automaticAttachmentOriginals.has(attachment)) return false;
+      originals.set(
+        attachment.reference.key,
+        automaticAttachmentOriginals.get(attachment),
+      );
+      return true;
+    });
+    for (const attachment of automatic) {
+      if (this.automaticAttachmentsDisabled) break;
+      try {
+        const status = await attachment.upload();
+        if (status.upload_status === "error")
+          throw new Error("Automatic attachment upload failed");
+      } catch {
+        this.automaticAttachmentsDisabled = true;
+        debugLogger.warn(
+          "Automatic attachment uploads disabled after an upload failure; exporting original inline media.",
+        );
+      }
+    }
+    if (this.automaticAttachmentsDisabled && automatic.length) {
+      for (const group of allItems) {
+        for (let i = 0; i < group.length; i++) {
+          group[i] = restoreAutomaticAttachments(
+            group[i],
+            originals,
+          ) as BackgroundLogEvent;
+        }
+      }
+    }
+
     // Failure barriers must be sent in order, in separate requests. Within each
     // group, retain the normal parallel transport batching.
     let chunkBytes = 0;
@@ -3754,6 +3807,7 @@ class HTTPBackgroundLogger implements BackgroundLogger {
     const attachmentErrors: unknown[] = [];
     // For now, upload attachments serially.
     for (const attachment of attachments) {
+      if (automaticAttachmentOriginals.has(attachment)) continue;
       try {
         const result = await attachment.upload();
         if (result.upload_status === "error") {
@@ -7458,46 +7512,74 @@ function extractAttachments(
   event: Record<string, any>,
   attachments: BaseAttachment[],
 ): void {
-  for (const [key, value] of Object.entries(event)) {
-    if (!value) {
-      continue;
-    }
+  const pending: {
+    event: Record<string, any>;
+    key: string;
+    attachment: BaseAttachment;
+  }[] = [];
+  let automatic = false;
+  const walk = (event: Record<string, any>, depth = 0): void => {
+    if (depth >= 128) return;
+    for (const [key, value] of Object.entries(event)) {
+      if (!value) {
+        continue;
+      }
 
-    // Base case: Attachment or ExternalAttachment.
-    if (value instanceof BaseAttachment) {
-      attachments.push(value);
-      event[key] = value.reference;
-      continue; // Attachment cannot be nested.
-    }
+      // Base case: Attachment or ExternalAttachment.
+      if (value instanceof BaseAttachment) {
+        automatic ||= automaticAttachmentOriginals.has(value);
+        pending.push({ event, key, attachment: value });
+        continue; // Attachment cannot be nested.
+      }
 
-    // Skip if this is already just a reference (no uploader field)
-    if (value?.type === BRAINTRUST_ATTACHMENT && value.key && !value.uploader) {
-      // This is already just a reference, skip it
-      continue;
-    }
+      // Skip if this is already just a reference (no uploader field)
+      if (
+        [
+          BRAINTRUST_ATTACHMENT,
+          EXTERNAL_ATTACHMENT,
+          "inline_attachment",
+        ].includes(value?.type)
+      ) {
+        // This is already just a reference, skip it
+        continue;
+      }
 
-    // Somewhere in our pipeline we're serializing the attachment and then deserializing it.
-    // This loses the instanceof identity of the attachment, so we need to recreate it because
-    // the above instance check doesn't catch it.
-    if (value?.reference?.type === BRAINTRUST_ATTACHMENT && value?.uploader) {
-      // This looks like a serialized Attachment object, recreate it properly
-      const attachment = new Attachment({
-        data: value.dataDebugString,
-        filename: value.reference.filename,
-        contentType: value.reference.content_type,
-      });
-      attachments.push(attachment);
-      event[key] = attachment.reference;
-      continue;
-    }
+      // Somewhere in our pipeline we're serializing the attachment and then deserializing it.
+      // This loses the instanceof identity of the attachment, so we need to recreate it because
+      // the above instance check doesn't catch it.
+      if (value?.reference?.type === BRAINTRUST_ATTACHMENT && value?.uploader) {
+        // This looks like a serialized Attachment object, recreate it properly
+        const attachment = new Attachment({
+          data: value.dataDebugString,
+          filename: value.reference.filename,
+          contentType: value.reference.content_type,
+        });
+        pending.push({ event, key, attachment });
+        continue;
+      }
 
-    // Base case: non-object.
-    if (!(value instanceof Object)) {
-      continue; // Nothing to explore recursively.
-    }
+      // Base case: non-object.
+      if (!(value instanceof Object)) {
+        continue; // Nothing to explore recursively.
+      }
 
-    // Recursive case: object or array.
-    extractAttachments(value, attachments);
+      // Recursive case: object or array.
+      walk(value, depth + 1);
+    }
+  };
+  const queueLength = attachments.length;
+  try {
+    walk(event);
+    // Read all references and enqueue before committing any replacement.
+    const references = pending.map(({ attachment }) => attachment.reference);
+    for (const { attachment } of pending) attachments.push(attachment);
+    pending.forEach(({ event, key }, index) => {
+      event[key] = references[index];
+    });
+  } catch (error) {
+    attachments.length = queueLength;
+    if (!automatic) throw error;
+    Object.assign(event, restoreAutomaticAttachments(event));
   }
 }
 

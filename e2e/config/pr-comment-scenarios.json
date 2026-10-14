@@ -62,6 +62,14 @@
       {
         "variantKey": "openai-v6-latest",
         "label": "v6 latest"
+      },
+      {
+        "variantKey": "openai-v7",
+        "label": "v7 pinned"
+      },
+      {
+        "variantKey": "openai-v7-latest",
+        "label": "v7 latest"
       }
     ]
   },
