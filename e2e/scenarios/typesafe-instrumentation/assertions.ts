@@ -87,7 +87,7 @@ export function defineTypeSafeInstrumentationAssertions(options: {
       );
 
       expect(root?.row.metadata).toMatchObject({ scenario: SCENARIO_NAME });
-      expect(span?.span.type).toBe("question");
+      expect(span?.span.type).toBe("decision");
       expect(span?.input).toMatchObject({
         state: { message: expect.any(String) },
         questions: expect.arrayContaining([
@@ -160,44 +160,35 @@ export function defineTypeSafeInstrumentationAssertions(options: {
           "typesafe.systemOne",
           operation?.span.id,
         );
-        const input = span?.input as {
-          state: string;
-          assets: Record<string, unknown>;
-        };
-        expect(input.state).toMatch(/^<image:[a-f0-9]{32}>$/);
-        expect(input.assets).toEqual({ [input.state]: { type: "image" } });
+        expect(span?.input).toMatchObject({ state: { type: "image" } });
+        expect(span?.input).not.toHaveProperty("assets");
         expect(span?.output).toMatchObject({
           answers: [{ id: "ship", type: "noul", noul: expect.any(Number) }],
         });
       });
 
-      test("captures template assets in state, instructions and criteria only once", () => {
+      test("captures template images in place in state, instructions and criteria", () => {
         const operation = findLatestSpan(events, "typesafe-template-operation");
         const span = findLatestChildSpan(
           events,
           "typesafe.systemOne",
           operation?.span.id,
         );
-        const input = span?.input as { assets: Record<string, unknown> };
-        const references = Object.keys(input.assets);
-        expect(references).toHaveLength(1);
-        const reference = references[0];
-        expect(input).toMatchObject({
-          state: { scene: `Look at ${reference}.` },
+        const reference = {
+          type: "braintrust_attachment",
+          content_type: "image/png",
+        };
+        expect(span?.input).toMatchObject({
+          state: { scene: ["Look at ", reference, "."] },
           questions: [
             {
               id: "weather",
-              instructions: `What weather is shown in ${reference}?`,
-              criteria: { stormy: `Stormy weather in ${reference}` },
+              instructions: ["What weather is shown in ", reference, "?"],
+              criteria: { stormy: ["Stormy weather in ", reference] },
             },
           ],
-          assets: {
-            [reference]: {
-              type: "braintrust_attachment",
-              content_type: "image/png",
-            },
-          },
         });
+        expect(span?.input).not.toHaveProperty("assets");
         expect(span?.output).toMatchObject({
           answers: [
             { id: "weather", type: "choice", choice: expect.any(String) },
@@ -205,30 +196,39 @@ export function defineTypeSafeInstrumentationAssertions(options: {
         });
       });
 
-      test("captures named image assets and bounding box answers", () => {
+      test("captures mixed answers and associates multiple boxes with the nested image", () => {
         const operation = findLatestSpan(events, "typesafe-box-operation");
         const span = findLatestChildSpan(
           events,
           "typesafe.systemOne",
           operation?.span.id,
         );
+        expect(span?.span.type).toBe("decision");
         expect(span?.input).toMatchObject({
-          state: "Locate the ship in <photo>.",
-          questions: [
-            { id: "ship", type: "box", instructions: "The sailing ship" },
-          ],
-          assets: {
-            "<photo>": {
-              type: "braintrust_attachment",
-              content_type: "image/png",
-            },
+          state: {
+            "photos~/": [
+              { type: "braintrust_attachment", content_type: "image/png" },
+            ],
+            description: "Locate the ship.",
           },
+          questions: expect.arrayContaining([
+            { id: "ship", type: "box", instructions: "The sailing ship" },
+            {
+              id: "mast",
+              type: "box",
+              instructions: "The tallest mast on the ship",
+            },
+            expect.objectContaining({ id: "present", type: "noul" }),
+            expect.objectContaining({ id: "weather", type: "choice" }),
+            expect.objectContaining({ id: "waves", type: "score" }),
+          ]),
         });
         expect(span?.output).toMatchObject({
-          answers: [
-            {
-              id: "ship",
+          answers: expect.arrayContaining([
+            ...["ship", "mast"].map((id) => ({
+              id,
               type: "box",
+              image_path: "/state/photos~0~1/0",
               box: {
                 top: expect.any(Number),
                 bottom: expect.any(Number),
@@ -238,9 +238,28 @@ export function defineTypeSafeInstrumentationAssertions(options: {
               confidence: expect.toSatisfy(
                 (value: unknown) => value === null || typeof value === "number",
               ),
-            },
-          ],
+            })),
+            expect.objectContaining({
+              id: "present",
+              type: "noul",
+              noul: expect.any(Number),
+            }),
+            expect.objectContaining({
+              id: "weather",
+              type: "choice",
+              choice: expect.any(String),
+            }),
+            expect.objectContaining({
+              id: "waves",
+              type: "score",
+              score: expect.any(Number),
+            }),
+          ]),
         });
+        expect((span?.output as { answers: unknown[] }).answers).toHaveLength(
+          5,
+        );
+        expect(span?.row).not.toHaveProperty("scores");
         expect(span?.row.metadata).toMatchObject({
           model: expect.stringMatching(/^jev-/),
           provider: "typesafe",
@@ -252,14 +271,10 @@ export function defineTypeSafeInstrumentationAssertions(options: {
     }
 
     test("matches the span tree snapshot", async () => {
-      // Image references are random per SDK object; preserve their relationships.
-      const normalized = JSON.parse(
-        JSON.stringify(spanTreeEvents(events, options.supportsImages)).replace(
-          /<image:[a-f0-9]{32}>/g,
-          "<image:reference>",
-        ),
+      await matchSpanTreeSnapshot(
+        spanTreeEvents(events, options.supportsImages),
+        spanSnapshotPath,
       );
-      await matchSpanTreeSnapshot(normalized, spanSnapshotPath);
     });
   });
 }

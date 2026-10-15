@@ -124,9 +124,21 @@ export async function runTypeSafeInstrumentationScenario(
         const response = await client
           .systemOne({
             model: "jev-preview",
-            state: typesafe.withAssets`Locate the ship in ${photo}.`,
+            state: { "photos~/": ["<photo>"], description: "Locate the ship." },
             assets: { "<photo>": photo },
-            questions: { ship: typesafe.box("The sailing ship") },
+            questions: {
+              ship: typesafe.box("The sailing ship"),
+              mast: typesafe.box("The tallest mast on the ship"),
+              present: typesafe.noul("Is there a sailing ship?"),
+              weather: typesafe.choice("What weather is shown?", {
+                stormy: null,
+                clear: null,
+              }),
+              waves: typesafe.score("How rough are the waves?", [
+                "calm",
+                "rough",
+              ]),
+            },
           })
           .asResponse();
         if (response.bodyUsed)

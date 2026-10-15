@@ -9,7 +9,7 @@
           "children": [
             {
               "name": "typesafe.systemOne",
-              "type": "question",
+              "type": "decision",
               "children": [],
               "input": {
                 "questions": [
@@ -64,7 +64,7 @@
                     "type": "noul"
                   },
                   {
-                    "confidence": 0.66,
+                    "confidence": 0.71,
                     "id": "<span:3>",
                     "legend": {
                       "0": "routine",
@@ -73,10 +73,10 @@
                     },
                     "probabilities": {
                       "0": 0,
-                      "1": 0.23,
-                      "2": 0.77
+                      "1": 0.19,
+                      "2": 0.81
                     },
-                    "score": 1.76,
+                    "score": 1.8,
                     "type": "score"
                   }
                 ]
@@ -102,7 +102,7 @@
           "children": [
             {
               "name": "typesafe.systemOne",
-              "type": "question",
+              "type": "decision",
               "children": [],
               "input": {
                 "questions": [
@@ -144,14 +144,9 @@
           "children": [
             {
               "name": "typesafe.systemOne",
-              "type": "question",
+              "type": "decision",
               "children": [],
               "input": {
-                "assets": {
-                  "<image:reference>": {
-                    "type": "image"
-                  }
-                },
                 "questions": [
                   {
                     "id": "<span:1>",
@@ -159,7 +154,9 @@
                     "type": "noul"
                   }
                 ],
-                "state": "<image:reference>"
+                "state": {
+                  "type": "image"
+                }
               },
               "output": {
                 "answers": [
@@ -176,8 +173,8 @@
               },
               "metrics": {
                 "completion_tokens": 20,
-                "prompt_tokens": 3045,
-                "tokens": 3065
+                "prompt_tokens": 3043,
+                "tokens": 3063
               }
             }
           ],
@@ -191,30 +188,48 @@
           "children": [
             {
               "name": "typesafe.systemOne",
-              "type": "question",
+              "type": "decision",
               "children": [],
               "input": {
-                "assets": {
-                  "<image:reference>": {
-                    "content_type": "image/png",
-                    "filename": "image.png",
-                    "key": "<uuid:2>",
-                    "type": "braintrust_attachment"
-                  }
-                },
                 "questions": [
                   {
                     "criteria": {
                       "clear": "Clear skies",
-                      "stormy": "Stormy weather in <image:reference>"
+                      "stormy": [
+                        "Stormy weather in ",
+                        {
+                          "content_type": "image/png",
+                          "filename": "attachment.png",
+                          "key": "<uuid:3>",
+                          "type": "braintrust_attachment"
+                        }
+                      ]
                     },
-                    "id": "<span:1>",
-                    "instructions": "What weather is shown in <image:reference>?",
+                    "id": "<span:4>",
+                    "instructions": [
+                      "What weather is shown in ",
+                      {
+                        "content_type": "image/png",
+                        "filename": "attachment.png",
+                        "key": "<uuid:2>",
+                        "type": "braintrust_attachment"
+                      },
+                      "?"
+                    ],
                     "type": "choice"
                   }
                 ],
                 "state": {
-                  "scene": "Look at <image:reference>."
+                  "scene": [
+                    "Look at ",
+                    {
+                      "content_type": "image/png",
+                      "filename": "attachment.png",
+                      "key": "<uuid:1>",
+                      "type": "braintrust_attachment"
+                    },
+                    "."
+                  ]
                 }
               },
               "output": {
@@ -252,38 +267,110 @@
           "children": [
             {
               "name": "typesafe.systemOne",
-              "type": "question",
+              "type": "decision",
               "children": [],
               "input": {
-                "assets": {
-                  "<photo>": {
-                    "content_type": "image/png",
-                    "filename": "image.png",
-                    "key": "<uuid:2>",
-                    "type": "braintrust_attachment"
-                  }
-                },
                 "questions": [
                   {
-                    "id": "<span:1>",
+                    "id": "<span:2>",
                     "instructions": "The sailing ship",
                     "type": "box"
+                  },
+                  {
+                    "id": "<span:3>",
+                    "instructions": "The tallest mast on the ship",
+                    "type": "box"
+                  },
+                  {
+                    "id": "<span:4>",
+                    "instructions": "Is there a sailing ship?",
+                    "type": "noul"
+                  },
+                  {
+                    "criteria": {
+                      "clear": null,
+                      "stormy": null
+                    },
+                    "id": "<span:5>",
+                    "instructions": "What weather is shown?",
+                    "type": "choice"
+                  },
+                  {
+                    "criteria": [
+                      "calm",
+                      "rough"
+                    ],
+                    "id": "<span:6>",
+                    "instructions": "How rough are the waves?",
+                    "type": "score"
                   }
                 ],
-                "state": "Locate the ship in <photo>."
+                "state": {
+                  "description": "Locate the ship.",
+                  "photos~/": [
+                    {
+                      "content_type": "image/png",
+                      "filename": "attachment.png",
+                      "key": "<uuid:1>",
+                      "type": "braintrust_attachment"
+                    }
+                  ]
+                }
               },
               "output": {
                 "answers": [
                   {
                     "box": {
+                      "bottom": 0.68,
+                      "left": 0.46,
+                      "right": 0.64,
+                      "top": 0.12
+                    },
+                    "confidence": 0.41,
+                    "id": "<span:1>",
+                    "image_path": "/state/photos~0~1/0",
+                    "type": "box"
+                  },
+                  {
+                    "id": "<span:2>",
+                    "noul": 0.95,
+                    "type": "noul"
+                  },
+                  {
+                    "box": {
                       "bottom": 0.7,
-                      "left": 0.38,
-                      "right": 0.69,
+                      "left": 0.37,
+                      "right": 0.7,
                       "top": 0.11
                     },
-                    "confidence": 0.92,
-                    "id": "<span:1>",
+                    "confidence": 0.88,
+                    "id": "<span:3>",
+                    "image_path": "/state/photos~0~1/0",
                     "type": "box"
+                  },
+                  {
+                    "confidence": 1,
+                    "id": "<span:4>",
+                    "legend": {
+                      "0": "calm",
+                      "1": "rough"
+                    },
+                    "probabilities": {
+                      "0": 0,
+                      "1": 1
+                    },
+                    "score": 1,
+                    "type": "score"
+                  },
+                  {
+                    "choice": "stormy",
+                    "confidence": 1,
+                    "id": "<span:5>",
+                    "probabilities": {
+                      "clear": 0,
+                      "stormy": 1
+                    },
+                    "type": "choice"
                   }
                 ]
               },
@@ -292,9 +379,9 @@
                 "provider": "typesafe"
               },
               "metrics": {
-                "completion_tokens": 20,
-                "prompt_tokens": 3017,
-                "tokens": 3037
+                "completion_tokens": 95,
+                "prompt_tokens": 3121,
+                "tokens": 3216
               }
             }
           ],
