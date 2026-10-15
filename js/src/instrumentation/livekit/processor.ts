@@ -8,6 +8,7 @@ import type {
   EndOfTurnInfo,
   ChatMessage,
   AudioFrame,
+  AudioOutput,
   RealtimeGeneration,
 } from "./types";
 import iso from "../../isomorph";
@@ -19,6 +20,8 @@ import {
   messages,
   modelFields,
 } from "./schema";
+import { SpeechTracker } from "./speech";
+import { Relationships } from "./relationships";
 import { RealtimeObserver } from "./realtime";
 import { observeStream } from "./streams";
 import {
@@ -51,7 +54,7 @@ export { wrapLiveKitSession } from "./wrap";
  * Media capture requires the normal braintrust/hook.mjs loader (LiveKit 1.9.x).
  */
 export class LiveKitSpanProcessor {
-  private execution = iso.newAsyncLocalStorage<boolean>();
+  private execution = iso.newAsyncLocalStorage<{ model?: Row }>();
   readonly rows = new Map<string, Row>();
   readonly captures = new WeakMap<object, Capture>();
   private active = new Set<Capture>();
@@ -63,8 +66,16 @@ export class LiveKitSpanProcessor {
   private audio?: AudioExtension;
   private user: boolean;
   private agent: boolean;
-  private requests = new Map<string, string>();
-  private consumed = new Set<string>();
+  private sessions = new Map<
+    string,
+    { speech: SpeechTracker; relationships: Relationships }
+  >();
+  private outputCleanups = new Map<AgentSession, () => void>();
+  private outputs = new Map<AgentSession, AudioOutput>();
+
+  private state(id: string | undefined) {
+    return id ? this.sessions.get(id) : undefined;
+  }
   constructor(
     private options: LiveKitOptions & {
       logger: Logger<any>;
@@ -109,18 +120,7 @@ export class LiveKitSpanProcessor {
       });
       return;
     }
-    const speakingTurn =
-      native.name === "user_speaking" &&
-      parentRow?.native.name === "agent_session"
-        ? [...this.realtimeObservers]
-            .find(([session]) => nativeId(session.sessionSpan) === parent)?.[1]
-            .takeSpeakingTurn()
-        : undefined;
-    const span = (
-      speakingTurn ??
-      parentRow?.span ??
-      this.options.logger
-    ).startSpan(
+    const span = (parentRow?.span ?? this.options.logger).startSpan(
       withSpanInstrumentationName(
         {
           name: operation(native.name),
@@ -139,15 +139,34 @@ export class LiveKitSpanProcessor {
     const nativeContext = native.spanContext();
     const row: Row = {
       span,
+      start: seconds(native.startTime),
       native: { name: native.name, spanContext: () => nativeContext },
       parent,
       replyTo: parentRow?.replyTo,
       session: native.name === "agent_session" ? id : parentRow?.session,
       turn: ["agent_turn", "user_turn"].includes(native.name)
         ? id
-        : (speakingTurn?.spanId ?? parentRow?.turn),
+        : parentRow?.turn,
     };
     this.rows.set(id, row);
+    if (native.name === "agent_session") {
+      const relationships = new Relationships();
+      this.sessions.set(id, {
+        relationships,
+        speech: new SpeechTracker(relationships, this.captureContent),
+      });
+    }
+    const state = this.state(row.session);
+    if (["user_speaking", "agent_speaking"].includes(native.name))
+      state?.speech.add(row);
+    const execution = this.execution.getStore();
+    if (["llm_node", "realtime_inference"].includes(native.name) && execution)
+      execution.model = row;
+    if (
+      ["tts_node", "agent_speaking"].includes(native.name) &&
+      execution?.model
+    )
+      state?.relationships.link(span, execution.model.span, "generated_by");
     if (["agent_speaking", "user_speaking"].includes(native.name) && row.turn) {
       const speaking = this.speakingByTurn.get(row.turn) ?? new Set<Row>();
       speaking.add(row);
@@ -172,9 +191,7 @@ export class LiveKitSpanProcessor {
           r.session === row.session,
       );
       if (request)
-        span.log({
-          metadata: { "contrib.livekit.request_span_id": request.span.spanId },
-        });
+        state?.relationships.link(span, request.span, "requested_by");
     }
     if (native.name === "agent_turn") {
       const input = [...this.rows.values()].find(
@@ -193,14 +210,7 @@ export class LiveKitSpanProcessor {
     if (row.turn)
       span.log({
         metadata: {
-          "turn.id":
-            speakingTurn?.spanId ?? this.rows.get(row.turn)?.span.spanId,
-          ...(speakingTurn
-            ? {
-                "contrib.livekit.turn.association":
-                  "realtime_speech_start_dispatch",
-              }
-            : {}),
+          "turn.id": this.rows.get(row.turn)?.span.spanId,
         },
       });
   }
@@ -296,21 +306,6 @@ export class LiveKitSpanProcessor {
           ...(input ? { input } : {}),
           ...(output?.length ? { output } : {}),
         });
-        const turn = this.rows.get(row.turn ?? "");
-        if (turn)
-          for (const message of output ?? [])
-            if (message.tool_calls?.length) {
-              turn.messages ??= new Map();
-              turn.messages.set(
-                message.tool_calls.map((call) => call.id).join(":"),
-                message,
-              );
-              turn.span.log({ output: [...turn.messages.values()] });
-            }
-      } else if (native.name === "user_turn") {
-        const transcript = attrs["contrib.livekit.pii.user_transcript"];
-        if (typeof transcript === "string")
-          row.span.log({ input: [{ role: "user", content: transcript }] });
       } else if (native.name === "tts_node") {
         const text = attrs["contrib.livekit.pii.input_text"];
         if (typeof text === "string")
@@ -330,15 +325,15 @@ export class LiveKitSpanProcessor {
               attrs["gen_ai.tool.call.result"],
           ),
         });
-      this.correlate(row, attrs);
     }
+    this.correlate(row, attrs);
     const replyTo = row.replyTo ?? this.rows.get(row.turn ?? "")?.replyTo;
     if (replyTo) row.span.log({ metadata: { "turn.reply_to": replyTo } });
-    if (native.name === "user_speaking" && row.turn) {
+    if (native.name === "user_speaking") {
       const capture = [...this.active].find(
         (c) => c.row.session === row.session,
       );
-      if (capture?.user && capture.externalSpans?.has(row.turn)) {
+      if (capture?.user) {
         for (const packet of capture.inputTimeline) {
           const from = Math.max(
             packet.at,
@@ -349,18 +344,13 @@ export class LiveKitSpanProcessor {
             seconds(native.endTime) * 1000 - capture.origin,
           );
           if (to > from) {
-            select(capture, row.turn, from, to, 0);
             select(capture, nativeId(native)!, from, to, 0);
           }
         }
         this.publishSelections(capture);
       }
     }
-    if (native.name === "agent_speaking") {
-      for (const [session, observer] of this.realtimeObservers)
-        if (nativeId(session.sessionSpan) === row.session)
-          observer.assistantSpeechEnded(seconds(native.endTime) * 1000);
-    }
+    row.end = seconds(native.endTime);
     row.ended = true;
     row.span.end({ endTime: seconds(native.endTime) });
     if (native.name === "agent_session") {
@@ -392,79 +382,90 @@ export class LiveKitSpanProcessor {
   scope<T>(native: any, fn: () => T): T {
     const row = this.rows.get(nativeId(native)!);
     return row
-      ? this.execution.run(true, () => withCurrent(row.span, fn))
+      ? this.execution.run(
+          {
+            model: ["llm_node", "realtime_inference"].includes(row.native.name)
+              ? row
+              : undefined,
+          },
+          () => withCurrent(row.span, fn),
+        )
       : fn();
   }
   inference<T>(fn: () => T): T {
     // Only the inference worker is suppressed, not the pipeline or user tools.
     // An installed processor must not suppress unrelated/untracked sessions.
-    return this.execution.getStore()
-      ? runWithAutoInstrumentationSuppressed(fn)
-      : fn();
+    const execution = this.execution.getStore();
+    if (!execution) return fn();
+    const result = runWithAutoInstrumentationSuppressed(fn);
+    // LiveKit's inference factory returns [task, generationData]. The data ID
+    // is the committed message ID, not the provider's response ID.
+    const data = Array.isArray(result) ? result[1] : undefined;
+    if (execution.model && typeof data?.id === "string")
+      this.state(execution.model.session)?.relationships.register(
+        `generation:${data.id}`,
+        execution.model.span,
+      );
+    return result;
   }
   conversation(session: AgentSession, item: ChatMessage): void {
-    if (!this.captureContent || item?.type !== "message") return;
+    if (item?.type !== "message") return;
     const sessionId = nativeId(session.sessionSpan);
     const current = [...this.rows.values()].find(
       (r) => r.span.spanId === currentSpan().spanId && r.session === sessionId,
     );
-    const contextTurn = this.rows.get(current?.turn ?? "");
     const turn =
-      item.role === "user"
-        ? current?.native.name === "user_turn"
-          ? current
-          : undefined
-        : item.role === "assistant"
-          ? contextTurn?.native.name === "agent_turn"
-            ? contextTurn
-            : this.rows.get(
-                nativeId(session.activity?.currentSpeech?._agentTurnSpan) ?? "",
-              )
-          : undefined;
-    const root = this.rows.get(sessionId ?? "");
-    // Preserve source identity even when upstream supplies no reliable turn owner.
-    const realtimeTurn =
-      item.role === "user"
-        ? this.realtimeObservers.get(session)?.message(item.id)
-        : undefined;
-    const owner = realtimeTurn ? { span: realtimeTurn } : (turn ?? root);
-    if (!owner) return;
-    const metadata = {
-      id: item.id,
-      role: item.role,
-      text: item.textContent,
-      interrupted: item.interrupted,
-      ...((realtimeTurn ?? turn?.span)
-        ? { turn_span_id: (realtimeTurn ?? turn!.span).spanId }
-        : {}),
-    };
-    if (turn && item.role === "assistant") {
-      turn.messages ??= new Map();
-      turn.messages.set(item.id, {
-        role: "assistant",
-        content: item.textContent ?? "",
-      });
+      current?.turn ??
+      (item.role === "assistant"
+        ? nativeId(session.activity?.currentSpeech?._agentTurnSpan)
+        : undefined);
+    // LiveKit falls back to the entire generated text on partial playback when
+    // its output has no synchronized transcript. That fallback is not heard text.
+    const verified = this.rows.get(
+      nativeId(session.agentSpeakingSpan) ?? "",
+    )?.playedText;
+    const played =
+      item.role === "assistant" && item.interrupted
+        ? verified === undefined
+          ? undefined
+          : // A pipeline commit can include earlier fully played segments followed
+            // by the synchronized partial suffix. Preserve that verified prefix too.
+            item.textContent?.endsWith(verified)
+            ? item.textContent
+            : verified
+        : item.textContent;
+    this.state(sessionId)?.speech.message(
+      { ...item, textContent: played },
+      { turn },
+    );
+  }
+  private context(row: Row, context: unknown) {
+    const parsed = parse(context) as any;
+    const items = Array.isArray(parsed) ? parsed : parsed?.items;
+    if (!Array.isArray(items)) return;
+    const relationships = this.state(row.session)?.relationships;
+    for (const item of items) {
+      if (item?.type === "function_call_output") {
+        const callId = item.call_id ?? item.callId;
+        if (typeof callId === "string")
+          relationships?.reference(
+            row.span,
+            `tool:${callId}`,
+            "consumes_tool_result",
+          );
+      } else if (
+        typeof item?.id === "string" &&
+        (!item.type || item.type === "message")
+      )
+        relationships?.reference(
+          row.span,
+          `speech:${item.id}`,
+          "input_context",
+        );
     }
-    owner.span.log({
-      metadata: {
-        "contrib.livekit.committed_messages": { [item.id]: metadata },
-      },
-      ...(turn || realtimeTurn
-        ? item.role === "user"
-          ? realtimeTurn
-            ? {}
-            : { input: [{ role: "user", content: item.textContent ?? "" }] }
-          : {
-              output: [...(turn?.messages?.values() ?? [])],
-              metadata: {
-                "contrib.livekit.committed_messages": { [item.id]: metadata },
-                "contrib.livekit.interrupted": item.interrupted,
-              },
-            }
-        : {}),
-    });
   }
   private correlate(row: Row, attrs: Record<string, any>) {
+    const relationships = this.state(row.session)?.relationships;
     const calls =
       parse(attrs["contrib.livekit.pii.response.function_calls"]) ??
       messages(attrs["gen_ai.output.messages"])?.flatMap(
@@ -472,37 +473,20 @@ export class LiveKitSpanProcessor {
       );
     if (Array.isArray(calls))
       for (const call of calls) {
-        if (!call || typeof call !== "object") continue;
-        const id = call.call_id ?? call.callId ?? call.id;
+        const id = call?.call_id ?? call?.callId ?? call?.id;
         if (typeof id === "string")
-          this.requests.set(`${row.session}:${id}`, row.span.spanId);
+          relationships?.register(`request:${id}`, row.span);
       }
     const callId =
       attrs["gen_ai.tool.call.id"] ?? attrs["contrib.livekit.function_tool.id"];
-    const request = this.requests.get(`${row.session}:${callId}`);
-    if (request)
-      row.span.log({
-        metadata: { "contrib.livekit.request_span_id": request },
-      });
-    const context = parse(attrs["contrib.livekit.pii.chat_ctx"]) as any;
-    const fresh = (Array.isArray(context?.items) ? context.items : [])
-      .filter(
-        (item: any) =>
-          item?.type === "function_call_output" &&
-          !this.consumed.has(`${row.session}:${item.call_id ?? item.callId}`),
-      )
-      .map((item: any) => item.call_id ?? item.callId)
-      .filter(
-        (id: any) =>
-          typeof id === "string" && this.requests.has(`${row.session}:${id}`),
-      );
-    if (fresh.length) {
-      for (const id of fresh) this.consumed.add(`${row.session}:${id}`);
-      row.span.log({
-        metadata: { "continuation.tool_call_ids": fresh },
-      });
+    if (row.native.name === "function_tool" && typeof callId === "string") {
+      relationships?.register(`tool:${callId}`, row.span);
+      relationships?.reference(row.span, `request:${callId}`, "requested_by");
     }
+    if (["llm_node", "realtime_inference"].includes(row.native.name))
+      this.context(row, attrs["contrib.livekit.pii.chat_ctx"]);
   }
+
   begin(session: AgentSession): void {
     if (
       this.captures.has(session) ||
@@ -573,10 +557,33 @@ export class LiveKitSpanProcessor {
     if (!observer && root && activity.realtimeSession) {
       observer = new RealtimeObserver(
         activity.realtimeSession,
-        root.span,
         this.captureContent,
-        () => this.captures.get(activity.agentSession),
-        this.options.turnGrouping?.maxPauseMs,
+        (event, sameDispatch) => {
+          if (typeof event.itemId !== "string") return;
+          this.state(root.session)?.speech.message(
+            {
+              type: "message",
+              id: event.itemId,
+              role: "user",
+              textContent:
+                typeof event.transcript === "string"
+                  ? event.transcript
+                  : undefined,
+              metrics:
+                typeof event.turnStartedAt === "number"
+                  ? { startedSpeakingAt: event.turnStartedAt / 1000 }
+                  : undefined,
+            },
+            {
+              transcribed: true,
+              speech: sameDispatch
+                ? this.rows.get(
+                    nativeId(activity.agentSession._userSpeakingSpan) ?? "",
+                  )
+                : undefined,
+            },
+          );
+        },
       );
       this.realtimeObservers.set(activity.agentSession, observer);
     }
@@ -589,35 +596,45 @@ export class LiveKitSpanProcessor {
         metadata: { "contrib.livekit.response_id": event.responseId },
       });
     }
-    if (!this.captureContent) return;
-    const excludeOutput = observer?.captureInput(model.span);
-    this.correlate(model, {
-      "contrib.livekit.pii.chat_ctx": activity.realtimeSession?.chatCtx,
-    });
+    const input = observer?.captureInput(model.span, (items) =>
+      this.context(model, items),
+    );
     const output = new Map<
       string,
       NonNullable<ReturnType<typeof messages>>[number]
     >();
-    const publish = () => model.span.log({ output: [...output.values()] });
+    const publish = () => {
+      if (this.captureContent) model.span.log({ output: [...output.values()] });
+    };
     if (event.messageStream)
-      event.messageStream = observeStream(event.messageStream, (message) => {
-        excludeOutput?.(message.messageId);
-        const parts: string[] = [];
-        message.textStream = observeStream(
-          message.textStream,
-          (value) => {
-            const text = typeof value === "string" ? value : value.text;
-            if (typeof text === "string") parts.push(text);
-          },
-          () => {
-            output.set(message.messageId, {
-              role: "assistant",
-              content: parts.join(""),
-            });
-            publish();
-          },
-        );
-      });
+      event.messageStream = observeStream(
+        event.messageStream,
+        (message) => {
+          input?.exclude(message.messageId);
+          this.state(model.session)?.relationships.register(
+            `generation:${message.messageId}`,
+            model.span,
+          );
+          const parts: string[] = [];
+          message.textStream = observeStream(
+            message.textStream,
+            (value) => {
+              const text = typeof value === "string" ? value : value.text;
+              if (this.captureContent && typeof text === "string")
+                parts.push(text);
+            },
+            () => {
+              output.set(message.messageId, {
+                role: "assistant",
+                content: parts.join(""),
+              });
+              publish();
+            },
+          );
+        },
+        () => input?.finish(),
+      );
+    else input?.finish();
     if (event.functionStream)
       event.functionStream = observeStream(event.functionStream, (call) => {
         for (const message of messages([call]) ?? []) {
@@ -625,9 +642,9 @@ export class LiveKitSpanProcessor {
           if (id) {
             output.set(id, message);
             for (const call of message.tool_calls ?? [])
-              this.requests.set(
-                `${model.session}:${call.id}`,
-                model.span.spanId,
+              this.state(model.session)?.relationships.register(
+                `request:${call.id}`,
+                model.span,
               );
             publish();
           }
@@ -641,11 +658,42 @@ export class LiveKitSpanProcessor {
     if (capture) instrumentInput(capture, stream);
   }
   output(session: AgentSession): void {
+    const sink = session.output?.audio;
+    if (this.outputs.get(session) !== sink) {
+      this.outputCleanups.get(session)?.();
+      this.outputCleanups.delete(session);
+      this.outputs.delete(session);
+      if (sink) {
+        const finished = (event: any) =>
+          observe(() => {
+            const row = this.rows.get(
+              nativeId(session.agentSpeakingSpan) ?? "",
+            );
+            if (row)
+              row.playedText =
+                this.captureContent &&
+                typeof event.synchronizedTranscript === "string"
+                  ? event.synchronizedTranscript
+                  : undefined;
+          });
+        sink.on("playbackFinished", finished);
+        this.outputs.set(session, sink);
+        this.outputCleanups.set(session, () =>
+          sink.off?.("playbackFinished", finished),
+        );
+      }
+    }
     const capture = this.captures.get(session);
     if (capture)
       instrumentOutput(capture, session.output?.audio, this.captureContent);
   }
   userTurn(activity: AgentActivity, info: EndOfTurnInfo): void {
+    const turnId = nativeId(info.userTurnSpan);
+    if (turnId && info.startedSpeakingAt !== undefined)
+      this.state(nativeId(activity.agentSession.sessionSpan))?.speech.recognize(
+        turnId,
+        info.startedSpeakingAt,
+      );
     const c = this.captures.get(activity.agentSession);
     if (!c || c.closed || !c.user) return;
     const id = nativeId(info.userTurnSpan);
@@ -668,6 +716,9 @@ export class LiveKitSpanProcessor {
     this.publishSelections(c);
   }
   finish(session: AgentSession): Promise<void> {
+    this.outputCleanups.get(session)?.();
+    this.outputCleanups.delete(session);
+    this.outputs.delete(session);
     this.realtimeObservers.get(session)?.close();
     this.realtimeObservers.delete(session);
     const c = this.captures.get(session);
@@ -730,15 +781,14 @@ export class LiveKitSpanProcessor {
     // every native operation finishes, even after the recording has finalized.
     if ([...this.rows.values()].some((row) => row.session === id && !row.ended))
       return;
+    const root = this.rows.get(id);
+    if (root) this.state(id)?.speech.finish(root.span);
     for (const [key, row] of this.rows)
       if (row.session === id) {
         this.rows.delete(key);
         if (row.turn) this.speakingByTurn.delete(row.turn);
       }
-    for (const key of this.requests.keys())
-      if (key.startsWith(`${id}:`)) this.requests.delete(key);
-    for (const key of this.consumed)
-      if (key.startsWith(`${id}:`)) this.consumed.delete(key);
+    this.sessions.delete(id);
   }
   async forceFlush(): Promise<void> {
     await Promise.all([...this.active].map((c) => c.recording.drain()));
@@ -761,10 +811,16 @@ export class LiveKitSpanProcessor {
       }
     for (const observer of this.realtimeObservers.values()) observer.close();
     this.realtimeObservers.clear();
+    for (const [id, state] of this.sessions) {
+      const root = this.rows.get(id);
+      if (root) state.speech.finish(root.span);
+    }
     this.rows.clear();
     this.speakingByTurn.clear();
-    this.requests.clear();
-    this.consumed.clear();
+    this.sessions.clear();
+    for (const cleanup of this.outputCleanups.values()) cleanup();
+    this.outputCleanups.clear();
+    this.outputs.clear();
     try {
       await this.forceFlush();
     } finally {

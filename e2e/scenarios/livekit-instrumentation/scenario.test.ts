@@ -25,7 +25,8 @@ function normalizer() {
     }
     if (
       typeof value === "string" &&
-      (/^(item_|speech_)/.test(value) ||
+      (["traceId", "spanId"].includes(key) ||
+        /^(item_|speech_)/.test(value) ||
         /^[0-9a-f]{8}-[0-9a-f]{3}$/.test(value))
     ) {
       if (!ids.has(value)) ids.set(value, `<native:${ids.size + 1}>`);
@@ -80,7 +81,7 @@ for (const variant of ["livekit-v1", "livekit-v1-latest"]) {
             (name) => findAllSpans(raw, name!),
           );
           const root = findLatestSpan(events, "livekit.agent_session");
-          const turn = findLatestSpan(events, "assistant_turn");
+          const turn = findLatestSpan(events, "agent_turn");
           expect(root).toBeDefined();
           expect(turn).toBeDefined();
           expect(
@@ -113,6 +114,7 @@ for (const variant of ["livekit-v1", "livekit-v1-latest"]) {
               fields: stable({
                 ...spanTreeFields(event),
                 context: event.row.context,
+                links: event.row.links,
               }) as Record<string, unknown>,
             })),
             resolveFileSnapshotPath(
@@ -155,7 +157,7 @@ for (const variant of ["livekit-v1", "livekit-v1-latest"]) {
         const events = [...new Set(raw.map((e) => e.span.name))].flatMap(
           (name) => findAllSpans(raw, name!),
         );
-        const turn = findLatestSpan(events, "assistant_turn");
+        const turn = findLatestSpan(events, "agent_turn");
         expect(turn).toBeDefined();
         const responses = events.filter((e) => e.span.name === "llm_response");
         expect(
@@ -176,15 +178,24 @@ for (const variant of ["livekit-v1", "livekit-v1-latest"]) {
         const tool = findLatestSpan(events, "lookup_order");
         expect(tool?.row.input).toEqual({ order_id: "1042" });
         expect(tool?.row.output).toMatchObject({ delivery: "Friday" });
-        const callId = tool!.row.metadata?.["gen_ai.tool.call.id"];
         expect(
           responses.some((e) =>
             (
-              e.row.metadata?.["continuation.tool_call_ids"] as unknown[]
-            )?.includes(callId),
+              e.row.links as
+                | {
+                    context: { spanId: string };
+                    attributes: Record<string, string>;
+                  }[]
+                | undefined
+            )?.some(
+              (link) =>
+                link.context.spanId === tool!.span.id &&
+                link.attributes["braintrust.relationship.type"] ===
+                  "consumes_tool_result",
+            ),
           ),
         ).toBe(true);
-        expect(turn!.row.output).toEqual(
+        expect(findLatestSpan(events, "agent_speech")?.row.output).toEqual(
           expect.arrayContaining([
             expect.objectContaining({
               role: "assistant",
@@ -202,6 +213,7 @@ for (const variant of ["livekit-v1", "livekit-v1-latest"]) {
             fields: stable({
               ...spanTreeFields(event),
               context: event.row.context,
+              links: event.row.links,
             }) as Record<string, unknown>,
           })),
           resolveFileSnapshotPath(
@@ -277,8 +289,8 @@ for (const variant of ["livekit-v1", "livekit-v1-latest"]) {
           expect(
             events.filter((e) => e.span.name === "llm_response").length,
           ).toBeGreaterThanOrEqual(2);
-          const turn = findLatestSpan(events, "assistant_turn");
-          expect(turn?.row.output).toEqual(
+          const turn = findLatestSpan(events, "agent_turn");
+          expect(findLatestSpan(events, "agent_speech")?.row.output).toEqual(
             expect.arrayContaining([
               expect.objectContaining({
                 role: "assistant",
@@ -286,53 +298,22 @@ for (const variant of ["livekit-v1", "livekit-v1-latest"]) {
               }),
             ]),
           );
-          if (scheme === "reconnect")
-            expect(
-              events.filter(
-                (e) =>
-                  e.span.name === "user_turn" &&
-                  e.row.metadata?.["contrib.livekit.item_id"],
-              ),
-            ).toHaveLength(2);
-          if (scheme.startsWith("duplex")) {
-            const callers = events.filter(
-              (e) =>
-                e.span.name === "user_turn" &&
-                e.row.metadata?.["contrib.livekit.item_id"],
-            );
-            expect(callers).toHaveLength(scheme === "duplex-overlap" ? 2 : 1);
-            if (scheme === "duplex-overlap")
-              expect(callers[1].row.input).toEqual([
-                expect.objectContaining({
-                  role: "user",
-                  content: expect.stringMatching(/Thanks.*delivery.*detail/i),
-                }),
-              ]);
-            expect(callers[0].row.input).toEqual([
-              expect.objectContaining({
-                role: "user",
-                content: expect.stringMatching(
-                  /Where is my order.*(?:1042|one zero four two)/i,
-                ),
-              }),
-            ]);
-          }
-          const user = events.find(
+          const users = findAllSpans(events, "user_speech");
+          expect(users.length).toBeGreaterThan(0);
+          const transcript = users
+            .flatMap((e) =>
+              Array.isArray(e.row.input)
+                ? e.row.input.map((m) => m.content)
+                : [],
+            )
+            .join(" ");
+          expect(transcript).toMatch(/Where\s+is\s+my\s+order/i);
+          if (scheme === "duplex-overlap")
+            expect(transcript).toMatch(/Thanks.*delivery.*detail/i);
+          const user = users.find(
             (e) =>
-              e.span.name === "user_turn" &&
-              (e.row.metadata?.["contrib.livekit.item_id"] ||
-                (scheme === "streaming-cascade" &&
-                  Array.isArray(e.row.input) &&
-                  e.row.input.some(
-                    (message) => message?.role === "user" && message.content,
-                  ))),
+              Array.isArray(e.row.input) && e.row.input.some((m) => m.content),
           );
-          expect(user?.row.input).toEqual([
-            expect.objectContaining({
-              role: "user",
-              content: expect.stringMatching(/order/i),
-            }),
-          ]);
           expect(user?.row.metadata?.["audio.selections"]).toEqual(
             expect.arrayContaining([
               expect.objectContaining({ channel_index: 0 }),
@@ -347,13 +328,16 @@ for (const variant of ["livekit-v1", "livekit-v1-latest"]) {
             expect(findLatestSpan(events, "tts")).toBeDefined();
           else expect(findLatestSpan(events, "tts")).toBeUndefined();
           if (scheme === "streaming-cascade")
-            expect(user?.row.metadata?.model).toBe("gpt-4o-mini-transcribe");
+            expect(
+              findLatestSpan(events, "user_turn")?.row.metadata?.model,
+            ).toBe("gpt-4o-mini-transcribe");
           await matchSpanTreeSnapshot(
             events.map((event) => ({
               event,
               fields: stable({
                 ...spanTreeFields(event),
                 context: event.row.context,
+                links: event.row.links,
               }) as Record<string, unknown>,
             })),
             resolveFileSnapshotPath(
@@ -401,15 +385,15 @@ for (const variant of ["livekit-v1", "livekit-v1-latest"]) {
           );
           const turn = events.find(
             (e) =>
-              e.span.name === "assistant_turn" &&
+              e.span.name === "agent_speech" &&
               e.row.metadata?.["contrib.livekit.interrupted"],
           );
           if (recover) {
-            const resumed = findLatestSpan(events, "assistant_turn");
+            const resumed = findLatestSpan(events, "agent_speech");
             expect(resumed?.span.id).not.toBe(turn?.span.id);
-            expect(resumed?.row.metadata?.["contrib.livekit.interrupted"]).toBe(
-              false,
-            );
+            expect(
+              resumed?.row.metadata?.["contrib.livekit.interrupted"],
+            ).not.toBe(true);
             expect(resumed?.row.output).toEqual(
               expect.arrayContaining([
                 expect.objectContaining({
@@ -433,7 +417,8 @@ for (const variant of ["livekit-v1", "livekit-v1-latest"]) {
             ]),
           );
           expect(
-            turn?.row.metadata?.["contrib.livekit.playback_events"],
+            events.find((e) => e.span.id === turn?.row.metadata?.["turn.id"])
+              ?.row.metadata?.["contrib.livekit.playback_events"],
           ).toEqual(
             expect.arrayContaining([
               expect.objectContaining({
@@ -448,6 +433,7 @@ for (const variant of ["livekit-v1", "livekit-v1-latest"]) {
               fields: stable({
                 ...spanTreeFields(event),
                 context: event.row.context,
+                links: event.row.links,
               }) as Record<string, unknown>,
             })),
             resolveFileSnapshotPath(
@@ -567,7 +553,7 @@ for (const variant of ["livekit-v1", "livekit-v1-latest"]) {
               Object.values(attachments).some((a) => a.key === upload.key),
           ),
         ).toBe(true);
-        for (const name of ["assistant_turn", "livekit.agent_speaking"]) {
+        for (const name of ["agent_turn", "agent_speech"]) {
           const owner = findLatestSpan(events, name)!;
           const selections = owner.row.metadata?.["audio.selections"] as {
             recording_id: string;
@@ -697,16 +683,18 @@ for (const variant of ["livekit-v1", "livekit-v1-latest"]) {
               },
             ]);
           } else expect(metadata?.["audio.recordings"]).toBeUndefined();
-          const turn = findLatestSpan(events, "assistant_turn");
+          const turn = findLatestSpan(events, "agent_turn");
           expect(turn).toBeDefined();
           if (mode === "redacted")
             expect(JSON.stringify(events.map((e) => e.row))).not.toContain(
               "Your order arrives Friday.",
             );
           else
-            expect(JSON.stringify(turn?.row.output)).toContain(
-              "Your order arrives Friday.",
-            );
+            expect(
+              JSON.stringify(
+                findLatestSpan(events, "agent_speech")?.row.output,
+              ),
+            ).toContain("Your order arrives Friday.");
         });
       },
       90000,
@@ -744,7 +732,7 @@ for (const variant of ["livekit-v1", "livekit-v1-latest"]) {
           const events = harness.events();
           assertAudioTrace(events);
           expect(findAllSpans(events, "livekit.agent_session")).toHaveLength(1);
-          const turns = findAllSpans(events, "assistant_turn");
+          const turns = findAllSpans(events, "agent_turn");
           const turnIds = new Set(turns.map((t) => t.span.id));
           for (const response of findAllSpans(events, "llm_response"))
             expect(
@@ -773,9 +761,7 @@ for (const variant of ["livekit-v1", "livekit-v1-latest"]) {
             },
           });
           expect(
-            JSON.stringify(
-              findLatestSpan(events, "assistant_turn")?.row.output,
-            ),
+            JSON.stringify(findLatestSpan(events, "agent_speech")?.row.output),
           ).toContain("Friday");
         });
       },

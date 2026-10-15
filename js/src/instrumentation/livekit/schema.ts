@@ -15,7 +15,13 @@ export function operation(name: string): string {
     case "user_turn":
       return "user_turn";
     case "agent_turn":
-      return "assistant_turn";
+      return "agent_turn";
+    case "user_speaking":
+      return "user_speech";
+    case "agent_speaking":
+      return "agent_speech";
+    case "stt_node":
+      return "stt";
     case "llm_node":
     case "realtime_inference":
       return "llm_response";

@@ -37,6 +37,9 @@ export type Row = {
   parent?: string;
   turn?: string;
   session?: string;
+  playedText?: string;
+  start?: number;
+  end?: number;
   ended?: boolean;
   folded?: boolean;
   replyTo?: string;

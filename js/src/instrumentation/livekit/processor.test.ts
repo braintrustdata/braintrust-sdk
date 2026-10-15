@@ -37,12 +37,13 @@ function fixture(
           parent,
           logs: [] as any[],
           end: undefined as any,
-          spanId: String(rows.length),
+          spanId: (rows.length + 1).toString(16).padStart(16, "0"),
         };
         rows.push(row);
         return {
           ...owner(row.spanId),
           spanId: row.spanId,
+          rootSpanId: "1234567890abcdef1234567890abcdef",
           log(event: any) {
             row.logs.push(event);
           },
@@ -91,7 +92,12 @@ test("native hierarchy and inference types survive; namespace and tool payloads 
     });
   for (const s of [root, turn, model, tool]) p.onStart(s);
   for (const s of [model, tool, turn, root]) p.onEnd(s);
-  expect(rows.map((r) => r.parent)).toEqual([undefined, "0", "1", "1"]);
+  expect(rows.map((r) => r.parent)).toEqual([
+    undefined,
+    rows[0].spanId,
+    rows[1].spanId,
+    rows[1].spanId,
+  ]);
   expect(rows[2].args.type).toBe("llm");
   expect(
     rows[3].logs.some((e: any) => e.span_attributes?.name === "lookup_order"),
@@ -123,7 +129,7 @@ test("concurrent sessions keep parents separate; closing one does not clear anot
   p.onStart(b);
   p.onStart(child);
   p.onEnd(a);
-  expect(rows[2].parent).toBe("0");
+  expect(rows[2].parent).toBe(rows[0].spanId);
   const laterChild = span("later", "agent_turn", "b");
   p.onStart(laterChild);
   p.onEnd(laterChild);
@@ -149,7 +155,7 @@ test("late tool completion keeps its native owner after the session ends", () =>
   expect(rows[2].logs.find((event: any) => event.output)?.output).toEqual({
     ok: true,
   });
-  expect(rows[2].parent).toBe("1");
+  expect(rows[2].parent).toBe(rows[1].spanId);
 });
 test("committed messages retain identity and honor content opt-out", () => {
   const { rows, span, p } = fixture(false),
@@ -162,117 +168,6 @@ test("committed messages retain identity and honor content opt-out", () => {
   p.onEnd(root);
   expect(JSON.stringify(rows)).not.toContain("private");
 });
-test("late realtime user transcript is not assigned to the currently speaking agent", () => {
-  const { rows, span, p } = fixture(true),
-    root = span("root", "agent_session"),
-    turn = span("turn", "agent_turn", "root");
-  p.onStart(root);
-  p.onStart(turn);
-  const session: any = {
-    sessionSpan: root,
-    activity: { currentSpeech: { _agentTurnSpan: turn } },
-  };
-  p.conversation(session, {
-    type: "message",
-    id: "input-item",
-    role: "user",
-    textContent: "late transcript",
-  });
-  p.conversation(session, {
-    type: "message",
-    id: "output-item",
-    role: "assistant",
-    textContent: "response",
-  });
-  expect(
-    rows[0].logs.some(
-      (e: any) =>
-        e.metadata?.["contrib.livekit.committed_messages"]?.["input-item"],
-    ),
-  ).toBe(true);
-  expect(
-    rows[1].logs.some(
-      (e: any) =>
-        e.metadata?.["contrib.livekit.committed_messages"]?.["input-item"],
-    ),
-  ).toBe(false);
-  expect(
-    rows[1].logs.some(
-      (e: any) =>
-        e.metadata?.["contrib.livekit.committed_messages"]?.["output-item"],
-    ),
-  ).toBe(true);
-  p.onEnd(turn);
-  p.onEnd(root);
-});
-test("pipeline context owns an interrupted message after the speech handle is cleared", () => {
-  const { rows, span, p } = fixture(true),
-    root = span("root", "agent_session"),
-    turn = span("turn", "agent_turn", "root");
-  p.onStart(root);
-  p.onStart(turn);
-  p.onEnd(turn);
-  p.scope(turn, () =>
-    p.conversation(
-      { sessionSpan: root },
-      {
-        type: "message",
-        id: "interrupted-item",
-        role: "assistant",
-        textContent: "partial response",
-        interrupted: true,
-      },
-    ),
-  );
-  expect(
-    rows[1].logs.some(
-      (event: any) =>
-        event.metadata?.["contrib.livekit.committed_messages"]?.[
-          "interrupted-item"
-        ]?.turn_span_id === "1",
-    ),
-  ).toBe(true);
-  p.onEnd(root);
-});
-
-test("realtime speaking nests under its framework turn without crossing sessions or dispatches", async () => {
-  const { rows, span, p } = fixture(true);
-  const root = span("root", "agent_session"),
-    other = span("other", "agent_session");
-  p.onStart(root);
-  p.onStart(other);
-  const provider = new EventEmitter();
-  p.realtime({
-    agentSession: { sessionSpan: root },
-    realtimeSession: provider,
-  });
-  provider.emit("input_speech_started", {});
-  const user = rows.find((row) => row.args.name === "user_turn")!;
-  const unrelated = span("unrelated", "user_speaking", "other");
-  const speaking = span("speaking", "user_speaking", "root");
-  p.onStart(unrelated);
-  p.onStart(speaking);
-  expect(rows.at(-2)?.parent).toBe(rows[1].spanId);
-  expect(rows.at(-1)?.parent).toBe(user.spanId);
-  expect(rows.at(-1)?.logs).toContainEqual({
-    metadata: {
-      "turn.id": user.spanId,
-      "contrib.livekit.turn.association": "realtime_speech_start_dispatch",
-    },
-  });
-  p.onEnd(speaking);
-  p.onEnd(unrelated);
-  provider.emit("input_speech_stopped", {});
-  provider.emit("input_speech_started", {});
-  await Promise.resolve();
-  const delayed = span("delayed", "user_speaking", "root");
-  p.onStart(delayed);
-  expect(rows.at(-1)?.parent).toBe(rows[0].spanId);
-  p.onEnd(delayed);
-  p.onEnd(other);
-  p.onEnd(root);
-});
-
 test("inference suppression preserves results and leaves provider calls in user tools visible", async () => {
   const { rows, span, p } = fixture(true);
   const root = span("root", "agent_session");
@@ -347,12 +242,10 @@ test("common voice operations expose standard messages, metrics, and native prov
   expect(rows.map((r) => r.args.name)).toEqual([
     "livekit.agent_session",
     "user_turn",
-    "assistant_turn",
+    "agent_turn",
     "llm_response",
   ]);
-  expect(
-    rows[1].logs.some((e) => e.input?.[0]?.content === "Where is order 1042?"),
-  ).toBe(true);
+  expect(rows[1].logs.some((e) => e.input)).toBe(false);
   expect(
     rows[3].logs.some(
       (e) => e.metrics?.tokens === 13 && e.metrics?.time_to_first_token === 0.2,
@@ -382,7 +275,7 @@ test("content opt-out also excludes system instructions and tool definitions", (
   expect(JSON.stringify(rows)).not.toContain("private");
 });
 
-test("tool-only cascade turns expose tool requests in standard output", () => {
+test("tool-only responses retain tool requests on the model without inventing speech", () => {
   const { rows, span, p } = fixture(true);
   const root = span("s", "agent_session"),
     turn = span("a", "agent_turn", "s"),
@@ -404,7 +297,7 @@ test("tool-only cascade turns expose tool requests in standard output", () => {
   for (const s of [root, turn, model]) p.onStart(s);
   for (const s of [model, turn, root]) p.onEnd(s);
   expect(
-    rows[1].logs.some((e) => e.output?.[0]?.tool_calls?.[0]?.id === "call-1"),
+    rows[2].logs.some((e) => e.output?.[0]?.tool_calls?.[0]?.id === "call-1"),
   ).toBe(true);
 });
 
@@ -588,49 +481,6 @@ test("installing a realtime observer never hides a native caller turn", () => {
   p.onEnd(root);
 });
 
-test("committed realtime fragments preserve the complete caller turn and speaking parents", () => {
-  const { rows, span, p } = fixture(true);
-  const root = span("root", "agent_session");
-  p.onStart(root);
-  const provider = new EventEmitter();
-  const session = { sessionSpan: root };
-  p.realtime({ agentSession: session, realtimeSession: provider });
-  for (const [id, text] of [
-    ["a", "Where is my order"],
-    ["b", " DMO"],
-    ["c", "1042?"],
-  ]) {
-    provider.emit("input_speech_started", {});
-    const speaking = span(id, "user_speaking", "root");
-    p.onStart(speaking);
-    provider.emit("input_audio_transcription_completed", {
-      itemId: id,
-      transcript: text,
-      isFinal: true,
-    });
-    p.conversation(session, {
-      type: "message",
-      id,
-      role: "user",
-      textContent: text,
-      interrupted: false,
-    });
-    p.onEnd(speaking);
-    provider.emit("input_speech_stopped", {});
-  }
-  const callers = rows.filter((row) => row.args.name === "user_turn");
-  expect(callers).toHaveLength(1);
-  expect(callers[0].logs.filter((event) => event.input).at(-1).input).toEqual([
-    { role: "user", content: "Where is my order DMO1042?" },
-  ]);
-  const speech = rows.filter(
-    (row) => row.args.name === "livekit.user_speaking",
-  );
-  expect(speech).toHaveLength(3);
-  expect(speech.every((row) => row.parent === callers[0].spanId)).toBe(true);
-  p.onEnd(root);
-});
-
 test("late native realtime metrics update their model operation without another span", () => {
   const { rows, span, p } = fixture();
   const root = span("s", "agent_session");
@@ -687,4 +537,370 @@ test("early native realtime usage reaches its inference with content capture dis
   );
   expect(JSON.stringify(rows)).not.toContain("must not be logged");
   p.onEnd(root);
+});
+
+test("native speech preserves overlap, segmentation, late transcript timing and session ownership", () => {
+  const { rows, span, p } = fixture(true);
+  const root = span("root", "agent_session");
+  const agent = span("agent", "agent_speaking", "root");
+  const caller = span("caller", "user_speaking", "root");
+  agent.endTime = [6, 0];
+  caller.startTime = [3, 0];
+  caller.endTime = [4, 0];
+  for (const native of [root, agent, caller]) p.onStart(native);
+  p.onEnd(caller);
+  p.conversation(
+    { sessionSpan: root },
+    {
+      type: "message",
+      id: "late",
+      role: "user",
+      textContent: "Wait, order 1042",
+      metrics: { startedSpeakingAt: 3 },
+    },
+  );
+  p.conversation(
+    { sessionSpan: root },
+    {
+      type: "message",
+      id: "agent-message",
+      role: "assistant",
+      textContent: "It arrives Friday.",
+      metrics: { startedSpeakingAt: 1 },
+    },
+  );
+  p.onEnd(agent);
+  expect(rows.map((r) => r.args.name)).toEqual([
+    "livekit.agent_session",
+    "agent_speech",
+    "user_speech",
+  ]);
+  expect(rows[1].end.endTime).toBe(6);
+  expect(rows[2].args.startTime).toBe(3);
+  expect(rows[2].end.endTime).toBe(4);
+  expect(rows[2].logs).toContainEqual({
+    input: [{ role: "user", content: "Wait, order 1042" }],
+  });
+  expect(rows[1].logs).toContainEqual({
+    output: [{ role: "assistant", content: "It arrives Friday." }],
+  });
+  expect(rows[2].parent).toBe(rows[0].spanId);
+});
+
+test("native user fragments remain speech segments instead of pause-grouped turns", () => {
+  const { rows, span, p } = fixture(true);
+  const root = span("root", "agent_session");
+  p.onStart(root);
+  const provider = new EventEmitter();
+  p.realtime({
+    agentSession: { sessionSpan: root },
+    realtimeSession: provider,
+  });
+  for (const [id, text] of [
+    ["a", "Where is my order"],
+    ["b", "1042?"],
+  ]) {
+    const speech = span(id, "user_speaking", "root");
+    p.onStart(speech);
+    provider.emit("input_audio_transcription_completed", {
+      itemId: id,
+      transcript: text,
+      isFinal: true,
+    });
+    p.onEnd(speech);
+  }
+  expect(rows.map((row) => row.args.name)).toEqual([
+    "livekit.agent_session",
+    "user_speech",
+    "user_speech",
+  ]);
+  expect(
+    rows
+      .slice(1)
+      .map((r) => r.logs.filter((log) => log.input).at(-1).input[0].content),
+  ).toEqual(["Where is my order", "1042?"]);
+});
+
+test("tool request, continuation, input speech and generated speech use exported link identities", () => {
+  const { rows, span, p } = fixture(true);
+  const root = span("s", "agent_session");
+  const turn = span("turn", "agent_turn", "s");
+  const user = span("u", "user_speaking", "s");
+  const model = span("m", "llm_node", "turn", {
+    "lk.pii.chat_ctx": {
+      items: [
+        { type: "message", id: "caller", role: "user", content: ["Order?"] },
+      ],
+    },
+    "lk.pii.response.function_calls": [
+      { call_id: "call", name: "lookup_order" },
+    ],
+  });
+  const tool = span("tool", "function_tool", "turn", {
+    "gen_ai.tool.call.id": "call",
+  });
+  const continuation = span("next", "llm_node", "turn", {
+    "lk.pii.chat_ctx": {
+      items: [
+        { type: "function_call_output", call_id: "call", output: "Friday" },
+      ],
+    },
+  });
+  for (const native of [root, turn, user, model, tool]) p.onStart(native);
+  // Late request/transcript resolution also works after the consuming operation ended.
+  p.onEnd(tool);
+  p.onEnd(model);
+  p.onEnd(user);
+  p.conversation(
+    { sessionSpan: root },
+    {
+      type: "message",
+      id: "caller",
+      role: "user",
+      textContent: "Order?",
+      metrics: { startedSpeakingAt: 1 },
+    },
+  );
+  p.scope(turn, () => {
+    p.inference(() => {
+      p.onStart(continuation);
+      return [null, { id: "answer" }];
+    });
+    const tts = span("tts", "tts_node", "turn");
+    const speech = span("speech", "agent_speaking", "turn");
+    p.onStart(tts);
+    p.onStart(speech);
+    p.conversation(
+      { sessionSpan: root },
+      {
+        type: "message",
+        id: "answer",
+        role: "assistant",
+        textContent: "Friday",
+      },
+    );
+    p.onEnd(speech);
+    p.onEnd(tts);
+  });
+  p.onEnd(continuation);
+  const links = (i: number) =>
+    rows[i].logs.filter((log) => log.links).at(-1)?.links ?? [];
+  const link = (target: number, type: string) => ({
+    context: {
+      traceId: "1234567890abcdef1234567890abcdef",
+      spanId: rows[target].spanId,
+      traceFlags: 1,
+    },
+    attributes: { "braintrust.relationship.type": type },
+  });
+  expect(links(3)).toEqual([link(2, "input_context")]);
+  expect(links(4)).toEqual([link(3, "requested_by")]);
+  expect(links(5)).toEqual([link(4, "consumes_tool_result")]);
+  expect(links(6)).toEqual([link(5, "generated_by")]);
+  expect(links(7)).toEqual([link(5, "generated_by")]);
+  expect(JSON.stringify(rows)).not.toContain("continuation.tool_call_ids");
+  expect(JSON.stringify(rows)).not.toContain("request_span_id");
+});
+
+test.each([undefined, "Heard prefix"])(
+  "interrupted speech uses only synchronized playback text (%s)",
+  (synchronizedTranscript) => {
+    const { rows, span, p } = fixture(true);
+    const root = span("s", "agent_session"),
+      speech = span("a", "agent_speaking", "s");
+    p.onStart(root);
+    p.onStart(speech);
+    const sink = Object.assign(new EventEmitter(), {
+      captureFrame: async () => {},
+      flush() {},
+      clearBuffer() {},
+    });
+    const session: any = {
+      sessionSpan: root,
+      agentSpeakingSpan: speech,
+      output: { audio: sink },
+    };
+    p.output(session);
+    sink.emit("playbackFinished", {
+      interrupted: true,
+      synchronizedTranscript,
+    });
+    p.conversation(session, {
+      type: "message",
+      id: "answer",
+      role: "assistant",
+      textContent: "Heard prefix and unheard suffix",
+      interrupted: true,
+    });
+    expect(rows[1].logs.filter((log) => log.output)).toEqual(
+      synchronizedTranscript === undefined
+        ? []
+        : [
+            {
+              output: [{ role: "assistant", content: synchronizedTranscript }],
+            },
+          ],
+    );
+  },
+);
+
+test("an untimed final transcript resolves only an unambiguous native speech interval", () => {
+  const { rows, span, p } = fixture(true);
+  const root = span("s", "agent_session"),
+    first = span("first", "user_speaking", "s");
+  p.onStart(root);
+  const provider = new EventEmitter();
+  p.realtime({
+    agentSession: { sessionSpan: root },
+    realtimeSession: provider,
+  });
+  p.onStart(first);
+  p.onEnd(first);
+  provider.emit("input_audio_transcription_completed", {
+    itemId: "first-text",
+    transcript: "Order 1042",
+    isFinal: true,
+  });
+  expect(rows[1].logs).toContainEqual({
+    input: [{ role: "user", content: "Order 1042" }],
+  });
+  const second = span("second", "user_speaking", "s"),
+    third = span("third", "user_speaking", "s");
+  p.onStart(second);
+  p.onEnd(second);
+  p.onStart(third);
+  provider.emit("input_audio_transcription_completed", {
+    itemId: "ambiguous",
+    transcript: "Unattributed",
+    isFinal: true,
+  });
+  expect(rows.slice(2).some((row) => row.logs.some((log) => log.input))).toBe(
+    false,
+  );
+});
+
+test("synchronous realtime speech dispatch supplies identity even when native start follows transcript epoch", () => {
+  const { rows, span, p } = fixture(true);
+  const root = span("s", "agent_session"),
+    speech = span("speech", "user_speaking", "s");
+  speech.startTime = [1, 5_000_000];
+  p.onStart(root);
+  const provider = new EventEmitter();
+  const session: any = { sessionSpan: root };
+  provider.on("input_speech_started", () => {
+    p.onStart(speech);
+    session._userSpeakingSpan = speech;
+  });
+  p.realtime({ agentSession: session, realtimeSession: provider });
+  provider.emit("input_speech_started", {});
+  provider.emit("input_audio_transcription_completed", {
+    itemId: "user",
+    transcript: "Where is my order?",
+    turnStartedAt: 1000,
+    isFinal: false,
+  });
+  p.onEnd(speech);
+  expect(rows[1].logs).toContainEqual({
+    input: [{ role: "user", content: "Where is my order?" }],
+  });
+  expect(rows[1].args.startTime).toBe(1.005);
+});
+
+test("output replacement removes stale transcript evidence and can restore an earlier output", () => {
+  const { rows, span, p } = fixture(true);
+  const root = span("s", "agent_session"),
+    speech = span("a", "agent_speaking", "s");
+  p.onStart(root);
+  p.onStart(speech);
+  const first = new EventEmitter(),
+    second = new EventEmitter();
+  const session: any = {
+    sessionSpan: root,
+    agentSpeakingSpan: speech,
+    output: { audio: first },
+  };
+  p.output(session);
+  session.output.audio = second;
+  p.output(session);
+  expect(first.listenerCount("playbackFinished")).toBe(0);
+  session.output.audio = first;
+  p.output(session);
+  expect(second.listenerCount("playbackFinished")).toBe(0);
+  first.emit("playbackFinished", { synchronizedTranscript: "partial suffix" });
+  p.conversation(session, {
+    type: "message",
+    id: "first",
+    role: "assistant",
+    textContent: "Fully played prefix and partial suffix",
+    interrupted: true,
+  });
+  expect(rows[1].logs).toContainEqual({
+    output: [
+      { role: "assistant", content: "Fully played prefix and partial suffix" },
+    ],
+  });
+  first.emit("playbackFinished", { interrupted: true });
+  p.conversation(session, {
+    type: "message",
+    id: "unverified",
+    role: "assistant",
+    textContent: "unheard",
+    interrupted: true,
+  });
+  expect(JSON.stringify(rows)).not.toContain("unheard");
+});
+
+test("text injected into conversation is not attributed to an earlier untranscribed speech interval", () => {
+  const { rows, span, p } = fixture(true);
+  const root = span("s", "agent_session"),
+    speech = span("u", "user_speaking", "s");
+  p.onStart(root);
+  p.onStart(speech);
+  p.onEnd(speech);
+  p.conversation(
+    { sessionSpan: root },
+    { type: "message", id: "typed", role: "user", textContent: "Typed input" },
+  );
+  p.onEnd(root);
+  expect(rows[1].logs.some((log) => log.input)).toBe(false);
+  expect(rows[0].logs).toContainEqual({
+    metadata: {
+      "contrib.livekit.unassociated_messages": [
+        {
+          id: "typed",
+          role: "user",
+          text: "Typed input",
+          started_speaking_at: undefined,
+        },
+      ],
+    },
+  });
+});
+
+test("native recognition ownership survives independently sampled speech timestamps", () => {
+  const { rows, span, p } = fixture(true);
+  const root = span("s", "agent_session"),
+    user = span("u", "user_turn", "s"),
+    speech = span("speech", "user_speaking", "u");
+  speech.startTime = [1, 5_000_000];
+  p.onStart(root);
+  p.onStart(user);
+  p.onStart(speech);
+  p.onEnd(speech);
+  const session = { sessionSpan: root };
+  p.userTurn(
+    { agentSession: session },
+    { userTurnSpan: user, startedSpeakingAt: 1000, stoppedSpeakingAt: 2000 },
+  );
+  p.conversation(session, {
+    type: "message",
+    id: "caller",
+    role: "user",
+    textContent: "Where is my order?",
+    metrics: { startedSpeakingAt: 1 },
+  });
+  expect(rows[2].logs).toContainEqual({
+    input: [{ role: "user", content: "Where is my order?" }],
+  });
+  expect(rows[2].args.startTime).toBe(1.005);
 });

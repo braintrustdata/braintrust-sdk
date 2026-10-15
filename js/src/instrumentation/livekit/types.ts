@@ -13,6 +13,7 @@ export interface SpeechHandle {
 export interface AgentSession {
   sessionSpan?: NativeSpan;
   agentSpeakingSpan?: NativeSpan;
+  _userSpeakingSpan?: NativeSpan;
   activity?: AgentActivity;
   output?: { audio?: AudioOutput | null };
 }
@@ -39,6 +40,7 @@ export interface ChatMessage {
   role?: string;
   textContent?: string;
   interrupted?: boolean;
+  metrics?: { startedSpeakingAt?: number; stoppedSpeakingAt?: number };
 }
 
 export interface RealtimeGeneration {

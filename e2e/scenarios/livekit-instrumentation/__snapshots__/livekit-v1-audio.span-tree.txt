@@ -126,13 +126,7 @@ span_tree:
     │             "caller_functionname": "ScenarioProcessor.onStart",
     │             "caller_lineno": 0
     │           }
-    ├── assistant_turn [task]
-    │   output: [
-    │     {
-    │       "content": "Fixture playback",
-    │       "role": "assistant"
-    │     }
-    │   ]
+    ├── agent_turn [task]
     │   metadata: {
     │     "audio.selection": {
     │       "channel_index": 1,
@@ -150,27 +144,17 @@ span_tree:
     │         "start_offset_ms": 0
     │       }
     │     ],
-    │     "contrib.livekit.committed_messages": {
-    │       "<native:1>": {
-    │         "id": "<span:3>",
-    │         "interrupted": false,
-    │         "role": "assistant",
-    │         "text": "Fixture playback",
-    │         "turn_span_id": "<span:1>"
-    │       }
-    │     },
     │     "contrib.livekit.events": [
     │       {
     │         "attributes": {
-    │           "contrib.livekit.generation_id": "<native:3>"
+    │           "contrib.livekit.generation_id": "<native:2>"
     │         },
     │         "name": "generation",
     │         "time_unix_ms": 0
     │       }
     │     ],
     │     "contrib.livekit.generation_count": 1,
-    │     "contrib.livekit.generation_id": "<native:3>",
-    │     "contrib.livekit.interrupted": false,
+    │     "contrib.livekit.generation_id": "<native:2>",
     │     "contrib.livekit.playback_events": [
     │       {
     │         "attributes": {
@@ -182,7 +166,7 @@ span_tree:
     │       }
     │     ],
     │     "contrib.livekit.speech.queue_wait": 0,
-    │     "contrib.livekit.speech_id": "<native:2>",
+    │     "contrib.livekit.speech_id": "<native:1>",
     │     "gen_ai.agent.name": "default_agent",
     │     "gen_ai.operation.name": "invoke_agent",
     │     "scenario": "livekit-instrumentation",
@@ -194,7 +178,13 @@ span_tree:
     │     "caller_functionname": "ScenarioProcessor.onStart",
     │     "caller_lineno": 0
     │   }
-    │   └── livekit.agent_speaking [task]
+    │   └── agent_speech [task]
+    │       output: [
+    │         {
+    │           "content": "Fixture playback",
+    │           "role": "assistant"
+    │         }
+    │       ]
     │       metadata: {
     │         "audio.selection": {
     │           "channel_index": 1,
@@ -211,6 +201,9 @@ span_tree:
     │             "recording_span_id": "<span:2>",
     │             "start_offset_ms": 0
     │           }
+    │         ],
+    │         "contrib.livekit.message_ids": [
+    │           "<native:3>"
     │         ],
     │         "scenario": "livekit-instrumentation",
     │         "testRunId": "<run:1>",
@@ -256,12 +249,6 @@ span_tree:
     │             "caller_lineno": 0
     │           }
     └── user_turn [task]
-        input: [
-          {
-            "content": "",
-            "role": "user"
-          }
-        ]
         metadata: {
           "contrib.livekit.end_of_turn_delay": 0,
           "contrib.livekit.transcript_confidence": 0,

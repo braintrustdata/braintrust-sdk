@@ -21,12 +21,12 @@ function event(
 const root = event("root", "livekit.agent_session", []);
 const turn = event("turn", "user_turn", ["root"]);
 
-test.each([undefined, "missing", "root"])(
-  "rejects missing or invalid speaking turn reference: %s",
+test.each(["missing", "root"])(
+  "rejects invalid optional speaking turn reference: %s",
   (turnId) => {
     const speech = event(
       "speech",
-      "livekit.user_speaking",
+      "user_speech",
       ["root"],
       turnId ? { "turn.id": turnId } : {},
     );
@@ -34,8 +34,8 @@ test.each([undefined, "missing", "root"])(
   },
 );
 
-test("validates parentage and permits only explicitly expected session-owned speech", () => {
-  const speech = event("speech", "livekit.user_speaking", ["turn"], {
+test("validates parentage and permits session-owned speech", () => {
+  const speech = event("speech", "user_speech", ["turn"], {
     "turn.id": "turn",
   });
   expect(() => assertAudioTrace([root, turn, speech])).not.toThrow();

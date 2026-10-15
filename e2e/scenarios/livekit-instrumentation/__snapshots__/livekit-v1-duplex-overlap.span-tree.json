@@ -71,282 +71,37 @@
           }
         },
         {
-          "name": "user_turn",
+          "name": "user_speech",
           "type": "task",
-          "children": [
-            {
-              "name": "livekit.user_speaking",
-              "type": "task",
-              "children": [],
-              "metadata": {
-                "audio.selection": {
-                  "channel_index": 0,
-                  "end_offset_ms": 0,
-                  "recording_id": "call-0000",
-                  "recording_span_id": "<span:2>",
-                  "start_offset_ms": 0
-                },
-                "audio.selections": [
-                  {
-                    "channel_index": 0,
-                    "end_offset_ms": 0,
-                    "recording_id": "call-0000",
-                    "recording_span_id": "<span:2>",
-                    "start_offset_ms": 0
-                  }
-                ],
-                "contrib.livekit.turn.association": "realtime_speech_start_dispatch",
-                "scenario": "livekit-instrumentation",
-                "testRunId": "<run:1>",
-                "turn.id": "<span:1>"
-              },
-              "context": {
-                "caller_filename": "<repo>/e2e/scenarios/livekit-instrumentation/scenario.mjs",
-                "caller_functionname": "ScenarioProcessor.onStart",
-                "caller_lineno": 0
-              }
-            },
-            {
-              "name": "livekit.user_speaking",
-              "type": "task",
-              "children": [],
-              "metadata": {
-                "audio.selection": {
-                  "channel_index": 0,
-                  "end_offset_ms": 0,
-                  "recording_id": "call-0000",
-                  "recording_span_id": "<span:2>",
-                  "start_offset_ms": 0
-                },
-                "audio.selections": [
-                  {
-                    "channel_index": 0,
-                    "end_offset_ms": 0,
-                    "recording_id": "call-0000",
-                    "recording_span_id": "<span:2>",
-                    "start_offset_ms": 0
-                  }
-                ],
-                "contrib.livekit.turn.association": "realtime_speech_start_dispatch",
-                "scenario": "livekit-instrumentation",
-                "testRunId": "<run:1>",
-                "turn.id": "<span:1>"
-              },
-              "context": {
-                "caller_filename": "<repo>/e2e/scenarios/livekit-instrumentation/scenario.mjs",
-                "caller_functionname": "ScenarioProcessor.onStart",
-                "caller_lineno": 0
-              }
-            }
-          ],
+          "children": [],
           "input": [
             {
-              "content": "Where is my order DMO-1042",
+              "content": "Where is my order",
               "role": "user"
             }
           ],
           "metadata": {
-            "audio.selection": null,
+            "audio.selection": {
+              "channel_index": 0,
+              "end_offset_ms": 0,
+              "recording_id": "call-0000",
+              "recording_span_id": "<span:1>",
+              "start_offset_ms": 0
+            },
             "audio.selections": [
               {
                 "channel_index": 0,
                 "end_offset_ms": 0,
                 "recording_id": "call-0000",
-                "recording_span_id": "<span:4>",
-                "start_offset_ms": 0
-              },
-              {
-                "channel_index": 0,
-                "end_offset_ms": 0,
-                "recording_id": "call-0000",
-                "recording_span_id": "<span:4>",
+                "recording_span_id": "<span:1>",
                 "start_offset_ms": 0
               }
             ],
-            "contrib.livekit.committed_messages": {
-              "<native:1>": {
-                "id": "<span:2>",
-                "interrupted": false,
-                "role": "user",
-                "text": "Where is my order",
-                "turn_span_id": "<span:1>"
-              },
-              "<native:2>": {
-                "id": "<span:3>",
-                "interrupted": false,
-                "role": "user",
-                "text": " DMO-1042",
-                "turn_span_id": "<span:1>"
-              }
-            },
-            "contrib.livekit.item_id": "<native:1>",
-            "contrib.livekit.turn.timing_source": "realtime_session_events",
-            "turn.id": "<span:1>"
-          },
-          "context": {
-            "caller_filename": "<node-internal>",
-            "caller_functionname": "<node-internal>",
-            "caller_lineno": 0
-          }
-        },
-        {
-          "name": "user_turn",
-          "type": "task",
-          "children": [
-            {
-              "name": "livekit.user_speaking",
-              "type": "task",
-              "children": [],
-              "metadata": {
-                "audio.selection": {
-                  "channel_index": 0,
-                  "end_offset_ms": 0,
-                  "recording_id": "call-0000",
-                  "recording_span_id": "<span:2>",
-                  "start_offset_ms": 0
-                },
-                "audio.selections": [
-                  {
-                    "channel_index": 0,
-                    "end_offset_ms": 0,
-                    "recording_id": "call-0000",
-                    "recording_span_id": "<span:2>",
-                    "start_offset_ms": 0
-                  }
-                ],
-                "contrib.livekit.turn.association": "realtime_speech_start_dispatch",
-                "scenario": "livekit-instrumentation",
-                "testRunId": "<run:1>",
-                "turn.id": "<span:1>"
-              },
-              "context": {
-                "caller_filename": "<repo>/e2e/scenarios/livekit-instrumentation/scenario.mjs",
-                "caller_functionname": "ScenarioProcessor.onStart",
-                "caller_lineno": 0
-              }
-            },
-            {
-              "name": "livekit.user_speaking",
-              "type": "task",
-              "children": [],
-              "metadata": {
-                "audio.selection": {
-                  "channel_index": 0,
-                  "end_offset_ms": 0,
-                  "recording_id": "call-0000",
-                  "recording_span_id": "<span:2>",
-                  "start_offset_ms": 0
-                },
-                "audio.selections": [
-                  {
-                    "channel_index": 0,
-                    "end_offset_ms": 0,
-                    "recording_id": "call-0000",
-                    "recording_span_id": "<span:2>",
-                    "start_offset_ms": 0
-                  }
-                ],
-                "contrib.livekit.turn.association": "realtime_speech_start_dispatch",
-                "scenario": "livekit-instrumentation",
-                "testRunId": "<run:1>",
-                "turn.id": "<span:1>"
-              },
-              "context": {
-                "caller_filename": "<repo>/e2e/scenarios/livekit-instrumentation/scenario.mjs",
-                "caller_functionname": "ScenarioProcessor.onStart",
-                "caller_lineno": 0
-              }
-            }
-          ],
-          "input": [
-            {
-              "content": " Thanks Please describe the delivery process in detail",
-              "role": "user"
-            }
-          ],
-          "metadata": {
-            "audio.selection": null,
-            "audio.selections": [
-              {
-                "channel_index": 0,
-                "end_offset_ms": 0,
-                "recording_id": "call-0000",
-                "recording_span_id": "<span:4>",
-                "start_offset_ms": 0
-              },
-              {
-                "channel_index": 0,
-                "end_offset_ms": 0,
-                "recording_id": "call-0000",
-                "recording_span_id": "<span:4>",
-                "start_offset_ms": 0
-              }
+            "contrib.livekit.message_ids": [
+              "<native:1>"
             ],
-            "contrib.livekit.committed_messages": {
-              "<native:3>": {
-                "id": "<span:2>",
-                "interrupted": false,
-                "role": "user",
-                "text": " Thanks",
-                "turn_span_id": "<span:1>"
-              },
-              "<native:4>": {
-                "id": "<span:3>",
-                "interrupted": false,
-                "role": "user",
-                "text": " Please describe the delivery process in detail",
-                "turn_span_id": "<span:1>"
-              }
-            },
-            "contrib.livekit.item_id": "<native:3>",
-            "contrib.livekit.turn.timing_source": "realtime_session_events",
-            "turn.id": "<span:1>"
-          },
-          "context": {
-            "caller_filename": "<node-internal>",
-            "caller_functionname": "<node-internal>",
-            "caller_lineno": 0
-          }
-        },
-        {
-          "name": "user_turn",
-          "type": "task",
-          "children": [
-            {
-              "name": "livekit.eou_wait",
-              "type": "task",
-              "children": [],
-              "metadata": {
-                "contrib.livekit.eou.endpointing_delay": 0.5,
-                "contrib.livekit.eou.not_committed_count": 0,
-                "contrib.livekit.eou.outcome": "committed",
-                "contrib.livekit.eou.rearm_count": 0,
-                "contrib.livekit.eou.source": "manual",
-                "contrib.livekit.eou.wait_duration": 0,
-                "scenario": "livekit-instrumentation",
-                "testRunId": "<run:1>",
-                "turn.id": "<span:1>"
-              },
-              "context": {
-                "caller_filename": "<repo>/e2e/scenarios/livekit-instrumentation/scenario.mjs",
-                "caller_functionname": "ScenarioProcessor.onStart",
-                "caller_lineno": 0
-              }
-            }
-          ],
-          "input": [
-            {
-              "content": "",
-              "role": "user"
-            }
-          ],
-          "metadata": {
-            "contrib.livekit.end_of_turn_delay": 0,
-            "contrib.livekit.transcript_confidence": 0,
-            "contrib.livekit.transcription_delay": 0,
             "scenario": "livekit-instrumentation",
-            "testRunId": "<run:1>",
-            "turn.id": "<span:1>"
+            "testRunId": "<run:1>"
           },
           "context": {
             "caller_filename": "<repo>/e2e/scenarios/livekit-instrumentation/scenario.mjs",
@@ -355,7 +110,124 @@
           }
         },
         {
-          "name": "assistant_turn",
+          "name": "user_speech",
+          "type": "task",
+          "children": [],
+          "input": [
+            {
+              "content": " DMO-1042",
+              "role": "user"
+            }
+          ],
+          "metadata": {
+            "audio.selection": {
+              "channel_index": 0,
+              "end_offset_ms": 0,
+              "recording_id": "call-0000",
+              "recording_span_id": "<span:1>",
+              "start_offset_ms": 0
+            },
+            "audio.selections": [
+              {
+                "channel_index": 0,
+                "end_offset_ms": 0,
+                "recording_id": "call-0000",
+                "recording_span_id": "<span:1>",
+                "start_offset_ms": 0
+              }
+            ],
+            "contrib.livekit.message_ids": [
+              "<native:2>"
+            ],
+            "scenario": "livekit-instrumentation",
+            "testRunId": "<run:1>"
+          },
+          "context": {
+            "caller_filename": "<repo>/e2e/scenarios/livekit-instrumentation/scenario.mjs",
+            "caller_functionname": "ScenarioProcessor.onStart",
+            "caller_lineno": 0
+          }
+        },
+        {
+          "name": "user_speech",
+          "type": "task",
+          "children": [],
+          "input": [
+            {
+              "content": " Thanks",
+              "role": "user"
+            }
+          ],
+          "metadata": {
+            "audio.selection": {
+              "channel_index": 0,
+              "end_offset_ms": 0,
+              "recording_id": "call-0000",
+              "recording_span_id": "<span:1>",
+              "start_offset_ms": 0
+            },
+            "audio.selections": [
+              {
+                "channel_index": 0,
+                "end_offset_ms": 0,
+                "recording_id": "call-0000",
+                "recording_span_id": "<span:1>",
+                "start_offset_ms": 0
+              }
+            ],
+            "contrib.livekit.message_ids": [
+              "<native:3>"
+            ],
+            "scenario": "livekit-instrumentation",
+            "testRunId": "<run:1>"
+          },
+          "context": {
+            "caller_filename": "<repo>/e2e/scenarios/livekit-instrumentation/scenario.mjs",
+            "caller_functionname": "ScenarioProcessor.onStart",
+            "caller_lineno": 0
+          }
+        },
+        {
+          "name": "user_speech",
+          "type": "task",
+          "children": [],
+          "input": [
+            {
+              "content": " Please describe the delivery process in detail",
+              "role": "user"
+            }
+          ],
+          "metadata": {
+            "audio.selection": {
+              "channel_index": 0,
+              "end_offset_ms": 0,
+              "recording_id": "call-0000",
+              "recording_span_id": "<span:1>",
+              "start_offset_ms": 0
+            },
+            "audio.selections": [
+              {
+                "channel_index": 0,
+                "end_offset_ms": 0,
+                "recording_id": "call-0000",
+                "recording_span_id": "<span:1>",
+                "start_offset_ms": 0
+              }
+            ],
+            "contrib.livekit.message_ids": [
+              "<native:4>"
+            ],
+            "scenario": "livekit-instrumentation",
+            "testRunId": "<run:1>"
+          },
+          "context": {
+            "caller_filename": "<repo>/e2e/scenarios/livekit-instrumentation/scenario.mjs",
+            "caller_functionname": "ScenarioProcessor.onStart",
+            "caller_lineno": 0
+          }
+        },
+        {
+          "name": "agent_turn",
           "type": "task",
           "children": [
             {
@@ -364,7 +236,11 @@
               "children": [],
               "input": [
                 {
-                  "content": "Where is my order DMO-1042",
+                  "content": "Where is my order",
+                  "role": "user"
+                },
+                {
+                  "content": " DMO-1042",
                   "role": "user"
                 },
                 {
@@ -399,8 +275,7 @@
                 }
               ],
               "metadata": {
-                "contrib.livekit.input_scope": "realtime_session_context",
-                "contrib.livekit.response_id": "<native:12>",
+                "contrib.livekit.response_id": "<native:10>",
                 "gen_ai.operation.name": "generate_content",
                 "gen_ai.provider.name": "<provider-host>",
                 "gen_ai.request.model": "gpt-live-1",
@@ -415,7 +290,29 @@
                 "caller_filename": "<repo>/e2e/scenarios/livekit-instrumentation/scenario.mjs",
                 "caller_functionname": "ScenarioProcessor.onStart",
                 "caller_lineno": 0
-              }
+              },
+              "links": [
+                {
+                  "attributes": {
+                    "braintrust.relationship.type": "input_context"
+                  },
+                  "context": {
+                    "spanId": "<native:12>",
+                    "traceFlags": 1,
+                    "traceId": "<native:11>"
+                  }
+                },
+                {
+                  "attributes": {
+                    "braintrust.relationship.type": "input_context"
+                  },
+                  "context": {
+                    "spanId": "<native:13>",
+                    "traceFlags": 1,
+                    "traceId": "<native:11>"
+                  }
+                }
+              ]
             },
             {
               "name": "llm_response",
@@ -423,7 +320,11 @@
               "children": [],
               "input": [
                 {
-                  "content": "Where is my order DMO-1042",
+                  "content": "Where is my order",
+                  "role": "user"
+                },
+                {
+                  "content": " DMO-1042",
                   "role": "user"
                 },
                 {
@@ -453,11 +354,8 @@
                 }
               ],
               "metadata": {
-                "continuation.tool_call_ids": [
-                  "call_JfjxAUKmEjXi3S6qcoBBCrNd"
-                ],
                 "contrib.livekit.input_scope": "realtime_session_context",
-                "contrib.livekit.response_id": "<native:5>",
+                "contrib.livekit.response_id": "<native:14>",
                 "gen_ai.operation.name": "generate_content",
                 "gen_ai.provider.name": "<provider-host>",
                 "gen_ai.request.model": "gpt-live-1",
@@ -472,7 +370,39 @@
                 "caller_filename": "<repo>/e2e/scenarios/livekit-instrumentation/scenario.mjs",
                 "caller_functionname": "ScenarioProcessor.onStart",
                 "caller_lineno": 0
-              }
+              },
+              "links": [
+                {
+                  "attributes": {
+                    "braintrust.relationship.type": "input_context"
+                  },
+                  "context": {
+                    "spanId": "<native:12>",
+                    "traceFlags": 1,
+                    "traceId": "<native:11>"
+                  }
+                },
+                {
+                  "attributes": {
+                    "braintrust.relationship.type": "input_context"
+                  },
+                  "context": {
+                    "spanId": "<native:13>",
+                    "traceFlags": 1,
+                    "traceId": "<native:11>"
+                  }
+                },
+                {
+                  "attributes": {
+                    "braintrust.relationship.type": "consumes_tool_result"
+                  },
+                  "context": {
+                    "spanId": "<native:15>",
+                    "traceFlags": 1,
+                    "traceId": "<native:11>"
+                  }
+                }
+              ]
             },
             {
               "name": "lookup_order",
@@ -489,7 +419,6 @@
               "metadata": {
                 "contrib.livekit.function_tool.is_error": false,
                 "contrib.livekit.function_tool.name": "lookup_order",
-                "contrib.livekit.request_span_id": "<span:1>",
                 "gen_ai.agent.name": "default_agent",
                 "gen_ai.operation.name": "execute_tool",
                 "gen_ai.tool.call.id": "call_JfjxAUKmEjXi3S6qcoBBCrNd",
@@ -497,18 +426,36 @@
                 "gen_ai.tool.type": "function",
                 "scenario": "livekit-instrumentation",
                 "testRunId": "<run:1>",
-                "turn.id": "<span:2>"
+                "turn.id": "<span:1>"
               },
               "context": {
                 "caller_filename": "<repo>/e2e/scenarios/livekit-instrumentation/scenario.mjs",
                 "caller_functionname": "ScenarioProcessor.onStart",
                 "caller_lineno": 0
-              }
+              },
+              "links": [
+                {
+                  "attributes": {
+                    "braintrust.relationship.type": "requested_by"
+                  },
+                  "context": {
+                    "spanId": "<native:19>",
+                    "traceFlags": 1,
+                    "traceId": "<native:11>"
+                  }
+                }
+              ]
             },
             {
-              "name": "livekit.agent_speaking",
+              "name": "agent_speech",
               "type": "task",
               "children": [],
+              "output": [
+                {
+                  "content": " Let me check that order. It's expected to arrive on Friday.",
+                  "role": "assistant"
+                }
+              ],
               "metadata": {
                 "audio.selection": {
                   "channel_index": 1,
@@ -526,6 +473,9 @@
                     "start_offset_ms": 0
                   }
                 ],
+                "contrib.livekit.message_ids": [
+                  "<native:14>"
+                ],
                 "scenario": "livekit-instrumentation",
                 "testRunId": "<run:1>",
                 "turn.id": "<span:1>"
@@ -534,13 +484,19 @@
                 "caller_filename": "<repo>/e2e/scenarios/livekit-instrumentation/scenario.mjs",
                 "caller_functionname": "ScenarioProcessor.onStart",
                 "caller_lineno": 0
-              }
-            }
-          ],
-          "output": [
-            {
-              "content": " Let me check that order. It's expected to arrive on Friday.",
-              "role": "assistant"
+              },
+              "links": [
+                {
+                  "attributes": {
+                    "braintrust.relationship.type": "generated_by"
+                  },
+                  "context": {
+                    "spanId": "<native:20>",
+                    "traceFlags": 1,
+                    "traceId": "<native:11>"
+                  }
+                }
+              ]
             }
           ],
           "metadata": {
@@ -560,35 +516,25 @@
                 "start_offset_ms": 0
               }
             ],
-            "contrib.livekit.committed_messages": {
-              "<native:5>": {
-                "id": "<span:3>",
-                "interrupted": false,
-                "role": "assistant",
-                "text": " Let me check that order. It's expected to arrive on Friday.",
-                "turn_span_id": "<span:1>"
-              }
-            },
             "contrib.livekit.events": [
               {
                 "attributes": {
-                  "contrib.livekit.generation_id": "<native:8>"
+                  "contrib.livekit.generation_id": "<native:7>"
                 },
                 "name": "generation",
                 "time_unix_ms": 0
               },
               {
                 "attributes": {
-                  "contrib.livekit.generation_id": "<native:7>",
-                  "contrib.livekit.parent_generation_id": "<native:8>"
+                  "contrib.livekit.generation_id": "<native:6>",
+                  "contrib.livekit.parent_generation_id": "<native:7>"
                 },
                 "name": "generation",
                 "time_unix_ms": 0
               }
             ],
             "contrib.livekit.generation_count": 2,
-            "contrib.livekit.generation_id": "<native:7>",
-            "contrib.livekit.interrupted": false,
+            "contrib.livekit.generation_id": "<native:6>",
             "contrib.livekit.playback_events": [
               {
                 "attributes": {
@@ -600,7 +546,7 @@
               }
             ],
             "contrib.livekit.speech.queue_wait": 0,
-            "contrib.livekit.speech_id": "<native:6>",
+            "contrib.livekit.speech_id": "<native:5>",
             "gen_ai.agent.name": "default_agent",
             "gen_ai.operation.name": "invoke_agent",
             "scenario": "livekit-instrumentation",
@@ -614,7 +560,7 @@
           }
         },
         {
-          "name": "assistant_turn",
+          "name": "agent_turn",
           "type": "task",
           "children": [
             {
@@ -623,7 +569,11 @@
               "children": [],
               "input": [
                 {
-                  "content": "Where is my order DMO-1042",
+                  "content": "Where is my order",
+                  "role": "user"
+                },
+                {
+                  "content": " DMO-1042",
                   "role": "user"
                 },
                 {
@@ -650,7 +600,7 @@
                   "role": "assistant"
                 },
                 {
-                  "content": " Thanks Please describe the delivery process in detail",
+                  "content": " Thanks",
                   "role": "user"
                 }
               ],
@@ -662,7 +612,7 @@
               ],
               "metadata": {
                 "contrib.livekit.input_scope": "realtime_session_context",
-                "contrib.livekit.response_id": "<native:9>",
+                "contrib.livekit.response_id": "<native:16>",
                 "gen_ai.operation.name": "generate_content",
                 "gen_ai.provider.name": "<provider-host>",
                 "gen_ai.request.model": "gpt-live-1",
@@ -677,12 +627,70 @@
                 "caller_filename": "<repo>/e2e/scenarios/livekit-instrumentation/scenario.mjs",
                 "caller_functionname": "ScenarioProcessor.onStart",
                 "caller_lineno": 0
-              }
+              },
+              "links": [
+                {
+                  "attributes": {
+                    "braintrust.relationship.type": "input_context"
+                  },
+                  "context": {
+                    "spanId": "<native:12>",
+                    "traceFlags": 1,
+                    "traceId": "<native:11>"
+                  }
+                },
+                {
+                  "attributes": {
+                    "braintrust.relationship.type": "input_context"
+                  },
+                  "context": {
+                    "spanId": "<native:13>",
+                    "traceFlags": 1,
+                    "traceId": "<native:11>"
+                  }
+                },
+                {
+                  "attributes": {
+                    "braintrust.relationship.type": "consumes_tool_result"
+                  },
+                  "context": {
+                    "spanId": "<native:15>",
+                    "traceFlags": 1,
+                    "traceId": "<native:11>"
+                  }
+                },
+                {
+                  "attributes": {
+                    "braintrust.relationship.type": "input_context"
+                  },
+                  "context": {
+                    "spanId": "<native:17>",
+                    "traceFlags": 1,
+                    "traceId": "<native:11>"
+                  }
+                },
+                {
+                  "attributes": {
+                    "braintrust.relationship.type": "input_context"
+                  },
+                  "context": {
+                    "spanId": "<native:18>",
+                    "traceFlags": 1,
+                    "traceId": "<native:11>"
+                  }
+                }
+              ]
             },
             {
-              "name": "livekit.agent_speaking",
+              "name": "agent_speech",
               "type": "task",
               "children": [],
+              "output": [
+                {
+                  "content": " Here's a quick overview. Once your order is packed, it's handed to the carrier, scanned into their system, and moves through a few sorting facilities. Then the local courier picks it up and delivers it to your address on the scheduled day, which is Friday.",
+                  "role": "assistant"
+                }
+              ],
               "metadata": {
                 "audio.selection": {
                   "channel_index": 1,
@@ -700,6 +708,9 @@
                     "start_offset_ms": 0
                   }
                 ],
+                "contrib.livekit.message_ids": [
+                  "<native:16>"
+                ],
                 "scenario": "livekit-instrumentation",
                 "testRunId": "<run:1>",
                 "turn.id": "<span:1>"
@@ -708,13 +719,19 @@
                 "caller_filename": "<repo>/e2e/scenarios/livekit-instrumentation/scenario.mjs",
                 "caller_functionname": "ScenarioProcessor.onStart",
                 "caller_lineno": 0
-              }
-            }
-          ],
-          "output": [
-            {
-              "content": " Here's a quick overview. Once your order is packed, it's handed to the carrier, scanned into their system, and moves through a few sorting facilities. Then the local courier picks it up and delivers it to your address on the scheduled day, which is Friday.",
-              "role": "assistant"
+              },
+              "links": [
+                {
+                  "attributes": {
+                    "braintrust.relationship.type": "generated_by"
+                  },
+                  "context": {
+                    "spanId": "<native:21>",
+                    "traceFlags": 1,
+                    "traceId": "<native:11>"
+                  }
+                }
+              ]
             }
           ],
           "metadata": {
@@ -734,27 +751,17 @@
                 "start_offset_ms": 0
               }
             ],
-            "contrib.livekit.committed_messages": {
-              "<native:9>": {
-                "id": "<span:3>",
-                "interrupted": false,
-                "role": "assistant",
-                "text": " Here's a quick overview. Once your order is packed, it's handed to the carrier, scanned into their system, and moves through a few sorting facilities. Then the local courier picks it up and delivers it to your address on the scheduled day, which is Friday.",
-                "turn_span_id": "<span:1>"
-              }
-            },
             "contrib.livekit.events": [
               {
                 "attributes": {
-                  "contrib.livekit.generation_id": "<native:11>"
+                  "contrib.livekit.generation_id": "<native:9>"
                 },
                 "name": "generation",
                 "time_unix_ms": 0
               }
             ],
             "contrib.livekit.generation_count": 1,
-            "contrib.livekit.generation_id": "<native:11>",
-            "contrib.livekit.interrupted": false,
+            "contrib.livekit.generation_id": "<native:9>",
             "contrib.livekit.playback_events": [
               {
                 "attributes": {
@@ -766,7 +773,7 @@
               }
             ],
             "contrib.livekit.speech.queue_wait": 0,
-            "contrib.livekit.speech_id": "<native:10>",
+            "contrib.livekit.speech_id": "<native:8>",
             "gen_ai.agent.name": "default_agent",
             "gen_ai.operation.name": "invoke_agent",
             "scenario": "livekit-instrumentation",
@@ -820,6 +827,46 @@
             "contrib.livekit.close_reason": "user_initiated",
             "scenario": "livekit-instrumentation",
             "testRunId": "<run:1>"
+          },
+          "context": {
+            "caller_filename": "<repo>/e2e/scenarios/livekit-instrumentation/scenario.mjs",
+            "caller_functionname": "ScenarioProcessor.onStart",
+            "caller_lineno": 0
+          }
+        },
+        {
+          "name": "user_turn",
+          "type": "task",
+          "children": [
+            {
+              "name": "livekit.eou_wait",
+              "type": "task",
+              "children": [],
+              "metadata": {
+                "contrib.livekit.eou.endpointing_delay": 0.5,
+                "contrib.livekit.eou.not_committed_count": 0,
+                "contrib.livekit.eou.outcome": "committed",
+                "contrib.livekit.eou.rearm_count": 0,
+                "contrib.livekit.eou.source": "manual",
+                "contrib.livekit.eou.wait_duration": 0,
+                "scenario": "livekit-instrumentation",
+                "testRunId": "<run:1>",
+                "turn.id": "<span:1>"
+              },
+              "context": {
+                "caller_filename": "<repo>/e2e/scenarios/livekit-instrumentation/scenario.mjs",
+                "caller_functionname": "ScenarioProcessor.onStart",
+                "caller_lineno": 0
+              }
+            }
+          ],
+          "metadata": {
+            "contrib.livekit.end_of_turn_delay": 0,
+            "contrib.livekit.transcript_confidence": 0,
+            "contrib.livekit.transcription_delay": 0,
+            "scenario": "livekit-instrumentation",
+            "testRunId": "<run:1>",
+            "turn.id": "<span:1>"
           },
           "context": {
             "caller_filename": "<repo>/e2e/scenarios/livekit-instrumentation/scenario.mjs",

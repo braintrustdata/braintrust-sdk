@@ -26,6 +26,11 @@ export type OtherExperimentLogFields = {
   datasetRecordId: string;
   origin: ObjectReferenceType;
   span_attributes: Record<string, unknown>;
+  /** OpenTelemetry-style links to related spans, independent of parentage. */
+  links: {
+    context: { traceId: string; spanId: string; traceFlags: number };
+    attributes?: Record<string, string | number | boolean>;
+  }[];
   [ASYNC_SCORING_CONTROL_FIELD]: AsyncScoringControl;
   [MERGE_PATHS_FIELD]: string[][];
   [SKIP_ASYNC_SCORING_FIELD]: boolean;

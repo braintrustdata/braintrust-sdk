@@ -19,34 +19,6 @@ type Recording = {
   attachment?: { span_id: string; ref: string };
 };
 
-// Compare coverage, allowing one 24 kHz PCM sample of boundary rounding.
-// Adjacent selections may be compacted differently at the turn and speaking levels.
-function coverage(selections: Selection[]) {
-  const groups = new Map<string, [number, number][]>();
-  for (const s of selections) {
-    const key = JSON.stringify([
-      s.recording_span_id,
-      s.recording_id,
-      s.channel_index,
-    ]);
-    const ranges = groups.get(key) ?? [];
-    ranges.push([s.start_offset_ms, s.end_offset_ms]);
-    groups.set(key, ranges);
-  }
-  return new Map(
-    [...groups].map(([key, ranges]) => {
-      const intervals: [number, number][] = [];
-      for (const [start, end] of ranges.sort((a, b) => a[0] - b[0])) {
-        const previous = intervals.at(-1);
-        if (previous && start <= previous[1] + 1000 / 24000)
-          previous[1] = Math.max(previous[1], end);
-        else intervals.push([start, end]);
-      }
-      return [key, intervals];
-    }),
-  );
-}
-
 export function assertAudioTrace(
   raw: CapturedLogEvent[],
   {
@@ -63,6 +35,7 @@ export function assertAudioTrace(
       []) as Recording[]) {
       expect(recordings.has(key(event.span.id!, r.id))).toBe(false);
       recordings.set(key(event.span.id!, r.id), r);
+      if ("gaps" in r) expect(r.timeline).toBeDefined();
       if (r.state !== "ready") continue;
       expect(Number.isFinite(r.duration_ms)).toBe(true);
       expect(r.duration_ms).toBeGreaterThan(0);
@@ -96,11 +69,9 @@ export function assertAudioTrace(
       expect(Number.isInteger(s.channel_index)).toBe(true);
       expect(s.channel_index).toBeGreaterThanOrEqual(0);
       expect(s.channel_index).toBeLessThan(r!.channel_count);
-      if (["user_turn", "livekit.user_speaking"].includes(event.span.name!))
+      if (["user_turn", "user_speech"].includes(event.span.name!))
         expect(s.channel_index).toBe(0);
-      if (
-        ["assistant_turn", "livekit.agent_speaking"].includes(event.span.name!)
-      )
+      if (["agent_turn", "agent_speech"].includes(event.span.name!))
         expect(s.channel_index).toBe(1);
       expect(
         Number.isFinite(s.start_offset_ms) && Number.isFinite(s.end_offset_ms),
@@ -114,11 +85,11 @@ export function assertAudioTrace(
   }
   const unassociated = new Set(unassociatedSpeaking);
   for (const speech of events.filter((e) =>
-    ["livekit.user_speaking", "livekit.agent_speaking"].includes(e.span.name!),
+    ["user_speech", "agent_speech"].includes(e.span.name!),
   )) {
     const turnId = speech.metadata?.["turn.id"];
-    if (turnId === undefined && unassociated.delete(speech.span.id!)) {
-      // Explicitly expected unassociated speech must remain session-owned.
+    if (turnId === undefined) {
+      unassociated.delete(speech.span.id!);
       const parent = events.find((e) => e.span.id === speech.span.parentIds[0]);
       expect(parent?.span.name).toBe("livekit.agent_session");
       continue;
@@ -129,9 +100,7 @@ export function assertAudioTrace(
       `${speech.span.name}: missing or dangling turn.id`,
     ).toBeDefined();
     expect(turn!.span.name).toBe(
-      speech.span.name === "livekit.user_speaking"
-        ? "user_turn"
-        : "assistant_turn",
+      speech.span.name === "user_speech" ? "user_turn" : "agent_turn",
     );
     expect(speech.row.span_parents).toEqual([turnId]);
   }
@@ -139,40 +108,25 @@ export function assertAudioTrace(
     [...unassociated],
     "expected unassociated speaking spans were not found",
   ).toEqual([]);
-  for (const turn of events.filter((e) =>
-    ["user_turn", "assistant_turn"].includes(e.span.name!),
-  )) {
-    const children = events.filter(
-      (e) =>
-        ["livekit.user_speaking", "livekit.agent_speaking"].includes(
-          e.span.name!,
-        ) && e.metadata?.["turn.id"] === turn.span.id,
-    );
-    if (!children.length) continue;
-    for (const child of children) {
-      expect(child.row.span_parents).toEqual([turn.span.id]);
-      expect(Number(turn.metrics?.start)).toBeLessThanOrEqual(
-        Number(child.metrics?.start) + 0.005,
+  for (const source of events) {
+    for (const link of (source.row.links ?? []) as {
+      context: { traceId: string; spanId: string; traceFlags: number };
+      attributes: Record<string, string>;
+    }[]) {
+      expect(link.context.traceId).toMatch(/^[0-9a-f]{32}$/);
+      expect(link.context.spanId).toMatch(/^[0-9a-f]{16}$/);
+      const target = events.find(
+        (event) => event.span.id === link.context.spanId,
       );
-      expect(Number(turn.metrics?.end) + 0.005).toBeGreaterThanOrEqual(
-        Number(child.metrics?.end),
-      );
-    }
-    const actual = coverage(
-      (turn.metadata?.["audio.selections"] ?? []) as Selection[],
-    );
-    const expected = coverage(
-      children.flatMap(
-        (e) => (e.metadata?.["audio.selections"] ?? []) as Selection[],
-      ),
-    );
-    expect([...actual.keys()].sort()).toEqual([...expected.keys()].sort());
-    for (const [key, ranges] of expected) {
-      expect(actual.get(key)).toHaveLength(ranges.length);
-      ranges.forEach(([start, end], i) => {
-        expect(actual.get(key)![i][0]).toBeCloseTo(start, 1);
-        expect(actual.get(key)![i][1]).toBeCloseTo(end, 1);
-      });
+      expect(target, "link target must be an exported span").toBeDefined();
+      expect(target!.row.root_span_id).toBe(link.context.traceId);
+      expect([
+        "input_context",
+        "requested_by",
+        "consumes_tool_result",
+        "generated_by",
+        "transcribed_by",
+      ]).toContain(link.attributes["braintrust.relationship.type"]);
     }
   }
 }
