@@ -21,6 +21,7 @@ export interface SpanCustomizer {
 }
 
 export interface InstrumentationIntegrationsConfig {
+  lumaai?: boolean;
   openai?: boolean;
   anthropic?: boolean;
   vercel?: boolean;
@@ -83,6 +84,8 @@ const envIntegrationAliases: Record<
   string,
   keyof InstrumentationIntegrationsConfig
 > = {
+  lumaai: "lumaai",
+  luma: "lumaai",
   openai: "openai",
   "openai-codex": "openaiCodexSDK",
   "openai-codex-sdk": "openaiCodexSDK",
@@ -174,6 +177,7 @@ export function getDefaultInstrumentationIntegrations(): Record<
   boolean
 > {
   return {
+    lumaai: true,
     openai: true,
     openaiCodexSDK: true,
     anthropic: true,
