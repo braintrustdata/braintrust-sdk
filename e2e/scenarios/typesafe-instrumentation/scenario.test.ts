@@ -17,12 +17,28 @@ const scenarios = await Promise.all(
       autoEntry: "scenario.cjs-client.mjs",
       dependencyName: "typesafe-sdk-v0",
       snapshotName: "typesafe-v0",
+      supportsImages: false,
       wrapperEntry: "scenario.cjs-client.ts",
     },
     {
       autoEntry: "scenario.mjs",
       dependencyName: "typesafe-sdk-v0-latest",
       snapshotName: "typesafe-v0-latest",
+      supportsImages: false,
+      wrapperEntry: "scenario.ts",
+    },
+    {
+      autoEntry: "scenario.cjs-client.mjs",
+      dependencyName: "typesafe-sdk-v0-7",
+      snapshotName: "typesafe-v0-7",
+      supportsImages: true,
+      wrapperEntry: "scenario.cjs-client.ts",
+    },
+    {
+      autoEntry: "scenario.mjs",
+      dependencyName: "typesafe-sdk-v0-7-latest",
+      snapshotName: "typesafe-v0-7-latest",
+      supportsImages: true,
       wrapperEntry: "scenario.ts",
     },
   ].map(async (scenario) => ({
@@ -37,7 +53,10 @@ const scenarios = await Promise.all(
 describe.concurrent("variants", () => {
   for (const scenario of scenarios) {
     describe.sequential(`typesafe sdk ${scenario.version}`, () => {
-      const env = { TYPESAFE_PACKAGE_NAME: scenario.dependencyName };
+      const env = {
+        TYPESAFE_PACKAGE_NAME: scenario.dependencyName,
+        TYPESAFE_SUPPORTS_IMAGES: scenario.supportsImages ? "1" : "0",
+      };
       const runContext = {
         originalScenarioDir,
         variantKey: scenario.snapshotName,
@@ -54,6 +73,7 @@ describe.concurrent("variants", () => {
           });
         },
         snapshotName: `${scenario.snapshotName}-wrapped`,
+        supportsImages: scenario.supportsImages,
         testFileUrl: import.meta.url,
       });
 
@@ -69,6 +89,7 @@ describe.concurrent("variants", () => {
           });
         },
         snapshotName: scenario.snapshotName,
+        supportsImages: scenario.supportsImages,
         testFileUrl: import.meta.url,
       });
     });

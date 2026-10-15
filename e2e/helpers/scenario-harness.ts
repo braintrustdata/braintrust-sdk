@@ -452,6 +452,7 @@ function resolveCassetteMode(
 
 async function loadScenarioCassetteOptions(scenarioDir: string): Promise<{
   filter: FilterSpec | undefined;
+  inlineRequestBodies?: boolean;
   redact: RedactionSpec | undefined;
   streamingRequests: StreamingRequestMatcher[] | undefined;
 }> {
@@ -465,11 +466,13 @@ async function loadScenarioCassetteOptions(scenarioDir: string): Promise<{
   }
   const mod = (await import(pathToFileURL(filterPath).href)) as {
     filter?: FilterSpec;
+    inlineRequestBodies?: boolean;
     redact?: RedactionSpec;
     streamingRequests?: StreamingRequestMatcher[];
   };
   return {
     filter: mod.filter ?? "default",
+    inlineRequestBodies: mod.inlineRequestBodies,
     redact: mod.redact,
     streamingRequests: mod.streamingRequests,
   };
@@ -808,6 +811,7 @@ export async function withScenarioHarness(
       mode: wiring.mode,
       store: createJsonFileStore({ rootDir: wiring.cassetteDir }),
       filters: cassetteOptions.filter,
+      inlineRequestBodies: cassetteOptions.inlineRequestBodies,
       redact: cassetteOptions.redact,
       streamingRequests: cassetteOptions.streamingRequests,
       ignoredRequests: CASSETTE_IGNORED_REQUESTS,
