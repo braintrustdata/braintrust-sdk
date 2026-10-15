@@ -1,3 +1,7 @@
+// Multipart image bodies exceed the sidecar threshold. Keep the bytes available
+// to normalize their random boundaries and image references during matching.
+export const inlineRequestBodies = true;
+
 export const filter = [
   "default",
   {

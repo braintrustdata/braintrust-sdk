@@ -16,7 +16,12 @@ export async function runTypeSafeInstrumentationScenario(
     throw new Error("Expected TYPESAFE_API_KEY to be set for e2e");
   }
 
-  const baseClient = new typesafe.TypeSafeClient({ compression: false });
+  const baseClient = new typesafe.TypeSafeClient({
+    compression: false,
+    ...(process.env.TYPESAFE_SUPPORTS_IMAGES === "1"
+      ? { defaultHeaders: { "TypeSafe-Danger-Zone-Images": "true" } }
+      : {}),
+  });
   const client = decorateClient ? decorateClient(baseClient) : baseClient;
 
   await runTracedScenario({
