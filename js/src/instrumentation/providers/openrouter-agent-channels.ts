@@ -1,3 +1,7 @@
+import type {
+  MaterializedChannel,
+  ChannelSpec,
+} from "../core/channel-definitions";
 import { channel, defineChannels } from "../core/channel-definitions";
 import { INSTRUMENTATION_NAMES } from "../../span-origin";
 import type {
@@ -5,27 +9,30 @@ import type {
   OpenRouterAgentCallModelRequest,
 } from "../../vendor-sdk-types/openrouter-agent";
 
-export const openRouterAgentChannels = defineChannels(
-  "@openrouter/agent",
-  {
-    callModel: channel<OpenRouterAgentCallModelArgs, unknown>({
-      channelName: "callModel",
-      kind: "sync-stream",
-    }),
-
-    callModelTurn: channel<
+export const openRouterAgentChannels: {
+  callModel: MaterializedChannel<
+    ChannelSpec<
+      OpenRouterAgentCallModelArgs,
+      unknown,
+      Record<string, unknown>,
+      never,
+      "sync-stream"
+    >
+  >;
+  callModelTurn: MaterializedChannel<
+    ChannelSpec<
       [OpenRouterAgentCallModelRequest | undefined],
       unknown,
       {
         step: number;
         stepType: "initial" | "continue";
-      }
-    >({
-      channelName: "callModel.turn",
-      kind: "async",
-    }),
-
-    toolExecute: channel<
+      },
+      never,
+      "async"
+    >
+  >;
+  toolExecute: MaterializedChannel<
+    ChannelSpec<
       [unknown],
       unknown | AsyncIterable<unknown>,
       {
@@ -35,11 +42,46 @@ export const openRouterAgentChannels = defineChannels(
         toolCallId?: string;
         toolName: string;
       },
-      unknown
-    >({
-      channelName: "tool.execute",
-      kind: "async",
-    }),
-  },
-  { instrumentationName: INSTRUMENTATION_NAMES.OPENROUTER_AGENT },
-);
+      unknown,
+      "async"
+    >
+  >;
+} = /* @__PURE__ */ (() =>
+  defineChannels(
+    "@openrouter/agent",
+    {
+      callModel: channel<OpenRouterAgentCallModelArgs, unknown>({
+        channelName: "callModel",
+        kind: "sync-stream",
+      }),
+
+      callModelTurn: channel<
+        [OpenRouterAgentCallModelRequest | undefined],
+        unknown,
+        {
+          step: number;
+          stepType: "initial" | "continue";
+        }
+      >({
+        channelName: "callModel.turn",
+        kind: "async",
+      }),
+
+      toolExecute: channel<
+        [unknown],
+        unknown | AsyncIterable<unknown>,
+        {
+          span_info?: {
+            name?: string;
+          };
+          toolCallId?: string;
+          toolName: string;
+        },
+        unknown
+      >({
+        channelName: "tool.execute",
+        kind: "async",
+      }),
+    },
+    { instrumentationName: INSTRUMENTATION_NAMES.OPENROUTER_AGENT },
+  ))();

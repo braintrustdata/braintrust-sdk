@@ -1,5 +1,10 @@
-import { currentSpan, initLogger, NOOP_SPAN, startSpan } from "../../logger";
-import type { Span } from "../../logger";
+import {
+  currentSpan,
+  initLogger,
+  NOOP_SPAN,
+  startSpan,
+} from "../../logger/core";
+import type { Span } from "../../logger/core";
 import {
   INSTRUMENTATION_NAMES,
   withSpanInstrumentationName,
@@ -16,7 +21,7 @@ export const BRAINTRUST_LANGCHAIN_CALLBACK_HANDLER_NAME =
   "BraintrustCallbackHandler";
 
 export class BraintrustLangChainCallbackHandler {
-  name = BRAINTRUST_LANGCHAIN_CALLBACK_HANDLER_NAME;
+  name: string = BRAINTRUST_LANGCHAIN_CALLBACK_HANDLER_NAME;
   private spans = new Map<string, Span>();
   private skippedRuns = new Set<string>();
   private parent?: Span | (() => Span);

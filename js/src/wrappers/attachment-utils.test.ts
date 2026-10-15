@@ -1,5 +1,5 @@
-import { afterEach, describe, expect, it } from "vitest";
-import iso from "../isomorph";
+import { afterEach, describe, expect, it } from "vite-plus/test";
+import iso from "#braintrust-platform";
 import {
   isAutoCaptureAttachmentsEnabled,
   processInputAttachments,

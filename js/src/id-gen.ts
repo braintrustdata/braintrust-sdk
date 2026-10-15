@@ -7,7 +7,7 @@
 
 import { v4 as uuidv4 } from "uuid";
 import { debugLogger } from "./debug-logger";
-import iso from "./isomorph";
+import iso from "#braintrust-platform";
 
 /**
  * Abstract base class for ID generators

@@ -1,11 +1,18 @@
-import { expect, test, describe, beforeEach, afterEach, vi } from "vitest";
 import {
-  _exportsForTestingOnly,
+  expect,
+  test,
+  describe,
+  beforeEach,
+  afterEach,
+  vi,
+} from "vite-plus/test";
+import { _exportsForTestingOnly } from "./logger/testing";
+import {
   initLogger,
   wrapTraced,
   currentSpan,
   setMaskingFunction,
-} from "./logger";
+} from "./logger/core";
 import { configureNode } from "./node/config";
 import { setSpanCustomizers } from "./span-customizer";
 import {

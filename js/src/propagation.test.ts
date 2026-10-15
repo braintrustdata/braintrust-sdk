@@ -7,16 +7,23 @@
  * propagation path (no `@opentelemetry/api` dependency).
  */
 
-import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import {
-  _exportsForTestingOnly,
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  test,
+  vi,
+} from "vite-plus/test";
+import { _exportsForTestingOnly } from "./logger/testing";
+import {
   _internalStartSpan,
   _injectIntoCarrier,
   extractTraceContextFromHeaders,
   initLogger,
   injectTraceContext,
   startSpan,
-} from "./logger";
+} from "./logger/core";
 import {
   BAGGAGE_HEADER,
   BRAINTRUST_PARENT_KEY,

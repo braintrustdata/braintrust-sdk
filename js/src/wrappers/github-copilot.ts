@@ -1,3 +1,4 @@
+import { registerInstrumentation } from "../instrumentation/registrations/gitHubCopilot";
 import { gitHubCopilotChannels } from "../instrumentation/providers/github-copilot-channels";
 import type {
   GitHubCopilotClient,
@@ -36,6 +37,7 @@ function isGitHubCopilotClient(value: unknown): value is GitHubCopilotClient {
  * ```
  */
 export function wrapCopilotClient<T extends object>(client: T): T {
+  registerInstrumentation();
   if (!isGitHubCopilotClient(client)) {
     // eslint-disable-next-line no-restricted-properties -- preserving intentional console usage.
     console.warn(

@@ -6,7 +6,7 @@ import {
   NOOP_SPAN,
   currentSpan,
   startSpan as startBaseSpan,
-} from "../../logger";
+} from "../../logger/core";
 import {
   INSTRUMENTATION_NAMES,
   withSpanInstrumentationName,
@@ -192,7 +192,14 @@ export class OpenAIAgentsTraceProcessor {
   >();
   private traceOrder: string[] = [];
 
-  public readonly _traceSpans = this.traceSpans;
+  public readonly _traceSpans: Map<
+    string,
+    {
+      rootSpan: BraintrustSpan;
+      childSpans: Map<string, BraintrustSpan>;
+      metadata: TraceMetadata;
+    }
+  > = this.traceSpans;
 
   constructor(options: OpenAIAgentsTraceProcessorOptions = {}) {
     this.logger = options.logger;

@@ -1,10 +1,10 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
 const { tracePromise } = vi.hoisted(() => ({
   tracePromise: vi.fn((fn: () => Promise<unknown>, _event?: unknown) => fn()),
 }));
 
-vi.mock("../isomorph", () => ({
+vi.mock("#braintrust-platform", () => ({
   default: {
     getEnv: vi.fn(),
     newTracingChannel: vi.fn(() => ({

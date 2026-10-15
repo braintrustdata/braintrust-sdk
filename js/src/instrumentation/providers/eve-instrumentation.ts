@@ -7,8 +7,8 @@ import {
   flush,
   updateSpan,
   withCurrent,
-} from "../../logger";
-import type { Span } from "../../logger";
+} from "../../logger/core";
+import type { Span } from "../../logger/core";
 import { LRUCache } from "../../lru-cache";
 import {
   INSTRUMENTATION_NAMES,

@@ -1,6 +1,6 @@
 import { isObject, SpanTypeAttribute } from "../../../util";
 import { debugLogger } from "../../debug-logger";
-import { startSpan, withCurrent, type Span } from "../../logger";
+import { startSpan, withCurrent, type Span } from "../../logger/core";
 import {
   INSTRUMENTATION_NAMES,
   withSpanInstrumentationName,

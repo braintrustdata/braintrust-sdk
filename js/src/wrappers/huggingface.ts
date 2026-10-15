@@ -1,3 +1,4 @@
+import { registerInstrumentation } from "../instrumentation/registrations/huggingface";
 import { huggingFaceChannels } from "../instrumentation/providers/huggingface-channels";
 import { isObject } from "../../util";
 import type {
@@ -43,6 +44,7 @@ export function wrapHuggingFace(
 ): HuggingFaceClient;
 export function wrapHuggingFace<T>(huggingFace: T): T;
 export function wrapHuggingFace(huggingFace: unknown): unknown {
+  registerInstrumentation();
   if (isSupportedHuggingFaceModule(huggingFace)) {
     return moduleProxy(huggingFace);
   }

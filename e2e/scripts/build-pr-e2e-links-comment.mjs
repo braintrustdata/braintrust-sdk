@@ -57,12 +57,18 @@ function btqlFilterClause(predicate) {
   };
 }
 
-function buildSearchParam(metadataScenario, testRunIds) {
+function buildSearchParam(metadataScenario, testRunIds, rootSpanIds) {
   return JSON.stringify({
-    filter: [
-      btqlFilterClause(scenarioPredicate(metadataScenario)),
-      btqlFilterClause(testRunIdPredicate(testRunIds)),
-    ],
+    filter: rootSpanIds?.length
+      ? [
+          btqlFilterClause(
+            `root_span_id IN (${rootSpanIds.map(quoteFilterValue).join(", ")})`,
+          ),
+        ]
+      : [
+          btqlFilterClause(scenarioPredicate(metadataScenario)),
+          btqlFilterClause(testRunIdPredicate(testRunIds)),
+        ],
   });
 }
 
@@ -230,6 +236,12 @@ async function readRunContextRecords(runContextDir) {
           : DEFAULT_VARIANT_KEY;
       records.push({
         entry: typeof parsed.entry === "string" ? parsed.entry : null,
+        logRootSpanIds: Array.isArray(parsed.logRootSpanIds)
+          ? parsed.logRootSpanIds.filter((id) => typeof id === "string")
+          : undefined,
+        experimentNames: Array.isArray(parsed.experimentNames)
+          ? parsed.experimentNames.filter((name) => typeof name === "string")
+          : undefined,
         scenarioDirName,
         testRunId: parsed.testRunId,
         variantKey,
@@ -414,7 +426,23 @@ function buildCommentBody(options) {
       return;
     }
 
-    const search = buildSearchParam(metadataScenario, observedRunIds);
+    const records = options.runContextRecords.filter((record) =>
+      observedRunIds.includes(record.testRunId),
+    );
+    const rootSpanIds = [
+      ...new Set(records.flatMap((record) => record.logRootSpanIds ?? [])),
+    ];
+    const experimentNames = [
+      ...new Set(records.flatMap((record) => record.experimentNames ?? [])),
+    ];
+    const legacyRecords = records.some(
+      (record) => record.logRootSpanIds === undefined,
+    );
+    const search = buildSearchParam(
+      metadataScenario,
+      observedRunIds,
+      rootSpanIds,
+    );
     const logsUrl = buildLogsUrl({
       appUrl: options.appPublicUrl,
       orgName: options.orgName,
@@ -427,7 +455,21 @@ function buildCommentBody(options) {
       ? `Observed (${runCount} ${runWord}, ${statusSuffix})`
       : `Observed (${runCount} ${runWord})`;
 
-    lines.push(`| ${rowLabel} | [Open logs](${logsUrl}) | ${status} |`);
+    const links = [
+      ...(rootSpanIds.length || legacyRecords
+        ? [`[Open logs](${logsUrl})`]
+        : []),
+      ...experimentNames.map((experimentName, index) => {
+        const url = buildExperimentUrl({
+          appUrl: options.appPublicUrl,
+          orgName: options.orgName,
+          projectName: options.projectName,
+          experimentName,
+        });
+        return `[Open eval${experimentNames.length > 1 ? ` ${index + 1}` : ""}](${url})`;
+      }),
+    ];
+    lines.push(`| ${rowLabel} | ${links.join("<br>") || "N/A"} | ${status} |`);
   };
 
   for (const scenario of options.scenarios) {

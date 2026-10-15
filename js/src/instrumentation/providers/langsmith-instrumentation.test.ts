@@ -1,6 +1,14 @@
-import { afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
+import {
+  afterEach,
+  beforeAll,
+  beforeEach,
+  describe,
+  expect,
+  it,
+} from "vite-plus/test";
 import { configureNode } from "../../node/config";
-import { _exportsForTestingOnly, initLogger } from "../../logger";
+import { _exportsForTestingOnly } from "../../logger/testing";
+import { initLogger } from "../../logger/core";
 import { configureInstrumentation } from "../registry";
 import { langSmithChannels } from "./langsmith-channels";
 import { registerLangSmithInstrumentation } from "./langsmith-instrumentation";

@@ -52,8 +52,4 @@
  * @module braintrust
  */
 
-import { configureNode } from "./config";
-
-configureNode();
-
 export * from "../exports";

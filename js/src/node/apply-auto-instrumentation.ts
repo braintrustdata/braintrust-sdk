@@ -1,5 +1,4 @@
 import { register } from "node:module";
-import { pathToFileURL } from "node:url";
 import { getDefaultAutoInstrumentationConfigs } from "../auto-instrumentations/configs/all";
 import { ModulePatch } from "../auto-instrumentations/loader/cjs-patch";
 import { debugLogger } from "../debug-logger";
@@ -37,10 +36,9 @@ export function applyAutoInstrumentation(): void {
   }
 
   const allConfigs = getDefaultAutoInstrumentationConfigs();
-  const currentModuleUrl = getCurrentModuleUrl();
 
-  register("./auto-instrumentations/loader/esm-hook.mjs", {
-    parentURL: currentModuleUrl,
+  register("../../hooks/loader/esm-hook.mjs", {
+    parentURL: import.meta.url,
     data: { instrumentations: allConfigs },
   });
   state.applied = true;
@@ -53,19 +51,4 @@ export function applyAutoInstrumentation(): void {
       error,
     );
   }
-}
-
-function getCurrentModuleUrl(): string {
-  if (typeof __filename !== "undefined") {
-    return pathToFileURL(__filename).href;
-  }
-
-  const stack = new Error().stack ?? "";
-  const match =
-    stack.match(/\((file:\/\/[^)]+)\)/) ?? stack.match(/\s(file:\/\/\S+)/);
-  if (match) {
-    return match[1].replace(/:\d+:\d+$/, "");
-  }
-
-  return pathToFileURL(process.argv[1] ?? process.cwd()).href;
 }

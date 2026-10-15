@@ -1,4 +1,4 @@
-import { describe } from "vitest";
+import { describe } from "vite-plus/test";
 import {
   prepareScenarioDir,
   readInstalledPackageVersion,
@@ -48,8 +48,9 @@ const googleGenAIScenarios = await Promise.all(
 
 describe.concurrent("variants", () => {
   for (const scenario of googleGenAIScenarios) {
-    describe.sequential(
+    describe(
       `${scenario.snapshotName}: google genai sdk ${scenario.version}`,
+      { concurrent: false },
       () => {
         defineGoogleGenAIInstrumentationAssertions({
           name: "wrapped instrumentation",

@@ -1,12 +1,16 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
+import {
+  afterEach,
+  beforeAll,
+  beforeEach,
+  describe,
+  expect,
+  it,
+} from "vite-plus/test";
 import * as ai from "ai";
 import { configureNode } from "../../node/config";
-import {
-  _exportsForTestingOnly,
-  initLogger,
-  type TestBackgroundLogger,
-} from "../../logger";
+import { _exportsForTestingOnly } from "../../logger/testing";
+import { initLogger, type TestBackgroundLogger } from "../../logger/core";
 import { wrapAISDK } from "../../wrappers/ai-sdk";
 import { wrapCloudflareThink } from "../../wrappers/cloudflare-think";
 import { cloudflareThinkSpanCountForTesting } from "./cloudflare-think-context";

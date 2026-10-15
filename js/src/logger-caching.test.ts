@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, test, vi } from "vitest";
+import { afterEach, describe, expect, test, vi } from "vite-plus/test";
 import {
   BraintrustState,
   initLogger,
@@ -6,9 +6,9 @@ import {
   startSpan,
   updateSpan,
   _internalResumeSpan,
-} from "./logger";
+} from "./logger/core";
 import { configureNode } from "./node/config";
-import iso from "./isomorph";
+import iso from "#braintrust-platform";
 import { SpanComponentsV4 } from "../util/span_identifier_v4";
 
 configureNode();

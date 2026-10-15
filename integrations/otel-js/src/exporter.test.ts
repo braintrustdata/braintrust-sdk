@@ -7,7 +7,7 @@ import {
   beforeEach,
   afterEach,
   vi,
-} from "vitest";
+} from "vite-plus/test";
 import { createServer, type Server } from "node:http";
 import type { AddressInfo } from "node:net";
 import {

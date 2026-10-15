@@ -1,4 +1,4 @@
-import { describe } from "vitest";
+import { describe } from "vite-plus/test";
 import {
   prepareScenarioDir,
   readInstalledPackageVersion,
@@ -33,7 +33,7 @@ const baseEnv = {
 
 describe.concurrent("variants", () => {
   for (const scenario of scenarios) {
-    describe.sequential(`langsmith sdk ${scenario.version}`, () => {
+    describe(`langsmith sdk ${scenario.version}`, { concurrent: false }, () => {
       defineLangSmithInstrumentationAssertions({
         name: "wrapped instrumentation",
         runScenario: async ({ runScenarioDir }) => {

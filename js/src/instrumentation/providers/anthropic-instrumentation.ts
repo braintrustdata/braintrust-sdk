@@ -5,14 +5,17 @@ import {
   Attachment,
   startSpan as startBaseSpan,
   withCurrent,
-} from "../../logger";
-import type { Span } from "../../logger";
+} from "../../logger/core";
+import type { Span } from "../../logger/core";
 import {
   INSTRUMENTATION_NAMES,
   withSpanInstrumentationName,
 } from "../../span-origin";
 import type { ChannelMessage } from "../core/channel-definitions";
-import type { IsoChannelHandlers, IsoTracingChannel } from "../../isomorph";
+import type {
+  IsoChannelHandlers,
+  IsoTracingChannel,
+} from "#braintrust-platform";
 import { debugLogger } from "../../debug-logger";
 import {
   SpanTypeAttribute,

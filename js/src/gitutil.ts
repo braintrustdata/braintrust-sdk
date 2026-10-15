@@ -105,7 +105,7 @@ async function getBaseBranchAncestor(remote: string | undefined = undefined) {
 export async function getPastNAncestors(
   n: number = 1000,
   remote: string | undefined = undefined,
-) {
+): Promise<string[]> {
   const repoPath = await currentRepoPath();
   if (!repoPath) {
     return [];
@@ -150,7 +150,9 @@ function truncateToByteLimit(s: string, byteLimit: number = 65536): string {
   return new TextDecoder().decode(truncated);
 }
 
-export async function getRepoInfo(settings?: GitMetadataSettings) {
+export async function getRepoInfo(
+  settings?: GitMetadataSettings,
+): Promise<RepoInfo | undefined> {
   if (!settings || settings.collect === "none") {
     return undefined;
   }

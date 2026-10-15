@@ -1,5 +1,5 @@
-import { Attachment } from "../logger";
-import iso from "../isomorph";
+import { Attachment } from "../logger/core";
+import iso from "#braintrust-platform";
 
 const CAPTURE_ATTACHMENTS_ENV_VAR = "BRAINTRUST_CAPTURE_ATTACHMENTS";
 

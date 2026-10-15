@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { Attachment } from "../../logger";
+import { Attachment } from "../../logger/core";
 import {
   isAutoCaptureAttachmentsEnabled,
   processInputAttachments,
@@ -98,7 +98,7 @@ export function extractOpenAIResponsesMetadata(
 /** Convert Responses API base64 image outputs to Braintrust attachments. */
 export function processImagesInOutput(
   output: any,
-  captureAttachments = isAutoCaptureAttachmentsEnabled(),
+  captureAttachments: boolean = isAutoCaptureAttachmentsEnabled(),
 ): any {
   if (Array.isArray(output)) {
     return output.map((item) =>

@@ -7,7 +7,7 @@ import {
 } from "../core/channel-tracing";
 import type { ChannelMessage } from "../core/channel-definitions";
 import { isAsyncIterable, patchStreamIfNeeded } from "../core/stream-patcher";
-import type { IsoChannelHandlers } from "../../isomorph";
+import type { IsoChannelHandlers } from "#braintrust-platform";
 import {
   SpanTypeAttribute,
   isObject,
@@ -21,7 +21,7 @@ import {
   startSpan,
   type Span,
   withCurrent,
-} from "../../logger";
+} from "../../logger/core";
 import {
   INSTRUMENTATION_NAMES,
   withSpanInstrumentationName,
@@ -1618,9 +1618,9 @@ const convertDataToAttachment = (
     } else if (typeof data === "string" && data.length > 0) {
       blob = convertDataToBlob(data, mimeType);
     } else if (data instanceof Uint8Array) {
-      blob = new Blob([data], { type: mimeType });
+      blob = new Blob([Uint8Array.from(data)], { type: mimeType });
     } else if (typeof Buffer !== "undefined" && Buffer.isBuffer(data)) {
-      blob = new Blob([data], { type: mimeType });
+      blob = new Blob([Uint8Array.from(data)], { type: mimeType });
     } else if (data instanceof Blob) {
       blob = data;
     }

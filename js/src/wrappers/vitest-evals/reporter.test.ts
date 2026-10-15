@@ -1,9 +1,14 @@
-import { beforeAll, beforeEach, describe, expect, test, vi } from "vitest";
-import BraintrustVitestEvalsReporter from "./reporter";
 import {
-  _exportsForTestingOnly,
-  type TestBackgroundLogger,
-} from "../../logger";
+  beforeAll,
+  beforeEach,
+  describe,
+  expect,
+  test,
+  vi,
+} from "vite-plus/test";
+import BraintrustVitestEvalsReporter from "./reporter";
+import { _exportsForTestingOnly } from "../../logger/testing";
+import { type TestBackgroundLogger } from "../../logger/core";
 import * as logger from "../../logger";
 import { configureNode } from "../../node/config";
 

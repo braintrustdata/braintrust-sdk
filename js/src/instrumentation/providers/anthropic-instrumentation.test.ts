@@ -1,7 +1,7 @@
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect, vi } from "vite-plus/test";
 
 // Mock iso's newTracingChannel - must be before any imports that use it
-vi.mock("../../isomorph", () => ({
+vi.mock("#braintrust-platform", () => ({
   default: {
     newTracingChannel: vi.fn(),
   },
@@ -13,7 +13,7 @@ import {
   processAttachmentsInInput,
   coalesceInput,
 } from "./anthropic-instrumentation";
-import { Attachment } from "../../logger";
+import { Attachment } from "../../logger/core";
 
 const parseMetricsFromUsageForTest = (usage: unknown) =>
   parseMetricsFromUsage(usage as any);
@@ -21,7 +21,7 @@ const aggregateAnthropicStreamChunksForTest = (chunks: unknown[]) =>
   aggregateAnthropicStreamChunks(chunks as any);
 
 // Mock startSpan from logger
-vi.mock("../../logger", () => ({
+vi.mock("../../logger/core", () => ({
   startSpan: vi.fn(() => ({
     log: vi.fn(),
     end: vi.fn(),

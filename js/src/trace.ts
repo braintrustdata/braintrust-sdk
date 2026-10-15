@@ -1,4 +1,5 @@
-import { BraintrustState, ObjectFetcher, WithTransactionId } from "./logger";
+import { BraintrustState } from "./logger/core";
+import { ObjectFetcher, WithTransactionId } from "./logger/objects";
 import { invoke } from "./functions/invoke";
 
 interface TraceOptions {
@@ -732,7 +733,11 @@ export class LocalTrace implements Trace {
     );
   }
 
-  getConfiguration() {
+  getConfiguration(): {
+    object_type: "project_logs" | "experiment" | "playground_logs";
+    object_id: string;
+    root_span_id: string;
+  } {
     return {
       object_type: this.objectType,
       object_id: this.objectId,
@@ -744,7 +749,13 @@ export class LocalTrace implements Trace {
    * Custom JSON serialization - returns trace_ref format so LocalTrace
    * can be safely passed through JSON.stringify() (e.g., in invoke()).
    */
-  toJSON() {
+  toJSON(): {
+    trace_ref: {
+      object_type: "project_logs" | "experiment" | "playground_logs";
+      object_id: string;
+      root_span_id: string;
+    };
+  } {
     return {
       trace_ref: {
         object_type: this.objectType,

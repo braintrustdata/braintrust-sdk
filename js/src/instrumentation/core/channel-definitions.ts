@@ -1,5 +1,5 @@
-import iso from "../../isomorph";
-import type { IsoTracingChannel } from "../../isomorph";
+import iso from "#braintrust-platform";
+import type { IsoTracingChannel } from "#braintrust-platform";
 import type { SpanInstrumentationName } from "../../span-origin";
 import type {
   AsyncEndEventWith,
@@ -25,7 +25,7 @@ type ChannelTypeInfo<
   __chunk?: TChunk;
 };
 
-type ChannelSpec<
+export type ChannelSpec<
   TArgs extends EventArguments,
   TResult,
   TExtra extends object = Record<string, unknown>,
@@ -216,13 +216,20 @@ export function channel(spec: {
   return spec as AnyChannelSpec;
 }
 
-type MaterializedChannel<T extends AnyChannelSpec> = T["kind"] extends "async"
-  ? TypedAsyncChannel<
-      ChannelSpec<ArgsOf<T>, ResultOf<T>, ExtraOf<T>, ChunkOf<T>, "async">
-    >
-  : TypedSyncStreamChannel<
-      ChannelSpec<ArgsOf<T>, ResultOf<T>, ExtraOf<T>, ChunkOf<T>, "sync-stream">
-    >;
+export type MaterializedChannel<T extends AnyChannelSpec> =
+  T["kind"] extends "async"
+    ? TypedAsyncChannel<
+        ChannelSpec<ArgsOf<T>, ResultOf<T>, ExtraOf<T>, ChunkOf<T>, "async">
+      >
+    : TypedSyncStreamChannel<
+        ChannelSpec<
+          ArgsOf<T>,
+          ResultOf<T>,
+          ExtraOf<T>,
+          ChunkOf<T>,
+          "sync-stream"
+        >
+      >;
 
 export function defineChannels<T extends ChannelSpecMap>(
   pkg: string,

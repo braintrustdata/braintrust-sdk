@@ -1,6 +1,11 @@
 import { isObject, SpanTypeAttribute } from "../../../util";
 import { debugLogger } from "../../debug-logger";
-import { Attachment, startSpan, withCurrent, type Span } from "../../logger";
+import {
+  Attachment,
+  startSpan,
+  withCurrent,
+  type Span,
+} from "../../logger/core";
 import {
   INSTRUMENTATION_NAMES,
   withSpanInstrumentationName,

@@ -1,9 +1,6 @@
-import {
-  JSONAttachment,
-  _exportsForTestingOnly,
-  BaseAttachment,
-} from "./logger";
-import { describe, expect, it } from "vitest";
+import { JSONAttachment, BaseAttachment } from "./logger/core";
+import { _exportsForTestingOnly } from "./logger/testing";
+import { describe, expect, it } from "vite-plus/test";
 
 const { extractAttachments } = _exportsForTestingOnly;
 

@@ -1,5 +1,5 @@
 import Ajv from "ajv";
-import { Prompt, RemoteEvalParameters } from "./logger";
+import { Prompt, RemoteEvalParameters } from "./logger/prompts";
 import {
   promptDefinitionToPromptData,
   type PromptDefinitionWithTools,

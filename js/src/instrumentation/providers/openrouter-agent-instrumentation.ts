@@ -10,8 +10,8 @@ import {
   isObject,
   isPromiseLike,
 } from "../../../util/index";
-import { withCurrent } from "../../logger";
-import type { Span } from "../../logger";
+import { withCurrent } from "../../logger/core";
+import type { Span } from "../../logger/core";
 import { zodToJsonSchema } from "../../zod/utils";
 import { openRouterAgentChannels } from "./openrouter-agent-channels";
 import type {

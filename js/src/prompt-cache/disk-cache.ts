@@ -1,4 +1,4 @@
-import iso from "../isomorph";
+import iso from "#braintrust-platform";
 
 export function canUseDiskCache(): boolean {
   return !!(

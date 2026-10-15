@@ -1,4 +1,4 @@
-import { describe } from "vitest";
+import { describe } from "vite-plus/test";
 import {
   prepareScenarioDir,
   readInstalledPackageVersion,
@@ -32,45 +32,49 @@ const githubCopilotScenarios = await Promise.all(
 
 describe.concurrent("variants", () => {
   for (const scenario of githubCopilotScenarios) {
-    describe.sequential(`github copilot sdk ${scenario.version}`, () => {
-      defineGitHubCopilotInstrumentationAssertions({
-        name: "wrapped instrumentation",
-        runScenario: async ({ runScenarioDir }) => {
-          await runScenarioDir({
-            entry: "scenario.ts",
-            env: { GITHUB_COPILOT_PACKAGE_NAME: scenario.dependencyName },
-            runContext: {
-              variantKey: scenario.snapshotName,
-              originalScenarioDir,
-            },
-            scenarioDir,
-            timeoutMs: GITHUB_COPILOT_SCENARIO_TIMEOUT_MS,
-          });
-        },
-        snapshotName: `${scenario.snapshotName}-wrapped`,
-        testFileUrl: import.meta.url,
-        timeoutMs: GITHUB_COPILOT_SCENARIO_TIMEOUT_MS,
-      });
+    describe(
+      `github copilot sdk ${scenario.version}`,
+      { concurrent: false },
+      () => {
+        defineGitHubCopilotInstrumentationAssertions({
+          name: "wrapped instrumentation",
+          runScenario: async ({ runScenarioDir }) => {
+            await runScenarioDir({
+              entry: "scenario.ts",
+              env: { GITHUB_COPILOT_PACKAGE_NAME: scenario.dependencyName },
+              runContext: {
+                variantKey: scenario.snapshotName,
+                originalScenarioDir,
+              },
+              scenarioDir,
+              timeoutMs: GITHUB_COPILOT_SCENARIO_TIMEOUT_MS,
+            });
+          },
+          snapshotName: `${scenario.snapshotName}-wrapped`,
+          testFileUrl: import.meta.url,
+          timeoutMs: GITHUB_COPILOT_SCENARIO_TIMEOUT_MS,
+        });
 
-      defineGitHubCopilotInstrumentationAssertions({
-        name: "auto-hook instrumentation",
-        runScenario: async ({ runNodeScenarioDir }) => {
-          await runNodeScenarioDir({
-            entry: "scenario.mjs",
-            env: { GITHUB_COPILOT_PACKAGE_NAME: scenario.dependencyName },
-            nodeArgs: ["--import", "braintrust/hook.mjs"],
-            runContext: {
-              variantKey: scenario.snapshotName,
-              originalScenarioDir,
-            },
-            scenarioDir,
-            timeoutMs: GITHUB_COPILOT_SCENARIO_TIMEOUT_MS,
-          });
-        },
-        snapshotName: `${scenario.snapshotName}-auto`,
-        testFileUrl: import.meta.url,
-        timeoutMs: GITHUB_COPILOT_SCENARIO_TIMEOUT_MS,
-      });
-    });
+        defineGitHubCopilotInstrumentationAssertions({
+          name: "auto-hook instrumentation",
+          runScenario: async ({ runNodeScenarioDir }) => {
+            await runNodeScenarioDir({
+              entry: "scenario.mjs",
+              env: { GITHUB_COPILOT_PACKAGE_NAME: scenario.dependencyName },
+              nodeArgs: ["--import", "braintrust/hook.mjs"],
+              runContext: {
+                variantKey: scenario.snapshotName,
+                originalScenarioDir,
+              },
+              scenarioDir,
+              timeoutMs: GITHUB_COPILOT_SCENARIO_TIMEOUT_MS,
+            });
+          },
+          snapshotName: `${scenario.snapshotName}-auto`,
+          testFileUrl: import.meta.url,
+          timeoutMs: GITHUB_COPILOT_SCENARIO_TIMEOUT_MS,
+        });
+      },
+    );
   }
 });

@@ -7,7 +7,7 @@ import {
   expect,
   test,
   vi,
-} from "vitest";
+} from "vite-plus/test";
 import OpenAI from "openai";
 import { configureNode } from "../src/node/config";
 import { _exportsForTestingOnly, Attachment, initLogger } from "../src/logger";

@@ -1,3 +1,4 @@
+import { registerInstrumentation } from "../instrumentation/registrations/voyageai";
 import { voyageAIChannels } from "../instrumentation/providers/voyageai-channels";
 import type {
   VoyageAIClient,
@@ -12,6 +13,7 @@ import type {
  * instrumentation hooks.
  */
 export function wrapVoyageAI<T>(client: T): T {
+  registerInstrumentation();
   if (!isSupportedVoyageAIClient(client)) {
     // eslint-disable-next-line no-restricted-properties -- preserving intentional console usage.
     console.warn("Unsupported Voyage AI library. Not wrapping.");

@@ -1,4 +1,11 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import {
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  vi,
+} from "vite-plus/test";
 
 const {
   interceptorsByName,
@@ -12,8 +19,8 @@ const {
   mockStartSpan: vi.fn(),
 }));
 
-vi.mock("../../isomorph", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("../../isomorph")>();
+vi.mock("#braintrust-platform", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("#braintrust-platform")>();
   const { AsyncLocalStorage } = await import("node:async_hooks");
   return {
     ...actual,
@@ -25,7 +32,7 @@ vi.mock("../../isomorph", async (importOriginal) => {
   };
 });
 
-vi.mock("../../logger", () => ({
+vi.mock("../../logger/core", () => ({
   withCurrent: (_span: unknown, callback: () => unknown) => callback(),
   startSpan: (...args: unknown[]) => mockStartSpan(...args),
   _internalStartSpan: (...args: unknown[]) => mockStartSpan(...args),

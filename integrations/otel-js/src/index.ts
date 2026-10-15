@@ -11,7 +11,7 @@ export {
 
 export { BraintrustSpanProcessor, BraintrustExporter } from "./otel";
 
-export const setupOtelCompat = () => {
+export const setupOtelCompat = (): void => {
   // Read braintrust's shared registration directly so this works with any
   // supported braintrust version. Keep the message in sync with braintrust.
   const spanCustomizers: unknown = (globalThis as Record<symbol, unknown>)[
@@ -26,6 +26,6 @@ export const setupOtelCompat = () => {
   configureContextManager(OtelContextManager);
 };
 
-export const resetOtelCompat = () => {
+export const resetOtelCompat = (): void => {
   configureContextManager(undefined);
 };

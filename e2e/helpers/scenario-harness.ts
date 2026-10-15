@@ -81,6 +81,8 @@ export interface ScenarioRunContext {
 
 interface ScenarioRunContextRecord {
   forwardToProduction?: boolean;
+  logRootSpanIds?: string[];
+  experimentNames?: string[];
   entry: string;
   runner: ScenarioRunner;
   scenarioDirName: string;
@@ -843,7 +845,30 @@ export async function withScenarioHarness(
   ): Promise<ScenarioResult> => {
     const result = await run();
     await recordScenarioRunContext({
-      forwardToProduction: optionsForHarness.forwardToProduction,
+      forwardToProduction: Boolean(prodForwarding),
+      logRootSpanIds: [
+        ...new Set(
+          server.events.flatMap((event) =>
+            event.projectId && !event.experimentId && event.span.rootId
+              ? [event.span.rootId]
+              : [],
+          ),
+        ),
+      ],
+      experimentNames: [
+        ...new Set(
+          server.requests.flatMap((request) => {
+            const body = request.jsonBody;
+            return request.path === "/api/experiment/register" &&
+              body &&
+              typeof body === "object" &&
+              !Array.isArray(body) &&
+              typeof body.experiment_name === "string"
+              ? [body.experiment_name]
+              : [];
+          }),
+        ),
+      ],
       entry: options.entry ?? defaultEntry,
       runner,
       scenarioDirName: path.basename(

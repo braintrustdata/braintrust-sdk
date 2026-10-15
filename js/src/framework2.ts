@@ -1,6 +1,6 @@
-import { _initializeSpanContext } from "./framework";
+import { _initializeSpanContext, getEvaluatorRegistry } from "./framework";
 import type { Trace } from "./trace";
-import iso from "./isomorph";
+import iso from "#braintrust-platform";
 import { slugify } from "../util/string_util";
 import { z } from "zod/v3";
 import { Project as projectSchema } from "./sdk-schemas";
@@ -14,12 +14,8 @@ import type {
   ExtendedSavedFunctionId,
 } from "./sdk-types";
 import { loadPrettyXact, TransactionId } from "../util/index";
-import {
-  _internalGetGlobalState,
-  login,
-  Prompt,
-  PromptRowWithId,
-} from "./logger";
+import { _internalGetGlobalState, login } from "./logger/core";
+import { Prompt, PromptRowWithId } from "./logger/prompts";
 import type { BaseFnOpts, GenericFunction } from "./framework-types";
 import type { EvalParameters } from "./eval-parameters";
 import {
@@ -49,11 +45,11 @@ type CreateProjectOpts =
     }
   | { id: string };
 class ProjectBuilder {
-  create(opts: CreateProjectOpts) {
+  create(opts: CreateProjectOpts): Project {
     return new Project(opts);
   }
 }
-export const projects = new ProjectBuilder();
+export const projects: ProjectBuilder = new ProjectBuilder();
 
 class Project {
   public readonly name?: string;
@@ -88,20 +84,18 @@ class Project {
     this.classifiers = new ClassifierBuilder(this);
   }
 
-  public addPrompt(prompt: CodePrompt) {
+  public addPrompt(prompt: CodePrompt): void {
     this._publishablePrompts.push(prompt);
     if (globalThis._lazy_load) {
-      globalThis._evals.prompts.push(prompt);
+      getEvaluatorRegistry().prompts.push(prompt);
     }
   }
 
-  public addParameters(parameters: CodeParameters) {
+  public addParameters(parameters: CodeParameters): void {
     this._publishableParameters.push(parameters);
     if (globalThis._lazy_load) {
-      if (globalThis._evals.parameters == null)
-        globalThis._evals.parameters = [];
-
-      globalThis._evals.parameters.push(parameters);
+      const registry = getEvaluatorRegistry();
+      (registry.parameters ??= []).push(parameters);
     }
   }
 
@@ -114,14 +108,14 @@ class Project {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       GenericFunction<any, any>
     >,
-  ) {
+  ): void {
     this._publishableCodeFunctions.push(fn);
     if (globalThis._lazy_load) {
-      globalThis._evals.functions.push(fn);
+      getEvaluatorRegistry().functions.push(fn);
     }
   }
 
-  async publish() {
+  async publish(): Promise<void> {
     if (globalThis._lazy_load) {
       // eslint-disable-next-line no-restricted-properties -- preserving intentional console usage.
       console.warn("publish() is a no-op when running `bt push`.");
@@ -233,7 +227,7 @@ class ScorerBuilder {
       Exact<Params, ScorerArgs<Output, Input>>,
       Returns
     >,
-  >(opts: ScorerOpts<Output, Input, Params, Returns, Fn>) {
+  >(opts: ScorerOpts<Output, Input, Params, Returns, Fn>): void {
     this.taskCounter++;
 
     let resolvedName = opts.name;
@@ -313,7 +307,9 @@ class ClassifierBuilder {
       Exact<Params, ScorerArgs<Output, Input>>,
       Returns
     >,
-  >(opts: ClassifierOpts<Output, Input, Params, Returns, Fn>) {
+  >(
+    opts: ClassifierOpts<Output, Input, Params, Returns, Fn>,
+  ): CodeFunction<Exact<Params, ScorerArgs<Output, Input>>, Returns, Fn> {
     this.taskCounter++;
 
     let resolvedName = opts.name ?? opts.handler.name;

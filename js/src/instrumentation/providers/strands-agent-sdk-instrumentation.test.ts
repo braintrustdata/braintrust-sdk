@@ -1,4 +1,11 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import {
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  vi,
+} from "vite-plus/test";
 
 const { mockWithCurrent, mockNewAsyncLocalStorage, mockStartSpan } = vi.hoisted(
   () => ({
@@ -22,7 +29,7 @@ const { mockWithCurrent, mockNewAsyncLocalStorage, mockStartSpan } = vi.hoisted(
   }),
 );
 
-vi.mock("../../isomorph", () => ({
+vi.mock("#braintrust-platform", () => ({
   default: {
     getEnv: vi.fn(),
     newAsyncLocalStorage: mockNewAsyncLocalStorage,
@@ -30,7 +37,7 @@ vi.mock("../../isomorph", () => ({
   },
 }));
 
-vi.mock("../../logger", async (importOriginal) => {
+vi.mock("../../logger/core", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../../logger")>();
   return {
     ...actual,
@@ -39,8 +46,8 @@ vi.mock("../../logger", async (importOriginal) => {
   };
 });
 
-import iso from "../../isomorph";
-import { Attachment } from "../../logger";
+import iso from "#braintrust-platform";
+import { Attachment } from "../../logger/core";
 import { isAutoInstrumentationSuppressed } from "../auto-instrumentation-suppression";
 import { registerStrandsAgentSDKInstrumentation } from "./strands-agent-sdk-instrumentation";
 

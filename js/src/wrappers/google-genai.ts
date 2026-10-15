@@ -1,3 +1,4 @@
+import { registerInstrumentation } from "../instrumentation/registrations/googleGenAI";
 import { googleGenAIChannels } from "../instrumentation/providers/google-genai-channels";
 import { isObject } from "../util";
 import type {
@@ -36,6 +37,7 @@ const patchedHttpResponses = new WeakSet<object>();
 export function wrapGoogleGenAI<T extends Record<string, any>>(
   googleGenAI: T,
 ): T {
+  registerInstrumentation();
   if (!googleGenAI || typeof googleGenAI !== "object") {
     // eslint-disable-next-line no-restricted-properties -- preserving intentional console usage.
     console.warn("Invalid Google GenAI module. Not wrapping.");

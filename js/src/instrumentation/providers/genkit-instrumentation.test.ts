@@ -1,5 +1,13 @@
-import { afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
-import { _exportsForTestingOnly, initLogger } from "../../logger";
+import {
+  afterEach,
+  beforeAll,
+  beforeEach,
+  describe,
+  expect,
+  it,
+} from "vite-plus/test";
+import { _exportsForTestingOnly } from "../../logger/testing";
+import { initLogger } from "../../logger/core";
 import { registerGenkitInstrumentation } from "./genkit-instrumentation";
 import { genkitChannels } from "./genkit-channels";
 

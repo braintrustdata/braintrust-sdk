@@ -581,3 +581,72 @@ export interface ToolFunctionDefinition {
     strict?: (boolean | null) | undefined;
   };
 }
+
+export interface ProjectRecord {
+  id: string;
+  org_id: string;
+  name: string;
+  description?: string | null;
+  created?: string | null;
+  deleted_at?: string | null;
+  user_id?: string | null;
+  settings?: {
+    comparison_key?: string | null;
+    baseline_experiment_id?: string | null;
+    spanFieldOrder?:
+      | {
+          object_type: string;
+          column_id: string;
+          position: string;
+          layout?: "full" | "two_column" | null;
+        }[]
+      | null;
+    remote_eval_sources?:
+      | { url: string; name?: string | null; description?: string | null }[]
+      | null;
+    disable_realtime_queries?: boolean | null;
+    monitor_charts_use_metrics_start?: boolean | null;
+    coding_agent_insights_dashboard?: boolean | null;
+    require_all_human_review_scores?: boolean | null;
+    blind_reviews?: boolean | null;
+    default_preprocessor?: SavedFunctionId | null;
+  } | null;
+}
+
+export interface PromptRecord {
+  id: string;
+  _xact_id: string;
+  project_id: string;
+  log_id: "p";
+  org_id: string;
+  name: string;
+  slug: string;
+  description?: string | null;
+  created?: string | null;
+  prompt_data?: PromptData | null;
+  tags?: string[] | null;
+  metadata?: Record<string, unknown> | null;
+  function_type?: FunctionTypeEnum | null;
+}
+
+// JSON inputs may omit values filled by schema defaults. Keep this type plain
+// so declarations do not expose Zod's implementation graph.
+export type SchemaInput<T> = T extends { type: "text"; text: string }
+  ? { [K in keyof Omit<T, "text">]: SchemaInput<Omit<T, "text">[K]> } & {
+      text?: string;
+    }
+  : T extends { role: "tool"; tool_call_id: string }
+    ? {
+        [K in keyof Omit<T, "tool_call_id">]: SchemaInput<
+          Omit<T, "tool_call_id">[K]
+        >;
+      } & { tool_call_id?: string }
+    : T extends { function_type: FunctionTypeEnum }
+      ? {
+          [K in keyof Omit<T, "function_type">]: SchemaInput<
+            Omit<T, "function_type">[K]
+          >;
+        } & { function_type?: T["function_type"] }
+      : T extends object
+        ? { [K in keyof T]: SchemaInput<T[K]> }
+        : T;

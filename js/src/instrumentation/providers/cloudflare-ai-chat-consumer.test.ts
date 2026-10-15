@@ -1,4 +1,11 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import {
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  vi,
+} from "vite-plus/test";
 
 const { mockInternalGetGlobalState, mockStartSpan, mockWithCurrent } =
   vi.hoisted(() => ({
@@ -9,17 +16,17 @@ const { mockInternalGetGlobalState, mockStartSpan, mockWithCurrent } =
     ),
   }));
 
-vi.mock("../../isomorph", () => ({
+vi.mock("#braintrust-platform", () => ({
   default: { newTracingChannel: vi.fn() },
 }));
 
-vi.mock("../../logger", () => ({
+vi.mock("../../logger/core", () => ({
   _internalGetGlobalState: () => mockInternalGetGlobalState(),
   startSpan: (...args: unknown[]) => (mockStartSpan as any)(...args),
   withCurrent: (...args: unknown[]) => (mockWithCurrent as any)(...args),
 }));
 
-import iso from "../../isomorph";
+import iso from "#braintrust-platform";
 import {
   INSTRUMENTATION_NAMES,
   INTERNAL_SPAN_INSTRUMENTATION_NAME,

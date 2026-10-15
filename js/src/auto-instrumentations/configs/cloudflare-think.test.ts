@@ -1,5 +1,5 @@
 import { create } from "@apm-js-collab/code-transformer";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "vite-plus/test";
 import { cloudflareThinkConfigs } from "./cloudflare-think";
 
 describe("Cloudflare Think transformation", () => {

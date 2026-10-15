@@ -1,3 +1,7 @@
+import type {
+  MaterializedChannel,
+  ChannelSpec,
+} from "../core/channel-definitions";
 import { channel, defineChannels } from "../core/channel-definitions";
 import { INSTRUMENTATION_NAMES } from "../../span-origin";
 import type {
@@ -17,20 +21,18 @@ type StrandsChannelContext = {
   self?: unknown;
 };
 
-export const strandsAgentSDKChannels = defineChannels(
-  "@strands-agents/sdk",
-  {
-    agentStream: channel<
+export const strandsAgentSDKChannels: {
+  agentStream: MaterializedChannel<
+    ChannelSpec<
       [StrandsInvokeArgs, StrandsInvokeOptions | undefined],
       AsyncGenerator<StrandsAgentStreamEvent, StrandsAgentResult, undefined>,
       StrandsChannelContext & { agent?: StrandsAgent },
-      StrandsAgentStreamEvent
-    >({
-      channelName: "Agent.stream",
-      kind: "sync-stream",
-    }),
-
-    graphStream: channel<
+      StrandsAgentStreamEvent,
+      "sync-stream"
+    >
+  >;
+  graphStream: MaterializedChannel<
+    ChannelSpec<
       [StrandsMultiAgentInput, StrandsMultiAgentInvokeOptions | undefined],
       AsyncGenerator<
         StrandsMultiAgentStreamEvent,
@@ -38,13 +40,12 @@ export const strandsAgentSDKChannels = defineChannels(
         undefined
       >,
       StrandsChannelContext & { orchestrator?: StrandsMultiAgent },
-      StrandsMultiAgentStreamEvent
-    >({
-      channelName: "Graph.stream",
-      kind: "sync-stream",
-    }),
-
-    swarmStream: channel<
+      StrandsMultiAgentStreamEvent,
+      "sync-stream"
+    >
+  >;
+  swarmStream: MaterializedChannel<
+    ChannelSpec<
       [StrandsMultiAgentInput, StrandsMultiAgentInvokeOptions | undefined],
       AsyncGenerator<
         StrandsMultiAgentStreamEvent,
@@ -52,11 +53,51 @@ export const strandsAgentSDKChannels = defineChannels(
         undefined
       >,
       StrandsChannelContext & { orchestrator?: StrandsMultiAgent },
-      StrandsMultiAgentStreamEvent
-    >({
-      channelName: "Swarm.stream",
-      kind: "sync-stream",
-    }),
-  },
-  { instrumentationName: INSTRUMENTATION_NAMES.STRANDS_AGENT_SDK },
-);
+      StrandsMultiAgentStreamEvent,
+      "sync-stream"
+    >
+  >;
+} = /* @__PURE__ */ (() =>
+  defineChannels(
+    "@strands-agents/sdk",
+    {
+      agentStream: channel<
+        [StrandsInvokeArgs, StrandsInvokeOptions | undefined],
+        AsyncGenerator<StrandsAgentStreamEvent, StrandsAgentResult, undefined>,
+        StrandsChannelContext & { agent?: StrandsAgent },
+        StrandsAgentStreamEvent
+      >({
+        channelName: "Agent.stream",
+        kind: "sync-stream",
+      }),
+
+      graphStream: channel<
+        [StrandsMultiAgentInput, StrandsMultiAgentInvokeOptions | undefined],
+        AsyncGenerator<
+          StrandsMultiAgentStreamEvent,
+          StrandsMultiAgentResult,
+          undefined
+        >,
+        StrandsChannelContext & { orchestrator?: StrandsMultiAgent },
+        StrandsMultiAgentStreamEvent
+      >({
+        channelName: "Graph.stream",
+        kind: "sync-stream",
+      }),
+
+      swarmStream: channel<
+        [StrandsMultiAgentInput, StrandsMultiAgentInvokeOptions | undefined],
+        AsyncGenerator<
+          StrandsMultiAgentStreamEvent,
+          StrandsMultiAgentResult,
+          undefined
+        >,
+        StrandsChannelContext & { orchestrator?: StrandsMultiAgent },
+        StrandsMultiAgentStreamEvent
+      >({
+        channelName: "Swarm.stream",
+        kind: "sync-stream",
+      }),
+    },
+    { instrumentationName: INSTRUMENTATION_NAMES.STRANDS_AGENT_SDK },
+  ))();

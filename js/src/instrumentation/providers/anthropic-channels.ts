@@ -1,3 +1,7 @@
+import type {
+  MaterializedChannel,
+  ChannelSpec,
+} from "../core/channel-definitions";
 import { channel, defineChannels } from "../core/channel-definitions";
 import { INSTRUMENTATION_NAMES } from "../../span-origin";
 import type {
@@ -15,52 +19,99 @@ import type {
 
 type AnthropicResult = AnthropicMessage | AnthropicMessageStream;
 
-export const anthropicChannels = defineChannels(
-  "@anthropic-ai/sdk",
-  {
-    messagesCreate: channel<
+export const anthropicChannels: {
+  messagesCreate: MaterializedChannel<
+    ChannelSpec<
       [AnthropicCreateParams],
       AnthropicResult,
       Record<string, unknown>,
-      AnthropicStreamEvent
-    >({
-      channelName: "messages.create",
-      kind: "async",
-    }),
-    betaMessagesCreate: channel<
+      AnthropicStreamEvent,
+      "async"
+    >
+  >;
+  betaMessagesCreate: MaterializedChannel<
+    ChannelSpec<
       [AnthropicCreateParams],
       AnthropicResult,
       Record<string, unknown>,
-      AnthropicStreamEvent
-    >({
-      channelName: "beta.messages.create",
-      kind: "async",
-    }),
-    betaMessagesToolRunner: channel<
+      AnthropicStreamEvent,
+      "async"
+    >
+  >;
+  betaMessagesToolRunner: MaterializedChannel<
+    ChannelSpec<
       [AnthropicToolRunnerParams],
-      AnthropicToolRunner<unknown>
-    >({
-      channelName: "beta.messages.toolRunner",
-      kind: "sync-stream",
-    }),
-    betaSessionsEventsStream: channel<
+      AnthropicToolRunner<unknown>,
+      Record<string, unknown>,
+      never,
+      "sync-stream"
+    >
+  >;
+  betaSessionsEventsStream: MaterializedChannel<
+    ChannelSpec<
       [string, AnthropicSessionEventStreamParams?],
       AnthropicSessionEventStream,
       Record<string, unknown>,
-      AnthropicSessionEvent
-    >({
-      channelName: "beta.sessions.events.stream",
-      kind: "async",
-    }),
-    betaSessionsThreadsEventsStream: channel<
+      AnthropicSessionEvent,
+      "async"
+    >
+  >;
+  betaSessionsThreadsEventsStream: MaterializedChannel<
+    ChannelSpec<
       [string, AnthropicSessionThreadEventStreamParams],
       AnthropicSessionEventStream,
       Record<string, unknown>,
-      AnthropicSessionEvent
-    >({
-      channelName: "beta.sessions.threads.events.stream",
-      kind: "async",
-    }),
-  },
-  { instrumentationName: INSTRUMENTATION_NAMES.ANTHROPIC },
-);
+      AnthropicSessionEvent,
+      "async"
+    >
+  >;
+} = /* @__PURE__ */ (() =>
+  defineChannels(
+    "@anthropic-ai/sdk",
+    {
+      messagesCreate: channel<
+        [AnthropicCreateParams],
+        AnthropicResult,
+        Record<string, unknown>,
+        AnthropicStreamEvent
+      >({
+        channelName: "messages.create",
+        kind: "async",
+      }),
+      betaMessagesCreate: channel<
+        [AnthropicCreateParams],
+        AnthropicResult,
+        Record<string, unknown>,
+        AnthropicStreamEvent
+      >({
+        channelName: "beta.messages.create",
+        kind: "async",
+      }),
+      betaMessagesToolRunner: channel<
+        [AnthropicToolRunnerParams],
+        AnthropicToolRunner<unknown>
+      >({
+        channelName: "beta.messages.toolRunner",
+        kind: "sync-stream",
+      }),
+      betaSessionsEventsStream: channel<
+        [string, AnthropicSessionEventStreamParams?],
+        AnthropicSessionEventStream,
+        Record<string, unknown>,
+        AnthropicSessionEvent
+      >({
+        channelName: "beta.sessions.events.stream",
+        kind: "async",
+      }),
+      betaSessionsThreadsEventsStream: channel<
+        [string, AnthropicSessionThreadEventStreamParams],
+        AnthropicSessionEventStream,
+        Record<string, unknown>,
+        AnthropicSessionEvent
+      >({
+        channelName: "beta.sessions.threads.events.stream",
+        kind: "async",
+      }),
+    },
+    { instrumentationName: INSTRUMENTATION_NAMES.ANTHROPIC },
+  ))();

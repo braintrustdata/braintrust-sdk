@@ -1,4 +1,4 @@
-import { expect, expectTypeOf, test } from "vitest";
+import { describe, expect, expectTypeOf, test } from "vite-plus/test";
 
 import * as publicExports from "./exports";
 import type {
@@ -21,6 +21,7 @@ import {
   init,
   initDataset,
   withParent,
+  wrapVitest,
 } from "./exports";
 
 test("exports only intentional extension types", () => {
@@ -83,4 +84,12 @@ test("accepts only canonical v4 call shapes", () => {
   }
 
   expect(true).toBe(true);
+});
+
+test("preserves the current Vitest expect API", () => {
+  if (false) {
+    const wrapped = wrapVitest({ test, describe, expect });
+    expectTypeOf(wrapped.expect).toEqualTypeOf<typeof expect>();
+    wrapped.expect(1, "named assertion").toBe(1);
+  }
 });

@@ -1,3 +1,4 @@
+import { registerInstrumentation } from "../instrumentation/registrations/strandsAgentSDK";
 import { strandsAgentSDKChannels } from "../instrumentation/providers/strands-agent-sdk-channels";
 import type {
   StrandsAgent,
@@ -25,6 +26,7 @@ const WRAPPED_INSTANCE = Symbol.for(
  * typed instrumentation channels; the Strands plugin owns span lifecycle.
  */
 export function wrapStrandsAgentSDK<T>(sdk: T): T {
+  registerInstrumentation();
   if (!sdk || typeof sdk !== "object") {
     return sdk;
   }

@@ -2,7 +2,7 @@ import {
   RemoteEvalParameters,
   serializeParametersForCache,
   type SerializedParameters,
-} from "../logger";
+} from "../logger/prompts";
 import { LRUCache } from "../lru-cache";
 import { DiskCache } from "./disk-cache";
 

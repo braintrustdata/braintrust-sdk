@@ -245,10 +245,7 @@ function addBraintrustTurbopackRule(
 
 function getWebpackLoaderPath(): string {
   const packageJsonPath = requireFromProject.resolve("braintrust/package.json");
-  return join(
-    dirname(packageJsonPath),
-    "dist/auto-instrumentations/bundler/webpack-loader.cjs",
-  );
+  return join(dirname(packageJsonPath), "dist/loaders/webpack-loader.cjs");
 }
 
 function getNextMajorVersion(): number | undefined {

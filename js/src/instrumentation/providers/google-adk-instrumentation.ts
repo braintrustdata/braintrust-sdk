@@ -1,12 +1,15 @@
 import type { ChannelMessage } from "../core/channel-definitions";
 import { isAsyncIterable, patchStreamIfNeeded } from "../core/stream-patcher";
-import type { IsoChannelHandlers, IsoTracingChannel } from "../../isomorph";
+import type {
+  IsoChannelHandlers,
+  IsoTracingChannel,
+} from "#braintrust-platform";
 import {
   _internalGetGlobalState,
   startSpan as startBaseSpan,
   withCurrent,
-} from "../../logger";
-import type { CurrentSpanStore, Span } from "../../logger";
+} from "../../logger/core";
+import type { CurrentSpanStore, Span } from "../../logger/core";
 import {
   INSTRUMENTATION_NAMES,
   withSpanInstrumentationName,

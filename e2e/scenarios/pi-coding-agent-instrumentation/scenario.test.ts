@@ -1,4 +1,4 @@
-import { describe } from "vitest";
+import { describe } from "vite-plus/test";
 import {
   prepareScenarioDir,
   readInstalledPackageVersion,
@@ -59,8 +59,9 @@ const piCodingAgentScenarios = await Promise.all(
 
 describe.concurrent("variants", () => {
   for (const piCodingAgentScenario of piCodingAgentScenarios) {
-    describe.sequential(
+    describe(
       `pi coding agent ${piCodingAgentScenario.version}`,
+      { concurrent: false },
       () => {
         definePiCodingAgentInstrumentationAssertions({
           name: "wrapped instrumentation",

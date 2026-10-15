@@ -1,4 +1,4 @@
-import { describe } from "vitest";
+import { describe } from "vite-plus/test";
 import {
   prepareScenarioDir,
   readInstalledPackageVersion,
@@ -46,7 +46,7 @@ const anthropicScenarios = await Promise.all(
 
 describe.concurrent("variants", () => {
   for (const scenario of anthropicScenarios) {
-    describe.sequential(`anthropic sdk ${scenario.version}`, () => {
+    describe(`anthropic sdk ${scenario.version}`, { concurrent: false }, () => {
       defineAnthropicInstrumentationAssertions({
         name: "wrapped instrumentation",
         runScenario: async ({ runScenarioDir }) => {

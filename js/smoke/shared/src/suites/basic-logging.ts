@@ -5,7 +5,7 @@
 
 import type { LoggerInstance } from "../helpers/types";
 import { assert, assertEqual, assertNotEmpty } from "../helpers/assertions";
-import { register } from "../helpers/register";
+import { register, type TestFn } from "../helpers/register";
 
 const PROJECT_ID = "test-project-id";
 
@@ -14,7 +14,7 @@ type InitLoggerFn = (options: {
   projectId?: string;
 }) => LoggerInstance;
 
-export const testBasicSpanLogging = register(
+export const testBasicSpanLogging: TestFn = register(
   "testBasicSpanLogging",
   async (braintrust, { backgroundLogger }) => {
     const initLogger = braintrust.initLogger as InitLoggerFn;
@@ -50,7 +50,7 @@ export const testBasicSpanLogging = register(
   { requiresTestHarness: true },
 );
 
-export const testMultipleSpans = register(
+export const testMultipleSpans: TestFn = register(
   "testMultipleSpans",
   async (braintrust, { backgroundLogger }) => {
     const initLogger = braintrust.initLogger as InitLoggerFn;
@@ -82,7 +82,7 @@ export const testMultipleSpans = register(
   { requiresTestHarness: true },
 );
 
-export const testDirectLogging = register(
+export const testDirectLogging: TestFn = register(
   "testDirectLogging",
   async (braintrust, { backgroundLogger }) => {
     const initLogger = braintrust.initLogger as InitLoggerFn;
@@ -107,7 +107,7 @@ export const testDirectLogging = register(
   { requiresTestHarness: true },
 );
 
-export const testJSONAttachment = register(
+export const testJSONAttachment: TestFn = register(
   "testJSONAttachment",
   async (braintrust, { backgroundLogger }) => {
     const initLogger = braintrust.initLogger as InitLoggerFn;
@@ -165,7 +165,7 @@ export const testJSONAttachment = register(
   { requiresTestHarness: true },
 );
 
-export const testAsyncLocalStorageTraced = register(
+export const testAsyncLocalStorageTraced: TestFn = register(
   "testAsyncLocalStorageTraced",
   async (braintrust, { backgroundLogger }) => {
     const initLogger = braintrust.initLogger as InitLoggerFn;
@@ -228,7 +228,7 @@ export const testAsyncLocalStorageTraced = register(
   { requiresTestHarness: true },
 );
 
-export const testNestedTraced = register(
+export const testNestedTraced: TestFn = register(
   "testNestedTraced",
   async (braintrust, { backgroundLogger }) => {
     const initLogger = braintrust.initLogger as InitLoggerFn;
@@ -309,7 +309,7 @@ export const testNestedTraced = register(
   { requiresTestHarness: true },
 );
 
-export const testCurrentSpan = register(
+export const testCurrentSpan: TestFn = register(
   "testCurrentSpan",
   async (braintrust, { backgroundLogger }) => {
     const initLogger = braintrust.initLogger as InitLoggerFn;

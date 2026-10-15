@@ -6,8 +6,9 @@ import {
   expect,
   it,
   vi,
-} from "vitest";
-import { Attachment, _exportsForTestingOnly, initLogger } from "../../logger";
+} from "vite-plus/test";
+import { Attachment, initLogger } from "../../logger/core";
+import { _exportsForTestingOnly } from "../../logger/testing";
 import { configureNode } from "../../node/config";
 import { wrapGoogleGenerativeAI } from "../../wrappers/google-generative-ai";
 import { googleGenerativeAIChannels as channels } from "./google-generative-ai-channels";

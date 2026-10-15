@@ -159,47 +159,6 @@ const envIntegrationAliases: Record<
   "@elevenlabs/elevenlabs-js": "elevenlabs",
 };
 
-export function getDefaultInstrumentationIntegrations(): Record<
-  keyof InstrumentationIntegrationsConfig,
-  boolean
-> {
-  return {
-    openai: true,
-    openaiCodexSDK: true,
-    anthropic: true,
-    aisdk: true,
-    googleGenAI: true,
-    googleGenerativeAI: true,
-    googleADK: true,
-    huggingface: true,
-    claudeAgentSDK: true,
-    cloudflareAIChat: true,
-    cloudflareThink: true,
-    cursorSDK: true,
-    mastra: true,
-    openAIAgents: true,
-    openrouter: true,
-    openrouterAgent: true,
-    mistral: true,
-    ollama: true,
-    cohere: true,
-    groq: true,
-    awsBedrockRuntime: true,
-    genkit: true,
-    gitHubCopilot: true,
-    langchain: true,
-    langgraph: true,
-    langgraphSDK: true,
-    langsmith: true,
-    voyageai: true,
-    typesafe: true,
-    elevenlabs: true,
-    piCodingAgent: true,
-    strandsAgentSDK: true,
-    cloudflareAgents: true,
-  };
-}
-
 export function readDisabledInstrumentationEnvConfig(
   disabledList: string | undefined,
 ): InstrumentationConfig {

@@ -23,7 +23,7 @@ e2e/
 |     |- scenario.test.ts     # Colocated Vitest suite
 |     |- package.json         # Optional slim scenario-local deps
 |     `- __snapshots__/       # Colocated snapshots
-`- vitest.config.mts
+`- vite.config.ts
 ```
 
 Any extra files needed only by one scenario stay in that scenario folder. Anything reused by multiple scenarios belongs in `e2e/helpers/`.
@@ -88,7 +88,7 @@ Some wrappers execute inside a nested test runner rather than a single SDK call.
 
 - Keep the outer e2e suite in `scenario.test.ts` and the spawned runner entrypoint in `scenario.ts`.
 - Put nested runner source in files like `runner.case.ts` or `runner.case.mjs`.
-- Do not name nested runner files `*.test.ts`, because the outer `e2e/vitest.config.mts` includes `scenarios/**/*.test.ts` and will try to execute them directly.
+- Do not name nested runner files `*.test.ts`, because the outer `e2e/vite.config.ts` includes `scenarios/**/*.test.ts` and will try to execute them directly.
 - Tag every traced test/eval with `metadata.testRunId` so the outer assertions can isolate rows across multiple trace roots with `payloadRowsForTestRunId(...)`.
 - If a nested runner needs its own test discovery rules, keep that config local to the scenario folder so the shared e2e config stays unchanged.
 

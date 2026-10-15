@@ -1,3 +1,4 @@
+import { registerInstrumentation } from "../instrumentation/registrations/langgraphSDK";
 import { isObject } from "../../util";
 import { debugLogger } from "../debug-logger";
 import { langGraphSDKChannels } from "../instrumentation/providers/langgraph-sdk-channels";
@@ -7,6 +8,7 @@ const clients = new WeakMap<LangGraphSDKClient, LangGraphSDKClient>();
 
 /** Trace LangGraph Platform runs that the caller waits for or streams. */
 export function wrapLangGraphSDK<T>(client: T): T {
+  registerInstrumentation();
   const runsClient = isObject(client) ? client.runs : undefined;
   if (
     !isObject(client) ||

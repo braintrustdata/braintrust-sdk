@@ -1,10 +1,20 @@
-import { afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
-import { _exportsForTestingOnly, initLogger } from "../../logger";
+import { registerInstrumentation } from "../registrations/langgraphSDK";
+import {
+  afterEach,
+  beforeAll,
+  beforeEach,
+  describe,
+  expect,
+  it,
+} from "vite-plus/test";
+import { _exportsForTestingOnly } from "../../logger/testing";
+import { initLogger } from "../../logger/core";
 import { configureNode } from "../../node/config";
 import { wrapLangGraphSDK } from "../../wrappers/langgraph-sdk";
 import { langGraphSDKChannels } from "./langgraph-sdk-channels";
 
 configureNode();
+registerInstrumentation();
 
 describe("LangGraph SDK instrumentation", () => {
   let backgroundLogger: ReturnType<

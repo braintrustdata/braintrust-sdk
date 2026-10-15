@@ -1,21 +1,28 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import {
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  vi,
+} from "vite-plus/test";
 
 const { mockStartSpan } = vi.hoisted(() => ({
   mockStartSpan: vi.fn(),
 }));
 
-vi.mock("../../isomorph", () => ({
+vi.mock("#braintrust-platform", () => ({
   default: {
     newTracingChannel: vi.fn(),
   },
 }));
 
-vi.mock("../../logger", () => ({
+vi.mock("../../logger/core", () => ({
   startSpan: (...args: unknown[]) => mockStartSpan(...args),
   _internalStartSpan: (...args: unknown[]) => mockStartSpan(...args),
 }));
 
-import iso from "../../isomorph";
+import iso from "#braintrust-platform";
 import { registerOpenAICodexInstrumentation } from "./openai-codex-instrumentation";
 
 const mockNewTracingChannel = iso.newTracingChannel as ReturnType<typeof vi.fn>;

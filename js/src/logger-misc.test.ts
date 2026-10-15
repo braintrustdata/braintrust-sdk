@@ -4,18 +4,25 @@
  */
 
 /* eslint-disable @typescript-eslint/consistent-type-assertions */
-import { vi, expect, test, describe, beforeEach, afterEach } from "vitest";
 import {
-  _exportsForTestingOnly,
+  vi,
+  expect,
+  test,
+  describe,
+  beforeEach,
+  afterEach,
+} from "vite-plus/test";
+import { _exportsForTestingOnly } from "./logger/testing";
+import {
   BaseAttachment,
   Attachment,
   ExternalAttachment,
-  init,
   initLogger,
   NOOP_SPAN,
   permalink,
   BraintrustState,
-} from "./logger";
+} from "./logger/core";
+import { init } from "./logger/experiments";
 import { SpanObjectTypeV3 } from "../util/index";
 import { LazyValue } from "./util";
 import { BackgroundLogEvent, IS_MERGE_FIELD } from "../util/index";

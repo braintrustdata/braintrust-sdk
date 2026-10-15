@@ -6,7 +6,7 @@ import {
   NOOP_SPAN,
   type Span,
   withCurrent,
-} from "../../logger";
+} from "../../logger/core";
 import { parseMetricsFromUsage } from "../../openai-utils";
 import {
   INSTRUMENTATION_NAMES,

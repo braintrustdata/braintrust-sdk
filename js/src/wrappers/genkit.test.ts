@@ -1,5 +1,5 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
-import type { IsoChannelHandlers } from "../isomorph";
+import { afterEach, describe, expect, it, vi } from "vite-plus/test";
+import type { IsoChannelHandlers } from "#braintrust-platform";
 import type { ChannelMessage } from "../instrumentation/core/channel-definitions";
 import { genkitChannels } from "../instrumentation/providers/genkit-channels";
 import { configureNode } from "../node/config";

@@ -7,6 +7,7 @@
     "baseUrl": ".",
     "paths": {
       "@braintrust/otel": ["src/index.ts"],
+      "#braintrust-platform": ["../../js/src/isomorph.ts"],
       "braintrust": ["../../js/src/node/index.ts"],
       "braintrust/instrumentation": ["../../js/src/instrumentation/index.ts"]
     }

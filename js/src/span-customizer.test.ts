@@ -6,18 +6,18 @@ import {
   expectTypeOf,
   test,
   vi,
-} from "vitest";
+} from "vite-plus/test";
+import { _exportsForTestingOnly } from "./logger/testing";
 import {
-  _exportsForTestingOnly,
   _internalGetGlobalState,
   Attachment,
   BraintrustState,
-  Dataset,
   initLogger,
   SpanImpl,
   updateSpan,
   type TestBackgroundLogger,
-} from "./logger";
+} from "./logger/core";
+import { Dataset } from "./logger/datasets";
 import { setSpanCustomizers } from "./span-customizer";
 import { configureNode } from "./node/config";
 import {

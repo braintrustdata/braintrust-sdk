@@ -18,7 +18,7 @@ import type {
 import { queue } from "async";
 import { v5 as uuidv5 } from "uuid";
 
-import iso from "./isomorph";
+import iso from "#braintrust-platform";
 import { debugLogger } from "./debug-logger";
 import { GenericFunction } from "./framework-types";
 import { CodeFunction, CodePrompt, CodeParameters } from "./framework2";
@@ -26,18 +26,11 @@ import { Trace, LocalTrace } from "./trace";
 import {
   BaseMetadata,
   BraintrustState,
-  Dataset,
   DefaultMetadataType,
   EvalCase,
-  Experiment,
-  ExperimentSummary,
-  FullInitOptions,
   NOOP_SPAN,
-  type ParametersRef,
-  RemoteEvalParameters,
   Span,
   StartSpanArgs,
-  init as _initExperiment,
   currentSpan,
   flush,
   logError as logSpanError,
@@ -46,7 +39,16 @@ import {
   withCurrent,
   _internalWithParent,
   _internalGetGlobalState,
-} from "./logger";
+} from "./logger/core";
+import { Dataset } from "./logger/datasets";
+import {
+  Experiment,
+  ExperimentSummary,
+  FullInitOptions,
+  type ParametersRef,
+  init as _initExperiment,
+} from "./logger/experiments";
+import { RemoteEvalParameters } from "./logger/prompts";
 import type { ProgressReporter } from "./reporters/types";
 import { SimpleProgressReporter } from "./reporters/progress";
 import type {
@@ -631,13 +633,15 @@ declare global {
   var _lazy_load: boolean;
 }
 
-globalThis._evals = {
-  functions: [],
-  prompts: [],
-  parameters: [],
-  evaluators: {},
-  reporters: {},
-};
+export function getEvaluatorRegistry(): EvaluatorFile {
+  return (globalThis._evals ??= {
+    functions: [],
+    prompts: [],
+    parameters: [],
+    evaluators: {},
+    reporters: {},
+  });
+}
 
 interface EvalOptions<EvalReport, Parameters extends EvalParameters> {
   /**
@@ -717,7 +721,7 @@ interface EvalOptions<EvalReport, Parameters extends EvalParameters> {
   enableCache?: boolean;
 }
 
-export function _initializeSpanContext() {
+export function _initializeSpanContext(): void {
   // This only needs to be set once, but Eval(), Task(), etc. are the only time
   // we get to run code while importing a module, so use it to
   // grab these values.
@@ -748,11 +752,11 @@ export async function Eval<
         : reporterOrOpts;
 
   let evalName = makeEvalName(name, evaluator.experimentName);
-  if (globalThis._evals.evaluators[evalName]) {
-    evalName = `${evalName}_${Object.keys(_evals).length}`;
+  if (getEvaluatorRegistry().evaluators[evalName]) {
+    evalName = `${evalName}_${Object.keys(getEvaluatorRegistry().evaluators).length}`;
   }
   if (globalThis._lazy_load) {
-    globalThis._evals.evaluators[evalName] = {
+    getEvaluatorRegistry().evaluators[evalName] = {
       // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
       evaluator: {
         evalName,
@@ -876,12 +880,12 @@ export function Reporter<EvalReport>(
   reporter: ReporterBody<EvalReport>,
 ): ReporterDef<EvalReport> {
   const ret = { name, ...reporter };
-  if (_evals.reporters[name]) {
+  if (getEvaluatorRegistry().reporters[name]) {
     throw new Error(`Reporter ${name} already exists`);
   }
 
   if (globalThis._lazy_load) {
-    _evals.reporters[name] = ret;
+    getEvaluatorRegistry().reporters[name] = ret;
   }
 
   return ret;
@@ -898,7 +902,7 @@ function scorerName(
 export function classifierName(
   classifier: EvalClassifier<any, any, any, any>,
   classifier_idx: number,
-) {
+): string {
   return classifier.name || `classifier_${classifier_idx}`;
 }
 

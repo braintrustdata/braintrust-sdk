@@ -45,12 +45,9 @@ Deno.test("deno-browser exposes the expected browser runtime surface", () => {
   expectNunjucksTemplateUnavailable(braintrust);
 });
 
-Deno.test(
-  "deno-browser can run Eval locally without sending logs",
-  async () => {
-    await expectEvalWorks(braintrust);
-  },
-);
+Deno.test("deno-browser can run Eval locally without sending logs", async () => {
+  await expectEvalWorks(braintrust);
+});
 
 Deno.test("deno-browser emits trace payloads over HTTP", async () => {
   const logger = createLogger();

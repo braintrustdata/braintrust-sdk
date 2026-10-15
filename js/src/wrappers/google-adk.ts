@@ -1,3 +1,4 @@
+import { registerInstrumentation } from "../instrumentation/registrations/googleADK";
 import { googleADKChannels } from "../instrumentation/providers/google-adk-channels";
 import type {
   GoogleADKRunner,
@@ -40,6 +41,7 @@ import type {
  * ```
  */
 export function wrapGoogleADK<T extends Record<string, any>>(adkModule: T): T {
+  registerInstrumentation();
   if (!adkModule || typeof adkModule !== "object") {
     // eslint-disable-next-line no-restricted-properties -- preserving intentional console usage.
     console.warn("Invalid Google ADK module. Not wrapping.");

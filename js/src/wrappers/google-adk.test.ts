@@ -1,7 +1,7 @@
-import { describe, it, expect, vi, afterEach } from "vitest";
+import { describe, it, expect, vi, afterEach } from "vite-plus/test";
 
 // Mock iso's newTracingChannel
-vi.mock("../isomorph", () => {
+vi.mock("#braintrust-platform", () => {
   const mockTraceSync = vi.fn((fn: () => any) => fn());
   const mockTracePromise = vi.fn((fn: () => any) => fn());
   return {

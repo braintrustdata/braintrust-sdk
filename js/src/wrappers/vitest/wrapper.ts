@@ -1,4 +1,4 @@
-import { init } from "../../logger";
+import { init } from "../../logger/experiments";
 import type {
   TestConfig,
   TestContext,

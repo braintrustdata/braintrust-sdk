@@ -1,4 +1,4 @@
-import type { Experiment } from "../../logger";
+import type { Experiment } from "../../logger/experiments";
 import { formatExperimentSummary } from "./format";
 
 /**

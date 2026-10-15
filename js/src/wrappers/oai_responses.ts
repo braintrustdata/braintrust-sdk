@@ -19,7 +19,7 @@ type SpanInfo = {
   span_info?: ChannelSpanInfo;
 };
 
-export function responsesProxy(openai: any) {
+export function responsesProxy(openai: any): any {
   // This was added in v4.87.0 of the openai-node library
   if (!openai.responses) {
     return openai;

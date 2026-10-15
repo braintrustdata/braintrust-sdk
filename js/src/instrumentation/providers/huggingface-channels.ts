@@ -1,3 +1,7 @@
+import type {
+  MaterializedChannel,
+  ChannelSpec,
+} from "../core/channel-definitions";
 import { channel, defineChannels } from "../core/channel-definitions";
 import { INSTRUMENTATION_NAMES } from "../../span-origin";
 import type {
@@ -11,52 +15,99 @@ import type {
   HuggingFaceTextGenerationStreamOutput,
 } from "../../vendor-sdk-types/huggingface";
 
-export const huggingFaceChannels = defineChannels(
-  "@huggingface/inference",
-  {
-    chatCompletion: channel<
+export const huggingFaceChannels: {
+  chatCompletion: MaterializedChannel<
+    ChannelSpec<
       [HuggingFaceChatCompletionParams],
-      HuggingFaceChatCompletion
-    >({
-      channelName: "chatCompletion",
-      kind: "async",
-    }),
-
-    chatCompletionStream: channel<
+      HuggingFaceChatCompletion,
+      Record<string, unknown>,
+      never,
+      "async"
+    >
+  >;
+  chatCompletionStream: MaterializedChannel<
+    ChannelSpec<
       [HuggingFaceChatCompletionParams],
       AsyncIterable<HuggingFaceChatCompletionChunk>,
       Record<string, unknown>,
-      HuggingFaceChatCompletionChunk
-    >({
-      channelName: "chatCompletionStream",
-      kind: "sync-stream",
-    }),
-
-    textGeneration: channel<
+      HuggingFaceChatCompletionChunk,
+      "sync-stream"
+    >
+  >;
+  textGeneration: MaterializedChannel<
+    ChannelSpec<
       [HuggingFaceTextGenerationParams],
-      HuggingFaceTextGenerationOutput
-    >({
-      channelName: "textGeneration",
-      kind: "async",
-    }),
-
-    textGenerationStream: channel<
+      HuggingFaceTextGenerationOutput,
+      Record<string, unknown>,
+      never,
+      "async"
+    >
+  >;
+  textGenerationStream: MaterializedChannel<
+    ChannelSpec<
       [HuggingFaceTextGenerationParams],
       AsyncIterable<HuggingFaceTextGenerationStreamOutput>,
       Record<string, unknown>,
-      HuggingFaceTextGenerationStreamOutput
-    >({
-      channelName: "textGenerationStream",
-      kind: "sync-stream",
-    }),
-
-    featureExtraction: channel<
+      HuggingFaceTextGenerationStreamOutput,
+      "sync-stream"
+    >
+  >;
+  featureExtraction: MaterializedChannel<
+    ChannelSpec<
       [HuggingFaceFeatureExtractionParams],
-      HuggingFaceFeatureExtractionOutput
-    >({
-      channelName: "featureExtraction",
-      kind: "async",
-    }),
-  },
-  { instrumentationName: INSTRUMENTATION_NAMES.HUGGINGFACE },
-);
+      HuggingFaceFeatureExtractionOutput,
+      Record<string, unknown>,
+      never,
+      "async"
+    >
+  >;
+} = /* @__PURE__ */ (() =>
+  defineChannels(
+    "@huggingface/inference",
+    {
+      chatCompletion: channel<
+        [HuggingFaceChatCompletionParams],
+        HuggingFaceChatCompletion
+      >({
+        channelName: "chatCompletion",
+        kind: "async",
+      }),
+
+      chatCompletionStream: channel<
+        [HuggingFaceChatCompletionParams],
+        AsyncIterable<HuggingFaceChatCompletionChunk>,
+        Record<string, unknown>,
+        HuggingFaceChatCompletionChunk
+      >({
+        channelName: "chatCompletionStream",
+        kind: "sync-stream",
+      }),
+
+      textGeneration: channel<
+        [HuggingFaceTextGenerationParams],
+        HuggingFaceTextGenerationOutput
+      >({
+        channelName: "textGeneration",
+        kind: "async",
+      }),
+
+      textGenerationStream: channel<
+        [HuggingFaceTextGenerationParams],
+        AsyncIterable<HuggingFaceTextGenerationStreamOutput>,
+        Record<string, unknown>,
+        HuggingFaceTextGenerationStreamOutput
+      >({
+        channelName: "textGenerationStream",
+        kind: "sync-stream",
+      }),
+
+      featureExtraction: channel<
+        [HuggingFaceFeatureExtractionParams],
+        HuggingFaceFeatureExtractionOutput
+      >({
+        channelName: "featureExtraction",
+        kind: "async",
+      }),
+    },
+    { instrumentationName: INSTRUMENTATION_NAMES.HUGGINGFACE },
+  ))();

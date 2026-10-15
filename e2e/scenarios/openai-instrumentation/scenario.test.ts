@@ -1,4 +1,4 @@
-import { describe, it } from "vitest";
+import { describe, it } from "vite-plus/test";
 import {
   prepareScenarioDir,
   readInstalledPackageVersion,
@@ -85,7 +85,7 @@ describe.concurrent("variants", () => {
     const assertPrivateFieldMethodsOperation =
       !scenario.disablePrivateFieldMethodsAssertion;
 
-    describe.sequential(`openai sdk ${scenario.version}`, () => {
+    describe(`openai sdk ${scenario.version}`, { concurrent: false }, () => {
       defineOpenAIInstrumentationAssertions({
         assertPrivateFieldMethodsOperation,
         name: "wrapped instrumentation",

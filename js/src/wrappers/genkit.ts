@@ -1,3 +1,4 @@
+import { registerInstrumentation } from "../instrumentation/registrations/genkit";
 import { genkitChannels } from "../instrumentation/providers/genkit-channels";
 import type {
   GenkitAction,
@@ -28,6 +29,7 @@ const wrappedGenkitActions = new WeakMap<GenkitAction, GenkitAction>();
  * - wrapping the module namespace and then calling its `genkit` factory
  */
 export function wrapGenkit<T>(genkit: T): T {
+  registerInstrumentation();
   if (isGenkitInstance(genkit)) {
     return wrapGenkitInstance(genkit) as T;
   }

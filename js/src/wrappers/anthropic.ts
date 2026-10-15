@@ -1,3 +1,4 @@
+import { registerInstrumentation } from "../instrumentation/registrations/anthropic";
 import { anthropicChannels } from "../instrumentation/providers/anthropic-channels";
 import { TypedApplyProxy } from "../typed-instrumentation-helpers";
 import type {
@@ -26,6 +27,7 @@ import type {
  * @returns The wrapped `Anthropic` object.
  */
 export function wrapAnthropic<T extends object>(anthropic: T): T {
+  registerInstrumentation();
   const au: unknown = anthropic;
   if (
     au &&

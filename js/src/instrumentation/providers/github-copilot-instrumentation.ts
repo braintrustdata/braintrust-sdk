@@ -1,6 +1,6 @@
-import type { IsoChannelHandlers } from "../../isomorph";
-import { _internalStartSpan as startBaseSpan } from "../../logger";
-import type { Span } from "../../logger";
+import type { IsoChannelHandlers } from "#braintrust-platform";
+import { _internalStartSpan as startBaseSpan } from "../../logger/core";
+import type { Span } from "../../logger/core";
 import {
   INSTRUMENTATION_NAMES,
   withSpanInstrumentationName,

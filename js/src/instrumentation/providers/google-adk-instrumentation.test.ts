@@ -1,18 +1,25 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import {
+  describe,
+  it,
+  expect,
+  vi,
+  beforeEach,
+  afterEach,
+} from "vite-plus/test";
 
 const { mockInternalGetGlobalState } = vi.hoisted(() => ({
   mockInternalGetGlobalState: vi.fn(() => undefined),
 }));
 
 // Mock iso's newTracingChannel — must be before any imports that use it
-vi.mock("../../isomorph", () => ({
+vi.mock("#braintrust-platform", () => ({
   default: {
     newTracingChannel: vi.fn(),
   },
 }));
 
 import { registerGoogleADKInstrumentation } from "./google-adk-instrumentation";
-import iso from "../../isomorph";
+import iso from "#braintrust-platform";
 
 const mockNewTracingChannel = iso.newTracingChannel as ReturnType<typeof vi.fn>;
 
@@ -23,7 +30,7 @@ const mockStartSpan = vi.fn(() => ({
   export: vi.fn(() => Promise.resolve("mock-span-export")),
 }));
 
-vi.mock("../../logger", () => ({
+vi.mock("../../logger/core", () => ({
   startSpan: (...args: any[]) => (mockStartSpan as any)(...args),
   _internalGetGlobalState: (...args: any[]) =>
     (mockInternalGetGlobalState as any)(...args),

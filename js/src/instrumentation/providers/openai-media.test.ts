@@ -1,9 +1,12 @@
+import { registerInstrumentation } from "../registrations/openai";
 import { Readable } from "node:stream";
-import { afterEach, beforeAll, beforeEach, expect, it } from "vitest";
-import { Attachment, _exportsForTestingOnly, initLogger } from "../../logger";
+import { afterEach, beforeAll, beforeEach, expect, it } from "vite-plus/test";
+import { Attachment, initLogger } from "../../logger/core";
+import { _exportsForTestingOnly } from "../../logger/testing";
 import { configureNode } from "../../node/config";
 import { openAIChannels } from "./openai-channels";
 configureNode();
+registerInstrumentation();
 const originalAutoCaptureAttachments =
   process.env.BRAINTRUST_CAPTURE_ATTACHMENTS;
 let background: ReturnType<

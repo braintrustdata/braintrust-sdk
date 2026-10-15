@@ -2,14 +2,14 @@
   "compilerOptions": {
     "declaration": true,
     "lib": ["es2022"],
-    "module": "commonjs",
+    "module": "ESNext",
     "target": "es2022",
-    "moduleResolution": "node",
-    "baseUrl": ".",
+    "moduleResolution": "Bundler",
     "paths": {
       "@apm-js-collab/code-transformer": [
-        "src/auto-instrumentations/orchestrion-js/index.ts"
-      ]
+        "./src/auto-instrumentations/orchestrion-js/index.ts"
+      ],
+      "#braintrust-platform": ["./src/isomorph.ts"]
     },
     "strict": true,
     "noUnusedLocals": true,
@@ -25,14 +25,13 @@
     "**/smoke/**",
     "scripts/**",
     "vendor/**",
-    "eslint.config.ts",
-    "tsup.config.ts",
     "src/auto-instrumentations/**/*.mts",
     "src/auto-instrumentations/bundler/**",
     "src/auto-instrumentations/configs/**",
     "src/auto-instrumentations/loader/**",
     "src/auto-instrumentations/index.ts",
     "tests/auto-instrumentations/**",
-    "./playground.ts"
+    "./playground.ts",
+    "vite.config.ts"
   ]
 }

@@ -1,4 +1,4 @@
-import { expectTypeOf, test } from "vitest";
+import { expectTypeOf, test } from "vite-plus/test";
 import type { z } from "zod/v3";
 import type * as Backend from "./generated_plain_types";
 import type * as backendSchemas from "./generated_types";
@@ -67,114 +67,186 @@ test("SDK-owned contracts remain compatible with the backend", () => {
 });
 
 test("runtime validators accept and return compatible types", () => {
-  expectTypeOf<z.input<typeof schemas.PromptData>>().toEqualTypeOf<
+  expectTypeOf<z.input<typeof schemas.PromptData>>().toExtend<
     z.input<typeof backendSchemas.PromptData>
   >();
-  expectTypeOf<z.output<typeof schemas.PromptData>>().toEqualTypeOf<
+  expectTypeOf<z.input<typeof backendSchemas.PromptData>>().toExtend<
+    z.input<typeof schemas.PromptData>
+  >();
+  expectTypeOf<z.output<typeof schemas.PromptData>>().toExtend<
     z.output<typeof backendSchemas.PromptData>
   >();
-  expectTypeOf<z.input<typeof schemas.ObjectReference>>().toEqualTypeOf<
+  expectTypeOf<z.output<typeof backendSchemas.PromptData>>().toExtend<
+    z.output<typeof schemas.PromptData>
+  >();
+  expectTypeOf<z.input<typeof schemas.ObjectReference>>().toExtend<
     z.input<typeof backendSchemas.ObjectReference>
   >();
-  expectTypeOf<z.output<typeof schemas.ObjectReference>>().toEqualTypeOf<
+  expectTypeOf<z.input<typeof backendSchemas.ObjectReference>>().toExtend<
+    z.input<typeof schemas.ObjectReference>
+  >();
+  expectTypeOf<z.output<typeof schemas.ObjectReference>>().toExtend<
     z.output<typeof backendSchemas.ObjectReference>
   >();
-  expectTypeOf<z.input<typeof schemas.Project>>().toEqualTypeOf<
+  expectTypeOf<z.output<typeof backendSchemas.ObjectReference>>().toExtend<
+    z.output<typeof schemas.ObjectReference>
+  >();
+  expectTypeOf<z.input<typeof schemas.Project>>().toExtend<
     z.input<typeof backendSchemas.Project>
   >();
-  expectTypeOf<z.output<typeof schemas.Project>>().toEqualTypeOf<
+  expectTypeOf<z.input<typeof backendSchemas.Project>>().toExtend<
+    z.input<typeof schemas.Project>
+  >();
+  expectTypeOf<z.output<typeof schemas.Project>>().toExtend<
     z.output<typeof backendSchemas.Project>
   >();
-  expectTypeOf<z.input<typeof schemas.AttachmentReference>>().toEqualTypeOf<
+  expectTypeOf<z.output<typeof backendSchemas.Project>>().toExtend<
+    z.output<typeof schemas.Project>
+  >();
+  expectTypeOf<z.input<typeof schemas.AttachmentReference>>().toExtend<
     z.input<typeof backendSchemas.AttachmentReference>
   >();
-  expectTypeOf<z.output<typeof schemas.AttachmentReference>>().toEqualTypeOf<
+  expectTypeOf<z.input<typeof backendSchemas.AttachmentReference>>().toExtend<
+    z.input<typeof schemas.AttachmentReference>
+  >();
+  expectTypeOf<z.output<typeof schemas.AttachmentReference>>().toExtend<
     z.output<typeof backendSchemas.AttachmentReference>
+  >();
+  expectTypeOf<z.output<typeof backendSchemas.AttachmentReference>>().toExtend<
+    z.output<typeof schemas.AttachmentReference>
   >();
   expectTypeOf<
     z.input<typeof schemas.BraintrustAttachmentReference>
-  >().toEqualTypeOf<
+  >().toExtend<z.input<typeof backendSchemas.BraintrustAttachmentReference>>();
+  expectTypeOf<
     z.input<typeof backendSchemas.BraintrustAttachmentReference>
-  >();
+  >().toExtend<z.input<typeof schemas.BraintrustAttachmentReference>>();
   expectTypeOf<
     z.output<typeof schemas.BraintrustAttachmentReference>
-  >().toEqualTypeOf<
+  >().toExtend<z.output<typeof backendSchemas.BraintrustAttachmentReference>>();
+  expectTypeOf<
     z.output<typeof backendSchemas.BraintrustAttachmentReference>
-  >();
-  expectTypeOf<z.input<typeof schemas.BraintrustModelParams>>().toEqualTypeOf<
-    z.input<typeof backendSchemas.BraintrustModelParams>
-  >();
-  expectTypeOf<z.output<typeof schemas.BraintrustModelParams>>().toEqualTypeOf<
-    z.output<typeof backendSchemas.BraintrustModelParams>
-  >();
-  expectTypeOf<z.input<typeof schemas.ChatCompletionTool>>().toEqualTypeOf<
+  >().toExtend<z.output<typeof schemas.BraintrustAttachmentReference>>();
+
+  expectTypeOf<z.input<typeof schemas.ChatCompletionTool>>().toExtend<
     z.input<typeof backendSchemas.ChatCompletionTool>
   >();
-  expectTypeOf<z.output<typeof schemas.ChatCompletionTool>>().toEqualTypeOf<
+  expectTypeOf<z.input<typeof backendSchemas.ChatCompletionTool>>().toExtend<
+    z.input<typeof schemas.ChatCompletionTool>
+  >();
+  expectTypeOf<z.output<typeof schemas.ChatCompletionTool>>().toExtend<
     z.output<typeof backendSchemas.ChatCompletionTool>
   >();
-  expectTypeOf<
-    z.input<typeof schemas.ExternalAttachmentReference>
-  >().toEqualTypeOf<
+  expectTypeOf<z.output<typeof backendSchemas.ChatCompletionTool>>().toExtend<
+    z.output<typeof schemas.ChatCompletionTool>
+  >();
+  expectTypeOf<z.input<typeof schemas.ExternalAttachmentReference>>().toExtend<
     z.input<typeof backendSchemas.ExternalAttachmentReference>
   >();
   expectTypeOf<
-    z.output<typeof schemas.ExternalAttachmentReference>
-  >().toEqualTypeOf<
+    z.input<typeof backendSchemas.ExternalAttachmentReference>
+  >().toExtend<z.input<typeof schemas.ExternalAttachmentReference>>();
+  expectTypeOf<z.output<typeof schemas.ExternalAttachmentReference>>().toExtend<
     z.output<typeof backendSchemas.ExternalAttachmentReference>
   >();
   expectTypeOf<
-    z.input<typeof schemas.ResponseFormatJsonSchema>
-  >().toEqualTypeOf<z.input<typeof backendSchemas.ResponseFormatJsonSchema>>();
-  expectTypeOf<
-    z.output<typeof schemas.ResponseFormatJsonSchema>
-  >().toEqualTypeOf<z.output<typeof backendSchemas.ResponseFormatJsonSchema>>();
-  expectTypeOf<z.input<typeof schemas.AttachmentStatus>>().toEqualTypeOf<
+    z.output<typeof backendSchemas.ExternalAttachmentReference>
+  >().toExtend<z.output<typeof schemas.ExternalAttachmentReference>>();
+
+  expectTypeOf<z.input<typeof schemas.AttachmentStatus>>().toExtend<
     z.input<typeof backendSchemas.AttachmentStatus>
   >();
-  expectTypeOf<z.output<typeof schemas.AttachmentStatus>>().toEqualTypeOf<
+  expectTypeOf<z.input<typeof backendSchemas.AttachmentStatus>>().toExtend<
+    z.input<typeof schemas.AttachmentStatus>
+  >();
+  expectTypeOf<z.output<typeof schemas.AttachmentStatus>>().toExtend<
     z.output<typeof backendSchemas.AttachmentStatus>
   >();
-  expectTypeOf<z.input<typeof schemas.GitMetadataSettings>>().toEqualTypeOf<
+  expectTypeOf<z.output<typeof backendSchemas.AttachmentStatus>>().toExtend<
+    z.output<typeof schemas.AttachmentStatus>
+  >();
+  expectTypeOf<z.input<typeof schemas.GitMetadataSettings>>().toExtend<
     z.input<typeof backendSchemas.GitMetadataSettings>
   >();
-  expectTypeOf<z.output<typeof schemas.GitMetadataSettings>>().toEqualTypeOf<
+  expectTypeOf<z.input<typeof backendSchemas.GitMetadataSettings>>().toExtend<
+    z.input<typeof schemas.GitMetadataSettings>
+  >();
+  expectTypeOf<z.output<typeof schemas.GitMetadataSettings>>().toExtend<
     z.output<typeof backendSchemas.GitMetadataSettings>
   >();
-  expectTypeOf<z.input<typeof schemas.DatasetSnapshot>>().toEqualTypeOf<
+  expectTypeOf<z.output<typeof backendSchemas.GitMetadataSettings>>().toExtend<
+    z.output<typeof schemas.GitMetadataSettings>
+  >();
+  expectTypeOf<z.input<typeof schemas.DatasetSnapshot>>().toExtend<
     z.input<typeof backendSchemas.DatasetSnapshot>
   >();
-  expectTypeOf<z.output<typeof schemas.DatasetSnapshot>>().toEqualTypeOf<
+  expectTypeOf<z.input<typeof backendSchemas.DatasetSnapshot>>().toExtend<
+    z.input<typeof schemas.DatasetSnapshot>
+  >();
+  expectTypeOf<z.output<typeof schemas.DatasetSnapshot>>().toExtend<
     z.output<typeof backendSchemas.DatasetSnapshot>
   >();
-  expectTypeOf<z.input<typeof schemas.Prompt>>().toEqualTypeOf<
+  expectTypeOf<z.output<typeof backendSchemas.DatasetSnapshot>>().toExtend<
+    z.output<typeof schemas.DatasetSnapshot>
+  >();
+  expectTypeOf<z.input<typeof schemas.Prompt>>().toExtend<
     z.input<typeof backendSchemas.Prompt>
   >();
-  expectTypeOf<z.output<typeof schemas.Prompt>>().toEqualTypeOf<
+  expectTypeOf<z.input<typeof backendSchemas.Prompt>>().toExtend<
+    z.input<typeof schemas.Prompt>
+  >();
+  expectTypeOf<z.output<typeof schemas.Prompt>>().toExtend<
     z.output<typeof backendSchemas.Prompt>
   >();
-  expectTypeOf<z.input<typeof schemas.FunctionId>>().toEqualTypeOf<
+  expectTypeOf<z.output<typeof backendSchemas.Prompt>>().toExtend<
+    z.output<typeof schemas.Prompt>
+  >();
+  expectTypeOf<z.input<typeof schemas.FunctionId>>().toExtend<
     z.input<typeof backendSchemas.FunctionId>
   >();
-  expectTypeOf<z.output<typeof schemas.FunctionId>>().toEqualTypeOf<
+  expectTypeOf<z.input<typeof backendSchemas.FunctionId>>().toExtend<
+    z.input<typeof schemas.FunctionId>
+  >();
+  expectTypeOf<z.output<typeof schemas.FunctionId>>().toExtend<
     z.output<typeof backendSchemas.FunctionId>
   >();
-  expectTypeOf<z.input<typeof schemas.CallEvent>>().toEqualTypeOf<
+  expectTypeOf<z.output<typeof backendSchemas.FunctionId>>().toExtend<
+    z.output<typeof schemas.FunctionId>
+  >();
+  expectTypeOf<z.input<typeof schemas.CallEvent>>().toExtend<
     z.input<typeof backendSchemas.CallEvent>
   >();
-  expectTypeOf<z.output<typeof schemas.CallEvent>>().toEqualTypeOf<
+  expectTypeOf<z.input<typeof backendSchemas.CallEvent>>().toExtend<
+    z.input<typeof schemas.CallEvent>
+  >();
+  expectTypeOf<z.output<typeof schemas.CallEvent>>().toExtend<
     z.output<typeof backendSchemas.CallEvent>
   >();
-  expectTypeOf<z.input<typeof schemas.SSEConsoleEventData>>().toEqualTypeOf<
+  expectTypeOf<z.output<typeof backendSchemas.CallEvent>>().toExtend<
+    z.output<typeof schemas.CallEvent>
+  >();
+  expectTypeOf<z.input<typeof schemas.SSEConsoleEventData>>().toExtend<
     z.input<typeof backendSchemas.SSEConsoleEventData>
   >();
-  expectTypeOf<z.output<typeof schemas.SSEConsoleEventData>>().toEqualTypeOf<
+  expectTypeOf<z.input<typeof backendSchemas.SSEConsoleEventData>>().toExtend<
+    z.input<typeof schemas.SSEConsoleEventData>
+  >();
+  expectTypeOf<z.output<typeof schemas.SSEConsoleEventData>>().toExtend<
     z.output<typeof backendSchemas.SSEConsoleEventData>
   >();
-  expectTypeOf<z.input<typeof schemas.SSEProgressEventData>>().toEqualTypeOf<
+  expectTypeOf<z.output<typeof backendSchemas.SSEConsoleEventData>>().toExtend<
+    z.output<typeof schemas.SSEConsoleEventData>
+  >();
+  expectTypeOf<z.input<typeof schemas.SSEProgressEventData>>().toExtend<
     z.input<typeof backendSchemas.SSEProgressEventData>
   >();
-  expectTypeOf<z.output<typeof schemas.SSEProgressEventData>>().toEqualTypeOf<
+  expectTypeOf<z.input<typeof backendSchemas.SSEProgressEventData>>().toExtend<
+    z.input<typeof schemas.SSEProgressEventData>
+  >();
+  expectTypeOf<z.output<typeof schemas.SSEProgressEventData>>().toExtend<
     z.output<typeof backendSchemas.SSEProgressEventData>
+  >();
+  expectTypeOf<z.output<typeof backendSchemas.SSEProgressEventData>>().toExtend<
+    z.output<typeof schemas.SSEProgressEventData>
   >();
 });

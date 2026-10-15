@@ -1,5 +1,14 @@
-import { afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
-import { _exportsForTestingOnly, initLogger } from "../../logger";
+import { registerInstrumentation } from "../registrations/awsBedrockRuntime";
+import {
+  afterEach,
+  beforeAll,
+  beforeEach,
+  describe,
+  expect,
+  it,
+} from "vite-plus/test";
+import { _exportsForTestingOnly } from "../../logger/testing";
+import { initLogger } from "../../logger/core";
 import { configureNode } from "../../node/config";
 import {
   smithyClientChannels,
@@ -13,6 +22,7 @@ import {
 
 try {
   configureNode();
+  registerInstrumentation();
 } catch {
   // Best-effort initialization for test environments.
 }

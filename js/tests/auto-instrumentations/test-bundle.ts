@@ -44,7 +44,7 @@ export async function bundleFixture(
         lib: {
           entry: entryPoint,
           formats: ["es"],
-          fileName: path.basename(outfile, ".mjs"),
+          fileName: () => path.basename(outfile),
         },
         outDir: path.dirname(outfile),
         emptyOutDir: false,
