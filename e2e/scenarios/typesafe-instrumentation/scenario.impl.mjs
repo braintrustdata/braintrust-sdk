@@ -1,3 +1,4 @@
+import { readFile } from "node:fs/promises";
 import { wrapTypeSafe } from "braintrust";
 import {
   runOperation,
@@ -15,7 +16,7 @@ export async function runTypeSafeInstrumentationScenario(
     throw new Error("Expected TYPESAFE_API_KEY to be set for e2e");
   }
 
-  const baseClient = new typesafe.TypeSafeClient();
+  const baseClient = new typesafe.TypeSafeClient({ compression: false });
   const client = decorateClient ? decorateClient(baseClient) : baseClient;
 
   await runTracedScenario({
@@ -71,6 +72,63 @@ export async function runTypeSafeInstrumentationScenario(
         if (data.answers?.positive?.type !== "noul") {
           throw new Error("Unexpected TypeSafe raw response");
         }
+      });
+
+      if (process.env.TYPESAFE_SUPPORTS_IMAGES !== "1") return;
+
+      const bytes = await readFile(
+        new URL("./test-image.png", import.meta.url),
+      );
+      process.env.BRAINTRUST_CAPTURE_ATTACHMENTS = "false";
+      await runOperation("typesafe-image-operation", "image", async () => {
+        await client.systemOne({
+          model: "jev-preview",
+          state: typesafe.image(bytes),
+          questions: { ship: typesafe.noul("Is there a sailing ship?") },
+        });
+      });
+
+      process.env.BRAINTRUST_CAPTURE_ATTACHMENTS = "true";
+      await runOperation(
+        "typesafe-template-operation",
+        "template",
+        async () => {
+          const photo = typesafe.Image.fromBase64(bytes.toString("base64"));
+          await client
+            .systemOne({
+              model: "jev-preview",
+              state: {
+                scene: typesafe.withAssets`Look at ${typesafe.withAssets.join([photo], ", ")}.`,
+              },
+              questions: {
+                weather: typesafe.choice(
+                  typesafe.withAssets`What weather is shown in ${photo}?`,
+                  {
+                    stormy: typesafe.withAssets`Stormy weather in ${photo}`,
+                    clear: "Clear skies",
+                  },
+                ),
+              },
+            })
+            .withResponse();
+        },
+      );
+
+      await runOperation("typesafe-box-operation", "box", async () => {
+        const photo = typesafe.image(new Blob([bytes], { type: "image/png" }));
+        const response = await client
+          .systemOne({
+            model: "jev-preview",
+            state: typesafe.withAssets`Locate the ship in ${photo}.`,
+            assets: { "<photo>": photo },
+            questions: { ship: typesafe.box("The sailing ship") },
+          })
+          .asResponse();
+        if (response.bodyUsed)
+          throw new Error("Instrumentation consumed the image response");
+        const result = await response.json();
+        if (result.answers.ship.type !== "box")
+          throw new Error("Expected a box answer");
       });
     },
     metadata: { scenario: SCENARIO_NAME },

@@ -1,6 +1,6 @@
 import { isObject } from "../../../util/index";
 import { debugLogger } from "../../debug-logger";
-import { startSpan, withCurrent } from "../../logger";
+import { Attachment, startSpan, withCurrent } from "../../logger";
 import type { Span } from "../../logger";
 import {
   INSTRUMENTATION_NAMES,
@@ -8,6 +8,8 @@ import {
 } from "../../span-origin";
 import type {
   TypeSafeAPIPromise,
+  TypeSafeImage,
+  TypeSafeTextWithAssets,
   TypeSafeSystemOneRequest,
   TypeSafeSystemOneResult,
 } from "../../vendor-sdk-types/typesafe";
@@ -15,6 +17,7 @@ import {
   isAutoInstrumentationSuppressed,
   runWithAutoInstrumentationSuppressed,
 } from "../auto-instrumentation-suppression";
+import { isAutoCaptureAttachmentsEnabled } from "../../wrappers/attachment-utils";
 import { BasePlugin } from "../core";
 import { unsubscribeAll } from "../core/tracing";
 import { typeSafeChannels } from "./typesafe-interceptors";
@@ -60,10 +63,7 @@ function interceptSystemOne(
       withSpanInstrumentationName(
         {
           event: {
-            input: {
-              state: request?.state,
-              questions: addIds(request?.questions),
-            },
+            input: prepareTypeSafeInput(request),
             metadata: {
               ...(model ? { model } : {}),
               provider: "typesafe",
@@ -274,4 +274,86 @@ function validTokenCount(value: unknown): number | undefined {
   return typeof value === "number" && Number.isInteger(value) && value >= 0
     ? value
     : undefined;
+}
+
+/** Preserve the SDK's references while capturing each asset only once. */
+function prepareTypeSafeInput(request: TypeSafeSystemOneRequest): unknown {
+  const capture = isAutoCaptureAttachmentsEnabled();
+  const names = new Map<TypeSafeImage, string>(
+    Object.entries(request.assets ?? {}).map(([name, asset]) => [asset, name]),
+  );
+  const assets = new Map<string, unknown>();
+  const captured = new Map<TypeSafeImage, unknown>();
+  const visit = (value: unknown, depth = 0, name?: string): unknown => {
+    if (depth >= 128) return "<omitted>";
+    if (Array.isArray(value))
+      return value.map((item) => visit(item, depth + 1));
+    if (value === null || typeof value !== "object") return value;
+    if (Symbol.for("@typesafe-ai/sdk/image") in value) {
+      // eslint-disable-next-line @typescript-eslint/consistent-type-assertions -- The shared SDK brand identifies images across package copies.
+      const asset = value as unknown as TypeSafeImage;
+      const reference = name ?? names.get(asset) ?? asset.toString();
+      if (!captured.has(asset)) {
+        if (capture) {
+          const data = asset.data;
+          // TypeSafe accepts PNG and JPEG bytes. Blob MIME types may be absent;
+          // retain that uncertainty instead of guessing a format.
+          const contentType =
+            data instanceof Blob
+              ? data.type || "application/octet-stream"
+              : data[0] === 0x89 && data[1] === 0x50
+                ? "image/png"
+                : data[0] === 0xff && data[1] === 0xd8
+                  ? "image/jpeg"
+                  : "application/octet-stream";
+          captured.set(
+            asset,
+            new Attachment({
+              data:
+                data instanceof Blob ? data : new Blob([new Uint8Array(data)]),
+              contentType,
+              filename:
+                contentType === "image/png"
+                  ? "image.png"
+                  : contentType === "image/jpeg"
+                    ? "image.jpg"
+                    : "image.bin",
+            }),
+          );
+        } else {
+          captured.set(asset, { type: "image" });
+        }
+      }
+      assets.set(reference, captured.get(asset));
+      return reference;
+    }
+    if (Symbol.for("@typesafe-ai/sdk/text-with-assets") in value) {
+      // eslint-disable-next-line @typescript-eslint/consistent-type-assertions -- The SDK brand identifies text templates across package copies.
+      const template = value as unknown as TypeSafeTextWithAssets;
+      let text = template.text;
+      for (const asset of template.assets) {
+        const reference = visit(asset, depth + 1);
+        if (typeof reference === "string")
+          text = text.replaceAll(asset.toString(), reference);
+      }
+      return text;
+    }
+    if (![Object.prototype, null].includes(Object.getPrototypeOf(value)))
+      return value;
+    return Object.fromEntries(
+      Object.entries(value).map(([key, child]) => [
+        key,
+        visit(child, depth + 1),
+      ]),
+    );
+  };
+  for (const [name, asset] of Object.entries(request.assets ?? {}))
+    visit(asset, 0, name);
+  const state = visit(request.state);
+  const questions = visit(addIds(request.questions));
+  return {
+    state,
+    questions,
+    ...(assets.size ? { assets: Object.fromEntries(assets) } : {}),
+  };
 }

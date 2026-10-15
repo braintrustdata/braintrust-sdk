@@ -7,7 +7,7 @@ import {
   it,
   vi,
 } from "vitest";
-import { _exportsForTestingOnly, initLogger } from "../logger";
+import { Attachment, _exportsForTestingOnly, initLogger } from "../logger";
 import { configureNode } from "../node/config";
 import type {
   TypeSafeAPIPromise,
@@ -100,6 +100,7 @@ describe("TypeSafe wrapper", () => {
   afterEach(() => {
     _exportsForTestingOnly.clearTestBackgroundLogger();
     vi.restoreAllMocks();
+    vi.unstubAllEnvs();
   });
 
   it("returns unsupported clients unchanged", () => {
@@ -201,6 +202,130 @@ describe("TypeSafe wrapper", () => {
       .systemOne({ state: "hello", questions: {} })
       .map((value: any) => value.model);
     await expect(mapped).resolves.toBe("jev-1.13.0");
+  });
+
+  it("logs image references and box answers without reading bytes when capture is disabled", async () => {
+    vi.stubEnv("BRAINTRUST_CAPTURE_ATTACHMENTS", "false");
+    const readData = vi.fn(() => {
+      throw new Error("Image bytes must not be observed");
+    });
+    const image = {
+      [Symbol.for("@typesafe-ai/sdk/image")]: true,
+      type: "image",
+      get data() {
+        return readData();
+      },
+      toString: () => "<image:1234>",
+    };
+    const template = {
+      [Symbol.for("@typesafe-ai/sdk/text-with-assets")]: true,
+      text: "Locate the ship in <image:1234>",
+      assets: [image],
+    };
+    const request = {
+      state: Object.assign(Object.create(null), {
+        photo: image,
+        description: template,
+      }),
+      assets: { "<photo>": image },
+      questions: { ship: { type: "box", instructions: template } },
+    };
+    const result = {
+      model: "jev-1.14.0",
+      answers: {
+        ship: {
+          type: "box",
+          box: { top: 0.1, bottom: 0.8, left: 0.2, right: 0.7 },
+          confidence: null,
+        },
+      },
+      usage: { input_tokens: 10, output_tokens: null },
+    };
+    const promise = responsePromise(result);
+    const provider = {
+      systemOne: vi.fn(function (this: unknown, actual: unknown) {
+        expect(this).toBe(provider);
+        expect(actual).toBe(request);
+        return promise;
+      }),
+    };
+    const wrapped = wrapTypeSafe(provider);
+    expect(wrapped.systemOne(request)).toBe(promise);
+    await promise;
+    const [span] = await backgroundLogger.drain();
+    expect(span).toMatchObject({
+      input: {
+        state: { photo: "<photo>", description: "Locate the ship in <photo>" },
+        questions: [
+          {
+            id: "ship",
+            type: "box",
+            instructions: "Locate the ship in <photo>",
+          },
+        ],
+        assets: { "<photo>": { type: "image" } },
+      },
+      output: { answers: [{ id: "ship", ...result.answers.ship }] },
+      metrics: { prompt_tokens: 10 },
+    });
+    expect(readData).not.toHaveBeenCalled();
+    expect(provider.systemOne).toHaveBeenCalledTimes(1);
+    expect(request.state.photo).toBe(image);
+    expect(template.text).toBe("Locate the ship in <image:1234>");
+  });
+
+  it.each(["bytes", "blob"])(
+    "captures %s assets once and snapshots caller-owned bytes",
+    async (kind) => {
+      vi.stubEnv("BRAINTRUST_CAPTURE_ATTACHMENTS", "true");
+      const bytes = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 13, 10, 26, 10]);
+      const originalBytes = bytes.slice();
+      const image = {
+        [Symbol.for("@typesafe-ai/sdk/image")]: true,
+        type: "image",
+        data:
+          kind === "blob" ? new Blob([bytes], { type: "image/png" }) : bytes,
+        toString: () => "<image:1234>",
+      };
+      const client = wrapTypeSafe({
+        systemOne: (_request: unknown) => responsePromise({ answers: {} }),
+      });
+      const promise = client.systemOne({
+        state: [image, "<first>", "<second>"],
+        questions: { match: { type: "noul", instructions: [image] } },
+        assets: { "<first>": image, "<second>": image },
+      });
+      bytes.fill(0);
+      await promise;
+      const [span] = await backgroundLogger.drain();
+      const input = (span as { input: { assets: Record<string, Attachment> } })
+        .input;
+      expect(span).toMatchObject({
+        input: {
+          state: ["<second>", "<first>", "<second>"],
+          questions: [{ id: "match", instructions: ["<second>"] }],
+        },
+      });
+      const attachment = input.assets["<first>"];
+      expect(attachment).toBeInstanceOf(Attachment);
+      expect(input.assets["<second>"]).toBe(attachment);
+      expect(attachment.reference.content_type).toBe("image/png");
+      expect(
+        new Uint8Array(await (await attachment.data()).arrayBuffer()),
+      ).toEqual(originalBytes);
+    },
+  );
+
+  it("preserves JSON serialization of non-asset state objects", async () => {
+    const date = new Date("2026-10-15T00:00:00Z");
+    const client = wrapTypeSafe({
+      systemOne: (_request: unknown) => responsePromise({ answers: {} }),
+    });
+    await client.systemOne({ state: { date }, questions: {} });
+    const [span] = await backgroundLogger.drain();
+    expect(span).toMatchObject({
+      input: { state: { date: date.toISOString() } },
+    });
   });
 
   it("preserves synchronous and asynchronous provider errors", async () => {
