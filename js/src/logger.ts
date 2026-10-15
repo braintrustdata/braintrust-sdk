@@ -18,6 +18,8 @@ export {
   NOOP_SPAN_PERMALINK,
   SerializedBraintrustState,
   BraintrustState,
+  CAPTURE_ATTACHMENTS,
+  _internalCaptureAttachmentsEnabled,
   _internalSetInitialState,
   _internalGetGlobalState,
   registerOtelFlush,

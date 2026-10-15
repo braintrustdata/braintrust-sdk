@@ -1,7 +1,10 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { Attachment } from "../../logger/core";
 import {
-  isAutoCaptureAttachmentsEnabled,
+  _internalCaptureAttachmentsEnabled,
+  Attachment,
+} from "../../logger/core";
+import {
+  omitMediaData,
   processInputAttachments,
 } from "../../wrappers/attachment-utils";
 import { isObject } from "../../../util/index";
@@ -58,7 +61,7 @@ export function extractOpenAIBatchInput(
   const input =
     endpoint === "/v1/chat/completions" ? params.messages : params.input;
   return {
-    input: processInputAttachments(input, isAutoCaptureAttachmentsEnabled()),
+    input: processInputAttachments(input, _internalCaptureAttachmentsEnabled()),
     metadata: batchMetadata(params),
   };
 }
@@ -69,7 +72,10 @@ export function extractOpenAIChatInput(params: Record<string, unknown>): {
 } {
   const { messages, ...metadata } = params;
   return {
-    input: processInputAttachments(messages, isAutoCaptureAttachmentsEnabled()),
+    input: processInputAttachments(
+      messages,
+      _internalCaptureAttachmentsEnabled(),
+    ),
     metadata: { ...metadata, provider: "openai" },
   };
 }
@@ -80,7 +86,7 @@ export function extractOpenAIResponsesInput(params: Record<string, unknown>): {
 } {
   const { input, ...metadata } = params;
   return {
-    input: processInputAttachments(input, isAutoCaptureAttachmentsEnabled()),
+    input: processInputAttachments(input, _internalCaptureAttachmentsEnabled()),
     metadata: { ...metadata, provider: "openai" },
   };
 }
@@ -98,12 +104,12 @@ export function extractOpenAIResponsesMetadata(
 /** Convert Responses API base64 image outputs to Braintrust attachments. */
 export function processImagesInOutput(
   output: any,
-  captureAttachments: boolean = isAutoCaptureAttachmentsEnabled(),
+  captureAttachments: boolean = _internalCaptureAttachmentsEnabled(),
 ): any {
   if (Array.isArray(output)) {
-    return output.map((item) =>
-      processImagesInOutput(item, captureAttachments),
-    );
+    return output
+      .map((item) => processImagesInOutput(item, captureAttachments))
+      .filter((item) => item !== undefined);
   }
 
   if (
@@ -113,7 +119,7 @@ export function processImagesInOutput(
     output.result
   ) {
     if (!captureAttachments) {
-      return { ...output, result: "<omitted>" };
+      return omitMediaData(output, "result");
     }
     const fileExtension = output.output_format || "png";
     const contentType = `image/${fileExtension}`;

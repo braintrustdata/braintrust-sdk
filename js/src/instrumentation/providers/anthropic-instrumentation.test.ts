@@ -4,6 +4,9 @@ import { describe, it, expect, vi } from "vite-plus/test";
 vi.mock("#braintrust-platform", () => ({
   default: {
     newTracingChannel: vi.fn(),
+    getEnv: vi.fn((name: string) =>
+      name === "BRAINTRUST_CAPTURE_ATTACHMENTS" ? "true" : undefined,
+    ),
   },
 }));
 
@@ -21,22 +24,28 @@ const aggregateAnthropicStreamChunksForTest = (chunks: unknown[]) =>
   aggregateAnthropicStreamChunks(chunks as any);
 
 // Mock startSpan from logger
-vi.mock("../../logger/core", () => ({
-  startSpan: vi.fn(() => ({
-    log: vi.fn(),
-    end: vi.fn(),
-  })),
-  _internalGetGlobalState: vi.fn(() => undefined),
-  Attachment: class Attachment {
-    reference: any;
-    constructor(opts: any) {
-      this.reference = {
-        filename: opts.filename,
-        content_type: opts.contentType,
-      };
-    }
-  },
-}));
+vi.mock("../../logger/core", async () => {
+  const { default: iso } = await import("#braintrust-platform");
+  return {
+    _internalCaptureAttachmentsEnabled: () =>
+      iso.getEnv("BRAINTRUST_CAPTURE_ATTACHMENTS") === "true",
+    withCurrent: (_span: unknown, callback: () => unknown) => callback(),
+    startSpan: vi.fn(() => ({
+      log: vi.fn(),
+      end: vi.fn(),
+    })),
+    _internalGetGlobalState: vi.fn(() => undefined),
+    Attachment: class Attachment {
+      reference: any;
+      constructor(opts: any) {
+        this.reference = {
+          filename: opts.filename,
+          content_type: opts.contentType,
+        };
+      }
+    },
+  };
+});
 
 describe("parseMetricsFromUsage", () => {
   it("should return empty object for null usage", () => {

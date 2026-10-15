@@ -31,7 +31,9 @@ const { mockWithCurrent, mockNewAsyncLocalStorage, mockStartSpan } = vi.hoisted(
 
 vi.mock("#braintrust-platform", () => ({
   default: {
-    getEnv: vi.fn(),
+    getEnv: vi.fn((name: string) =>
+      name === "BRAINTRUST_CAPTURE_ATTACHMENTS" ? "true" : undefined,
+    ),
     newAsyncLocalStorage: mockNewAsyncLocalStorage,
     newTracingChannel: vi.fn(),
   },
@@ -46,6 +48,9 @@ vi.mock("../../logger/core", async (importOriginal) => {
   };
 });
 
+vi.mock("../../lru-cache", { spy: true });
+
+import { LRUCache } from "../../lru-cache";
 import iso from "#braintrust-platform";
 import { Attachment } from "../../logger/core";
 import { isAutoInstrumentationSuppressed } from "../auto-instrumentation-suppression";
@@ -325,11 +330,18 @@ describe("registerStrandsAgentSDKInstrumentation", () => {
   });
 
   it.each([
-    ["binary objects", new Uint8Array([1, 2, 3])],
-    ["base64 strings", "AQID"],
+    ["binary objects", new Uint8Array([1, 2, 3]), true],
+    ["omitted binary objects", new Uint8Array([1, 2, 3]), false],
+    ["base64 strings", "AQID", true],
+    ["omitted base64 strings", "AQID", false],
   ])(
     "converts media from %s to one attachment shared by agent and model spans",
-    async (_description, bytes) => {
+    async (_description, bytes, captureAttachments) => {
+      vi.mocked(iso.getEnv).mockImplementation((name) =>
+        name === "BRAINTRUST_CAPTURE_ATTACHMENTS"
+          ? String(captureAttachments)
+          : undefined,
+      );
       registerStrandsAgentSDKInstrumentation();
 
       const handlers = handlersByName.get(
@@ -375,10 +387,16 @@ describe("registerStrandsAgentSDKInstrumentation", () => {
         (span) => span.args.name === "Strands model: gpt-4o-mini",
       );
       const rootAttachment =
-        rootSpan?.args.event.input[0].document.source.bytes;
+        rootSpan?.args.event.input[0].document.source?.bytes;
       const modelAttachment =
-        modelSpan?.args.event.input[0].content[0].document.source.bytes;
+        modelSpan?.args.event.input[0].content[0].document.source?.bytes;
 
+      if (!captureAttachments) {
+        expect(LRUCache).not.toHaveBeenCalled();
+        expect(rootAttachment).toBeUndefined();
+        expect(modelAttachment).toBeUndefined();
+        return;
+      }
       expect(rootAttachment).toBeInstanceOf(Attachment);
       expect(rootAttachment.reference).toMatchObject({
         content_type: "application/pdf",

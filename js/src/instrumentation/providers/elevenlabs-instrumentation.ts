@@ -1,6 +1,7 @@
 import { isObject, SpanTypeAttribute } from "../../../util";
 import { debugLogger } from "../../debug-logger";
 import {
+  _internalCaptureAttachmentsEnabled,
   Attachment,
   startSpan,
   withCurrent,
@@ -75,8 +76,9 @@ export function registerElevenLabsInstrumentation(): void {
         file instanceof Blob
           ? file.type || "application/octet-stream"
           : "application/octet-stream";
-      const blob =
-        file instanceof Blob
+      const blob = !_internalCaptureAttachmentsEnabled()
+        ? undefined
+        : file instanceof Blob
           ? file
           : file instanceof Uint8Array
             ? new Blob([new Uint8Array(file)], { type: contentType })
@@ -126,7 +128,8 @@ export function registerElevenLabsInstrumentation(): void {
     },
     ([request], span) => {
       const file = request.file;
-      if (!isAsyncIterable(file)) return;
+      if (!_internalCaptureAttachmentsEnabled(span) || !isAsyncIterable(file))
+        return;
       const chunks: Uint8Array[] = [];
       const filename =
         isObject(file) && typeof file.path === "string"
@@ -288,6 +291,7 @@ function captureSpeech(
   started: number,
   headers?: Headers,
 ): void {
+  const captureAttachments = _internalCaptureAttachmentsEnabled(span);
   const format = request.outputFormat ?? "mp3_44100_128";
   const formatType = format.startsWith("mp3_")
     ? "audio/mpeg"
@@ -325,8 +329,10 @@ function captureSpeech(
       });
     }
     first = false;
-    chunks.push(new Uint8Array(chunk));
-    bytes += chunk.byteLength;
+    if (captureAttachments) {
+      chunks.push(new Uint8Array(chunk));
+      bytes += chunk.byteLength;
+    }
   };
   const complete = () => {
     if (stopped) return;
@@ -370,8 +376,17 @@ function captureSpeech(
     finish(error);
   };
   const timestampChunk = (chunk: ElevenLabsTimestampAudio) => {
-    const binary = atob(chunk.audioBase64);
-    observe(Uint8Array.from(binary, (character) => character.charCodeAt(0)));
+    if (captureAttachments) {
+      const binary = atob(chunk.audioBase64);
+      observe(Uint8Array.from(binary, (character) => character.charCodeAt(0)));
+    } else if (first && chunk.audioBase64) {
+      if (method.startsWith("stream")) {
+        span.log({
+          metrics: { time_to_first_token: Date.now() / 1000 - started },
+        });
+      }
+      first = false;
+    }
     if (chunk.alignment || chunk.normalizedAlignment)
       alignments.push({
         alignment: chunk.alignment,

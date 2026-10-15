@@ -31,6 +31,7 @@ describe("ElevenLabs instrumentation", () => {
   beforeEach(() => {
     logger = _exportsForTestingOnly.useTestBackgroundLogger();
     initLogger({
+      captureAttachments: true,
       projectName: "tmp-luca-elevenlabs-unit",
       projectId: "test-project-id",
     });
@@ -39,44 +40,56 @@ describe("ElevenLabs instrumentation", () => {
     _exportsForTestingOnly.clearTestBackgroundLogger();
   });
 
-  it("keeps promise helpers and stream identity, and copies bytes before the caller can mutate them", async () => {
-    const bytes = new Uint8Array([0, 1, 2, 3]);
-    const stream = new ReadableStream<Uint8Array>({
-      start(controller) {
-        controller.enqueue(bytes.subarray(1, 3));
-        controller.close();
-      },
-    });
-    const promise = Object.assign(Promise.resolve(stream), {
-      withRawResponse: () =>
-        Promise.resolve({
-          data: stream,
-          rawResponse: {
-            headers: new Headers({ "content-type": "audio/mpeg" }),
-          },
-        }),
-    });
-    const result = elevenLabsChannels.convert.invoke(
-      () => promise,
-      undefined,
-      ["voice", request],
-      {},
-    );
-    expect(result).toBe(promise);
-    expect((await result.withRawResponse()).data).toBe(stream);
-    const reader = stream.getReader();
-    expect((await reader.read()).value).toEqual(new Uint8Array([1, 2]));
-    bytes.fill(9);
-    await reader.read();
-    const spans = (await logger.drain()) as Record<string, any>[];
-    const output = spans.find((row: any) => row.output)?.output as any;
-    const attachment = output.content[0].file.file_data as Attachment;
-    expect(attachment).toBeInstanceOf(Attachment);
-    expect(output.content[0].file.byte_size).toBe(2);
-    expect(
-      new Uint8Array(await (await attachment.data()).arrayBuffer()),
-    ).toEqual(new Uint8Array([1, 2]));
-  });
+  it.each([false, true])(
+    "keeps promise helpers and stream identity with capture=%s",
+    async (captureAttachments) => {
+      initLogger({
+        projectName: "tmp-luca-elevenlabs-unit",
+        projectId: "test-project-id",
+        captureAttachments,
+      });
+      const bytes = new Uint8Array([0, 1, 2, 3]);
+      const stream = new ReadableStream<Uint8Array>({
+        start(controller) {
+          controller.enqueue(bytes.subarray(1, 3));
+          controller.close();
+        },
+      });
+      const promise = Object.assign(Promise.resolve(stream), {
+        withRawResponse: () =>
+          Promise.resolve({
+            data: stream,
+            rawResponse: {
+              headers: new Headers({ "content-type": "audio/mpeg" }),
+            },
+          }),
+      });
+      const result = elevenLabsChannels.convert.invoke(
+        () => promise,
+        undefined,
+        ["voice", request],
+        {},
+      );
+      expect(result).toBe(promise);
+      expect((await result.withRawResponse()).data).toBe(stream);
+      const reader = stream.getReader();
+      expect((await reader.read()).value).toEqual(new Uint8Array([1, 2]));
+      bytes.fill(9);
+      await reader.read();
+      const spans = (await logger.drain()) as Record<string, any>[];
+      const output = spans.find((row: any) => row.output)?.output as any;
+      if (!captureAttachments) {
+        expect(output.content).toEqual([]);
+        return;
+      }
+      const attachment = output.content[0].file.file_data as Attachment;
+      expect(attachment).toBeInstanceOf(Attachment);
+      expect(output.content[0].file.byte_size).toBe(2);
+      expect(
+        new Uint8Array(await (await attachment.data()).arrayBuffer()),
+      ).toEqual(new Uint8Array([1, 2]));
+    },
+  );
 
   it.each(["cancel", "error", "break"])(
     "omits partial audio on %s",

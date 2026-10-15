@@ -1,4 +1,11 @@
-import { describe, expect, it, vi } from "vite-plus/test";
+import {
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  vi,
+} from "vite-plus/test";
 import iso from "#braintrust-platform";
 import { configureNode } from "../../node/config";
 import {
@@ -12,6 +19,8 @@ import {
 } from "./ollama-instrumentation";
 
 configureNode();
+beforeEach(() => vi.stubEnv("BRAINTRUST_CAPTURE_ATTACHMENTS", "true"));
+afterEach(() => vi.unstubAllEnvs());
 
 describe("Ollama instrumentation extraction", () => {
   it("normalizes chat inputs, tools, and supported request metadata", () => {

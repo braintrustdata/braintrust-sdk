@@ -21,6 +21,7 @@ export {
   Logger,
   NOOP_SPAN,
   ReadonlyAttachment,
+  _internalCaptureAttachmentsEnabled,
   currentExperiment,
   currentLogger,
   currentSpan,

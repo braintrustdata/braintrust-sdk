@@ -32,11 +32,18 @@ vi.mock("#braintrust-platform", async (importOriginal) => {
   };
 });
 
-vi.mock("../../logger/core", () => ({
-  withCurrent: (_span: unknown, callback: () => unknown) => callback(),
-  startSpan: (...args: unknown[]) => mockStartSpan(...args),
-  _internalStartSpan: (...args: unknown[]) => mockStartSpan(...args),
-}));
+vi.mock("../../logger/core", async () => {
+  const { default: iso } = await import("#braintrust-platform");
+  return {
+    _internalCaptureAttachmentsEnabled: () =>
+      iso.getEnv("BRAINTRUST_CAPTURE_ATTACHMENTS") === "true",
+    CAPTURE_ATTACHMENTS: Symbol.for("braintrust.captureAttachments"),
+    BaseAttachment: class {},
+    _internalStartSpan: (...args: unknown[]) => mockStartSpan(...args),
+    startSpan: (...args: unknown[]) => mockStartSpan(...args),
+    withCurrent: (_span: unknown, callback: () => unknown) => callback(),
+  };
+});
 
 import { isAutoInstrumentationSuppressed } from "../auto-instrumentation-suppression";
 import { registerPiCodingAgentInstrumentation } from "./pi-coding-agent-instrumentation";

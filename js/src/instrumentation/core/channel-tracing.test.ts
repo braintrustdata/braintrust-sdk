@@ -27,6 +27,11 @@ import { traceAsyncChannel, traceStreamingChannel } from "./channel-tracing";
 const testChannels = defineChannels(
   "channel-tracing-test",
   {
+    inputContext: channel<
+      [Record<string, unknown>],
+      { ok: true },
+      Record<string, unknown>
+    >({ channelName: "async.input-context", kind: "async" }),
     asyncBinding: channel<[Record<string, unknown>], { ok: true }>({
       channelName: "async.binding",
       kind: "async",
@@ -115,6 +120,31 @@ describe("traceAsyncChannel current span binding", () => {
     expect(spans[0]?.context?.span_origin).toMatchObject({
       instrumentation: { name: INSTRUMENTATION_NAMES.OPENAI },
     });
+  });
+
+  it("extracts input in the caller's context", async () => {
+    let inputContextSpan: Span | undefined;
+    let createdSpan: Span | undefined;
+    traceAsyncChannel(testChannels.inputContext, {
+      name: "channel-tracing-test",
+      type: "function",
+      extractInput: (_args, _event, span) => {
+        inputContextSpan = currentSpan();
+        createdSpan = span;
+        return { input: "input", metadata: undefined };
+      },
+      extractOutput: (result) => result,
+      extractMetrics: () => ({}),
+    });
+
+    await testChannels.inputContext.tracePromise(
+      async () => ({ ok: true as const }),
+      { arguments: [{}] } as any,
+    );
+
+    // AI SDK child tracing compares the caller's span with the created span.
+    expect(createdSpan).toBeDefined();
+    expect(inputContextSpan).not.toBe(createdSpan);
   });
 
   it("limits channel provenance to directly instrumented spans", async () => {

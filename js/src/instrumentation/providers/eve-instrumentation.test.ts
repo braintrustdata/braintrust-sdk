@@ -63,11 +63,13 @@ describe("braintrustEveInstrumentation", () => {
     initLogger({
       projectName: "eve-instrumentation.test.ts",
       projectId: "test-project-id",
+      captureAttachments: false,
     });
   });
 
   afterEach(() => {
     vi.restoreAllMocks();
+    vi.unstubAllEnvs();
     _exportsForTestingOnly.clearTestBackgroundLogger();
   });
 
@@ -772,130 +774,139 @@ describe("braintrustEveInstrumentation", () => {
     expect(step?.root_span_id).toBe(parent?.root_span_id);
   });
 
-  it("resumes spans and turn metrics from Eve operation state", async () => {
-    const firstProvider = braintrustEveInstrumentation();
-    const turnContext = providerContext();
-    const modelContext = providerContext();
-    const scope = ATTEMPT_SCOPE;
+  it.each([false, true])(
+    "resumes spans and turn metrics from Eve operation state (legacy: %s)",
+    async (legacy) => {
+      const firstProvider = braintrustEveInstrumentation();
+      const turnContext = providerContext();
+      const modelContext = providerContext();
+      const scope = ATTEMPT_SCOPE;
 
-    await firstProvider.events["turn.started"](
-      {
-        idempotencyKey: "turn:session-root:turn-0",
-        rootSessionId: "session-root",
-        sequence: 0,
-        sessionId: "session-root",
-        turnId: "turn-0",
-        type: "turn.started",
-      },
-      turnContext,
-    );
-    await firstProvider.events["model.call.started"](
-      {
-        idempotencyKey: "model:attempt-0:0",
-        input: {
-          messages: [{ content: "Resume this call", role: "user" }],
+      await firstProvider.events["turn.started"](
+        {
+          idempotencyKey: "turn:session-root:turn-0",
+          rootSessionId: "session-root",
+          sequence: 0,
+          sessionId: "session-root",
+          turnId: "turn-0",
+          type: "turn.started",
         },
-        model: {
-          modelId: "gpt-5.4-mini",
-          provider: "openai.responses",
+        turnContext,
+      );
+      await firstProvider.events["model.call.started"](
+        {
+          idempotencyKey: "model:attempt-0:0",
+          input: {
+            messages: [{ content: "Resume this call", role: "user" }],
+          },
+          model: {
+            modelId: "gpt-5.4-mini",
+            provider: "openai.responses",
+          },
+          scope,
+          type: "model.call.started",
         },
-        scope,
-        type: "model.call.started",
-      },
-      modelContext,
-    );
+        modelContext,
+      );
 
-    const persisted = modelContext.state.get();
-    expect(persisted).toMatchObject({
-      exported: expect.any(String),
-      rootSpanId: expect.any(String),
-      spanId: expect.any(String),
-    });
+      const persisted = {
+        ...(modelContext.state.get() as Record<string, EveJsonValue>),
+      };
+      if (legacy) delete persisted.captureAttachments;
+      expect(persisted).toMatchObject({
+        exported: expect.any(String),
+        rootSpanId: expect.any(String),
+        spanId: expect.any(String),
+      });
 
-    const resumedProvider = braintrustEveInstrumentation();
-    await resumedProvider.events["model.call.completed"](
-      {
-        content: [{ text: "Resumed output", type: "text" }],
-        finishReason: "stop",
-        idempotencyKey: "model:attempt-0:0",
-        scope,
-        type: "model.call.completed",
-        usage: { inputTokens: 4, outputTokens: 2 },
-      },
-      providerContext(persisted),
-    );
-    const secondModelContext = providerContext();
-    await resumedProvider.events["model.call.started"](
-      {
-        idempotencyKey: "model:attempt-0:1",
-        input: {
-          messages: [{ content: "Continue this call", role: "user" }],
+      const resumedProvider = braintrustEveInstrumentation();
+      await resumedProvider.events["model.call.completed"](
+        {
+          content: [{ text: "Resumed output", type: "text" }],
+          finishReason: "stop",
+          idempotencyKey: "model:attempt-0:0",
+          scope,
+          type: "model.call.completed",
+          usage: { inputTokens: 4, outputTokens: 2 },
         },
-        model: {
-          modelId: "gpt-5.4-mini",
-          provider: "openai.responses",
+        providerContext(persisted),
+      );
+      const secondModelContext = providerContext();
+      await resumedProvider.events["model.call.started"](
+        {
+          idempotencyKey: "model:attempt-0:1",
+          input: {
+            messages: [{ content: "Continue this call", role: "user" }],
+          },
+          model: {
+            modelId: "gpt-5.4-mini",
+            provider: "openai.responses",
+          },
+          scope: { ...scope, stepIndex: 1 },
+          type: "model.call.started",
         },
-        scope: { ...scope, stepIndex: 1 },
-        type: "model.call.started",
-      },
-      secondModelContext,
-    );
-    const secondPersisted = secondModelContext.state.get();
-    expect(secondPersisted).toMatchObject({
-      turnMetricContributions: {
-        "model:attempt-0:0": {
+        secondModelContext,
+      );
+      const secondPersisted = {
+        ...(secondModelContext.state.get() as Record<string, EveJsonValue>),
+      };
+      if (legacy) delete secondPersisted.captureAttachments;
+      expect(secondPersisted).toMatchObject({
+        turnMetricContributions: {
+          "model:attempt-0:0": {
+            completion_tokens: 2,
+            prompt_tokens: 4,
+            tokens: 6,
+          },
+        },
+      });
+      const finalProvider = braintrustEveInstrumentation();
+      await finalProvider.events["model.call.completed"](
+        {
+          content: [{ text: "Final resumed output", type: "text" }],
+          finishReason: "stop",
+          idempotencyKey: "model:attempt-0:1",
+          scope: { ...scope, stepIndex: 1 },
+          type: "model.call.completed",
+          usage: { inputTokens: 3, outputTokens: 1 },
+        },
+        providerContext(secondPersisted),
+      );
+
+      const spans = (await backgroundLogger.drain()) as Array<
+        Record<string, any>
+      >;
+      const steps = spans.filter(
+        (span) => span.span_attributes?.name === "eve.step",
+      );
+      expect(steps).toHaveLength(2);
+      expect(steps[0]).toMatchObject({
+        input: [{ content: "Resume this call", role: "user" }],
+        metrics: {
           completion_tokens: 2,
           prompt_tokens: 4,
           tokens: 6,
         },
-      },
-    });
-    const finalProvider = braintrustEveInstrumentation();
-    await finalProvider.events["model.call.completed"](
-      {
-        content: [{ text: "Final resumed output", type: "text" }],
-        finishReason: "stop",
-        idempotencyKey: "model:attempt-0:1",
-        scope: { ...scope, stepIndex: 1 },
-        type: "model.call.completed",
-        usage: { inputTokens: 3, outputTokens: 1 },
-      },
-      providerContext(secondPersisted),
-    );
-
-    const spans = (await backgroundLogger.drain()) as Array<
-      Record<string, any>
-    >;
-    const steps = spans.filter(
-      (span) => span.span_attributes?.name === "eve.step",
-    );
-    expect(steps).toHaveLength(2);
-    expect(steps[0]).toMatchObject({
-      input: [{ content: "Resume this call", role: "user" }],
-      metrics: {
-        completion_tokens: 2,
-        prompt_tokens: 4,
-        tokens: 6,
-      },
-      output: [
-        {
-          finish_reason: "stop",
-          message: {
-            content: "Resumed output",
-            role: "assistant",
+        output: [
+          {
+            finish_reason: "stop",
+            message: {
+              content: "Resumed output",
+              role: "assistant",
+            },
           },
-        },
-      ],
-    });
-    const turn = spans.find(
-      (span) => span.span_attributes?.name === "eve.turn",
-    );
-    expect(turn?.metrics).toMatchObject({
-      completion_tokens: 3,
-      prompt_tokens: 7,
-      tokens: 10,
-    });
-  });
+        ],
+      });
+      const turn = spans.find(
+        (span) => span.span_attributes?.name === "eve.turn",
+      );
+      expect(turn?.metrics).toMatchObject({
+        completion_tokens: 3,
+        prompt_tokens: 7,
+        tokens: 10,
+      });
+    },
+  );
 
   it("does not double-count replayed model completions", async () => {
     const provider = braintrustEveInstrumentation();
@@ -1121,159 +1132,217 @@ describe("braintrustEveInstrumentation", () => {
     expect(JSON.stringify(step?.input)).not.toContain("secret");
   });
 
-  it("converts inline model and tool-result media to attachments", async () => {
-    const provider = braintrustEveInstrumentation();
-    const actionContext = providerContext();
-    await provider.events["turn.started"](
-      {
-        idempotencyKey: "turn:session-root:turn-0",
-        rootSessionId: "session-root",
-        sequence: 0,
-        sessionId: "session-root",
-        turnId: "turn-0",
-        type: "turn.started",
-      },
-      providerContext(),
-    );
-    await provider.events["model.call.started"](
-      {
-        idempotencyKey: "model:attempt-0:0",
-        input: {
-          messages: [
-            {
-              content: [
-                {
-                  data: "AQID",
-                  filename: "tiny.png",
-                  mediaType: "image/png",
-                  type: "file",
-                },
-                {
-                  image: "DQ4P",
-                  mediaType: "image/png",
-                  type: "image",
-                },
-                {
-                  data: "not valid base64!",
-                  filename: "invalid.png",
-                  mediaType: "image/png",
-                  type: "file",
-                },
-              ],
-              role: "user",
-            },
-            {
-              content: [
-                {
-                  output: {
-                    type: "content",
-                    value: [
-                      {
-                        data: "BAUG",
-                        mediaType: "image/png",
-                        type: "image-data",
-                      },
-                    ],
-                  },
-                  toolCallId: "call-image",
-                  toolName: "render",
-                  type: "tool-result",
-                },
-              ],
-              role: "tool",
-            },
-          ],
+  it.each(
+    [
+      { option: false, env: "true", enabled: false },
+      { option: true, env: "false", enabled: true },
+      { option: undefined, env: undefined, enabled: false },
+      { option: undefined, env: "true", enabled: true },
+    ].flatMap((policy) => [
+      { ...policy, legacy: false },
+      { ...policy, legacy: true },
+    ]),
+  )(
+    "applies the persisted or current policy to model media and preserves action JSON ($option, $env, legacy: $legacy)",
+    async ({ option, env, enabled, legacy }) => {
+      const captureAttachments = legacy ? !enabled : enabled;
+      vi.stubEnv("BRAINTRUST_CAPTURE_ATTACHMENTS", env);
+      const logger = initLogger({
+        projectName: "eve-instrumentation.test.ts",
+        projectId: "test-project-id",
+        setCurrent: false,
+        captureAttachments: option,
+      });
+      const provider = braintrustEveInstrumentation();
+      const actionContext = providerContext();
+      const turnContext = providerContext();
+      await logger.traced(() =>
+        provider.events["turn.started"](
+          {
+            idempotencyKey: "turn:session-root:turn-0",
+            rootSessionId: "session-root",
+            sequence: 0,
+            sessionId: "session-root",
+            turnId: "turn-0",
+            type: "turn.started",
+          },
+          turnContext,
+        ),
+      );
+      initLogger({
+        projectName: "eve-instrumentation.test.ts",
+        projectId: "test-project-id",
+        captureAttachments: !enabled,
+      });
+      const persistedTurn = {
+        ...(turnContext.state.get() as Record<string, EveJsonValue>),
+      };
+      if (legacy) delete persistedTurn.captureAttachments;
+      // Recreate the bridge from persisted state, as Eve does across workers.
+      const resumedProvider = braintrustEveInstrumentation();
+      await resumedProvider.events["turn.started"](
+        {
+          idempotencyKey: "turn:session-root:turn-0",
+          rootSessionId: "session-root",
+          sequence: 0,
+          sessionId: "session-root",
+          turnId: "turn-0",
+          type: "turn.started",
         },
-        model: { modelId: "gpt-5.4-mini", provider: "openai.responses" },
-        scope: ATTEMPT_SCOPE,
-        type: "model.call.started",
-      },
-      providerContext(),
-    );
-    await provider.events["action.started"](
-      {
-        callId: "call-render",
-        idempotencyKey: "action:session-root:turn-0:call-render",
-        input: {
-          data: "data:image/png;base64,BwgJ",
-          mediaType: "image/png",
-          type: "file",
-        },
-        name: "render",
-        scope: ATTEMPT_SCOPE,
-        type: "action.started",
-      },
-      actionContext,
-    );
-    await provider.events["action.completed"](
-      {
-        idempotencyKey: "action:session-root:turn-0:call-render",
-        output: {
-          output: {
-            type: "content",
-            value: [
+        providerContext(persistedTurn),
+      );
+      const decode = vi.spyOn(globalThis, "atob");
+      await resumedProvider.events["model.call.started"](
+        {
+          idempotencyKey: "model:attempt-0:0",
+          input: {
+            messages: [
               {
-                data: new Uint8Array([10, 11, 12]),
-                mediaType: "image/png",
-                type: "image-data",
+                content: [
+                  {
+                    data: "AQID",
+                    filename: "tiny.png",
+                    mediaType: "image/png",
+                    type: "file",
+                  },
+                  {
+                    image: "DQ4P",
+                    mediaType: "image/png",
+                    type: "image",
+                  },
+                  {
+                    data: "not valid base64!",
+                    filename: "invalid.png",
+                    mediaType: "image/png",
+                    type: "file",
+                  },
+                  { type: "image", image: "https://example.com/image.png" },
+                ],
+                role: "user",
+              },
+              {
+                content: [
+                  {
+                    output: {
+                      type: "content",
+                      value: [
+                        {
+                          data: "BAUG",
+                          mediaType: "image/png",
+                          type: "image-data",
+                        },
+                      ],
+                    },
+                    toolCallId: "call-image",
+                    toolName: "render",
+                    type: "tool-result",
+                  },
+                ],
+                role: "tool",
               },
             ],
           },
-          type: "result",
+          model: { modelId: "gpt-5.4-mini", provider: "openai.responses" },
+          scope: ATTEMPT_SCOPE,
+          type: "model.call.started",
         },
-        scope: ATTEMPT_SCOPE,
-        type: "action.completed",
-      },
-      actionContext,
-    );
+        providerContext(),
+      );
+      await provider.events["action.started"](
+        {
+          callId: "call-render",
+          idempotencyKey: "action:session-root:turn-0:call-render",
+          input: {
+            data: "report text",
+            type: "file",
+          },
+          name: "render",
+          scope: ATTEMPT_SCOPE,
+          type: "action.started",
+        },
+        actionContext,
+      );
+      await provider.events["action.completed"](
+        {
+          idempotencyKey: "action:session-root:turn-0:call-render",
+          output: {
+            output: {
+              type: "content",
+              value: [
+                {
+                  data: "ordinary JSON data",
+                  mediaType: "image/png",
+                  type: "image-data",
+                },
+              ],
+            },
+            type: "result",
+          },
+          scope: ATTEMPT_SCOPE,
+          type: "action.completed",
+        },
+        actionContext,
+      );
 
-    const spans = (await backgroundLogger.drain()) as Array<
-      Record<string, any>
-    >;
-    const step = spans.find(
-      (span) => span.span_attributes?.name === "eve.step",
-    );
-    const inputAttachment = step?.input?.[0]?.content?.[0]?.data;
-    const imageAttachment = step?.input?.[0]?.content?.[1]?.image;
-    const unconvertedFile = step?.input?.[0]?.content?.[2]?.data;
-    const outputAttachment =
-      step?.input?.[1]?.content?.[0]?.output?.value?.[0]?.data;
-    const action = spans.find(
-      (span) => span.span_attributes?.name === "render",
-    );
-    const actionInputAttachment = action?.input?.data;
-    const actionOutputAttachment = action?.output?.value?.[0]?.data;
-    expect(inputAttachment).toBeInstanceOf(Attachment);
-    expect(inputAttachment.reference).toMatchObject({
-      content_type: "image/png",
-      filename: "tiny.png",
-      type: "braintrust_attachment",
-    });
-    expect(imageAttachment).toBeInstanceOf(Attachment);
-    expect(imageAttachment.reference).toMatchObject({
-      content_type: "image/png",
-      type: "braintrust_attachment",
-    });
-    expect(unconvertedFile).toBe("not valid base64!");
-    expect(outputAttachment).toBeInstanceOf(Attachment);
-    expect(outputAttachment.reference).toMatchObject({
-      content_type: "image/png",
-      filename: "attachment.png",
-      type: "braintrust_attachment",
-    });
-    expect(actionInputAttachment).toBeInstanceOf(Attachment);
-    expect(actionInputAttachment.reference).toMatchObject({
-      content_type: "image/png",
-      type: "braintrust_attachment",
-    });
-    expect(actionOutputAttachment).toBeInstanceOf(Attachment);
-    expect(actionOutputAttachment.reference).toMatchObject({
-      content_type: "image/png",
-      type: "braintrust_attachment",
-    });
-    expect(JSON.stringify(step?.input)).not.toContain("AQID");
-    expect(JSON.stringify(step?.input)).not.toContain("BAUG");
-  });
+      const spans = (await backgroundLogger.drain()) as Array<
+        Record<string, any>
+      >;
+      const step = spans.find(
+        (span) => span.span_attributes?.name === "eve.step",
+      );
+      expect(step).toMatchObject({
+        root_span_id: persistedTurn.rootSpanId,
+        span_parents: [persistedTurn.spanId],
+      });
+      const inputAttachment = step?.input?.[0]?.content?.[0]?.data;
+      const imageAttachment = step?.input?.[0]?.content?.[1]?.image;
+      const unconvertedFile = step?.input?.[0]?.content?.[2]?.data;
+      const outputAttachment =
+        step?.input?.[1]?.content?.[0]?.output?.value?.[0]?.data;
+      const action = spans.find(
+        (span) => span.span_attributes?.name === "render",
+      );
+      const actionInputAttachment = action?.input?.data;
+      const actionOutputAttachment = action?.output?.value?.[0]?.data;
+      if (captureAttachments) {
+        expect(inputAttachment).toBeInstanceOf(Attachment);
+        expect(inputAttachment.reference).toMatchObject({
+          content_type: "image/png",
+          filename: "tiny.png",
+          type: "braintrust_attachment",
+        });
+        expect(imageAttachment).toBeInstanceOf(Attachment);
+        expect(imageAttachment.reference).toMatchObject({
+          content_type: "image/png",
+          type: "braintrust_attachment",
+        });
+        expect(unconvertedFile).toBe("not valid base64!");
+        expect(outputAttachment).toBeInstanceOf(Attachment);
+        expect(outputAttachment.reference).toMatchObject({
+          content_type: "image/png",
+          filename: "attachment.png",
+          type: "braintrust_attachment",
+        });
+      } else {
+        expect(inputAttachment).toBeUndefined();
+        expect(imageAttachment).toBeUndefined();
+        expect(unconvertedFile).toBeUndefined();
+        expect(outputAttachment).toBeUndefined();
+        for (const payload of ["AQID", "DQ4P", "BAUG", "not valid base64!"]) {
+          expect(decode).not.toHaveBeenCalledWith(payload);
+        }
+      }
+      expect(step?.input?.[0]?.content?.[3]).toEqual({
+        type: "image",
+        image: "https://example.com/image.png",
+      });
+      expect(action?.input).toEqual({ type: "file", data: "report text" });
+      expect(actionInputAttachment).toBe("report text");
+      expect(actionOutputAttachment).toBe("ordinary JSON data");
+      expect(JSON.stringify(step?.input)).not.toContain("AQID");
+      expect(JSON.stringify(step?.input)).not.toContain("BAUG");
+    },
+  );
 
   it("preserves arbitrary action outputs with type fields", async () => {
     const provider = braintrustEveInstrumentation();

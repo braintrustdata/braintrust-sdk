@@ -15,7 +15,9 @@ const telemetryMocks = vi.hoisted(() => ({
 vi.mock("#braintrust-platform", () => ({
   default: {
     newTracingChannel: vi.fn(),
-    getEnv: () => undefined,
+    getEnv: vi.fn((name: string) =>
+      name === "BRAINTRUST_CAPTURE_ATTACHMENTS" ? "true" : undefined,
+    ),
     newAsyncLocalStorage: () => ({
       getStore: () => undefined,
       run: (_store: unknown, callback: () => unknown) => callback(),

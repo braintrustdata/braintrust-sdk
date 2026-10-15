@@ -1,4 +1,5 @@
 import {
+  _internalCaptureAttachmentsEnabled,
   Attachment,
   startSpan,
   withCurrent,
@@ -13,7 +14,6 @@ import {
 import {
   convertDataToBlob,
   getExtensionFromMediaType,
-  isAutoCaptureAttachmentsEnabled,
 } from "../../wrappers/attachment-utils";
 import { isObject } from "../../../util/index";
 import { isAsyncIterable, patchStreamIfNeeded } from "../core/stream-patcher";
@@ -658,7 +658,7 @@ export function interceptOpenAIMedia(
   return channel.intercept((target, thisArg, args, additional) => {
     if (isAutoInstrumentationSuppressed()) return target.apply(thisArg, args);
     const params = args[0];
-    const captureAttachments = isAutoCaptureAttachmentsEnabled();
+    const captureAttachments = _internalCaptureAttachmentsEnabled();
     let span: Span;
     try {
       const { name, spanAttributes, spanInfoMetadata } = buildStartSpanArgs(
