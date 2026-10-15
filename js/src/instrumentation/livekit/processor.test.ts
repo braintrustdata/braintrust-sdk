@@ -684,7 +684,8 @@ test("tool request, continuation, input speech and generated speech use exported
   });
   p.onEnd(continuation);
   const links = (i: number) =>
-    rows[i].logs.filter((log) => log.links).at(-1)?.links ?? [];
+    rows[i].logs.filter((log) => log.metadata?.links).at(-1)?.metadata?.links ??
+    [];
   const link = (target: number, type: string) => ({
     context: {
       traceId: "1234567890abcdef1234567890abcdef",
@@ -693,6 +694,9 @@ test("tool request, continuation, input speech and generated speech use exported
     },
     attributes: { "braintrust.relationship.type": type },
   });
+  expect(
+    rows.flatMap((row) => row.logs).every((log) => !("links" in log)),
+  ).toBe(true);
   expect(links(3)).toEqual([link(2, "input_context")]);
   expect(links(4)).toEqual([link(3, "requested_by")]);
   expect(links(5)).toEqual([link(4, "consumes_tool_result")]);
@@ -903,4 +907,41 @@ test("native recognition ownership survives independently sampled speech timesta
     input: [{ role: "user", content: "Where is my order?" }],
   });
   expect(rows[2].args.startTime).toBe(1.005);
+});
+
+test("duplex omits adapter turns while preserving speech, models and tool parentage", () => {
+  const { rows, span, p } = fixture(true);
+  const root = span("s", "agent_session");
+  p.onStart(root);
+  p.begin({ sessionSpan: root, llm: { duplexModel: {} } });
+  const user = span("u", "user_turn", "s");
+  const caller = span("us", "user_speaking", "u");
+  const agent = span("a", "agent_turn", "s");
+  const model = span("m", "realtime_inference", "a");
+  const tool = span("t", "function_tool", "m");
+  const speech = span("as", "agent_speaking", "a");
+  for (const native of [user, caller, agent, model, tool, speech])
+    p.onStart(native);
+  for (const native of [caller, user, tool, model, speech, agent, root])
+    p.onEnd(native);
+  expect(rows.map((row) => row.args.name)).toEqual([
+    "livekit.agent_session",
+    "user_speech",
+    "llm_response",
+    "livekit.function_tool",
+    "agent_speech",
+  ]);
+  expect(rows.slice(1).map((row) => row.parent)).toEqual([
+    rows[0].spanId,
+    rows[0].spanId,
+    rows[2].spanId,
+    rows[0].spanId,
+  ]);
+  expect(rows.every((row) => row.end)).toBe(true);
+  expect(
+    rows
+      .flatMap((row) => row.logs)
+      .flatMap((log) => Object.keys(log.metadata ?? {}))
+      .filter((key) => key.startsWith("turn.")),
+  ).toEqual([]);
 });

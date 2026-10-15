@@ -65,6 +65,7 @@ export class Relationships {
       attributes: { "braintrust.relationship.type": relationship },
     });
     this.links.set(source, links);
-    source.log({ links: [...links.values()] });
+    // Prototype transport until hosted queries expose top-level OTel links.
+    source.log({ metadata: { links: [...links.values()] } });
   }
 }

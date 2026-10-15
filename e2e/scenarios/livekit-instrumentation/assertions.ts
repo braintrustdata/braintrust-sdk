@@ -109,7 +109,7 @@ export function assertAudioTrace(
     "expected unassociated speaking spans were not found",
   ).toEqual([]);
   for (const source of events) {
-    for (const link of (source.row.links ?? []) as {
+    for (const link of (source.row.metadata?.links ?? []) as {
       context: { traceId: string; spanId: string; traceFlags: number };
       attributes: Record<string, string>;
     }[]) {

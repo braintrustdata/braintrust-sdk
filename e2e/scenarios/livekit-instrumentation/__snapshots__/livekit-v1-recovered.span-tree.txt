@@ -329,6 +329,18 @@ span_tree:
     │   │     "contrib.livekit.response.ttft": 0,
     │   │     "gen_ai.provider.name": "<provider-host>",
     │   │     "gen_ai.request.model": "gpt-4.1-nano",
+    │   │     "links": [
+    │   │       {
+    │   │         "attributes": {
+    │   │           "braintrust.relationship.type": "consumes_tool_result"
+    │   │         },
+    │   │         "context": {
+    │   │           "spanId": "<native:9>",
+    │   │           "traceFlags": 1,
+    │   │           "traceId": "<native:8>"
+    │   │         }
+    │   │       }
+    │   │     ],
     │   │     "model": "gpt-4.1-nano",
     │   │     "provider": "<provider-host>",
     │   │     "scenario": "livekit-instrumentation",
@@ -346,18 +358,6 @@ span_tree:
     │   │     "caller_functionname": "ScenarioProcessor.onStart",
     │   │     "caller_lineno": 0
     │   │   }
-    │   │   links: [
-    │   │     {
-    │   │       "attributes": {
-    │   │         "braintrust.relationship.type": "consumes_tool_result"
-    │   │       },
-    │   │       "context": {
-    │   │         "spanId": "<native:9>",
-    │   │         "traceFlags": 1,
-    │   │         "traceId": "<native:8>"
-    │   │       }
-    │   │     }
-    │   │   ]
     │   ├── lookup_order [tool]
     │   │   input: {
     │   │     "order_id": "1042"
@@ -375,6 +375,18 @@ span_tree:
     │   │     "gen_ai.tool.call.id": "call_ThLD0enkAFrFk7EcZVLFKRvh",
     │   │     "gen_ai.tool.name": "lookup_order",
     │   │     "gen_ai.tool.type": "function",
+    │   │     "links": [
+    │   │       {
+    │   │         "attributes": {
+    │   │           "braintrust.relationship.type": "requested_by"
+    │   │         },
+    │   │         "context": {
+    │   │           "spanId": "<native:11>",
+    │   │           "traceFlags": 1,
+    │   │           "traceId": "<native:8>"
+    │   │         }
+    │   │       }
+    │   │     ],
     │   │     "scenario": "livekit-instrumentation",
     │   │     "testRunId": "<run:1>",
     │   │     "turn.id": "<span:1>"
@@ -384,23 +396,23 @@ span_tree:
     │   │     "caller_functionname": "ScenarioProcessor.onStart",
     │   │     "caller_lineno": 0
     │   │   }
-    │   │   links: [
-    │   │     {
-    │   │       "attributes": {
-    │   │         "braintrust.relationship.type": "requested_by"
-    │   │       },
-    │   │       "context": {
-    │   │         "spanId": "<native:11>",
-    │   │         "traceFlags": 1,
-    │   │         "traceId": "<native:8>"
-    │   │       }
-    │   │     }
-    │   │   ]
     │   ├── tts [task]
     │   │   metadata: {
     │   │     "contrib.livekit.response.ttfb": 0,
     │   │     "gen_ai.provider.name": "<provider-host>",
     │   │     "gen_ai.request.model": "gpt-4o-mini-tts",
+    │   │     "links": [
+    │   │       {
+    │   │         "attributes": {
+    │   │           "braintrust.relationship.type": "generated_by"
+    │   │         },
+    │   │         "context": {
+    │   │           "spanId": "<native:12>",
+    │   │           "traceFlags": 1,
+    │   │           "traceId": "<native:8>"
+    │   │         }
+    │   │       }
+    │   │     ],
     │   │     "model": "gpt-4o-mini-tts",
     │   │     "provider": "<provider-host>",
     │   │     "scenario": "livekit-instrumentation",
@@ -412,18 +424,6 @@ span_tree:
     │   │     "caller_functionname": "ScenarioProcessor.onStart",
     │   │     "caller_lineno": 0
     │   │   }
-    │   │   links: [
-    │   │     {
-    │   │       "attributes": {
-    │   │         "braintrust.relationship.type": "generated_by"
-    │   │       },
-    │   │       "context": {
-    │   │         "spanId": "<native:12>",
-    │   │         "traceFlags": 1,
-    │   │         "traceId": "<native:8>"
-    │   │       }
-    │   │     }
-    │   │   ]
     │   │   └── livekit.tts_request [task]
     │   │       metadata: {
     │   │         "contrib.livekit.tts.label": "openai.TTS",
@@ -508,6 +508,18 @@ span_tree:
     │         "contrib.livekit.message_ids": [
     │           "<native:16>"
     │         ],
+    │         "links": [
+    │           {
+    │             "attributes": {
+    │               "braintrust.relationship.type": "generated_by"
+    │             },
+    │             "context": {
+    │               "spanId": "<native:12>",
+    │               "traceFlags": 1,
+    │               "traceId": "<native:8>"
+    │             }
+    │           }
+    │         ],
     │         "scenario": "livekit-instrumentation",
     │         "testRunId": "<run:1>",
     │         "turn.id": "<span:1>"
@@ -517,18 +529,6 @@ span_tree:
     │         "caller_functionname": "ScenarioProcessor.onStart",
     │         "caller_lineno": 0
     │       }
-    │       links: [
-    │         {
-    │           "attributes": {
-    │             "braintrust.relationship.type": "generated_by"
-    │           },
-    │           "context": {
-    │             "spanId": "<native:12>",
-    │             "traceFlags": 1,
-    │             "traceId": "<native:8>"
-    │           }
-    │         }
-    │       ]
     ├── agent_turn [task]
     │   metadata: {
     │     "audio.selection": {
@@ -631,6 +631,28 @@ span_tree:
     │   │     "contrib.livekit.response.ttft": 0,
     │   │     "gen_ai.provider.name": "<provider-host>",
     │   │     "gen_ai.request.model": "gpt-4.1-nano",
+    │   │     "links": [
+    │   │       {
+    │   │         "attributes": {
+    │   │           "braintrust.relationship.type": "consumes_tool_result"
+    │   │         },
+    │   │         "context": {
+    │   │           "spanId": "<native:9>",
+    │   │           "traceFlags": 1,
+    │   │           "traceId": "<native:8>"
+    │   │         }
+    │   │       },
+    │   │       {
+    │   │         "attributes": {
+    │   │           "braintrust.relationship.type": "input_context"
+    │   │         },
+    │   │         "context": {
+    │   │           "spanId": "<native:10>",
+    │   │           "traceFlags": 1,
+    │   │           "traceId": "<native:8>"
+    │   │         }
+    │   │       }
+    │   │     ],
     │   │     "model": "gpt-4.1-nano",
     │   │     "provider": "<provider-host>",
     │   │     "scenario": "livekit-instrumentation",
@@ -648,33 +670,23 @@ span_tree:
     │   │     "caller_functionname": "ScenarioProcessor.onStart",
     │   │     "caller_lineno": 0
     │   │   }
-    │   │   links: [
-    │   │     {
-    │   │       "attributes": {
-    │   │         "braintrust.relationship.type": "consumes_tool_result"
-    │   │       },
-    │   │       "context": {
-    │   │         "spanId": "<native:9>",
-    │   │         "traceFlags": 1,
-    │   │         "traceId": "<native:8>"
-    │   │       }
-    │   │     },
-    │   │     {
-    │   │       "attributes": {
-    │   │         "braintrust.relationship.type": "input_context"
-    │   │       },
-    │   │       "context": {
-    │   │         "spanId": "<native:10>",
-    │   │         "traceFlags": 1,
-    │   │         "traceId": "<native:8>"
-    │   │       }
-    │   │     }
-    │   │   ]
     │   ├── tts [task]
     │   │   metadata: {
     │   │     "contrib.livekit.response.ttfb": 0,
     │   │     "gen_ai.provider.name": "<provider-host>",
     │   │     "gen_ai.request.model": "gpt-4o-mini-tts",
+    │   │     "links": [
+    │   │       {
+    │   │         "attributes": {
+    │   │           "braintrust.relationship.type": "generated_by"
+    │   │         },
+    │   │         "context": {
+    │   │           "spanId": "<native:13>",
+    │   │           "traceFlags": 1,
+    │   │           "traceId": "<native:8>"
+    │   │         }
+    │   │       }
+    │   │     ],
     │   │     "model": "gpt-4o-mini-tts",
     │   │     "provider": "<provider-host>",
     │   │     "scenario": "livekit-instrumentation",
@@ -686,18 +698,6 @@ span_tree:
     │   │     "caller_functionname": "ScenarioProcessor.onStart",
     │   │     "caller_lineno": 0
     │   │   }
-    │   │   links: [
-    │   │     {
-    │   │       "attributes": {
-    │   │         "braintrust.relationship.type": "generated_by"
-    │   │       },
-    │   │       "context": {
-    │   │         "spanId": "<native:13>",
-    │   │         "traceFlags": 1,
-    │   │         "traceId": "<native:8>"
-    │   │       }
-    │   │     }
-    │   │   ]
     │   │   └── livekit.tts_request [task]
     │   │       metadata: {
     │   │         "contrib.livekit.tts.label": "openai.TTS",
@@ -787,6 +787,18 @@ span_tree:
     │         "contrib.livekit.message_ids": [
     │           "<native:17>"
     │         ],
+    │         "links": [
+    │           {
+    │             "attributes": {
+    │               "braintrust.relationship.type": "generated_by"
+    │             },
+    │             "context": {
+    │               "spanId": "<native:13>",
+    │               "traceFlags": 1,
+    │               "traceId": "<native:8>"
+    │             }
+    │           }
+    │         ],
     │         "scenario": "livekit-instrumentation",
     │         "testRunId": "<run:1>",
     │         "turn.id": "<span:1>"
@@ -796,18 +808,6 @@ span_tree:
     │         "caller_functionname": "ScenarioProcessor.onStart",
     │         "caller_lineno": 0
     │       }
-    │       links: [
-    │         {
-    │           "attributes": {
-    │             "braintrust.relationship.type": "generated_by"
-    │           },
-    │           "context": {
-    │             "spanId": "<native:13>",
-    │             "traceFlags": 1,
-    │             "traceId": "<native:8>"
-    │           }
-    │         }
-    │       ]
     ├── livekit.session_close [task]
     │   metadata: {
     │     "contrib.livekit.close.drain": false,

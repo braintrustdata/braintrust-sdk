@@ -158,6 +158,18 @@
                 "gen_ai.usage.output_tokens": 24,
                 "gen_ai.usage.text.input_tokens": 71,
                 "gen_ai.usage.text.output_tokens": 24,
+                "links": [
+                  {
+                    "attributes": {
+                      "braintrust.relationship.type": "input_context"
+                    },
+                    "context": {
+                      "spanId": "<native:6>",
+                      "traceFlags": 1,
+                      "traceId": "<native:5>"
+                    }
+                  }
+                ],
                 "model": "gpt-realtime-mini",
                 "provider": "<provider-host>",
                 "scenario": "livekit-instrumentation",
@@ -174,19 +186,7 @@
                 "caller_filename": "<repo>/e2e/scenarios/livekit-instrumentation/scenario.mjs",
                 "caller_functionname": "ScenarioProcessor.onStart",
                 "caller_lineno": 0
-              },
-              "links": [
-                {
-                  "attributes": {
-                    "braintrust.relationship.type": "input_context"
-                  },
-                  "context": {
-                    "spanId": "<native:6>",
-                    "traceFlags": 1,
-                    "traceId": "<native:5>"
-                  }
-                }
-              ]
+              }
             },
             {
               "name": "llm_response",
@@ -244,6 +244,28 @@
                 "gen_ai.usage.output_tokens": 74,
                 "gen_ai.usage.text.input_tokens": 116,
                 "gen_ai.usage.text.output_tokens": 20,
+                "links": [
+                  {
+                    "attributes": {
+                      "braintrust.relationship.type": "input_context"
+                    },
+                    "context": {
+                      "spanId": "<native:6>",
+                      "traceFlags": 1,
+                      "traceId": "<native:5>"
+                    }
+                  },
+                  {
+                    "attributes": {
+                      "braintrust.relationship.type": "consumes_tool_result"
+                    },
+                    "context": {
+                      "spanId": "<native:7>",
+                      "traceFlags": 1,
+                      "traceId": "<native:5>"
+                    }
+                  }
+                ],
                 "model": "gpt-realtime-mini",
                 "provider": "<provider-host>",
                 "scenario": "livekit-instrumentation",
@@ -261,29 +283,7 @@
                 "caller_filename": "<repo>/e2e/scenarios/livekit-instrumentation/scenario.mjs",
                 "caller_functionname": "ScenarioProcessor.onStart",
                 "caller_lineno": 0
-              },
-              "links": [
-                {
-                  "attributes": {
-                    "braintrust.relationship.type": "input_context"
-                  },
-                  "context": {
-                    "spanId": "<native:6>",
-                    "traceFlags": 1,
-                    "traceId": "<native:5>"
-                  }
-                },
-                {
-                  "attributes": {
-                    "braintrust.relationship.type": "consumes_tool_result"
-                  },
-                  "context": {
-                    "spanId": "<native:7>",
-                    "traceFlags": 1,
-                    "traceId": "<native:5>"
-                  }
-                }
-              ]
+              }
             },
             {
               "name": "lookup_order",
@@ -305,6 +305,18 @@
                 "gen_ai.tool.call.id": "call_qyReSAsLxCZzspTy",
                 "gen_ai.tool.name": "lookup_order",
                 "gen_ai.tool.type": "function",
+                "links": [
+                  {
+                    "attributes": {
+                      "braintrust.relationship.type": "requested_by"
+                    },
+                    "context": {
+                      "spanId": "<native:8>",
+                      "traceFlags": 1,
+                      "traceId": "<native:5>"
+                    }
+                  }
+                ],
                 "scenario": "livekit-instrumentation",
                 "testRunId": "<run:1>",
                 "turn.id": "<span:1>"
@@ -313,19 +325,7 @@
                 "caller_filename": "<repo>/e2e/scenarios/livekit-instrumentation/scenario.mjs",
                 "caller_functionname": "ScenarioProcessor.onStart",
                 "caller_lineno": 0
-              },
-              "links": [
-                {
-                  "attributes": {
-                    "braintrust.relationship.type": "requested_by"
-                  },
-                  "context": {
-                    "spanId": "<native:8>",
-                    "traceFlags": 1,
-                    "traceId": "<native:5>"
-                  }
-                }
-              ]
+              }
             },
             {
               "name": "agent_speech",
@@ -355,7 +355,19 @@
                   }
                 ],
                 "contrib.livekit.message_ids": [
-                  "<native:9>"
+                  "<native:10>"
+                ],
+                "links": [
+                  {
+                    "attributes": {
+                      "braintrust.relationship.type": "generated_by"
+                    },
+                    "context": {
+                      "spanId": "<native:9>",
+                      "traceFlags": 1,
+                      "traceId": "<native:5>"
+                    }
+                  }
                 ],
                 "scenario": "livekit-instrumentation",
                 "testRunId": "<run:1>",
@@ -365,19 +377,7 @@
                 "caller_filename": "<repo>/e2e/scenarios/livekit-instrumentation/scenario.mjs",
                 "caller_functionname": "ScenarioProcessor.onStart",
                 "caller_lineno": 0
-              },
-              "links": [
-                {
-                  "attributes": {
-                    "braintrust.relationship.type": "generated_by"
-                  },
-                  "context": {
-                    "spanId": "<native:10>",
-                    "traceFlags": 1,
-                    "traceId": "<native:5>"
-                  }
-                }
-              ]
+              }
             }
           ],
           "metadata": {

@@ -114,7 +114,6 @@ for (const variant of ["livekit-v1", "livekit-v1-latest"]) {
               fields: stable({
                 ...spanTreeFields(event),
                 context: event.row.context,
-                links: event.row.links,
               }) as Record<string, unknown>,
             })),
             resolveFileSnapshotPath(
@@ -181,7 +180,7 @@ for (const variant of ["livekit-v1", "livekit-v1-latest"]) {
         expect(
           responses.some((e) =>
             (
-              e.row.links as
+              e.row.metadata?.links as
                 | {
                     context: { spanId: string };
                     attributes: Record<string, string>;
@@ -213,7 +212,6 @@ for (const variant of ["livekit-v1", "livekit-v1-latest"]) {
             fields: stable({
               ...spanTreeFields(event),
               context: event.row.context,
-              links: event.row.links,
             }) as Record<string, unknown>,
           })),
           resolveFileSnapshotPath(
@@ -289,7 +287,25 @@ for (const variant of ["livekit-v1", "livekit-v1-latest"]) {
           expect(
             events.filter((e) => e.span.name === "llm_response").length,
           ).toBeGreaterThanOrEqual(2);
-          const turn = findLatestSpan(events, "agent_turn");
+          if (scheme.startsWith("duplex")) {
+            expect(
+              events.filter((e) =>
+                ["user_turn", "agent_turn"].includes(e.span.name ?? ""),
+              ),
+            ).toEqual([]);
+            expect(
+              events
+                .flatMap((e) => Object.keys(e.row.metadata ?? {}))
+                .filter((key) => key.startsWith("turn.")),
+            ).toEqual([]);
+            const root = findLatestSpan(events, "livekit.agent_session")!;
+            for (const event of events.filter((e) =>
+              ["user_speech", "agent_speech", "llm_response"].includes(
+                e.span.name ?? "",
+              ),
+            ))
+              expect(event.row.span_parents).toEqual([root.span.id]);
+          }
           expect(findLatestSpan(events, "agent_speech")?.row.output).toEqual(
             expect.arrayContaining([
               expect.objectContaining({
@@ -337,7 +353,6 @@ for (const variant of ["livekit-v1", "livekit-v1-latest"]) {
               fields: stable({
                 ...spanTreeFields(event),
                 context: event.row.context,
-                links: event.row.links,
               }) as Record<string, unknown>,
             })),
             resolveFileSnapshotPath(
@@ -433,7 +448,6 @@ for (const variant of ["livekit-v1", "livekit-v1-latest"]) {
               fields: stable({
                 ...spanTreeFields(event),
                 context: event.row.context,
-                links: event.row.links,
               }) as Record<string, unknown>,
             })),
             resolveFileSnapshotPath(

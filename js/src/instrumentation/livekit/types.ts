@@ -11,6 +11,7 @@ export interface SpeechHandle {
   _agentTurnSpan?: NativeSpan;
 }
 export interface AgentSession {
+  llm?: { duplexModel?: unknown };
   sessionSpan?: NativeSpan;
   agentSpeakingSpan?: NativeSpan;
   _userSpeakingSpan?: NativeSpan;
@@ -18,6 +19,7 @@ export interface AgentSession {
   output?: { audio?: AudioOutput | null };
 }
 export interface AgentActivity {
+  llm?: { duplexModel?: unknown };
   agentSession: AgentSession;
   currentSpeech?: SpeechHandle;
   realtimeSession?: RealtimeSession;

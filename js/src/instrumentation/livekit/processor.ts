@@ -68,7 +68,7 @@ export class LiveKitSpanProcessor {
   private agent: boolean;
   private sessions = new Map<
     string,
-    { speech: SpeechTracker; relationships: Relationships }
+    { speech: SpeechTracker; relationships: Relationships; duplex?: boolean }
   >();
   private outputCleanups = new Map<AgentSession, () => void>();
   private outputs = new Map<AgentSession, AudioOutput>();
@@ -99,22 +99,29 @@ export class LiveKitSpanProcessor {
     const parent = native.parentSpanContext?.spanId ?? native.parentSpanId;
     const parentRow = this.rows.get(parent);
     if (native.name !== "agent_session" && !parentRow) return;
+    const duplexTurn =
+      this.state(parentRow?.session)?.duplex &&
+      ["user_turn", "agent_turn"].includes(native.name);
+    // Duplex adapter turns are scheduling containers, not conversational turns.
     // Native request/run spans duplicate the public inference lifecycle. Keep their
     // measured usage on that operation without exporting another generation row.
     if (
       parentRow &&
-      [
-        "llm_request",
-        "llm_request_run",
-        "tts_request_run",
-        "realtime_metrics",
-      ].includes(native.name)
+      (duplexTurn ||
+        [
+          "llm_request",
+          "llm_request_run",
+          "tts_request_run",
+          "realtime_metrics",
+        ].includes(native.name))
     ) {
       const context = native.spanContext();
       this.rows.set(id, {
         ...parentRow,
         native: { name: native.name, spanContext: () => context },
         parent,
+        // Retain the native identity for transcript association, not trace grouping.
+        ...(duplexTurn ? { turn: id, replyTo: undefined } : {}),
         folded: true,
         ended: false,
       });
@@ -207,7 +214,7 @@ export class LiveKitSpanProcessor {
         });
       }
     }
-    if (row.turn)
+    if (row.turn && !state?.duplex)
       span.log({
         metadata: {
           "turn.id": this.rows.get(row.turn)?.span.spanId,
@@ -487,7 +494,16 @@ export class LiveKitSpanProcessor {
       this.context(row, attrs["contrib.livekit.pii.chat_ctx"]);
   }
 
+  private observeMode(
+    session: AgentSession,
+    activity = session.activity,
+  ): void {
+    const state = this.state(nativeId(session.sessionSpan));
+    const model = activity?.llm ?? session.llm;
+    if (state && model) state.duplex = model.duplexModel !== undefined;
+  }
   begin(session: AgentSession): void {
+    this.observeMode(session);
     if (
       this.captures.has(session) ||
       !this.audio ||
@@ -545,6 +561,7 @@ export class LiveKitSpanProcessor {
     });
   }
   realtime(activity: AgentActivity, generation?: RealtimeGeneration): void {
+    this.observeMode(activity.agentSession, activity);
     let observer = this.realtimeObservers.get(activity.agentSession);
     const root = this.rows.get(
       nativeId(activity.agentSession.sessionSpan) ?? "",
@@ -658,6 +675,7 @@ export class LiveKitSpanProcessor {
     if (capture) instrumentInput(capture, stream);
   }
   output(session: AgentSession): void {
+    this.observeMode(session);
     const sink = session.output?.audio;
     if (this.outputs.get(session) !== sink) {
       this.outputCleanups.get(session)?.();
@@ -738,6 +756,7 @@ export class LiveKitSpanProcessor {
   }
   private *turnSelections(c: Capture) {
     for (const [native, intervals] of c.selections) {
+      if (this.rows.get(native)?.folded) continue;
       const span = this.rows.get(native)?.span ?? c.externalSpans?.get(native);
       if (!span) continue;
       yield {
