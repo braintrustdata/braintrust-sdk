@@ -7,7 +7,6 @@ description: Create or update Changesets for this repository with a Conventional
 
 Inspect the diff to identify every publishable package affected and choose the appropriate semantic version bump for each package.
 Create the changeset by writing a new Markdown file under `.changeset/` directly, with a short kebab-case filename such as `.changeset/fix-queued-login-race.md`.
-Do not use `pnpm changeset` or `pnpm changeset add`; they open interactive prompts that agents cannot reliably drive.
 
 ```markdown
 ---
