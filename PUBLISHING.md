@@ -21,23 +21,7 @@ All package publishing happens in GitHub Actions. Do not publish from your local
 
 If your PR changes a publishable package, CI expects a changeset unless you explicitly skip it.
 
-Add one by writing a Markdown file under `.changeset/` with a short kebab-case name, for example `.changeset/fix-queued-login-race.md`:
-
-```markdown
----
-"braintrust": patch
----
-
-fix: Prevent conflicting queued logins from replacing active credentials
-```
-
-List each affected package by its `package.json` name. The first summary line must be a Conventional Commit message matching the PR title. Commit the file with your PR.
-
-Use:
-
-- `patch` for fixes and non-breaking maintenance changes
-- `minor` for new backwards-compatible features
-- `major` for breaking changes
+To add one, have an agent follow [`.agents/skills/create-changeset/SKILL.md`](.agents/skills/create-changeset/SKILL.md), then commit the generated `.changeset/*.md` file with your PR.
 
 If no release is intended, bypass the check with either:
 
