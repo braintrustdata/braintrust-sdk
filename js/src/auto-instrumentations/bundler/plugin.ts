@@ -1,5 +1,6 @@
 import { createUnplugin, type UnpluginInstance } from "unplugin";
 import { create, type InstrumentationConfig } from "../orchestrion-js";
+import { Transformer } from "../orchestrion-js/transformer";
 import { extname, isAbsolute, join, sep } from "path";
 import { readFileSync } from "fs";
 import { fileURLToPath } from "url";
@@ -129,7 +130,12 @@ export const unplugin: UnpluginInstance<BundlerPluginOptions, boolean> =
           browser,
         });
         if (patched !== null) {
-          return { code: patched, map: null };
+          return new Transformer(
+            moduleName,
+            moduleVersion ?? "",
+            normalizedModulePath,
+            [],
+          ).transform(patched, isModule ? "esm" : "cjs", "braintrust/auto");
         }
 
         // If no version found
@@ -155,7 +161,11 @@ export const unplugin: UnpluginInstance<BundlerPluginOptions, boolean> =
         try {
           // Transform the code
           const moduleType = isModule ? "esm" : "cjs";
-          const result = transformer.transform(code, moduleType);
+          const result = transformer.transform(
+            code,
+            moduleType,
+            "braintrust/auto",
+          );
           return {
             code: result.code,
             map: result.map,

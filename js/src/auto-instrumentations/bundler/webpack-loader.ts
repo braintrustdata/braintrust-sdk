@@ -9,6 +9,7 @@
  */
 
 import { create } from "../orchestrion-js";
+import { Transformer } from "../orchestrion-js/transformer";
 import { extname, join, sep } from "path";
 import { readFileSync } from "fs";
 import moduleDetailsFromPath from "module-details-from-path";
@@ -120,7 +121,13 @@ function codeTransformerLoader(
     browser: options.browser ?? false,
   });
   if (patched !== null) {
-    return callback(null, patched);
+    const result = new Transformer(
+      moduleName,
+      "",
+      normalizedModulePath,
+      [],
+    ).transform(patched, isModule ? "esm" : "cjs", "braintrust/auto");
+    return callback(null, result.code, result.map);
   }
 
   const moduleVersion = getModuleVersion(moduleDetails.basedir);
@@ -141,7 +148,7 @@ function codeTransformerLoader(
 
   try {
     const moduleType: ModuleType = isModule ? "esm" : "cjs";
-    const result = transformer.transform(code, moduleType);
+    const result = transformer.transform(code, moduleType, "braintrust/auto");
     callback(null, result.code, result.map ?? undefined);
   } catch (error) {
     console.warn(

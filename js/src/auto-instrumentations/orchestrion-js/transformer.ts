@@ -47,7 +47,11 @@ export class Transformer {
    * Instruments `code` by injecting global tracing hooks around the
    * target functions defined by this transformer's configs.
    */
-  transform(code: string | Buffer, moduleType: ModuleType): TransformOutput {
+  transform(
+    code: string | Buffer,
+    moduleType: ModuleType,
+    runtimeImport?: string,
+  ): TransformOutput {
     if (Buffer.isBuffer(code)) {
       code = code.toString();
     }
@@ -124,6 +128,31 @@ export class Transformer {
       throw new Error(
         `Failed to find injection points for: ${JSON.stringify(names)}`,
       );
+    }
+
+    if (runtimeImport) {
+      // Bundlers need the consumers in the application, whereas Node hooks
+      // register them in their preload. Insert into the AST to preserve both
+      // directive prologues (especially CJS strict mode) and source mappings.
+      ast ??= parse(code, {
+        loc: true,
+        ranges: true,
+        raw: true,
+        module: moduleType === "esm",
+      });
+      const statement =
+        moduleType === "esm"
+          ? `import ${JSON.stringify(runtimeImport)};`
+          : `require(${JSON.stringify(runtimeImport)});`;
+      const initialization = parse(statement, { module: moduleType === "esm" });
+      let index = 0;
+      while (
+        ast.body[index]?.type === "ExpressionStatement" &&
+        typeof ast.body[index].expression.value === "string"
+      ) {
+        index++;
+      }
+      ast.body.splice(index, 0, ...initialization.body);
     }
 
     if (ast) {
