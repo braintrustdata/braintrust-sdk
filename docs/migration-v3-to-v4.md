@@ -3,12 +3,13 @@
 Version 4 removes deprecated APIs and changes logging, attachment capture, and trace propagation.
 The behavior changes below can affect applications even when their code still type-checks.
 
-Draft based on the [v4 branch at `fb38418`](https://github.com/braintrustdata/braintrust-sdk-javascript/tree/fb384185380e5f741c8835fb93c313e45a5b05a0).
-
 ## 1. Version support changes
 
-**Node.js:** The supported version range is now `^20.12.0 || >=22.13.0`.
-This drops support for Node 18, Node 21, and Node 22 versions before 22.13.0.
+**Node.js:** The minimum supported version is now **22.18.0** for `braintrust` and the Braintrust integration packages.
+This drops support for Node 18, Node 20, Node 21, and Node 22 versions before 22.18.0.
+
+**Browsers and edge runtimes:** SDK builds now target ES2022.
+If you support older runtimes, include the SDK in your application's transpilation step.
 
 **Provider libraries:** Support for the following versions has been removed:
 
@@ -16,9 +17,34 @@ This drops support for Node 18, Node 21, and Node 22 versions before 22.13.0.
 - Eve versions before v0.34.0; upgrade to v0.34.0 or newer.
 - Flue versions before v1; upgrade to v1 or newer.
 
-Upgrade Braintrust integration packages alongside `braintrust`, using releases compatible with v4.
-
 ## 2. Behavior changes
+
+### Instrumentation registration
+
+Importing `braintrust` no longer registers all provider integrations.
+This allows bundlers to remove unused integrations from your application.
+
+For bundler-based auto-instrumentation, add the following import to your application's startup code before making provider calls:
+
+```ts
+import "braintrust/auto";
+```
+
+Keep your Braintrust bundler plugin configured; `braintrust/auto` registers the integrations that handle instrumented calls, but does not transform provider code itself.
+This applies to Vite, Webpack, Rollup, esbuild, and Next.js setups that previously relied on importing `braintrust` to register integrations.
+
+The Node.js entrypoints `braintrust/hook.mjs` and `braintrust/apply-auto-instrumentation` already register integrations.
+Manual wrappers such as `wrapOpenAI()` and `wrapAISDK()` register their own integrations when called.
+
+Call `configureInstrumentation()` before loading `braintrust/auto`, the Node.js instrumentation entrypoints, or calling a wrapper.
+When configuring programmatically, use a dynamic import to preserve that order:
+
+```ts
+import { configureInstrumentation } from "braintrust/instrumentation";
+
+configureInstrumentation({ integrations: { openai: false } });
+await import("braintrust/auto");
+```
 
 ### Logging and flushing
 
@@ -336,6 +362,29 @@ instrument(braintrustFlueInstrumentation());
   Remove these imports and annotations, and pass values directly to SDK functions.
 - Public declarations now use SDK-owned TypeScript contracts instead of backend-generated or Zod-inferred types.
   Supplying Zod schemas for eval and function parameters remains supported.
+
+## 6. Build changes
+
+- `braintrust`, `@braintrust/otel`, `@braintrust/temporal`, `@braintrust/deepseek-harness`, and `@braintrust/templates-nunjucks-js` now publish ESM instead of separate CommonJS and ESM builds.
+  `@braintrust/browser` remains ESM.
+  Configure your bundler and test runner to load ESM dependencies.
+  CommonJS applications can use dynamic `import()` when their loader cannot load ESM through `require()`:
+
+  ```js
+  const { initLogger } = await import("braintrust");
+  ```
+
+  In CommonJS, put this call inside an async function.
+
+- The SDK now preserves module boundaries so bundlers can remove unused features, including evals, datasets, prompts, and provider integrations.
+  Continue importing public APIs from `braintrust`; use `braintrust/auto` when registering all integrations as described above.
+
+- Runtime selection now uses the package's `exports` conditions (`workerd`, `edge-light`, `browser`, and `node`).
+  The fallback is the browser build, and the legacy `browser` field has been removed.
+  If you customize module resolution, ensure it honors these conditions; use `braintrust/node`, `braintrust/workerd`, or `braintrust/edge-light` when explicitly selecting a runtime.
+
+- Built file locations have changed, including the former `dist/index.js` and `dist/index.mjs` files.
+  Replace direct `dist` imports or aliases with public package entrypoints such as `braintrust` and `braintrust/hook.mjs`.
 
 <details>
 <summary>Complete index of names no longer exported from the root <code>braintrust</code> module</summary>
