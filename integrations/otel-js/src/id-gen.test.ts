@@ -1,4 +1,4 @@
-import { expect, test, describe, beforeEach, afterEach } from "vitest";
+import { expect, test, describe, beforeEach, afterEach } from "vite-plus/test";
 import {
   OTELIDGenerator,
   UUIDGenerator,

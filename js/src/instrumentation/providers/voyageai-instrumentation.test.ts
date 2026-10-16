@@ -1,10 +1,20 @@
-import { afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
-import { Attachment, _exportsForTestingOnly, initLogger } from "../../logger";
+import { registerInstrumentation } from "../registrations/voyageai";
+import {
+  afterEach,
+  beforeAll,
+  beforeEach,
+  describe,
+  expect,
+  it,
+} from "vite-plus/test";
+import { Attachment, initLogger } from "../../logger/core";
+import { _exportsForTestingOnly } from "../../logger/testing";
 import { configureNode } from "../../node/config";
 import { voyageAIChannels } from "./voyageai-channels";
 
 try {
   configureNode();
+  registerInstrumentation();
 } catch {
   // Best-effort initialization for test environments.
 }

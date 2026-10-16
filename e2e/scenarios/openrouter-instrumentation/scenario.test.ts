@@ -1,4 +1,4 @@
-import { describe } from "vitest";
+import { describe } from "vite-plus/test";
 import {
   prepareScenarioDir,
   readInstalledPackageVersion,
@@ -52,47 +52,51 @@ const openRouterScenarios = await Promise.all(
 
 describe.concurrent("variants", () => {
   for (const scenario of openRouterScenarios) {
-    describe.sequential(`openrouter sdk ${scenario.version}`, () => {
-      defineOpenRouterTraceAssertions({
-        name: "wrapped instrumentation",
-        runScenario: async ({ runScenarioDir }) => {
-          await runScenarioDir({
-            entry: scenario.wrapperEntry,
-            env: { OPENROUTER_PACKAGE_NAME: scenario.dependencyName },
-            runContext: {
-              variantKey: scenario.snapshotName,
-              originalScenarioDir,
-            },
-            scenarioDir,
-            timeoutMs: TIMEOUT_MS,
-          });
-        },
-        snapshotName: scenario.snapshotName,
-        supportsRerank: scenario.supportsRerank,
-        testFileUrl: import.meta.url,
-        timeoutMs: TIMEOUT_MS,
-      });
+    describe(
+      `openrouter sdk ${scenario.version}`,
+      { concurrent: false },
+      () => {
+        defineOpenRouterTraceAssertions({
+          name: "wrapped instrumentation",
+          runScenario: async ({ runScenarioDir }) => {
+            await runScenarioDir({
+              entry: scenario.wrapperEntry,
+              env: { OPENROUTER_PACKAGE_NAME: scenario.dependencyName },
+              runContext: {
+                variantKey: scenario.snapshotName,
+                originalScenarioDir,
+              },
+              scenarioDir,
+              timeoutMs: TIMEOUT_MS,
+            });
+          },
+          snapshotName: scenario.snapshotName,
+          supportsRerank: scenario.supportsRerank,
+          testFileUrl: import.meta.url,
+          timeoutMs: TIMEOUT_MS,
+        });
 
-      defineOpenRouterTraceAssertions({
-        name: "auto-hook instrumentation",
-        runScenario: async ({ runNodeScenarioDir }) => {
-          await runNodeScenarioDir({
-            entry: scenario.autoEntry,
-            env: { OPENROUTER_PACKAGE_NAME: scenario.dependencyName },
-            nodeArgs: ["--import", "braintrust/hook.mjs"],
-            runContext: {
-              variantKey: scenario.snapshotName,
-              originalScenarioDir,
-            },
-            scenarioDir,
-            timeoutMs: TIMEOUT_MS,
-          });
-        },
-        snapshotName: scenario.snapshotName,
-        supportsRerank: scenario.supportsRerank,
-        testFileUrl: import.meta.url,
-        timeoutMs: TIMEOUT_MS,
-      });
-    });
+        defineOpenRouterTraceAssertions({
+          name: "auto-hook instrumentation",
+          runScenario: async ({ runNodeScenarioDir }) => {
+            await runNodeScenarioDir({
+              entry: scenario.autoEntry,
+              env: { OPENROUTER_PACKAGE_NAME: scenario.dependencyName },
+              nodeArgs: ["--import", "braintrust/hook.mjs"],
+              runContext: {
+                variantKey: scenario.snapshotName,
+                originalScenarioDir,
+              },
+              scenarioDir,
+              timeoutMs: TIMEOUT_MS,
+            });
+          },
+          snapshotName: scenario.snapshotName,
+          supportsRerank: scenario.supportsRerank,
+          testFileUrl: import.meta.url,
+          timeoutMs: TIMEOUT_MS,
+        });
+      },
+    );
   }
 });

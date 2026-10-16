@@ -1,4 +1,4 @@
-import { describe } from "vitest";
+import { describe } from "vite-plus/test";
 import {
   prepareScenarioDir,
   readInstalledPackageVersion,
@@ -35,34 +35,38 @@ const variants = await Promise.all(
 const describeVariants =
   process.env.BRAINTRUST_E2E_CASSETTE_MODE === "record" ||
   process.env.BRAINTRUST_E2E_CASSETTE_MODE === "record-missing"
-    ? describe.sequential
+    ? describe
     : describe.concurrent;
 
 describeVariants("Cloudflare Think variants", () => {
   for (const variant of variants) {
-    describe.sequential(`${variant.label} (${variant.version})`, () => {
-      for (const mode of ["manual", "auto"] as const) {
-        defineCloudflareThinkAssertions({
-          name: `${mode} Workers/Vite instrumentation`,
-          runScenario: async ({ runScenarioDir }) => {
-            await runScenarioDir({
-              env: {
-                CLOUDFLARE_THINK_INSTRUMENTATION: mode,
-                CLOUDFLARE_THINK_PACKAGE_NAME: variant.dependencyName,
-              },
-              runContext: {
-                originalScenarioDir,
-                variantKey: `${variant.variantKey}-${mode}`,
-              },
-              scenarioDir,
-              timeoutMs: TIMEOUT_MS,
-            });
-          },
-          snapshotName: `${variant.variantKey}-${mode}`,
-          testFileUrl: import.meta.url,
-          timeoutMs: TIMEOUT_MS,
-        });
-      }
-    });
+    describe(
+      `${variant.label} (${variant.version})`,
+      { concurrent: false },
+      () => {
+        for (const mode of ["manual", "auto"] as const) {
+          defineCloudflareThinkAssertions({
+            name: `${mode} Workers/Vite instrumentation`,
+            runScenario: async ({ runScenarioDir }) => {
+              await runScenarioDir({
+                env: {
+                  CLOUDFLARE_THINK_INSTRUMENTATION: mode,
+                  CLOUDFLARE_THINK_PACKAGE_NAME: variant.dependencyName,
+                },
+                runContext: {
+                  originalScenarioDir,
+                  variantKey: `${variant.variantKey}-${mode}`,
+                },
+                scenarioDir,
+                timeoutMs: TIMEOUT_MS,
+              });
+            },
+            snapshotName: `${variant.variantKey}-${mode}`,
+            testFileUrl: import.meta.url,
+            timeoutMs: TIMEOUT_MS,
+          });
+        }
+      },
+    );
   }
 });

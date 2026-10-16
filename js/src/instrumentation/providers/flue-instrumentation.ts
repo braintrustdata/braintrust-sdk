@@ -6,8 +6,8 @@ import {
   _internalGetGlobalState,
   _internalStartSpan as startBaseSpan,
   withCurrent,
-} from "../../logger";
-import type { Span, StartSpanArgs } from "../../logger";
+} from "../../logger/core";
+import type { Span, StartSpanArgs } from "../../logger/core";
 import {
   INSTRUMENTATION_NAMES,
   withSpanInstrumentationName,

@@ -1,4 +1,4 @@
-import { _internalCaptureAttachmentsEnabled } from "../../logger";
+import { _internalCaptureAttachmentsEnabled } from "../../logger/core";
 import { processInputAttachments } from "../../wrappers/attachment-utils";
 import { interceptOpenAIMedia } from "./openai-media";
 import {

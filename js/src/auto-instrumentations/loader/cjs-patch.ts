@@ -32,7 +32,7 @@ export class ModulePatch {
    * If a module is found that has an instrumentator, it will transform the code before compiling it
    * with global hook calls.
    */
-  patch() {
+  patch(): void {
     const self = this;
     this.modulePrototype._compile = function wrappedCompile(...args: any[]) {
       const [content, filename] = args;
@@ -90,7 +90,7 @@ export class ModulePatch {
    * Restores the original Module.prototype._compile method
    * **Note**: This is intended to be used in testing only.
    */
-  unpatch() {
+  unpatch(): void {
     this.modulePrototype._compile = this.originalCompile;
   }
 }

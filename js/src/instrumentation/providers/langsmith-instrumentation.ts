@@ -1,7 +1,7 @@
 import { SpanTypeAttribute } from "../../../util/index";
 import { debugLogger } from "../../debug-logger";
-import { startSpan as startBaseSpan } from "../../logger";
-import type { Span } from "../../logger";
+import { startSpan as startBaseSpan } from "../../logger/core";
+import type { Span } from "../../logger/core";
 import {
   INSTRUMENTATION_NAMES,
   withSpanInstrumentationName,
@@ -20,7 +20,7 @@ type ActiveRun = {
 };
 
 type LangSmithInstrumentationOptions = {
-  skipLangChainRuns?: boolean;
+  skipLangChainRuns?: boolean | (() => boolean);
 };
 
 const MAX_COMPLETED_RUNS = 10_000;
@@ -46,7 +46,7 @@ class LangSmithInstrumentationConsumer {
   private readonly completedRuns = new LRUCache<string, true>({
     max: MAX_COMPLETED_RUNS,
   });
-  private readonly skipLangChainRuns: boolean;
+  private readonly skipLangChainRuns: boolean | (() => boolean);
 
   constructor(options: LangSmithInstrumentationOptions = {}) {
     this.skipLangChainRuns = options.skipLangChainRuns ?? true;
@@ -261,7 +261,11 @@ class LangSmithInstrumentationConsumer {
   }
 
   private shouldSkipLangChainRun(run: LangSmithRun): boolean {
-    if (!this.skipLangChainRuns) {
+    const skip =
+      typeof this.skipLangChainRuns === "function"
+        ? this.skipLangChainRuns()
+        : this.skipLangChainRuns;
+    if (!skip) {
       return false;
     }
     const serialized = ownValue(run, "serialized");

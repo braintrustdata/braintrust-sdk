@@ -1,15 +1,18 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 /* eslint-disable @typescript-eslint/consistent-type-assertions */
-import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import {
-  _exportsForTestingOnly,
-  initLogger,
-  traced,
-  type TestBackgroundLogger,
-} from "../logger";
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  test,
+  vi,
+} from "vite-plus/test";
+import { _exportsForTestingOnly } from "../logger/testing";
+import { initLogger, traced, type TestBackgroundLogger } from "../logger/core";
 import { configureNode } from "../node/config";
 import { aiSDKChannels } from "../instrumentation/providers/ai-sdk-channels";
-import { registry } from "../instrumentation/registry";
+import { registerInstrumentation } from "../instrumentation/registrations/aisdk";
 import { runWithAutoInstrumentationSuppressed } from "../instrumentation/auto-instrumentation-suppression";
 import type {
   AISDKEvaluateParams,
@@ -213,8 +216,8 @@ describe("AI SDK evaluate instrumentation", () => {
     const wrapped = wrapAISDK({
       experimental_evaluate: (_params: AISDKEvaluateParams) => original,
     });
-    registry.enable();
-    registry.enable();
+    registerInstrumentation();
+    registerInstrumentation();
     expect(wrapped.experimental_evaluate(params)).toBe(original);
     await original;
     expect(await backgroundLogger.drain()).toHaveLength(1);

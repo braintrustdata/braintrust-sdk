@@ -1,5 +1,13 @@
-import { afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
-import { _exportsForTestingOnly, initLogger, traced } from "../../logger";
+import {
+  afterEach,
+  beforeAll,
+  beforeEach,
+  describe,
+  expect,
+  it,
+} from "vite-plus/test";
+import { _exportsForTestingOnly } from "../../logger/testing";
+import { initLogger, traced } from "../../logger/core";
 import { configureNode } from "../../node/config";
 import { wrapGoogleGenAI } from "../../wrappers/google-genai";
 import type { GoogleGenAIEmbedContentResponse } from "../../vendor-sdk-types/google-genai";

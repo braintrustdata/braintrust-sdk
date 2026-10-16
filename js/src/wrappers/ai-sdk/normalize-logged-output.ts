@@ -1,5 +1,5 @@
 import type { AISDKResult } from "../../vendor-sdk-types/ai-sdk";
-import { BaseAttachment } from "../../logger";
+import { BaseAttachment } from "../../logger/core";
 
 const REMOVE_NORMALIZED_VALUE = Symbol("braintrust.ai-sdk.remove-normalized");
 

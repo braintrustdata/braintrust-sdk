@@ -99,7 +99,7 @@ export interface BraintrustModule {
   [key: string]: unknown;
 }
 
-export const testCoreLoggingExports = register(
+export const testCoreLoggingExports: TestFn = register(
   "testCoreLoggingExports",
   async (module) => {
     assertDefined(module.initLogger, "initLogger must exist");
@@ -152,7 +152,7 @@ export const testCoreLoggingExports = register(
   },
 );
 
-export const testDatasetExports = register(
+export const testDatasetExports: TestFn = register(
   "testDatasetExports",
   async (module) => {
     assertDefined(module.initDataset, "initDataset must exist");
@@ -169,7 +169,7 @@ export const testDatasetExports = register(
   },
 );
 
-export const testPromptExports = register(
+export const testPromptExports: TestFn = register(
   "testPromptExports",
   async (module) => {
     assertDefined(module.loadPrompt, "loadPrompt must exist");
@@ -189,7 +189,7 @@ export const testPromptExports = register(
   },
 );
 
-export const testExperimentExports = register(
+export const testExperimentExports: TestFn = register(
   "testExperimentExports",
   async (module) => {
     assertDefined(module.init, "init must exist");
@@ -213,27 +213,30 @@ export const testExperimentExports = register(
   },
 );
 
-export const testEvalExports = register("testEvalExports", async (module) => {
-  assertDefined(module.Eval, "Eval must exist");
-  assertType(module.Eval, "function", "Eval must be a function");
+export const testEvalExports: TestFn = register(
+  "testEvalExports",
+  async (module) => {
+    assertDefined(module.Eval, "Eval must exist");
+    assertType(module.Eval, "function", "Eval must be a function");
 
-  assertDefined(module.Reporter, "Reporter must exist");
-  assertType(module.Reporter, "function", "Reporter must be a function");
+    assertDefined(module.Reporter, "Reporter must exist");
+    assertType(module.Reporter, "function", "Reporter must be a function");
 
-  assertDefined(
-    module.defaultErrorScoreHandler,
-    "defaultErrorScoreHandler must exist",
-  );
-  assertType(
-    module.defaultErrorScoreHandler,
-    "function",
-    "defaultErrorScoreHandler must be a function",
-  );
+    assertDefined(
+      module.defaultErrorScoreHandler,
+      "defaultErrorScoreHandler must exist",
+    );
+    assertType(
+      module.defaultErrorScoreHandler,
+      "function",
+      "defaultErrorScoreHandler must be a function",
+    );
 
-  return "Eval exports verified (3 runtime exports)";
-});
+    return "Eval exports verified (3 runtime exports)";
+  },
+);
 
-export const testTracingExports = register(
+export const testTracingExports: TestFn = register(
   "testTracingExports",
   async (module) => {
     assertDefined(module.traced, "traced must exist");
@@ -263,7 +266,7 @@ export const testTracingExports = register(
   },
 );
 
-export const testClientWrapperExports = register(
+export const testClientWrapperExports: TestFn = register(
   "testClientWrapperExports",
   async (module) => {
     assertDefined(module.wrapOpenAI, "wrapOpenAI must exist");
@@ -293,7 +296,7 @@ export const testClientWrapperExports = register(
   },
 );
 
-export const testUtilityExports = register(
+export const testUtilityExports: TestFn = register(
   "testUtilityExports",
   async (module) => {
     assertDefined(module.JSONAttachment, "JSONAttachment must exist");
@@ -314,7 +317,7 @@ export const testUtilityExports = register(
   },
 );
 
-export const testFunctionExports = register(
+export const testFunctionExports: TestFn = register(
   "testFunctionExports",
   async (module) => {
     assertDefined(module.invoke, "invoke must exist");
@@ -331,7 +334,7 @@ export const testFunctionExports = register(
   },
 );
 
-export const testFramework2Exports = register(
+export const testFramework2Exports: TestFn = register(
   "testFramework2Exports",
   async (module) => {
     assertDefined(module.projects, "projects must exist");
@@ -341,7 +344,7 @@ export const testFramework2Exports = register(
   },
 );
 
-export const testIDGeneratorExports = register(
+export const testIDGeneratorExports: TestFn = register(
   "testIDGeneratorExports",
   async (module) => {
     assertDefined(module.IDGenerator, "IDGenerator must exist");
@@ -356,7 +359,7 @@ export const testIDGeneratorExports = register(
   { requiresTestHarness: true },
 );
 
-export const testTestingExports = register(
+export const testTestingExports: TestFn = register(
   "testTestingExports",
   async (module) => {
     assertDefined(
@@ -374,7 +377,7 @@ export const testTestingExports = register(
   { requiresTestHarness: true },
 );
 
-export const testStateManagementExports = register(
+export const testStateManagementExports: TestFn = register(
   "testStateManagementExports",
   async (module) => {
     assertDefined(module.BraintrustState, "BraintrustState must exist");

@@ -11,20 +11,16 @@ export type {
   PropagationContext,
   Span,
   StartSpanArgs,
-} from "./logger";
+} from "./logger/core";
 export {
   Attachment,
   BaseAttachment,
   BraintrustState,
-  Dataset,
-  Experiment,
   ExternalAttachment,
   JSONAttachment,
   Logger,
   NOOP_SPAN,
-  Prompt,
   ReadonlyAttachment,
-  ReadonlyExperiment,
   _internalCaptureAttachmentsEnabled,
   currentExperiment,
   currentLogger,
@@ -33,13 +29,8 @@ export {
   ContextManager,
   extractTraceContextFromHeaders,
   flush,
-  getPromptVersions,
-  init,
   injectTraceContext,
-  initDataset,
   initLogger,
-  loadParameters,
-  loadPrompt,
   logError,
   login,
   loginToState,
@@ -51,7 +42,15 @@ export {
   withCurrent,
   withParent,
   wrapTraced,
-} from "./logger";
+} from "./logger/core";
+export { Dataset, initDataset } from "./logger/datasets";
+export { Experiment, ReadonlyExperiment, init } from "./logger/experiments";
+export {
+  Prompt,
+  getPromptVersions,
+  loadParameters,
+  loadPrompt,
+} from "./logger/prompts";
 
 export { registerSandbox } from "./sandbox";
 

@@ -1,7 +1,7 @@
 import type { ChannelMessage } from "../core/channel-definitions";
-import type { IsoChannelHandlers } from "../../isomorph";
-import { _internalGetGlobalState, startSpan } from "../../logger";
-import type { Span } from "../../logger";
+import type { IsoChannelHandlers } from "#braintrust-platform";
+import { _internalGetGlobalState, startSpan } from "../../logger/core";
+import type { Span } from "../../logger/core";
 import {
   INSTRUMENTATION_NAMES,
   withSpanInstrumentationName,

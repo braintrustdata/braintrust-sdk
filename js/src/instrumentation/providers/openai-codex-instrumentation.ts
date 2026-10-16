@@ -1,9 +1,9 @@
 import { toLoggedError } from "../core";
 import type { ChannelMessage } from "../core/channel-definitions";
-import type { IsoChannelHandlers } from "../../isomorph";
+import type { IsoChannelHandlers } from "#braintrust-platform";
 import { debugLogger } from "../../debug-logger";
-import { _internalStartSpan as startBaseSpan } from "../../logger";
-import type { Span } from "../../logger";
+import { _internalStartSpan as startBaseSpan } from "../../logger/core";
+import type { Span } from "../../logger/core";
 import {
   INSTRUMENTATION_NAMES,
   withSpanInstrumentationName,

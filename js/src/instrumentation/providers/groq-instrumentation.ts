@@ -12,7 +12,7 @@ import {
   Attachment,
   withCurrent,
   type Span,
-} from "../../logger";
+} from "../../logger/core";
 import {
   convertDataToBlob,
   getExtensionFromMediaType,
@@ -265,7 +265,7 @@ function observeGroqAudioInput(
                 filename,
                 byte_size: data.byteLength,
                 file_data: new Attachment({
-                  data: data.buffer,
+                  data: Uint8Array.from(data).buffer,
                   filename,
                   contentType,
                 }),
@@ -431,7 +431,7 @@ function captureGroqSpeechResponse(
                       filename,
                       byte_size: data.byteLength,
                       file_data: new Attachment({
-                        data: data.buffer,
+                        data: Uint8Array.from(data).buffer,
                         filename,
                         contentType,
                       }),

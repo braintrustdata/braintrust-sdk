@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach } from "vite-plus/test";
 
 const telemetryMocks = vi.hoisted(() => ({
   braintrustAISDKTelemetry: vi.fn(),
@@ -12,12 +12,16 @@ const telemetryMocks = vi.hoisted(() => ({
 }));
 
 // Mock iso's newTracingChannel - must be before any imports that use it
-vi.mock("../../isomorph", () => ({
+vi.mock("#braintrust-platform", () => ({
   default: {
     newTracingChannel: vi.fn(),
     getEnv: vi.fn((name: string) =>
       name === "BRAINTRUST_CAPTURE_ATTACHMENTS" ? "true" : undefined,
     ),
+    newAsyncLocalStorage: () => ({
+      getStore: () => undefined,
+      run: (_store: unknown, callback: () => unknown) => callback(),
+    }),
   },
 }));
 
@@ -37,7 +41,7 @@ import {
   extractTokenMetrics,
   serializeModelWithProvider,
 } from "./ai-sdk-instrumentation";
-import iso from "../../isomorph";
+import iso from "#braintrust-platform";
 import { serializeAISDKToolsForLogging } from "../../wrappers/ai-sdk/tool-serialization";
 import { BRAINTRUST_AI_SDK_V7_OPERATION_KEY as AI_SDK_V7_OPERATION_KEY } from "../../vendor-sdk-types/ai-sdk-v7-telemetry";
 

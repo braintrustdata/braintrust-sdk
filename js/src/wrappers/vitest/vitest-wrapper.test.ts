@@ -8,16 +8,16 @@ import {
   afterEach,
   vi,
   expectTypeOf,
-} from "vitest";
+} from "vite-plus/test";
 import { configureNode } from "../../node/config";
 import { wrapVitest } from "./index";
 import { wrapExpect } from "./expect-wrapper";
-import {
-  _exportsForTestingOnly,
-  type TestBackgroundLogger,
-} from "../../logger";
+import { _exportsForTestingOnly } from "../../logger/testing";
+import { type TestBackgroundLogger } from "../../logger/core";
 import type { BraintrustVitest } from "./types";
-import * as logger from "../../logger";
+import * as experiments from "../../logger/experiments";
+import * as logger from "../../logger/core";
+import * as datasets from "../../logger/datasets";
 import { getExperimentContext } from "./wrapper";
 import {
   getVitestContextManager,
@@ -33,12 +33,12 @@ await _exportsForTestingOnly.simulateLoginForTests();
 _exportsForTestingOnly.useTestBackgroundLogger();
 
 // ✅ STEP 2: Mock initDataset and init to avoid network calls
-vi.spyOn(logger, "initDataset").mockReturnValue({
+vi.spyOn(datasets, "initDataset").mockReturnValue({
   insert: vi.fn(() => "test-example-id"),
 } as any);
 
 const initSpy = vi
-  .spyOn(logger, "init")
+  .spyOn(experiments, "init")
   .mockImplementation((projectOrOptions: string | any, options?: any) => {
     const experimentOptions =
       typeof projectOrOptions === "string" ? options : projectOrOptions;

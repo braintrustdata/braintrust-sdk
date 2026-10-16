@@ -1,4 +1,11 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import {
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  vi,
+} from "vite-plus/test";
 
 const {
   interceptorsByName,
@@ -12,8 +19,8 @@ const {
   mockStartSpan: vi.fn(),
 }));
 
-vi.mock("../../isomorph", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("../../isomorph")>();
+vi.mock("#braintrust-platform", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("#braintrust-platform")>();
   const { AsyncLocalStorage } = await import("node:async_hooks");
   return {
     ...actual,
@@ -25,8 +32,8 @@ vi.mock("../../isomorph", async (importOriginal) => {
   };
 });
 
-vi.mock("../../logger", async () => {
-  const { default: iso } = await import("../../isomorph");
+vi.mock("../../logger/core", async () => {
+  const { default: iso } = await import("#braintrust-platform");
   return {
     _internalCaptureAttachmentsEnabled: () =>
       iso.getEnv("BRAINTRUST_CAPTURE_ATTACHMENTS") === "true",

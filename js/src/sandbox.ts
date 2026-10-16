@@ -1,7 +1,7 @@
 import { z } from "zod/v3";
 import { slugify } from "../util/string_util";
 import type { IfExists } from "./sdk-types";
-import { type BraintrustState, _internalGetGlobalState } from "./logger";
+import { type BraintrustState, _internalGetGlobalState } from "./logger/core";
 
 /**
  * Configuration for a sandbox runtime.

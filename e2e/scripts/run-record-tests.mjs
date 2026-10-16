@@ -18,7 +18,7 @@ const VITEST_COMMAND = path.join(
   E2E_DIR,
   "node_modules",
   ".bin",
-  process.platform === "win32" ? "vitest.cmd" : "vitest",
+  process.platform === "win32" ? "vp.cmd" : "vp",
 );
 
 const rawArgs = process.argv.slice(2).filter((arg) => arg !== "--");
@@ -220,7 +220,7 @@ async function runVitest(scenarioNames, runContextDir) {
           "--update",
         ];
 
-  return await runProcess(VITEST_COMMAND, vitestArgs, {
+  return await runProcess(VITEST_COMMAND, ["test", ...vitestArgs], {
     cwd: E2E_DIR,
     env,
   });

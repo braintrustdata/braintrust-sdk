@@ -5,7 +5,7 @@ import {
   NOOP_SPAN,
   type Span,
   withCurrent,
-} from "../../logger";
+} from "../../logger/core";
 import type {
   OpenAIAgentsOpenTool,
   OpenAIAgentsTraceState,

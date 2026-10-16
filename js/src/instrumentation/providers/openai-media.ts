@@ -4,7 +4,7 @@ import {
   startSpan,
   withCurrent,
   type Span,
-} from "../../logger";
+} from "../../logger/core";
 import { debugLogger } from "../../debug-logger";
 import { getCurrentUnixTimestamp } from "../../util";
 import {
@@ -523,15 +523,7 @@ function observeSpeech(
                 else {
                   observeBytes(result.value);
                   const value = result.value;
-                  chunks.push(
-                    new Blob([
-                      new Uint8Array(
-                        value.buffer,
-                        value.byteOffset,
-                        value.byteLength,
-                      ),
-                    ]),
-                  );
+                  chunks.push(new Blob([Uint8Array.from(value)]));
                 }
               } catch (error) {
                 debugLogger.debug("OpenAI speech capture failed", error);
@@ -571,7 +563,7 @@ function observeSpeech(
         transform(chunk, controller) {
           try {
             observeBytes(chunk);
-            chunks.push(new Blob([chunk]));
+            chunks.push(new Blob([Uint8Array.from(chunk)]));
           } catch (error) {
             debugLogger.debug("OpenAI speech capture failed", error);
           }
@@ -617,7 +609,7 @@ function observeSpeech(
         transform(chunk, controller) {
           try {
             observeBytes(chunk);
-            chunks.push(new Blob([chunk]));
+            chunks.push(new Blob([Uint8Array.from(chunk)]));
           } catch (error) {
             debugLogger.debug("OpenAI speech capture failed", error);
           }
@@ -638,7 +630,7 @@ function observeSpeech(
   patchStreamIfNeeded<Uint8Array>(body, {
     onChunk: (chunk) => {
       observeBytes(chunk);
-      chunks.push(new Blob([chunk]));
+      chunks.push(new Blob([Uint8Array.from(chunk)]));
     },
     onComplete: () => finish(new Blob(chunks, { type: contentType })),
     onCancel: () => {

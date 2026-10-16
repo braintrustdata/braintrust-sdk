@@ -1,5 +1,5 @@
 import { readFileSync } from "node:fs";
-import { describe, expect, test } from "vitest";
+import { describe, expect, test } from "vite-plus/test";
 
 const packageJson = JSON.parse(
   readFileSync(new URL("../package.json", import.meta.url), "utf8"),
@@ -7,9 +7,11 @@ const packageJson = JSON.parse(
 
 describe("package exports", () => {
   test("publishes the curated entrypoints", () => {
-    expect(Object.keys(packageJson.exports).sort()).toEqual(
+    const keys = Object.keys(packageJson.exports);
+    expect(keys.sort()).toEqual(
       [
         ".",
+        "./auto",
         "./apply-auto-instrumentation",
         "./custom-views",
         "./preprocessors",

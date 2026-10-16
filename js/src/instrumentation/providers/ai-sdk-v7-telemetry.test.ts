@@ -1,12 +1,19 @@
-import { afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
+import {
+  afterEach,
+  beforeAll,
+  beforeEach,
+  describe,
+  expect,
+  it,
+} from "vite-plus/test";
+import { _exportsForTestingOnly } from "../../logger/testing";
 import {
   Attachment,
-  _exportsForTestingOnly,
   currentSpan,
   initLogger,
   startSpan,
   withCurrent,
-} from "../../logger";
+} from "../../logger/core";
 import { configureNode } from "../../node/config";
 import { braintrustAISDKTelemetry } from "../../wrappers/ai-sdk/telemetry";
 import {

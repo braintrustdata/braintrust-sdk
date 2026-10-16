@@ -1,4 +1,7 @@
-import { _internalStartSpan as startBaseSpan, withCurrent } from "../../logger";
+import {
+  _internalStartSpan as startBaseSpan,
+  withCurrent,
+} from "../../logger/core";
 import {
   INSTRUMENTATION_NAMES,
   withSpanInstrumentationName,

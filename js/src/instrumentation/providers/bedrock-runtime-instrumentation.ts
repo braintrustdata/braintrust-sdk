@@ -2,7 +2,7 @@ import { traceStreamingChannel } from "../core/channel-tracing";
 import { isAsyncIterable, patchStreamIfNeeded } from "../core/stream-patcher";
 import { SpanTypeAttribute, isObject } from "../../../util/index";
 import { getCurrentUnixTimestamp } from "../../util";
-import type { Span } from "../../logger";
+import type { Span } from "../../logger/core";
 import type { AnyAsyncChannel } from "../core/channel-definitions";
 import type {
   BedrockRuntimeConverseRequest,

@@ -1,10 +1,7 @@
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import {
-  _exportsForTestingOnly,
-  currentSpan,
-  startSpan,
-  type Span,
-} from "../../logger";
+import { registerInstrumentation } from "../registrations/piCodingAgent";
+import { afterEach, beforeEach, describe, expect, it } from "vite-plus/test";
+import { _exportsForTestingOnly } from "../../logger/testing";
+import { currentSpan, startSpan, type Span } from "../../logger/core";
 import { configureNode } from "../../node/config";
 import type {
   PiAgentEvent,
@@ -17,6 +14,7 @@ import { piCodingAgentChannels } from "./pi-coding-agent-channels";
 
 // Use real Braintrust spans and async context, capturing all log writes in memory.
 configureNode();
+registerInstrumentation();
 
 describe("Pi tool execution context", () => {
   let background: ReturnType<

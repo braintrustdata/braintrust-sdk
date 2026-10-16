@@ -17,10 +17,7 @@ import { spawn } from "node:child_process";
 import { rmSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
-import {
-  displayTestResults,
-  hasFailures,
-} from "../../../shared/dist/index.mjs";
+import { displayTestResults, hasFailures } from "../../../shared/dist/index.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);

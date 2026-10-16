@@ -3,7 +3,7 @@ import {
   getCurrentUnixTimestamp,
   isObject,
 } from "../../util";
-import { logError, startSpan, withCurrent, type Span } from "../../logger";
+import { logError, startSpan, withCurrent, type Span } from "../../logger/core";
 import {
   INSTRUMENTATION_NAMES,
   withSpanInstrumentationName,

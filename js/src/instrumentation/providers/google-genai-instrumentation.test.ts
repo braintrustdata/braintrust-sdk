@@ -1,7 +1,14 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import {
+  describe,
+  it,
+  expect,
+  vi,
+  beforeEach,
+  afterEach,
+} from "vite-plus/test";
 
 // Mock iso's newTracingChannel - must be before any imports that use it
-vi.mock("../../isomorph", () => ({
+vi.mock("#braintrust-platform", () => ({
   default: {
     newAsyncLocalStorage: vi.fn(() => {
       let current: unknown;
@@ -26,15 +33,15 @@ vi.mock("../../isomorph", () => ({
 }));
 
 import { registerGoogleGenAIInstrumentation } from "./google-genai-instrumentation";
-import { startSpan } from "../../logger";
-import iso from "../../isomorph";
+import { startSpan } from "../../logger/core";
+import iso from "#braintrust-platform";
 
 const mockNewTracingChannel = iso.newTracingChannel as ReturnType<typeof vi.fn>;
 const mockStartSpan = vi.mocked(startSpan);
 
 // Mock logger
-vi.mock("../../logger", async () => {
-  const { default: iso } = await import("../../isomorph");
+vi.mock("../../logger/core", async () => {
+  const { default: iso } = await import("#braintrust-platform");
   return {
     _internalCaptureAttachmentsEnabled: () =>
       iso.getEnv("BRAINTRUST_CAPTURE_ATTACHMENTS") === "true",

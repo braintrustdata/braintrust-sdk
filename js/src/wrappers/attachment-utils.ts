@@ -2,7 +2,7 @@ import {
   Attachment,
   BaseAttachment,
   _internalCaptureAttachmentsEnabled,
-} from "../logger";
+} from "../logger/core";
 
 /** Remove media fields without reading their values, dropping type-only blocks. */
 export function omitMediaData(

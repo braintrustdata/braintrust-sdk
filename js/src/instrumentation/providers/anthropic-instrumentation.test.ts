@@ -1,7 +1,7 @@
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect, vi } from "vite-plus/test";
 
 // Mock iso's newTracingChannel - must be before any imports that use it
-vi.mock("../../isomorph", () => ({
+vi.mock("#braintrust-platform", () => ({
   default: {
     newTracingChannel: vi.fn(),
     getEnv: vi.fn((name: string) =>
@@ -16,7 +16,7 @@ import {
   processAttachmentsInInput,
   coalesceInput,
 } from "./anthropic-instrumentation";
-import { Attachment } from "../../logger";
+import { Attachment } from "../../logger/core";
 
 const parseMetricsFromUsageForTest = (usage: unknown) =>
   parseMetricsFromUsage(usage as any);
@@ -24,8 +24,8 @@ const aggregateAnthropicStreamChunksForTest = (chunks: unknown[]) =>
   aggregateAnthropicStreamChunks(chunks as any);
 
 // Mock startSpan from logger
-vi.mock("../../logger", async () => {
-  const { default: iso } = await import("../../isomorph");
+vi.mock("../../logger/core", async () => {
+  const { default: iso } = await import("#braintrust-platform");
   return {
     _internalCaptureAttachmentsEnabled: () =>
       iso.getEnv("BRAINTRUST_CAPTURE_ATTACHMENTS") === "true",

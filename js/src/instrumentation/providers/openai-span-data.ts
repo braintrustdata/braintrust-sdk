@@ -1,5 +1,8 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { _internalCaptureAttachmentsEnabled, Attachment } from "../../logger";
+import {
+  _internalCaptureAttachmentsEnabled,
+  Attachment,
+} from "../../logger/core";
 import {
   omitMediaData,
   processInputAttachments,
@@ -101,7 +104,7 @@ export function extractOpenAIResponsesMetadata(
 /** Convert Responses API base64 image outputs to Braintrust attachments. */
 export function processImagesInOutput(
   output: any,
-  captureAttachments = _internalCaptureAttachmentsEnabled(),
+  captureAttachments: boolean = _internalCaptureAttachmentsEnabled(),
 ): any {
   if (Array.isArray(output)) {
     return output

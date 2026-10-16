@@ -1,4 +1,11 @@
-import { afterEach, beforeAll, expect, expectTypeOf, test, vi } from "vitest";
+import {
+  afterEach,
+  beforeAll,
+  expect,
+  expectTypeOf,
+  test,
+  vi,
+} from "vite-plus/test";
 import * as z3 from "zod/v3";
 import * as z4 from "zod/v4";
 import {
@@ -7,7 +14,7 @@ import {
   projects,
   CodeParameters,
 } from "./framework2";
-import { _internalGetGlobalState } from "./logger";
+import { _internalGetGlobalState } from "./logger/core";
 import { configureNode } from "./node/config";
 import { zodToJsonSchema } from "./zod/utils";
 

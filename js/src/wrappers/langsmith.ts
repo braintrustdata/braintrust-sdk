@@ -1,3 +1,4 @@
+import { registerInstrumentation } from "../instrumentation/registrations/langsmith";
 import { debugLogger } from "../debug-logger";
 import { langSmithChannels } from "../instrumentation/providers/langsmith-channels";
 import type {
@@ -33,6 +34,7 @@ const WRAPPED_TRACEABLE_NAMESPACE = Symbol.for(
 );
 
 export function wrapLangSmithTraceable<T>(namespace: T): T {
+  registerInstrumentation();
   return wrapNamespaceExport(
     namespace,
     "traceable",
@@ -42,6 +44,7 @@ export function wrapLangSmithTraceable<T>(namespace: T): T {
 }
 
 export function wrapLangSmithRunTrees<T>(namespace: T): T {
+  registerInstrumentation();
   return wrapNamespaceExport(
     namespace,
     "RunTree",
@@ -51,6 +54,7 @@ export function wrapLangSmithRunTrees<T>(namespace: T): T {
 }
 
 export function wrapLangSmithClient<T>(namespace: T): T {
+  registerInstrumentation();
   return wrapNamespaceExport(
     namespace,
     "Client",

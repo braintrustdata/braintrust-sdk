@@ -1,14 +1,14 @@
 import { toLoggedError } from "../core";
 import type { ChannelMessage } from "../core/channel-definitions";
-import iso, { type IsoAsyncLocalStorage } from "../../isomorph";
+import iso, { type IsoAsyncLocalStorage } from "#braintrust-platform";
 import { debugLogger } from "../../debug-logger";
 import {
   _internalCaptureAttachmentsEnabled,
   CAPTURE_ATTACHMENTS,
   withCurrent,
   _internalStartSpan as startBaseSpan,
-} from "../../logger";
-import type { Span } from "../../logger";
+} from "../../logger/core";
+import type { Span } from "../../logger/core";
 import {
   INSTRUMENTATION_NAMES,
   withSpanInstrumentationName,

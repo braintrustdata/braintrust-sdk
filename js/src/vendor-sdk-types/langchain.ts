@@ -1,4 +1,4 @@
-import type { Logger, Span, StartSpanArgs } from "../logger";
+import type { Logger, Span, StartSpanArgs } from "../logger/core";
 import type { ExperimentLogPartialArgs } from "../util";
 
 export type LangChainSerialized = {

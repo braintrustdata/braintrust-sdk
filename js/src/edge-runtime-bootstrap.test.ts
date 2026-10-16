@@ -1,4 +1,11 @@
-import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
+import {
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  test,
+  vi,
+} from "vite-plus/test";
 
 type EdgeEntrypoint = "./edge-light/index" | "./workerd/index";
 const braintrustStateSymbol = Symbol.for("braintrust-state");
@@ -23,6 +30,11 @@ describe.each([
       vi.restoreAllMocks();
 
       Reflect.deleteProperty(globalThis, braintrustStateSymbol);
+      Reflect.deleteProperty(
+        globalThis,
+        Symbol.for("braintrust.registry.global-hooks.v1"),
+      );
+      Reflect.deleteProperty(globalThis, "__braintrust_instrumentation_hooks");
 
       if (originalAsyncLocalStorageDescriptor) {
         Object.defineProperty(
@@ -66,6 +78,8 @@ describe.each([
         get: () => getBuiltinModule,
       });
 
+      const platform = await import(entrypoint.replace("/index", "/config"));
+      (platform.configureWorkerd ?? platform.configureEdgeLight)();
       const braintrust = await import(entrypoint);
       const { _exportsForTestingOnly } = await import("./logger");
 
@@ -112,6 +126,8 @@ describe.each([
     });
 
     test("wrapAISDK logs spans in edge runtimes", async () => {
+      const platform = await import(entrypoint.replace("/index", "/config"));
+      (platform.configureWorkerd ?? platform.configureEdgeLight)();
       const braintrust = await import(entrypoint);
       const { _exportsForTestingOnly } = await import("./logger");
 

@@ -1,5 +1,6 @@
-import iso, { type IsoAsyncLocalStorage } from "../../isomorph";
-import type { Dataset, Experiment } from "../../logger";
+import iso, { type IsoAsyncLocalStorage } from "#braintrust-platform";
+import type { Dataset } from "../../logger/datasets";
+import type { Experiment } from "../../logger/experiments";
 
 /**
  * VitestExperimentContext - State for a single describe block

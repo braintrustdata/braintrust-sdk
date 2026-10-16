@@ -28,7 +28,7 @@ import {
   startSpan,
   type StartSpanArgs,
   type Span,
-} from "../logger";
+} from "../logger/core";
 import {
   INSTRUMENTATION_NAMES,
   withSpanInstrumentationName,
@@ -240,7 +240,7 @@ type SpanRecord = {
  * each instance maintains its own span map keyed by Mastra `spanId`.
  */
 export class BraintrustObservabilityExporter implements MastraObservabilityExporter {
-  public readonly name = MASTRA_BRAINTRUST_EXPORTER_NAME;
+  public readonly name: "braintrust" = MASTRA_BRAINTRUST_EXPORTER_NAME;
 
   private readonly spans = new Map<string, SpanRecord>();
   // Captured at the first SPAN_STARTED event. Mastra's observability bus may

@@ -1,5 +1,12 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import iso from "../../isomorph";
+import {
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  vi,
+} from "vite-plus/test";
+import iso from "#braintrust-platform";
 import { configureNode } from "../../node/config";
 import {
   aggregateOllamaChatChunks,

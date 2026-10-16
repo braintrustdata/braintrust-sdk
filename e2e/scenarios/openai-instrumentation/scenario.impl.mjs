@@ -327,7 +327,7 @@ async function runOpenAIMediaOperations(client, openAIMajorVersion) {
         throw new Error("Expected a WAV speech response");
       }
       let pcm;
-      for (let offset = 12; offset + 8 <= wav.length; ) {
+      for (let offset = 12; offset + 8 <= wav.length;) {
         const length = wav.readUInt32LE(offset + 4);
         if (wav.toString("ascii", offset, offset + 4) === "data") {
           pcm = wav.subarray(offset + 8);

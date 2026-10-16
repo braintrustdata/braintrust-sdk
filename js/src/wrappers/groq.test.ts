@@ -6,10 +6,11 @@ import {
   expect,
   test,
   vi,
-} from "vitest";
+} from "vite-plus/test";
 import { Readable } from "node:stream";
 import { configureNode } from "../node/config";
-import { Attachment, _exportsForTestingOnly, initLogger } from "../logger";
+import { Attachment, initLogger } from "../logger/core";
+import { _exportsForTestingOnly } from "../logger/testing";
 import { wrapGroq } from "./groq";
 
 try {

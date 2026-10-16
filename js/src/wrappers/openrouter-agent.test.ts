@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 import { wrapOpenRouterAgent } from "./openrouter-agent";
 import { openRouterAgentChannels } from "../instrumentation/providers/openrouter-agent-channels";
 

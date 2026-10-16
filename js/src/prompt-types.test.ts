@@ -1,4 +1,4 @@
-import { expectTypeOf, test } from "vitest";
+import { expectTypeOf, test } from "vite-plus/test";
 import type { ChatCompletionCreateParamsNonStreaming } from "openai/resources/chat/completions";
 import type { CompletionCreateParamsNonStreaming } from "openai/resources/completions";
 import {
@@ -7,7 +7,7 @@ import {
   type CompiledPromptParams,
   type DefaultPromptArgs,
   type PromptRowWithId,
-} from "./logger";
+} from "./logger/prompts";
 import type { CodeParameters, CodePrompt } from "./framework2";
 import type {
   AnyModelParamsType,

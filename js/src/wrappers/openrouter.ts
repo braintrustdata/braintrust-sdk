@@ -1,3 +1,4 @@
+import { registerInstrumentation } from "../instrumentation/registrations/openrouter";
 import { openRouterChannels } from "../instrumentation/providers/openrouter-channels";
 import type {
   OpenRouterBeta,
@@ -22,6 +23,7 @@ import type {
  * diagnostics-channel events that Braintrust plugins can consume.
  */
 export function wrapOpenRouter<T>(openrouter: T): T {
+  registerInstrumentation();
   const or: unknown = openrouter;
   if (
     or &&

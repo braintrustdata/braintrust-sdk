@@ -14,7 +14,7 @@ import type {
   HuggingFaceTextGenerationDetails,
   HuggingFaceTextGenerationStreamOutput,
 } from "../../vendor-sdk-types/huggingface";
-import type { Span } from "../../logger";
+import type { Span } from "../../logger/core";
 
 const REQUEST_METADATA_ALLOWLIST = new Set([
   "dimensions",

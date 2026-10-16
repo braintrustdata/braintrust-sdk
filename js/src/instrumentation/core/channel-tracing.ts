@@ -1,7 +1,14 @@
 import { debugLogger } from "../../debug-logger";
-import type { IsoChannelHandlers, IsoTracingChannel } from "../../isomorph";
-import { _internalGetGlobalState, startSpan, withCurrent } from "../../logger";
-import type { Span } from "../../logger";
+import type {
+  IsoChannelHandlers,
+  IsoTracingChannel,
+} from "#braintrust-platform";
+import {
+  _internalGetGlobalState,
+  startSpan,
+  withCurrent,
+} from "../../logger/core";
+import type { Span } from "../../logger/core";
 import {
   withSpanInstrumentationName,
   type SpanInstrumentationName,

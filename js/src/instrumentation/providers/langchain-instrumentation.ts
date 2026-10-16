@@ -1,5 +1,8 @@
 import type { ChannelMessage } from "../core/channel-definitions";
-import type { IsoChannelHandlers, IsoTracingChannel } from "../../isomorph";
+import type {
+  IsoChannelHandlers,
+  IsoTracingChannel,
+} from "#braintrust-platform";
 import type { LangChainCallbackManager } from "../../vendor-sdk-types/langchain";
 import {
   BRAINTRUST_LANGCHAIN_CALLBACK_HANDLER_NAME,

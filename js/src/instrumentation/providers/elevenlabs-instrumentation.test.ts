@@ -1,16 +1,26 @@
-import { afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
+import { registerInstrumentation } from "../registrations/elevenlabs";
+import {
+  afterEach,
+  beforeAll,
+  beforeEach,
+  describe,
+  expect,
+  it,
+} from "vite-plus/test";
 import { Readable } from "node:stream";
 import {
   ReadableStream,
   WritableStream,
   TransformStream,
 } from "node:stream/web";
-import { Attachment, _exportsForTestingOnly, initLogger } from "../../logger";
+import { Attachment, initLogger } from "../../logger/core";
+import { _exportsForTestingOnly } from "../../logger/testing";
 import { configureNode } from "../../node/config";
 import { elevenLabsChannels } from "./elevenlabs-channels";
 import { wrapElevenLabs } from "../../wrappers/elevenlabs";
 
 configureNode();
+registerInstrumentation();
 const request = { text: "Hello", modelId: "eleven_flash_v2_5" };
 
 describe("ElevenLabs instrumentation", () => {

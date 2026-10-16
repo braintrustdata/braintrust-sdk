@@ -1,4 +1,4 @@
-import { init, type Experiment } from "../../logger";
+import { init, type Experiment } from "../../logger/experiments";
 import { runTracedEval } from "../shared/traced-eval";
 import { summarizeAndFlush } from "../shared/flush";
 import type {

@@ -1,3 +1,4 @@
+import { registerInstrumentation } from "../instrumentation/registrations/piCodingAgent";
 import { piCodingAgentChannels } from "../instrumentation/providers/pi-coding-agent-channels";
 import type {
   PiAgentSession,
@@ -13,6 +14,7 @@ const WRAPPED_PROMPT = Symbol.for("braintrust.pi-coding-agent.wrapped-prompt");
  * instrumentation hook calls; the Pi Coding Agent plugin owns span lifecycle.
  */
 export function wrapPiCodingAgentSDK<T>(sdk: T): T {
+  registerInstrumentation();
   if (!sdk || typeof sdk !== "object") {
     return sdk;
   }

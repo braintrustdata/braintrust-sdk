@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "vite-plus/test";
 import { openAIChannels } from "./instrumentation/providers/openai-channels";
 import { wrapOpenAI } from "./wrappers/oai";
 import {

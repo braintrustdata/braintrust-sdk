@@ -1,6 +1,9 @@
 import { SpanTypeAttribute, isObject } from "../../../util/index";
-import iso from "../../isomorph";
-import { _internalCaptureAttachmentsEnabled, Attachment } from "../../logger";
+import iso from "#braintrust-platform";
+import {
+  _internalCaptureAttachmentsEnabled,
+  Attachment,
+} from "../../logger/core";
 import { processInputAttachments } from "../../wrappers/attachment-utils";
 import type {
   OllamaChatRequest,

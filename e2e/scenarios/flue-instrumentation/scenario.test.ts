@@ -1,6 +1,6 @@
 import { promises as fs } from "node:fs";
 import path from "node:path";
-import { describe } from "vitest";
+import { describe } from "vite-plus/test";
 import {
   prepareScenarioDir,
   readInstalledPackageVersion,
@@ -50,41 +50,49 @@ const flueV2Scenarios = await Promise.all(
   })),
 );
 
-describe.sequential("flue variants", () => {
+describe("flue variants", { concurrent: false }, () => {
   for (const scenario of flueScenarios) {
-    describe.sequential(`flue ${scenario.label} (${scenario.version})`, () => {
-      defineFlueInstrumentationAssertions({
-        name: "explicit instrumentation",
-        runScenario: async ({ runScenarioDir }) => {
-          await runScenarioDir({
-            entry: "scenario.ts",
-            env: scenario.env,
-            runContext: {
-              originalScenarioDir,
-              variantKey: scenario.variantKey,
-            },
-            scenarioDir: scenario.scenarioDir,
-            timeoutMs: TIMEOUT_MS,
-          });
-        },
-        snapshotName: `${scenario.variantKey}-explicit`,
-        testFileUrl: import.meta.url,
-        timeoutMs: TIMEOUT_MS,
-      });
-    });
+    describe(
+      `flue ${scenario.label} (${scenario.version})`,
+      { concurrent: false },
+      () => {
+        defineFlueInstrumentationAssertions({
+          name: "explicit instrumentation",
+          runScenario: async ({ runScenarioDir }) => {
+            await runScenarioDir({
+              entry: "scenario.ts",
+              env: scenario.env,
+              runContext: {
+                originalScenarioDir,
+                variantKey: scenario.variantKey,
+              },
+              scenarioDir: scenario.scenarioDir,
+              timeoutMs: TIMEOUT_MS,
+            });
+          },
+          snapshotName: `${scenario.variantKey}-explicit`,
+          testFileUrl: import.meta.url,
+          timeoutMs: TIMEOUT_MS,
+        });
+      },
+    );
   }
 
   for (const scenario of flueV2Scenarios) {
-    describe.sequential(`flue ${scenario.label} (${scenario.version})`, () => {
-      defineFlueV2InstrumentationAssertions({
-        originalScenarioDir,
-        runtimePackageName: scenario.dependencyName,
-        scenarioDir: flueV2ScenarioDir,
-        snapshotName: scenario.variantKey,
-        testFileUrl: import.meta.url,
-        timeoutMs: TIMEOUT_MS,
-      });
-    });
+    describe(
+      `flue ${scenario.label} (${scenario.version})`,
+      { concurrent: false },
+      () => {
+        defineFlueV2InstrumentationAssertions({
+          originalScenarioDir,
+          runtimePackageName: scenario.dependencyName,
+          scenarioDir: flueV2ScenarioDir,
+          snapshotName: scenario.variantKey,
+          testFileUrl: import.meta.url,
+          timeoutMs: TIMEOUT_MS,
+        });
+      },
+    );
   }
 });
 

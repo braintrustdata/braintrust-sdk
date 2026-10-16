@@ -1,6 +1,7 @@
 import type { Reporter, TestCase, TestModule, Vitest } from "vitest/node";
 import { SpanTypeAttribute, isObject } from "../../../util";
-import { init, logError, type Experiment, type Span } from "../../logger";
+import { init, type Experiment } from "../../logger/experiments";
+import { logError, type Span } from "../../logger/core";
 import { configureNode } from "../../node/config";
 import { summarizeAndFlush } from "../shared/flush";
 

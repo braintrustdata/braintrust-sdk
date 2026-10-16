@@ -1,3 +1,7 @@
+import type {
+  MaterializedChannel,
+  ChannelSpec,
+} from "../core/channel-definitions";
 import { channel, defineChannels } from "../core/channel-definitions";
 import { INSTRUMENTATION_NAMES } from "../../span-origin";
 import type {
@@ -54,26 +58,46 @@ export function getHuggingFaceTransformersPipelineInfo(
   return pipeline ? pipelineInfo.get(pipeline) : undefined;
 }
 
-export const huggingFaceTransformersChannels = defineChannels(
-  "@huggingface/transformers",
-  {
-    pipeline: channel<
+export const huggingFaceTransformersChannels: {
+  pipeline: MaterializedChannel<
+    ChannelSpec<
       [string, (string | null)?, Record<string, unknown>?],
       HuggingFaceTransformersPipeline,
-      HuggingFaceTransformersEventContext
-    >({
-      channelName: "pipeline",
-      kind: "async",
-    }),
-
-    pipelineCall: channel<
+      HuggingFaceTransformersEventContext,
+      never,
+      "async"
+    >
+  >;
+  pipelineCall: MaterializedChannel<
+    ChannelSpec<
       [unknown, ...unknown[]],
       unknown | HuggingFaceTransformersTensor,
-      HuggingFaceTransformersEventContext
-    >({
-      channelName: "pipeline.call",
-      kind: "async",
-    }),
-  },
-  { instrumentationName: INSTRUMENTATION_NAMES.HUGGINGFACE },
-);
+      HuggingFaceTransformersEventContext,
+      never,
+      "async"
+    >
+  >;
+} = /* @__PURE__ */ (() =>
+  defineChannels(
+    "@huggingface/transformers",
+    {
+      pipeline: channel<
+        [string, (string | null)?, Record<string, unknown>?],
+        HuggingFaceTransformersPipeline,
+        HuggingFaceTransformersEventContext
+      >({
+        channelName: "pipeline",
+        kind: "async",
+      }),
+
+      pipelineCall: channel<
+        [unknown, ...unknown[]],
+        unknown | HuggingFaceTransformersTensor,
+        HuggingFaceTransformersEventContext
+      >({
+        channelName: "pipeline.call",
+        kind: "async",
+      }),
+    },
+    { instrumentationName: INSTRUMENTATION_NAMES.HUGGINGFACE },
+  ))();

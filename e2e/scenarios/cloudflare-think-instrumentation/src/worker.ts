@@ -1,8 +1,12 @@
+// Bundler transforms and runtime consumers are enabled independently.
 import * as cloudflareThink from "@cloudflare/think";
 import { createOpenAI } from "@ai-sdk/openai";
 import { flush, initLogger, wrapCloudflareThink } from "braintrust";
 import { tool } from "ai";
 import { z } from "zod";
+
+if (process.env.CLOUDFLARE_THINK_INSTRUMENTATION !== "manual")
+  await import("braintrust/auto");
 
 const OPENAI_MODEL = "gpt-5-nano";
 

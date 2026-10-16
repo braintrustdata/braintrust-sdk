@@ -144,6 +144,7 @@ export function createOtelAliases(cwd: string): Record<string, string> {
       ? path.resolve(cwd, "../..")
       : path.resolve(cwd, "../../..");
   return {
+    "#braintrust-platform": path.resolve(repositoryRoot, "js/src/isomorph.ts"),
     "@braintrust/otel": path.resolve(
       repositoryRoot,
       "integrations/otel-js/src/index.ts",

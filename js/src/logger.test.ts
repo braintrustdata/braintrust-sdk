@@ -1,3 +1,4 @@
+import { getLoaderCaches } from "./logger/prompts";
 /* eslint-disable @typescript-eslint/consistent-type-assertions */
 
 import {
@@ -8,20 +9,14 @@ import {
   describe,
   beforeEach,
   afterEach,
-} from "vitest";
+} from "vite-plus/test";
+import { _exportsForTestingOnly } from "./logger/testing";
 import {
-  _exportsForTestingOnly,
   _internalStartSpan,
-  init,
-  initDataset,
   initLogger,
   extractTraceContextFromHeaders,
-  Prompt,
-  RemoteEvalParameters,
   BraintrustState,
   FailedHTTPResponse,
-  loadPrompt,
-  loadParameters,
   wrapTraced,
   traced,
   currentSpan,
@@ -30,11 +25,18 @@ import {
   updateSpan,
   Attachment,
   deepCopyEvent,
-  ReadonlyExperiment,
-  renderMessageImpl,
   flush,
   type InitLoggerOptions,
-} from "./logger";
+} from "./logger/core";
+import { init, ReadonlyExperiment } from "./logger/experiments";
+import { initDataset } from "./logger/datasets";
+import {
+  Prompt,
+  RemoteEvalParameters,
+  loadPrompt,
+  loadParameters,
+  renderMessageImpl,
+} from "./logger/prompts";
 
 import { configureNode } from "./node/config";
 import { type GitMetadataSettingsType as GitMetadataSettings } from "./generated_types";
@@ -2380,8 +2382,14 @@ describe("prompt and parameters loaders", () => {
         )
         .mockResolvedValueOnce(jsonResponse({ objects: [promptRow] }))
         .mockResolvedValueOnce(serverErrorResponse());
-      const globalCacheGet = vi.spyOn(state.promptCache, "get");
-      const globalCacheSet = vi.spyOn(state.promptCache, "set");
+      const globalCacheGet = vi.spyOn(
+        getLoaderCaches(state).promptCache,
+        "get",
+      );
+      const globalCacheSet = vi.spyOn(
+        getLoaderCaches(state).promptCache,
+        "set",
+      );
 
       const options = {
         projectName: "test-project",
@@ -2784,7 +2792,7 @@ describe("prompt and parameters loaders", () => {
           logWarnings: false,
         });
         const diskCacheSet = vi.spyOn(onlineDiskCache, "set");
-        onlineState.promptCache = new PromptCache({
+        getLoaderCaches(onlineState).promptCache = new PromptCache({
           diskCache: onlineDiskCache,
         });
         await onlineState.login({});
@@ -2813,7 +2821,7 @@ describe("prompt and parameters loaders", () => {
           fetch: offlineFetch as unknown as typeof globalThis.fetch,
           noExitFlush: true,
         });
-        offlineState.promptCache = new PromptCache({
+        getLoaderCaches(offlineState).promptCache = new PromptCache({
           diskCache: new DiskCache({ cacheDir, logWarnings: false }),
         });
 
@@ -2838,7 +2846,7 @@ describe("prompt and parameters loaders", () => {
           fetch: rejectedFetch as unknown as typeof globalThis.fetch,
           noExitFlush: true,
         });
-        rejectedState.promptCache = new PromptCache({
+        getLoaderCaches(rejectedState).promptCache = new PromptCache({
           diskCache: new DiskCache({ cacheDir, logWarnings: false }),
         });
 
@@ -2879,7 +2887,7 @@ describe("prompt and parameters loaders", () => {
         fetch: fetchMock as unknown as typeof globalThis.fetch,
         noExitFlush: true,
       });
-      switchingState.promptCache = new PromptCache({
+      getLoaderCaches(switchingState).promptCache = new PromptCache({
         memoryCache: new LRUCache<string, PromptMemoryCacheEntry>({ max: 10 }),
       });
 
@@ -2904,10 +2912,10 @@ describe("prompt and parameters loaders", () => {
     });
 
     test("loadPrompt does not read legacy unnamespaced cache entries", async () => {
-      state.promptCache = new PromptCache({
+      getLoaderCaches(state).promptCache = new PromptCache({
         memoryCache: new LRUCache<string, PromptMemoryCacheEntry>({ max: 10 }),
       });
-      await state.promptCache.set(
+      await getLoaderCaches(state).promptCache.set(
         {
           projectName: "test-project",
           slug: "saved-prompt",
@@ -2996,7 +3004,7 @@ describe("prompt and parameters loaders", () => {
     });
 
     test("loadParameters uses request-local credentials and isolated caches", async () => {
-      state.parametersCache = new ParametersCache({
+      getLoaderCaches(state).parametersCache = new ParametersCache({
         memoryCache: new LRUCache<string, ParametersMemoryCacheEntry>({
           max: 10,
         }),

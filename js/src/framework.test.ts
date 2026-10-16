@@ -6,7 +6,7 @@ import {
   beforeEach,
   afterEach,
   vi,
-} from "vitest";
+} from "vite-plus/test";
 import { type ExperimentEvent } from "../util";
 import {
   defaultErrorScoreHandler,
@@ -16,14 +16,14 @@ import {
   _internalPrepareEvaluatorScore,
   type OneOrMoreScores,
 } from "./framework";
+import { _exportsForTestingOnly } from "./logger/testing";
 import {
-  _exportsForTestingOnly,
   BraintrustState,
   initLogger,
   injectTraceContext,
   TestBackgroundLogger,
   _internalWithParent,
-} from "./logger";
+} from "./logger/core";
 import { parseBaggage } from "./propagation";
 import { configureNode } from "./node/config";
 import type { ProgressReporter } from "./reporters/types";

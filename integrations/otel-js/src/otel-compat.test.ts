@@ -5,7 +5,7 @@
  * when created in mixed contexts.
  */
 
-import { beforeEach, afterEach, describe, expect, test } from "vitest";
+import { beforeEach, afterEach, describe, expect, test } from "vite-plus/test";
 import { initLogger, currentSpan, Eval } from "braintrust";
 import {
   _exportsForTestingOnly,

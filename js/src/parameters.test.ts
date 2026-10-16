@@ -1,7 +1,7 @@
-import { expect, expectTypeOf, test, beforeAll } from "vitest";
+import { expect, expectTypeOf, test, beforeAll } from "vite-plus/test";
 import { type InferParameters, validateParameters } from "./eval-parameters";
 import { Eval, runEvaluator } from "./framework";
-import { RemoteEvalParameters } from "./logger";
+import { RemoteEvalParameters } from "./logger/prompts";
 import { z } from "zod/v3";
 import * as z4 from "zod/v4";
 import { type ProgressReporter } from "./reporters/types";

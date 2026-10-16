@@ -1,3 +1,4 @@
+import { registerInstrumentation } from "../instrumentation/registrations/cursorSDK";
 import { cursorSDKChannels } from "../instrumentation/providers/cursor-sdk-channels";
 import type {
   CursorSDKAgent,
@@ -15,6 +16,7 @@ const WRAPPED_AGENT = Symbol.for("braintrust.cursor-sdk.wrapped-agent");
  * diagnostics-channel events; the Cursor SDK plugin owns span lifecycle.
  */
 export function wrapCursorSDK<T>(sdk: T): T {
+  registerInstrumentation();
   if (!sdk || typeof sdk !== "object") {
     return sdk;
   }

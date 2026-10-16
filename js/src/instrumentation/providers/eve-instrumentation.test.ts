@@ -6,10 +6,11 @@ import {
   expect,
   it,
   vi,
-} from "vitest";
+} from "vite-plus/test";
 import * as braintrustExports from "../../exports";
 import { configureNode } from "../../node/config";
-import { Attachment, _exportsForTestingOnly, initLogger } from "../../logger";
+import { Attachment, initLogger } from "../../logger/core";
+import { _exportsForTestingOnly } from "../../logger/testing";
 import * as instrumentationExports from "../index";
 import { braintrustEveInstrumentation } from "./eve-instrumentation";
 import type {

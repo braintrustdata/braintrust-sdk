@@ -1,242 +1,88 @@
-import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
+import {
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  vi,
+} from "vite-plus/test";
+import iso from "#braintrust-platform";
+import { GLOBAL_INSTRUMENTATION_HOOKS_PROTOCOL_VERSION } from "../global-instrumentation-hooks";
+import { configureInstrumentation, registry } from "./registry";
 
-// Mock iso's newTracingChannel - must be before any imports that use it
-vi.mock("../isomorph", () => ({
-  default: {
-    newTracingChannel: vi.fn(),
-    newAsyncLocalStorage: vi.fn(() => ({
-      getStore: vi.fn(() => undefined),
-      run: vi.fn((_store: unknown, callback: () => unknown) => callback()),
-    })),
-    getEnv: vi.fn(() => undefined),
-    buildType: "node",
-  },
-}));
+const registryKey = Symbol.for(
+  `braintrust.registry.global-hooks.v${GLOBAL_INSTRUMENTATION_HOOKS_PROTOCOL_VERSION}`,
+);
 
-import { registry, configureInstrumentation } from "./registry";
-import iso from "../isomorph";
-
-const mockNewTracingChannel = iso.newTracingChannel as ReturnType<typeof vi.fn>;
-
-describe("Instrumentation Registry", () => {
-  beforeEach(() => {
-    // Setup mock channel
-    const mockChannel = {
-      subscribe: vi.fn(),
-      hasSubscribers: false,
-    };
-    mockNewTracingChannel.mockReturnValue(mockChannel);
-  });
-
-  it("should not be enabled by default", () => {
-    const testRegistry = new (registry.constructor as any)();
-    expect(testRegistry.isEnabled()).toBe(false);
-  });
-
-  it("should enable instrumentation consumers when enable() is called", () => {
-    const testRegistry = new (registry.constructor as any)();
-    testRegistry.enable();
-    expect(testRegistry.isEnabled()).toBe(true);
-  });
-
-  it("should be idempotent (calling enable() multiple times)", () => {
-    const testRegistry = new (registry.constructor as any)();
-    testRegistry.enable();
-    testRegistry.enable(); // Should not throw
-    expect(testRegistry.isEnabled()).toBe(true);
-  });
-
-  it("should block a second instance from subscribing when another is already enabled", () => {
-    // Regression test for BT-5139: when the SDK is loaded from two different
-    // module paths in the same process, each gets its own instrumentation registry
-    // instance. Without cross-instance deduplication, both would subscribe to
-    // the same global hook, causing every OpenAI call to produce two
-    // LLM spans.
-    //
-    // The dedup mechanism checks globalThis[Symbol.for("braintrust-state")],
-    // which is the shared state object that all SDK instances reuse (see
-    // _internalSetInitialState in logger.ts). We simulate that here.
-    const sharedState = {};
-    const stateKey = Symbol.for("braintrust-state");
-    (globalThis as any)[stateKey] = sharedState;
-
-    const instanceA = new (registry.constructor as any)();
-    const instanceB = new (registry.constructor as any)();
-
-    try {
-      instanceA.enable();
-      expect(instanceA.isEnabled()).toBe(true);
-
-      // instanceB should be blocked — the hook is already subscribed
-      instanceB.enable();
-      expect(instanceB.isEnabled()).toBe(false);
-    } finally {
-      delete (globalThis as any)[stateKey];
-    }
-  });
-
-  it("should ignore deduplication markers from older transports", () => {
-    const stateKey = Symbol.for("braintrust-state");
-    (globalThis as any)[stateKey] = {
-      [Symbol.for("braintrust.registry")]: {},
-    };
-    const testRegistry = new (registry.constructor as any)();
-
-    try {
-      testRegistry.enable();
-      expect(testRegistry.isEnabled()).toBe(true);
-    } finally {
-      delete (globalThis as any)[stateKey];
-    }
-  });
-
-  it("should warn if configureInstrumentation is called after enable", () => {
-    const testRegistry = new (registry.constructor as any)();
-    const warnSpy = [] as string[];
-    const originalWarn = console.warn;
-    console.warn = (msg: string) => warnSpy.push(msg);
-
-    try {
-      testRegistry.enable();
-      testRegistry.configure({ integrations: { openai: false } });
-
-      expect(warnSpy.length).toBeGreaterThan(0);
-      expect(warnSpy[0]).toContain("Cannot configure instrumentation");
-    } finally {
-      console.warn = originalWarn;
-    }
-  });
-
-  it("should allow configuration before enable", () => {
-    const testRegistry = new (registry.constructor as any)();
-    const warnSpy = [] as string[];
-    const originalWarn = console.warn;
-    console.warn = (msg: string) => warnSpy.push(msg);
-
-    try {
-      testRegistry.configure({ integrations: { openai: false } });
-      testRegistry.enable();
-
-      expect(warnSpy.length).toBe(0);
-    } finally {
-      console.warn = originalWarn;
-    }
-  });
+beforeEach(() => {
+  delete (globalThis as Record<symbol, unknown>)[registryKey];
+});
+afterEach(() => {
+  vi.restoreAllMocks();
+  delete (globalThis as Record<symbol, unknown>)[registryKey];
 });
 
-describe("configureInstrumentation API", () => {
-  it("should export configureInstrumentation function", () => {
-    expect(typeof configureInstrumentation).toBe("function");
+describe("explicit instrumentation registration", () => {
+  it("does not register until requested", () => {
+    expect(registry.isEnabled()).toBe(false);
   });
 
-  it("should accept integration configuration", () => {
-    // Should not throw
-    configureInstrumentation({
-      integrations: {
-        openai: false,
-        openaiCodexSDK: false,
-        anthropic: true,
-        huggingface: true,
-        openrouter: false,
-        mistral: false,
-        cohere: false,
-        mastra: false,
-        strandsAgentSDK: false,
-        cloudflareAIChat: false,
-        cloudflareAgents: false,
-      },
-    });
-  });
-});
-
-describe("Environment Variable Configuration", () => {
-  let originalGetEnv: typeof import("../isomorph").default.getEnv;
-
-  beforeEach(async () => {
-    const iso = (await import("../isomorph")).default;
-    originalGetEnv = iso.getEnv;
+  it("deduplicates each provider independently across registry copies", () => {
+    const second = new (registry.constructor as new () => typeof registry)();
+    const openai = vi.fn();
+    const anthropic = vi.fn();
+    registry.register("openai", openai);
+    second.register("openai", openai);
+    second.register("anthropic", anthropic);
+    registry.register("anthropic", anthropic);
+    expect(openai).toHaveBeenCalledOnce();
+    expect(anthropic).toHaveBeenCalledOnce();
   });
 
-  afterEach(async () => {
-    const iso = (await import("../isomorph")).default;
-    iso.getEnv = originalGetEnv;
+  it("handles reentrant registration", () => {
+    const subscribe = vi.fn<() => void>();
+    subscribe.mockImplementation(() => registry.register("openai", subscribe));
+    registry.register("openai", subscribe);
+    expect(subscribe).toHaveBeenCalledOnce();
   });
 
-  it("should parse BRAINTRUST_DISABLE_INSTRUMENTATION with single SDK", async () => {
-    const iso = (await import("../isomorph")).default;
-    iso.getEnv = (name: string) => {
-      if (name === "BRAINTRUST_DISABLE_INSTRUMENTATION") {
-        return "openai";
-      }
-      return originalGetEnv(name);
-    };
-
-    const testRegistry = new (registry.constructor as any)();
-    testRegistry.enable();
-
-    // OpenAI should be disabled, others enabled by default
-    expect(testRegistry.isEnabled()).toBe(true);
+  it("shares configuration before registration and merges provider settings", () => {
+    configureInstrumentation({ integrations: { openai: false } });
+    configureInstrumentation({ integrations: { anthropic: false } });
+    const subscribe = vi.fn();
+    registry.register("openai", subscribe);
+    registry.register("anthropic", subscribe);
+    expect(subscribe).not.toHaveBeenCalled();
+    registry.register("groq", subscribe);
+    expect(subscribe).toHaveBeenCalledOnce();
   });
 
-  it("should parse BRAINTRUST_DISABLE_INSTRUMENTATION with multiple SDKs", async () => {
-    const iso = (await import("../isomorph")).default;
-    iso.getEnv = (name: string) => {
-      if (name === "BRAINTRUST_DISABLE_INSTRUMENTATION") {
-        return "openai,anthropic";
-      }
-      return originalGetEnv(name);
-    };
-
-    const testRegistry = new (registry.constructor as any)();
-    testRegistry.enable();
-
-    // Both should be disabled
-    expect(testRegistry.isEnabled()).toBe(true);
+  it("warns when configuration arrives after registration", () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    registry.register("openai", () => {});
+    configureInstrumentation({ integrations: { openai: false } });
+    expect(warn).toHaveBeenCalledWith(
+      expect.stringContaining("Cannot configure"),
+    );
   });
 
-  it("should handle whitespace in BRAINTRUST_DISABLE_INSTRUMENTATION", async () => {
-    const iso = (await import("../isomorph")).default;
-    iso.getEnv = (name: string) => {
-      if (name === "BRAINTRUST_DISABLE_INSTRUMENTATION") {
-        return " openai , anthropic , vercel ";
-      }
-      return originalGetEnv(name);
-    };
+  it.each(["openai", " OPENAI , anthropic ", "OpenAI,ai-sdk"])(
+    "environment opt-outs override explicit enablement: %s",
+    (disabled) => {
+      vi.spyOn(iso, "getEnv").mockImplementation((name) =>
+        name === "BRAINTRUST_DISABLE_INSTRUMENTATION" ? disabled : undefined,
+      );
+      configureInstrumentation({ integrations: { openai: true } });
+      const subscribe = vi.fn();
+      registry.register("openai", subscribe);
+      expect(subscribe).not.toHaveBeenCalled();
+    },
+  );
 
-    const testRegistry = new (registry.constructor as any)();
-    testRegistry.enable();
-
-    expect(testRegistry.isEnabled()).toBe(true);
-  });
-
-  it("should handle empty BRAINTRUST_DISABLE_INSTRUMENTATION", async () => {
-    const iso = (await import("../isomorph")).default;
-    iso.getEnv = (name: string) => {
-      if (name === "BRAINTRUST_DISABLE_INSTRUMENTATION") {
-        return "";
-      }
-      return originalGetEnv(name);
-    };
-
-    const testRegistry = new (registry.constructor as any)();
-    testRegistry.enable();
-
-    // All should be enabled (nothing disabled)
-    expect(testRegistry.isEnabled()).toBe(true);
-  });
-
-  it("should be case-insensitive for SDK names", async () => {
-    const iso = (await import("../isomorph")).default;
-    iso.getEnv = (name: string) => {
-      if (name === "BRAINTRUST_DISABLE_INSTRUMENTATION") {
-        return "OpenAI,ANTHROPIC";
-      }
-      return originalGetEnv(name);
-    };
-
-    const testRegistry = new (registry.constructor as any)();
-    testRegistry.enable();
-
-    expect(testRegistry.isEnabled()).toBe(true);
+  it("keeps the combined LangChain/LangGraph opt-out", () => {
+    configureInstrumentation({ integrations: { langgraph: false } });
+    const subscribe = vi.fn();
+    registry.register("langchain", subscribe);
+    expect(subscribe).not.toHaveBeenCalled();
   });
 });

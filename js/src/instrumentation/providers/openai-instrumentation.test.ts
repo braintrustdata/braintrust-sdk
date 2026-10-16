@@ -1,11 +1,11 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect } from "vite-plus/test";
 import {
   parseMetricsFromUsage,
   aggregateChatCompletionChunks,
   aggregateResponseStreamEvents,
 } from "./openai-instrumentation";
 import { processImagesInOutput as processImagesInOutputWithFlag } from "./openai-span-data";
-import { Attachment } from "../../logger";
+import { Attachment } from "../../logger/core";
 
 const processImagesInOutput = (output: unknown, captureAttachments = true) =>
   processImagesInOutputWithFlag(output, captureAttachments);

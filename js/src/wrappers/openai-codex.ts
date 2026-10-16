@@ -1,3 +1,4 @@
+import { registerInstrumentation } from "../instrumentation/registrations/openaiCodexSDK";
 import { openAICodexChannels } from "../instrumentation/providers/openai-codex-channels";
 import type {
   OpenAICodexClass,
@@ -18,6 +19,7 @@ const WRAPPED_THREAD = Symbol.for("braintrust.openai-codex.wrapped-thread");
  * emits diagnostics-channel events; the OpenAI Codex plugin owns span lifecycle.
  */
 export function wrapOpenAICodexSDK<T>(sdk: T): T {
+  registerInstrumentation();
   if (!sdk || typeof sdk !== "object") {
     return sdk;
   }

@@ -6,7 +6,7 @@ import {
   startSpan,
   withCurrent,
   type Span,
-} from "../../logger";
+} from "../../logger/core";
 import {
   INSTRUMENTATION_NAMES,
   withSpanInstrumentationName,

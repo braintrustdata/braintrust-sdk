@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi } from "vite-plus/test";
 import { INSTRUMENTATION_NAMES } from "../../span-origin";
 import { channel, defineChannels } from "./channel-definitions";
 

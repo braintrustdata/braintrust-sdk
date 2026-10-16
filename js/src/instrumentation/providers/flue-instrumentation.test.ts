@@ -1,4 +1,11 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import {
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  vi,
+} from "vite-plus/test";
 
 const {
   mockDebugLog,
@@ -34,7 +41,7 @@ vi.mock("../../debug-logger", () => ({
   },
 }));
 
-vi.mock("../../logger", () => ({
+vi.mock("../../logger/core", () => ({
   NOOP_SPAN: {},
   flush: (...args: unknown[]) => mockFlush(...args),
   _internalGetGlobalState: () => ({

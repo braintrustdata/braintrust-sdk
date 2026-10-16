@@ -1,4 +1,4 @@
-import { describe } from "vitest";
+import { describe } from "vite-plus/test";
 import {
   prepareScenarioDir,
   readInstalledPackageVersion,
@@ -32,7 +32,7 @@ function parseMajorVersion(version: string): number {
 const describeVariants =
   process.env.BRAINTRUST_E2E_CASSETTE_MODE === "record" ||
   process.env.BRAINTRUST_E2E_CASSETTE_MODE === "record-missing"
-    ? describe.sequential
+    ? describe
     : describe.concurrent;
 
 describeVariants("variants", () => {
@@ -47,7 +47,7 @@ describeVariants("variants", () => {
     const supportsOutputObjectScenario =
       scenario.supportsOutputObjectScenario ?? supportsRichInputScenarios;
 
-    describe.sequential(`ai sdk ${scenario.version}`, () => {
+    describe(`ai sdk ${scenario.version}`, { concurrent: false }, () => {
       defineAISDKInstrumentationAssertions({
         agentSpanName: scenario.agentSpanName,
         name: scenario.wrapperTestName ?? "wrapped instrumentation",

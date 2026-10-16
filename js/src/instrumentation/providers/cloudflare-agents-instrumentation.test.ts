@@ -6,8 +6,8 @@ import {
   expectTypeOf,
   it,
   vi,
-} from "vitest";
-import type { StartSpanArgs } from "../../logger";
+} from "vite-plus/test";
+import type { StartSpanArgs } from "../../logger/core";
 import {
   getSpanInstrumentationName,
   INSTRUMENTATION_NAMES,
@@ -17,18 +17,18 @@ const { mockStartSpan } = vi.hoisted(() => ({
   mockStartSpan: vi.fn(),
 }));
 
-vi.mock("../../logger", () => ({
+vi.mock("../../logger/core", () => ({
   _internalStartSpanWithContext: (...args: unknown[]) => mockStartSpan(...args),
 }));
 
-vi.mock("../../isomorph", () => ({
+vi.mock("#braintrust-platform", () => ({
   default: {
     getEnv: vi.fn(),
     newTracingChannel: vi.fn(),
   },
 }));
 
-import iso from "../../isomorph";
+import iso from "#braintrust-platform";
 import { registerCloudflareAgentsInstrumentation } from "./cloudflare-agents-instrumentation";
 
 const mockNewTracingChannel = iso.newTracingChannel as ReturnType<typeof vi.fn>;

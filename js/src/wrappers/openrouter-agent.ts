@@ -1,3 +1,4 @@
+import { registerInstrumentation } from "../instrumentation/registrations/openrouterAgent";
 import { openRouterAgentChannels } from "../instrumentation/providers/openrouter-agent-channels";
 import type {
   OpenRouterAgentClient,
@@ -9,6 +10,7 @@ import type {
  * diagnostics-channel events consumed by the OpenRouter Agent plugin.
  */
 export function wrapOpenRouterAgent<T extends object>(agent: T): T {
+  registerInstrumentation();
   const candidate: unknown = agent;
   if (
     candidate &&

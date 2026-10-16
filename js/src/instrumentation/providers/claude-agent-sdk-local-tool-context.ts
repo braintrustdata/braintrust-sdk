@@ -1,4 +1,4 @@
-import iso from "../../isomorph";
+import iso from "#braintrust-platform";
 
 type ClaudeLocalToolParentResolver = (toolUseId: string) => Promise<string>;
 

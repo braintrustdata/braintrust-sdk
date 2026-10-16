@@ -1,4 +1,4 @@
-import { expect, test } from "vitest";
+import { expect, test } from "vite-plus/test";
 import { withScenarioHarness } from "./scenario-harness";
 import { findLatestSpan } from "./trace-selectors";
 import { captureCases } from "./attachment-capture-scenario.mjs";

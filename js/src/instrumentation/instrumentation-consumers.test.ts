@@ -1,4 +1,6 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { configureInstrumentation } from "./registry";
+import { GLOBAL_INSTRUMENTATION_HOOKS_PROTOCOL_VERSION } from "../global-instrumentation-hooks";
+import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
 import type { InstrumentationIntegrationsConfig } from "./config";
 
 const registrations = vi.hoisted(() => ({
@@ -161,6 +163,11 @@ const integrationCases: Array<
 describe("registerInstrumentationConsumers", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    delete (globalThis as Record<symbol, unknown>)[
+      Symbol.for(
+        `braintrust.registry.global-hooks.v${GLOBAL_INSTRUMENTATION_HOOKS_PROTOCOL_VERSION}`,
+      )
+    ];
   });
 
   it("registers every instrumentation consumer by default", () => {
@@ -170,16 +177,20 @@ describe("registerInstrumentationConsumers", () => {
       expect(register).toHaveBeenCalledTimes(1);
     }
     expect(registrations.langSmith).toHaveBeenCalledWith({
-      skipLangChainRuns: true,
+      skipLangChainRuns: expect.any(Function),
     });
+    expect(registrations.langSmith.mock.calls[0][0].skipLangChainRuns()).toBe(
+      true,
+    );
   });
 
   it.each(integrationCases)(
     "does not register the %s integration when disabled",
     (integration, disabledRegistrations) => {
-      registerInstrumentationConsumers({
+      configureInstrumentation({
         integrations: { [integration]: false },
       });
+      registerInstrumentationConsumers();
 
       for (const register of disabledRegistrations) {
         expect(register).not.toHaveBeenCalled();
@@ -190,19 +201,24 @@ describe("registerInstrumentationConsumers", () => {
   it.each([["langgraph", registrations.langChain]] as const)(
     "honors the related %s disable flag",
     (integration, register) => {
-      registerInstrumentationConsumers({
+      configureInstrumentation({
         integrations: { [integration]: false },
       });
+      registerInstrumentationConsumers();
 
       expect(register).not.toHaveBeenCalled();
     },
   );
 
   it("tells LangSmith not to suppress LangChain runs when LangChain is disabled", () => {
-    registerInstrumentationConsumers({ integrations: { langchain: false } });
+    configureInstrumentation({ integrations: { langchain: false } });
+    registerInstrumentationConsumers();
 
     expect(registrations.langSmith).toHaveBeenCalledWith({
-      skipLangChainRuns: false,
+      skipLangChainRuns: expect.any(Function),
     });
+    expect(registrations.langSmith.mock.calls[0][0].skipLangChainRuns()).toBe(
+      false,
+    );
   });
 });

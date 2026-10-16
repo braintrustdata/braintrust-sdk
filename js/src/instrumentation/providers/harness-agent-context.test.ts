@@ -1,5 +1,5 @@
-import { describe, expect, test, vi } from "vitest";
-import { _internalGetGlobalState, type Span } from "../../logger";
+import { describe, expect, test, vi } from "vite-plus/test";
+import { _internalGetGlobalState, type Span } from "../../logger/core";
 import { configureNode } from "../../node/config";
 import { SpanObjectTypeV3 } from "../../util";
 import { SpanComponentsV4 } from "../../../util/span_identifier_v4";

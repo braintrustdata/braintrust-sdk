@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { promisify } from "node:util";
 import { fileURLToPath } from "node:url";
-import { expect, it } from "vitest";
+import { expect, it } from "vite-plus/test";
 
 it("links published runs while preserving legacy records and excluding local-only runs", async () => {
   const dir = await mkdtemp(path.join(tmpdir(), "braintrust-e2e-links-"));
@@ -20,6 +20,16 @@ it("links published runs while preserving legacy records and excluding local-onl
           label: "Scenario",
           metadataScenario: "scenario",
         },
+        {
+          scenarioDirName: "without-metadata",
+          label: "Without metadata",
+          metadataScenario: "without-metadata",
+        },
+        {
+          scenarioDirName: "experiment",
+          label: "Experiment",
+          metadataScenario: "experiment",
+        },
       ]),
     );
     await writeFile(
@@ -28,6 +38,20 @@ it("links published runs while preserving legacy records and excluding local-onl
         { testRunId: "e2e-published", forwardToProduction: true },
         { testRunId: "e2e-local-only", forwardToProduction: false },
         { testRunId: "e2e-legacy" },
+        {
+          scenarioDirName: "without-metadata",
+          testRunId: "e2e-no-metadata",
+          forwardToProduction: true,
+          logRootSpanIds: ["root-without-metadata"],
+          experimentNames: [],
+        },
+        {
+          scenarioDirName: "experiment",
+          testRunId: "e2e-experiment",
+          forwardToProduction: true,
+          logRootSpanIds: [],
+          experimentNames: ["suite with spaces"],
+        },
       ]
         .map((record) =>
           JSON.stringify({ scenarioDirName: "scenario", ...record }),
@@ -55,6 +79,21 @@ it("links published runs while preserving legacy records and excluding local-onl
     expect(stdout).toContain("e2e-published");
     expect(stdout).toContain("e2e-legacy");
     expect(stdout).not.toContain("e2e-local-only");
+    const logRow = stdout
+      .split("\n")
+      .find((line) => line.startsWith("| Without metadata |"))!;
+    const logUrl = new URL(logRow.match(/\]\(([^)]+)\)/)![1]);
+    const search = JSON.parse(logUrl.searchParams.get("search")!);
+    expect(
+      search.filter.map((filter: { text: string }) =>
+        decodeURIComponent(filter.text),
+      ),
+    ).toEqual(['root_span_id IN ("root-without-metadata")']);
+    const evalRow = stdout
+      .split("\n")
+      .find((line) => line.startsWith("| Experiment |"))!;
+    expect(evalRow).toContain("/experiments/suite%20with%20spaces");
+    expect(evalRow).not.toContain("/logs?");
   } finally {
     await rm(dir, { recursive: true, force: true });
   }

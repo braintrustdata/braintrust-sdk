@@ -1,3 +1,4 @@
+import { registerInstrumentation } from "../registrations/openrouterAgent";
 import {
   afterEach,
   beforeAll,
@@ -6,9 +7,10 @@ import {
   expect,
   it,
   vi,
-} from "vitest";
+} from "vite-plus/test";
 import { configureNode } from "../../node/config";
-import { _exportsForTestingOnly, initLogger } from "../../logger";
+import { _exportsForTestingOnly } from "../../logger/testing";
+import { initLogger } from "../../logger/core";
 import { openRouterAgentChannels } from "./openrouter-agent-channels";
 import {
   aggregateOpenRouterChatChunks,
@@ -21,6 +23,7 @@ const TEST_MODEL = "gpt-4.1-mini";
 
 try {
   configureNode();
+  registerInstrumentation();
 } catch {
   // Best-effort initialization for test environments.
 }

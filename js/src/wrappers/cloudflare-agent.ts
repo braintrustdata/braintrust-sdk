@@ -1,3 +1,4 @@
+import { registerInstrumentation } from "../instrumentation/registrations/cloudflareAgents";
 import { debugLogger } from "../debug-logger";
 import { cloudflareAgentsChannels } from "../instrumentation/providers/cloudflare-agents-channels";
 import type { CloudflareAgent } from "../vendor-sdk-types/cloudflare-agents";
@@ -13,6 +14,7 @@ const WRAPPED_RUN_AGENT_TOOL = Symbol.for(
  * Object exports and inheritance continue to work unchanged.
  */
 export function wrapCloudflareAgent<T>(Agent: T): T {
+  registerInstrumentation();
   if (typeof Agent !== "function") {
     warnUnsupportedAgent();
     return Agent;

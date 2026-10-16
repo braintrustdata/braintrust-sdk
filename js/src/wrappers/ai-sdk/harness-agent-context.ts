@@ -1,5 +1,8 @@
-import iso from "../../isomorph";
-import type { IsoAsyncLocalStorage, IsoTracingChannel } from "../../isomorph";
+import iso from "#braintrust-platform";
+import type {
+  IsoAsyncLocalStorage,
+  IsoTracingChannel,
+} from "#braintrust-platform";
 import {
   _internalGetGlobalState,
   _internalStartSpan,
@@ -8,7 +11,7 @@ import {
   updateSpan,
   type Span,
   type StartSpanArgs,
-} from "../../logger";
+} from "../../logger/core";
 import {
   INSTRUMENTATION_NAMES,
   withSpanInstrumentationName,

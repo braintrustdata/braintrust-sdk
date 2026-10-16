@@ -1,4 +1,4 @@
-import { beforeAll, describe, expect, test } from "vitest";
+import { beforeAll, describe, expect, test } from "vite-plus/test";
 import { resolveFileSnapshotPath } from "../../helpers/file-snapshot";
 import type {
   CapturedLogEvent,
@@ -64,7 +64,7 @@ const eveScenarios = await Promise.all(
 const TIMEOUT_MS =
   process.env.BRAINTRUST_E2E_CASSETTE_MODE === "record" ? 300_000 : 120_000;
 
-describe.sequential("eve instrumentation variants", () => {
+describe("eve instrumentation variants", { concurrent: false }, () => {
   for (const scenario of eveScenarios) {
     describe(`${scenario.label} (${scenario.version})`, () => {
       let events: CapturedLogEvent[] = [];

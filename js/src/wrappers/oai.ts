@@ -1,10 +1,11 @@
+import { registerInstrumentation } from "../instrumentation/registrations/openai";
 import type {
   OpenAIMediaClient,
   OpenAIMediaMethod,
   OpenAIMediaParams,
 } from "../vendor-sdk-types/openai-media";
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import type { CompiledPrompt } from "../logger";
+import type { CompiledPrompt } from "../logger/prompts";
 import { responsesProxy } from "./oai_responses";
 import type {
   ArgsOf,
@@ -47,6 +48,7 @@ declare global {
  * @returns The wrapped `OpenAI` object.
  */
 export function wrapOpenAI<T extends object>(openai: T): T {
+  registerInstrumentation();
   const oai: unknown = openai;
   if (
     oai &&
@@ -69,7 +71,6 @@ export function wrapOpenAI<T extends object>(openai: T): T {
     return openai;
   }
 }
-globalThis.__inherited_braintrust_wrap_openai = wrapOpenAI;
 
 type OpenAILike = OpenAIV4Client;
 

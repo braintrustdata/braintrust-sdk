@@ -1,7 +1,7 @@
 import { isAsyncIterable, patchStreamIfNeeded } from "../core/stream-patcher";
 import { debugLogger } from "../../debug-logger";
-import { _internalStartSpan as startBaseSpan } from "../../logger";
-import type { Span } from "../../logger";
+import { _internalStartSpan as startBaseSpan } from "../../logger/core";
+import type { Span } from "../../logger/core";
 import {
   INSTRUMENTATION_NAMES,
   withSpanInstrumentationName,

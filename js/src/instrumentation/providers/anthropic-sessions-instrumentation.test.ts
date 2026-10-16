@@ -1,11 +1,18 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import {
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  vi,
+} from "vite-plus/test";
 
 const { mockStartSpan, mockWithCurrent } = vi.hoisted(() => ({
   mockStartSpan: vi.fn(),
   mockWithCurrent: vi.fn(),
 }));
 
-vi.mock("../../isomorph", () => ({
+vi.mock("#braintrust-platform", () => ({
   default: {
     getEnv: vi.fn(),
     newAsyncLocalStorage: vi.fn(() => ({
@@ -16,7 +23,7 @@ vi.mock("../../isomorph", () => ({
   },
 }));
 
-vi.mock("../../logger", async (importOriginal) => {
+vi.mock("../../logger/core", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../../logger")>();
   return {
     ...actual,
@@ -25,7 +32,7 @@ vi.mock("../../logger", async (importOriginal) => {
   };
 });
 
-import iso from "../../isomorph";
+import iso from "#braintrust-platform";
 import { collectAnthropicSession } from "../../wrappers/anthropic-session-collector";
 import { registerAnthropicInstrumentation } from "./anthropic-instrumentation";
 

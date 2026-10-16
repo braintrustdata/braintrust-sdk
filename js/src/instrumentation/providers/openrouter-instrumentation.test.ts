@@ -1,3 +1,4 @@
+import { registerInstrumentation } from "../registrations/openrouter";
 import {
   afterEach,
   beforeAll,
@@ -6,9 +7,10 @@ import {
   expect,
   it,
   vi,
-} from "vitest";
+} from "vite-plus/test";
 import { configureNode } from "../../node/config";
-import { _exportsForTestingOnly, initLogger } from "../../logger";
+import { _exportsForTestingOnly } from "../../logger/testing";
+import { initLogger } from "../../logger/core";
 import { openRouterChannels } from "./openrouter-channels";
 import {
   aggregateOpenRouterChatChunks,
@@ -23,6 +25,7 @@ const TEST_RERANK_MODEL = "rerank-v3.5";
 
 try {
   configureNode();
+  registerInstrumentation();
 } catch {
   // Best-effort initialization for test environments.
 }

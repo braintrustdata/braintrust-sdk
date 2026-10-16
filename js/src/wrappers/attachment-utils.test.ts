@@ -1,6 +1,6 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
-import iso from "../isomorph";
-import { _internalCaptureAttachmentsEnabled, Attachment } from "../logger";
+import { afterEach, describe, expect, it, vi } from "vite-plus/test";
+import iso from "#braintrust-platform";
+import { _internalCaptureAttachmentsEnabled, Attachment } from "../logger/core";
 import { processInputAttachments } from "./attachment-utils";
 
 const originalGetEnv = iso.getEnv;

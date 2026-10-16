@@ -56,6 +56,8 @@ Span names should generally remain stable across calls and versions. Do not incl
 
 Uses Vitest. Prefer running the **narrowest relevant test** rather than the full suite.
 
+Generally, do not add tests for build or linting code or their configuration. Validate tooling changes by running the relevant build or lint commands instead.
+
 **From `js/` directory:**
 
 ```bash

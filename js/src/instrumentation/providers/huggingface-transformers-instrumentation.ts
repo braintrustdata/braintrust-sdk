@@ -1,6 +1,9 @@
 import { traceAsyncChannel } from "../core/channel-tracing";
 import type { ChannelMessage } from "../core/channel-definitions";
-import type { IsoChannelHandlers, IsoTracingChannel } from "../../isomorph";
+import type {
+  IsoChannelHandlers,
+  IsoTracingChannel,
+} from "#braintrust-platform";
 import { SpanTypeAttribute, isObject } from "../../../util";
 import type { HuggingFaceTransformersPipeline } from "../../vendor-sdk-types/huggingface-transformers";
 import {
@@ -307,7 +310,12 @@ function choicesFromGenerations(result: unknown): unknown {
   return choices.length > 0 ? choices : undefined;
 }
 
-export const _exportsForTestingOnly = {
+export const _exportsForTestingOnly: {
+  extractInput: typeof extractInput;
+  extractMetadata: typeof extractMetadata;
+  extractOutput: typeof extractOutput;
+  isSupportedTask: typeof isSupportedHuggingFaceTransformersTask;
+} = {
   extractInput,
   extractMetadata,
   extractOutput,

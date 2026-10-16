@@ -1,173 +1,68 @@
-import { registerTypeSafeInstrumentation } from "./providers/typesafe-instrumentation";
-import { registerLangGraphSDKInstrumentation } from "./providers/langgraph-sdk-instrumentation";
-import { registerGoogleGenerativeAIInstrumentation } from "./providers/google-generative-ai-instrumentation";
-import { registerElevenLabsInstrumentation } from "./providers/elevenlabs-instrumentation";
-import { registerOpenAIInstrumentation } from "./providers/openai-instrumentation";
-import { registerOpenAICodexInstrumentation } from "./providers/openai-codex-instrumentation";
-import { registerAnthropicInstrumentation } from "./providers/anthropic-instrumentation";
-import { registerAISDKInstrumentation } from "./providers/ai-sdk-instrumentation";
-import { registerClaudeAgentSDKInstrumentation } from "./providers/claude-agent-sdk-instrumentation";
-import { registerCloudflareThinkInstrumentation } from "./providers/cloudflare-think-instrumentation";
-import { registerCursorSDKInstrumentation } from "./providers/cursor-sdk-instrumentation";
-import { registerOpenAIAgentsInstrumentation } from "./providers/openai-agents-instrumentation";
-import { registerGoogleGenAIInstrumentation } from "./providers/google-genai-instrumentation";
-import { registerHuggingFaceInstrumentation } from "./providers/huggingface-instrumentation";
-import { registerHuggingFaceTransformersInstrumentation } from "./providers/huggingface-transformers-instrumentation";
-import { registerOpenRouterAgentInstrumentation } from "./providers/openrouter-agent-instrumentation";
-import { registerOpenRouterInstrumentation } from "./providers/openrouter-instrumentation";
-import { registerMistralInstrumentation } from "./providers/mistral-instrumentation";
-import { registerOllamaInstrumentation } from "./providers/ollama-instrumentation";
-import { registerGoogleADKInstrumentation } from "./providers/google-adk-instrumentation";
-import { registerCohereInstrumentation } from "./providers/cohere-instrumentation";
-import { registerGroqInstrumentation } from "./providers/groq-instrumentation";
-import { registerBedrockRuntimeInstrumentation } from "./providers/bedrock-runtime-instrumentation";
-import { registerGenkitInstrumentation } from "./providers/genkit-instrumentation";
-import { registerGitHubCopilotInstrumentation } from "./providers/github-copilot-instrumentation";
-import { registerLangChainInstrumentation } from "./providers/langchain-instrumentation";
-import { registerLangSmithInstrumentation } from "./providers/langsmith-instrumentation";
-import { registerPiCodingAgentInstrumentation } from "./providers/pi-coding-agent-instrumentation";
-import { registerStrandsAgentSDKInstrumentation } from "./providers/strands-agent-sdk-instrumentation";
-import { registerVoyageAIInstrumentation } from "./providers/voyageai-instrumentation";
-import { registerCloudflareAIChatInstrumentation } from "./providers/cloudflare-ai-chat-consumer";
-import { registerCloudflareAgentsInstrumentation } from "./providers/cloudflare-agents-instrumentation";
-import type { InstrumentationConfig } from "./config";
+import { registerInstrumentation as openai } from "./registrations/openai";
+import { registerInstrumentation as openaiCodexSDK } from "./registrations/openaiCodexSDK";
+import { registerInstrumentation as anthropic } from "./registrations/anthropic";
+import { registerInstrumentation as aisdk } from "./registrations/aisdk";
+import { registerInstrumentation as claudeAgentSDK } from "./registrations/claudeAgentSDK";
+import { registerInstrumentation as cloudflareThink } from "./registrations/cloudflareThink";
+import { registerInstrumentation as cursorSDK } from "./registrations/cursorSDK";
+import { registerInstrumentation as openAIAgents } from "./registrations/openAIAgents";
+import { registerInstrumentation as googleGenAI } from "./registrations/googleGenAI";
+import { registerInstrumentation as huggingface } from "./registrations/huggingface";
+import { registerInstrumentation as openrouter } from "./registrations/openrouter";
+import { registerInstrumentation as openrouterAgent } from "./registrations/openrouterAgent";
+import { registerInstrumentation as mistral } from "./registrations/mistral";
+import { registerInstrumentation as ollama } from "./registrations/ollama";
+import { registerInstrumentation as googleADK } from "./registrations/googleADK";
+import { registerInstrumentation as cohere } from "./registrations/cohere";
+import { registerInstrumentation as voyageai } from "./registrations/voyageai";
+import { registerInstrumentation as groq } from "./registrations/groq";
+import { registerInstrumentation as awsBedrockRuntime } from "./registrations/awsBedrockRuntime";
+import { registerInstrumentation as genkit } from "./registrations/genkit";
+import { registerInstrumentation as gitHubCopilot } from "./registrations/gitHubCopilot";
+import { registerInstrumentation as piCodingAgent } from "./registrations/piCodingAgent";
+import { registerInstrumentation as strandsAgentSDK } from "./registrations/strandsAgentSDK";
+import { registerInstrumentation as cloudflareAIChat } from "./registrations/cloudflareAIChat";
+import { registerInstrumentation as cloudflareAgents } from "./registrations/cloudflareAgents";
+import { registerInstrumentation as langchain } from "./registrations/langchain";
+import { registerInstrumentation as langsmith } from "./registrations/langsmith";
+import { registerInstrumentation as elevenlabs } from "./registrations/elevenlabs";
+import { registerInstrumentation as googleGenerativeAI } from "./registrations/googleGenerativeAI";
+import { registerInstrumentation as langgraphSDK } from "./registrations/langgraphSDK";
+import { registerInstrumentation as typesafe } from "./registrations/typesafe";
+import { registerInstrumentation as mastra } from "./registrations/mastra";
 
-/** Registers the configured process-lifetime instrumentation consumers. */
-export function registerInstrumentationConsumers(
-  config: InstrumentationConfig = {},
-): void {
-  const integrations = config.integrations ?? {};
-
-  if (integrations.openai !== false) {
-    registerOpenAIInstrumentation();
-  }
-
-  if (integrations.openaiCodexSDK !== false) {
-    registerOpenAICodexInstrumentation();
-  }
-
-  if (integrations.anthropic !== false) {
-    registerAnthropicInstrumentation();
-  }
-
-  if (integrations.aisdk !== false) {
-    registerAISDKInstrumentation();
-  }
-
-  if (integrations.claudeAgentSDK !== false) {
-    registerClaudeAgentSDKInstrumentation();
-  }
-
-  if (integrations.cloudflareThink !== false) {
-    registerCloudflareThinkInstrumentation();
-  }
-
-  if (integrations.cursorSDK !== false) {
-    registerCursorSDKInstrumentation();
-  }
-
-  if (integrations.openAIAgents !== false) {
-    registerOpenAIAgentsInstrumentation();
-  }
-
-  if (integrations.googleGenAI !== false) {
-    registerGoogleGenAIInstrumentation();
-  }
-
-  if (integrations.huggingface !== false) {
-    registerHuggingFaceInstrumentation();
-    registerHuggingFaceTransformersInstrumentation();
-  }
-
-  if (integrations.openrouter !== false) {
-    registerOpenRouterInstrumentation();
-  }
-
-  if (integrations.openrouterAgent !== false) {
-    registerOpenRouterAgentInstrumentation();
-  }
-
-  if (integrations.mistral !== false) {
-    registerMistralInstrumentation();
-  }
-
-  if (integrations.ollama !== false) {
-    registerOllamaInstrumentation();
-  }
-
-  if (integrations.googleADK !== false) {
-    registerGoogleADKInstrumentation();
-  }
-
-  if (integrations.cohere !== false) {
-    registerCohereInstrumentation();
-  }
-
-  if (integrations.voyageai !== false) {
-    registerVoyageAIInstrumentation();
-  }
-
-  if (integrations.groq !== false) {
-    registerGroqInstrumentation();
-  }
-
-  if (integrations.awsBedrockRuntime !== false) {
-    registerBedrockRuntimeInstrumentation();
-  }
-
-  if (integrations.genkit !== false) {
-    registerGenkitInstrumentation();
-  }
-
-  if (integrations.gitHubCopilot !== false) {
-    registerGitHubCopilotInstrumentation();
-  }
-
-  if (integrations.piCodingAgent !== false) {
-    registerPiCodingAgentInstrumentation();
-  }
-
-  if (integrations.strandsAgentSDK !== false) {
-    registerStrandsAgentSDKInstrumentation();
-  }
-
-  if (integrations.cloudflareAIChat !== false) {
-    registerCloudflareAIChatInstrumentation();
-  }
-
-  if (integrations.cloudflareAgents !== false) {
-    registerCloudflareAgentsInstrumentation();
-  }
-
-  if (integrations.langchain !== false && integrations.langgraph !== false) {
-    registerLangChainInstrumentation();
-  }
-
-  if (integrations.langsmith !== false) {
-    registerLangSmithInstrumentation({
-      skipLangChainRuns: integrations.langchain !== false,
-    });
-  }
-
-  if (integrations.elevenlabs !== false) {
-    registerElevenLabsInstrumentation();
-  }
-
-  if (integrations.googleGenerativeAI !== false) {
-    registerGoogleGenerativeAIInstrumentation();
-  }
-
-  if (integrations.langgraphSDK !== false) {
-    registerLangGraphSDKInstrumentation();
-  }
-
-  if (integrations.typesafe !== false) {
-    registerTypeSafeInstrumentation();
-  }
-
-  // Mastra is intentionally not wired here: `@mastra/core` ships its own
-  // ObservabilityExporter contract, and `BraintrustObservabilityExporter`
-  // (wrappers/mastra.ts) is auto-installed by the loader patch in
-  // `auto-instrumentations/loader/mastra-observability-patch.ts` rather than
-  // by an instrumentation consumer / global hook subscription.
+/** Register every enabled provider. Only explicit auto setup imports this module. */
+export function registerInstrumentationConsumers(): void {
+  openai();
+  openaiCodexSDK();
+  anthropic();
+  aisdk();
+  claudeAgentSDK();
+  cloudflareThink();
+  cursorSDK();
+  openAIAgents();
+  googleGenAI();
+  huggingface();
+  openrouter();
+  openrouterAgent();
+  mistral();
+  ollama();
+  googleADK();
+  cohere();
+  voyageai();
+  groq();
+  awsBedrockRuntime();
+  genkit();
+  gitHubCopilot();
+  piCodingAgent();
+  strandsAgentSDK();
+  cloudflareAIChat();
+  cloudflareAgents();
+  langchain();
+  langsmith();
+  elevenlabs();
+  googleGenerativeAI();
+  langgraphSDK();
+  typesafe();
+  mastra();
 }

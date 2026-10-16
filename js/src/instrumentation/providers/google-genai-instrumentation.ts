@@ -11,7 +11,10 @@ import type {
   ErrorOf,
   StartOf,
 } from "../core/channel-definitions";
-import type { IsoChannelHandlers, IsoTracingChannel } from "../../isomorph";
+import type {
+  IsoChannelHandlers,
+  IsoTracingChannel,
+} from "#braintrust-platform";
 import {
   _internalCaptureAttachmentsEnabled,
   _internalGetGlobalState,
@@ -23,7 +26,7 @@ import {
   type CurrentSpanStore,
   type Span,
   type StartSpanArgs,
-} from "../../logger";
+} from "../../logger/core";
 import {
   INSTRUMENTATION_NAMES,
   withSpanInstrumentationName,

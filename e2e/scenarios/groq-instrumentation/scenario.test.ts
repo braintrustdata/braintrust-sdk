@@ -1,4 +1,4 @@
-import { describe } from "vitest";
+import { describe } from "vite-plus/test";
 import { resolve } from "node:path";
 import {
   prepareScenarioDir,
@@ -37,7 +37,7 @@ const groqScenarios = await Promise.all(
 
 describe.concurrent("variants", () => {
   for (const scenario of groqScenarios) {
-    describe.sequential(`groq sdk ${scenario.version}`, () => {
+    describe(`groq sdk ${scenario.version}`, { concurrent: false }, () => {
       defineGroqInstrumentationAssertions({
         name: "wrapped instrumentation",
         runScenario: async ({ runScenarioDir }) => {

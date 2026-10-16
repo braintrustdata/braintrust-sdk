@@ -1,4 +1,11 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import {
+  describe,
+  it,
+  expect,
+  vi,
+  beforeEach,
+  afterEach,
+} from "vite-plus/test";
 import { AsyncLocalStorage } from "node:async_hooks";
 
 // Mock iso's newTracingChannel - must be before any imports that use it
@@ -11,7 +18,7 @@ const streamPatcherMock = vi.hoisted(() => ({
     | undefined,
 }));
 
-vi.mock("../../isomorph", () => ({
+vi.mock("#braintrust-platform", () => ({
   default: {
     newAsyncLocalStorage: <T>() => new AsyncLocalStorage<T>(),
     newTracingChannel: vi.fn(),
@@ -33,13 +40,13 @@ vi.mock("../core/stream-patcher", () => ({
 }));
 
 import { registerClaudeAgentSDKInstrumentation } from "./claude-agent-sdk-instrumentation";
-import iso from "../../isomorph";
-import { _internalStartSpan as startSpan } from "../../logger";
+import iso from "#braintrust-platform";
+import { _internalStartSpan as startSpan } from "../../logger/core";
 
 const mockNewTracingChannel = iso.newTracingChannel as ReturnType<typeof vi.fn>;
 
 // Mock the logger module
-vi.mock("../../logger", () => {
+vi.mock("../../logger/core", () => {
   const startSpan = vi.fn(() => ({
     log: vi.fn(),
     end: vi.fn(),

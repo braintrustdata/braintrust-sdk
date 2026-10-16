@@ -1,7 +1,7 @@
 import { AsyncLocalStorage } from "node:async_hooks";
 import { randomUUID } from "node:crypto";
 import { tracingChannel } from "node:diagnostics_channel";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 import {
   GLOBAL_INSTRUMENTATION_HOOK_BRAND,
   GLOBAL_INSTRUMENTATION_HOOKS_KEY,

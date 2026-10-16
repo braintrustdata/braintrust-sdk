@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
 const { invoke } = vi.hoisted(() => ({
   invoke: vi.fn(
@@ -7,7 +7,7 @@ const { invoke } = vi.hoisted(() => ({
   ),
 }));
 
-vi.mock("../isomorph", () => ({
+vi.mock("#braintrust-platform", () => ({
   default: {
     newTracingChannel: vi.fn(() => ({
       hasInterceptors: true,

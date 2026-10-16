@@ -11,7 +11,7 @@ import {
   Exportable,
   FullLoginOptions,
   getSpanParentObject,
-} from "../logger";
+} from "../logger/core";
 import { BraintrustStream } from "./stream";
 import { z } from "zod/v3";
 
@@ -279,7 +279,7 @@ export function initFunction({
   slug: string;
   version?: string;
   state?: BraintrustState;
-}) {
+}): (input: any) => Promise<any> {
   // Disable span cache since remote function spans won't be in the local cache
   const s = state ?? _internalGetGlobalState();
   s?.spanCache?.disable();

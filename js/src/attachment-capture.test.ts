@@ -1,4 +1,11 @@
-import { afterEach, beforeAll, beforeEach, expect, it, vi } from "vitest";
+import {
+  afterEach,
+  beforeAll,
+  beforeEach,
+  expect,
+  it,
+  vi,
+} from "vite-plus/test";
 import {
   _internalCaptureAttachmentsEnabled,
   Attachment,
@@ -6,12 +13,12 @@ import {
   CAPTURE_ATTACHMENTS,
   ExternalAttachment,
   startSpan,
-  _exportsForTestingOnly,
   _internalGetGlobalState,
   initLogger,
-} from "./logger";
+} from "./logger/core";
+import { _exportsForTestingOnly } from "./logger/testing";
 import { configureNode } from "./node/config";
-import iso from "./isomorph";
+import iso from "#braintrust-platform";
 import { processInputAttachments } from "./wrappers/attachment-utils";
 import { processAttachmentsInInput } from "./instrumentation/providers/anthropic-instrumentation";
 import {
@@ -25,13 +32,17 @@ import { OpenAIAgentsTraceProcessor } from "./instrumentation/providers/openai-a
 import type { OpenAIAgentsSpan } from "./vendor-sdk-types/openai-agents";
 import { extractOllamaChatInput } from "./instrumentation/providers/ollama-instrumentation";
 import { openAIChannels } from "./instrumentation/providers/openai-channels";
+import { registerInstrumentation } from "./instrumentation/registrations/openai";
 
 configureNode();
 const state = _internalGetGlobalState();
 let background: ReturnType<
   typeof _exportsForTestingOnly.useTestBackgroundLogger
 >;
-beforeAll(() => _exportsForTestingOnly.simulateLoginForTests());
+beforeAll(() => {
+  registerInstrumentation();
+  return _exportsForTestingOnly.simulateLoginForTests();
+});
 beforeEach(() => {
   vi.stubEnv("BRAINTRUST_CAPTURE_ATTACHMENTS", undefined);
   state.captureAttachments = undefined;

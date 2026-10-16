@@ -1,6 +1,6 @@
-import { beforeAll, describe, test, expect, vi } from "vitest";
+import { beforeAll, describe, test, expect, vi } from "vite-plus/test";
 import { configureNode } from "./node/config";
-import { Prompt } from "./logger";
+import { Prompt } from "./logger/prompts";
 import { type PromptDataType as PromptData } from "./generated_types";
 
 describe("prompt strict mode", () => {

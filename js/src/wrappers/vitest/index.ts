@@ -53,8 +53,9 @@ import type { VitestMethods, BraintrustVitest, WrapperConfig } from "./types";
  */
 export function wrapVitest<
   VitestContext = unknown,
-  ExpectType extends (...args: unknown[]) => unknown = (
-    ...args: unknown[]
+  ExpectType extends (value: unknown, message?: string) => unknown = (
+    value: unknown,
+    message?: string,
   ) => unknown,
 >(
   vitestMethods: VitestMethods<VitestContext, ExpectType>,

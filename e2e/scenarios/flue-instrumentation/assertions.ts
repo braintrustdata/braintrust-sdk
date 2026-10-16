@@ -1,4 +1,4 @@
-import { beforeAll, describe, expect, test } from "vitest";
+import { beforeAll, describe, expect, test } from "vite-plus/test";
 import type { CapturedLogEvent } from "../../helpers/mock-braintrust-server";
 import { resolveFileSnapshotPath } from "../../helpers/file-snapshot";
 import {
@@ -200,7 +200,7 @@ export function defineFlueInstrumentationAssertions(options: {
   const timeoutMs = effectiveScenarioTimeoutMs(options.timeoutMs);
   const testConfig = { timeout: timeoutMs };
 
-  describe.sequential(options.name, () => {
+  describe(options.name, { concurrent: false }, () => {
     let events: CapturedLogEvent[] = [];
 
     beforeAll(async () => {

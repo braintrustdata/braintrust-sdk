@@ -1,3 +1,7 @@
+import type {
+  MaterializedChannel,
+  ChannelSpec,
+} from "../core/channel-definitions";
 import { channel, defineChannels } from "../core/channel-definitions";
 import { INSTRUMENTATION_NAMES } from "../../span-origin";
 import type {
@@ -5,23 +9,43 @@ import type {
   LangChainCallbackManagerConfigureResult,
 } from "../../vendor-sdk-types/langchain";
 
-export const langChainChannels = defineChannels(
-  "@langchain/core",
-  {
-    configure: channel<
+export const langChainChannels: {
+  configure: MaterializedChannel<
+    ChannelSpec<
       LangChainCallbackManagerConfigureArgs,
-      LangChainCallbackManagerConfigureResult
-    >({
-      channelName: "CallbackManager.configure",
-      kind: "sync-stream",
-    }),
-    configureSync: channel<
+      LangChainCallbackManagerConfigureResult,
+      Record<string, unknown>,
+      never,
+      "sync-stream"
+    >
+  >;
+  configureSync: MaterializedChannel<
+    ChannelSpec<
       LangChainCallbackManagerConfigureArgs,
-      LangChainCallbackManagerConfigureResult
-    >({
-      channelName: "CallbackManager._configureSync",
-      kind: "sync-stream",
-    }),
-  },
-  { instrumentationName: INSTRUMENTATION_NAMES.LANGCHAIN },
-);
+      LangChainCallbackManagerConfigureResult,
+      Record<string, unknown>,
+      never,
+      "sync-stream"
+    >
+  >;
+} = /* @__PURE__ */ (() =>
+  defineChannels(
+    "@langchain/core",
+    {
+      configure: channel<
+        LangChainCallbackManagerConfigureArgs,
+        LangChainCallbackManagerConfigureResult
+      >({
+        channelName: "CallbackManager.configure",
+        kind: "sync-stream",
+      }),
+      configureSync: channel<
+        LangChainCallbackManagerConfigureArgs,
+        LangChainCallbackManagerConfigureResult
+      >({
+        channelName: "CallbackManager._configureSync",
+        kind: "sync-stream",
+      }),
+    },
+    { instrumentationName: INSTRUMENTATION_NAMES.LANGCHAIN },
+  ))();

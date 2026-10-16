@@ -7,7 +7,7 @@
  * IMPORTANT: Tests use a mock OpenAI package structure in test/fixtures/node_modules/openai.
  */
 
-import { describe, it, expect, beforeAll, afterAll, vi } from "vitest";
+import { describe, it, expect, beforeAll, afterAll, vi } from "vite-plus/test";
 import * as esbuild from "esbuild";
 import * as fs from "node:fs";
 import * as path from "node:path";
@@ -719,7 +719,7 @@ describe("Orchestrion Transformation Tests", () => {
   describe("turbopack / webpack loader", () => {
     const webpackLoaderPath = path.resolve(
       __dirname,
-      "../../dist/auto-instrumentations/bundler/webpack-loader.cjs",
+      "../../dist/loaders/webpack-loader.cjs",
     );
     async function runWebpackWithLoader(
       config: object,

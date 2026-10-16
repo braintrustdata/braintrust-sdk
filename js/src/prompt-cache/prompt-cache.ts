@@ -2,7 +2,7 @@ import {
   Prompt,
   serializePromptForCache,
   type SerializedPrompt,
-} from "../logger";
+} from "../logger/prompts";
 import { LRUCache } from "../lru-cache";
 import { DiskCache } from "./disk-cache";
 

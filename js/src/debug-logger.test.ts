@@ -1,11 +1,15 @@
-import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
-
+import { installGlobalHookErrorReporter } from "./debug-logger";
 import {
-  BraintrustState,
-  _exportsForTestingOnly,
-  initLogger,
-  login,
-} from "./logger";
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  test,
+  vi,
+} from "vite-plus/test";
+
+import { BraintrustState, initLogger, login } from "./logger/core";
+import { _exportsForTestingOnly } from "./logger/testing";
 import {
   debugLogger,
   getEnvDebugLogLevel,
@@ -75,6 +79,7 @@ describe("debug logger", () => {
   test("global hook failures are logged without escaping the provider call", () => {
     process.env.BRAINTRUST_DEBUG_LOG_LEVEL = "error";
     const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    installGlobalHookErrorReporter();
     const subscriberError = new Error("subscriber failed");
     const channel = newGlobalTracingChannel<Record<string, unknown>>(
       `test:debug-logger:${Math.random()}`,
