@@ -4,7 +4,7 @@ import * as fs from "node:fs/promises";
 import * as os from "node:os";
 import * as fsSync from "node:fs";
 import * as crypto from "node:crypto";
-import { promisify } from "node:util";
+import { format, promisify } from "node:util";
 import * as zlib from "node:zlib";
 import * as dotenv from "dotenv";
 
@@ -108,6 +108,7 @@ export function configureNode() {
     return undefined;
   };
   iso.getCallerLocation = getCallerLocation;
+  iso.formatLogMessage = format;
   iso.newAsyncLocalStorage = <T>() => new AsyncLocalStorage<T>();
   iso.processOn = (event: string, handler: (code: unknown) => void) => {
     process.on(event, handler);

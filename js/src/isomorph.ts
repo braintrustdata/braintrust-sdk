@@ -41,6 +41,7 @@ interface Common {
   getEnv: (name: string) => string | undefined;
   getBraintrustApiKey: () => Promise<string | undefined>;
   getCallerLocation: () => CallerLocation | undefined;
+  formatLogMessage?: (...args: unknown[]) => string;
   newAsyncLocalStorage: <T>() => IsoAsyncLocalStorage<T>;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   processOn: (event: string, handler: (code: any) => void) => void;

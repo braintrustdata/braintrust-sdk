@@ -1,6 +1,14 @@
 /// <reference lib="dom" />
 
 import { DecisionAttachmentProcessor } from "./decision-attachments";
+import { internalFetch } from "./logs/context";
+import {
+  formatLogTemplate,
+  renderLogBody,
+  type ApplicationLogLevel,
+  type ApplicationLogOptions,
+  type ApplicationLogTemplate,
+} from "./logs/templates";
 
 import { v4 as uuidv4 } from "uuid";
 
@@ -1631,11 +1639,11 @@ class HTTPConnection {
     this.headers = {};
 
     this._reset();
-    this.fetch = fetch;
+    this.fetch = internalFetch(fetch);
   }
 
   public setFetch(fetch: typeof globalThis.fetch) {
-    this.fetch = fetch;
+    this.fetch = internalFetch(fetch);
   }
 
   async ping() {
@@ -2058,7 +2066,7 @@ export class Attachment extends BaseAttachment {
       try {
         objectStoreResponse = await withRetry(async () =>
           checkResponse(
-            await fetch(signedUrl, {
+            await internalFetch(fetch)(signedUrl, {
               method: "PUT" satisfies RequestInit["method"],
               headers,
               body: data,
@@ -2333,7 +2341,7 @@ export class ReadonlyAttachment {
         );
       }
 
-      const objResponse = await fetch(downloadUrl);
+      const objResponse = await internalFetch(fetch)(downloadUrl);
       if (objResponse.status !== 200) {
         const error = await objResponse.text();
         throw new Error(`Couldn't download attachment: ${error}`);
@@ -2900,6 +2908,7 @@ export class Logger<IsAsyncFlush extends boolean> implements Exportable {
   private lastStartTime: number;
   private lazyId: LazyValue<string>;
   private calledStartSpan: boolean;
+  private readonly baselineTraceId: string;
 
   // For type identification.
   public kind = "logger" as const;
@@ -2917,6 +2926,7 @@ export class Logger<IsAsyncFlush extends boolean> implements Exportable {
     this.lazyId = new LazyValue(async () => await this.id);
     this.calledStartSpan = false;
     this.state = state;
+    this.baselineTraceId = state.idGenerator.getTraceId();
   }
 
   public get org_id(): Promise<string> {
@@ -2981,6 +2991,121 @@ export class Logger<IsAsyncFlush extends boolean> implements Exportable {
         return ret;
       })() as Ret;
     }
+  }
+
+  /**
+   * Capture an application log as one complete row, correlated with the active
+   * Braintrust or OpenTelemetry span. Without an active span, logs from this
+   * logger share a baseline trace ID.
+   */
+  private emitLog(
+    body: unknown,
+    level: ApplicationLogLevel,
+    options?: ApplicationLogOptions,
+  ): PromiseUnless<IsAsyncFlush, string> {
+    const rendered = renderLogBody(body, options);
+    const timestamp = getCurrentUnixTimestamp();
+    const current = this.state.contextManager.getParentSpanIds();
+    // Supply all fields in the initial write. Calling span.end() here would
+    // enqueue an unnecessary second write for this instantaneous event.
+    const span = new SpanImpl({
+      state: this.state,
+      parentObjectType: this.parentObjectType(),
+      parentObjectId: this.lazyId,
+      parentComputeObjectMetadataArgs: this.computeMetadataArgs,
+      parentSpanIds: {
+        rootSpanId: current?.rootSpanId ?? this.baselineTraceId,
+        parentSpanIds: [],
+      },
+      spanId: current?.spanParents[0],
+      name: "Log",
+      spanAttributes: { name: null, type: "log", log_level: level },
+      startTime: timestamp,
+      event: {
+        output: rendered.body,
+        metadata: rendered.metadata,
+        metrics: { end: timestamp },
+      },
+    });
+    type Ret = PromiseUnless<IsAsyncFlush, string>;
+    if (this.asyncFlush === true) return span.id as Ret;
+    return this.flush().then(() => span.id) as Ret;
+  }
+
+  /**
+   * Preserve a native JavaScript template literal and its interpolation values.
+   * Format values with JavaScript expressions, such as `${amount.toFixed(2)}`.
+   * Pass the result to any application-log severity method.
+   *
+   * @example
+   * logger.info(logger.fmt`User ${userId} paid ${amount.toFixed(2)}`, {
+   *   metadata: { source: "checkout" },
+   * });
+   */
+  public fmt(
+    strings: TemplateStringsArray,
+    ...values: unknown[]
+  ): ApplicationLogTemplate {
+    return formatLogTemplate(strings, values);
+  }
+
+  /** Capture a trace-level application log. Does not start a trace. */
+  public trace(
+    body: unknown,
+    options?: ApplicationLogOptions,
+  ): PromiseUnless<IsAsyncFlush, string> {
+    return this.emitLog(body, "trace", options);
+  }
+
+  /** Capture a debug-level application log. Supports {@link Logger.fmt} templates. */
+  public debug(
+    body: unknown,
+    options?: ApplicationLogOptions,
+  ): PromiseUnless<IsAsyncFlush, string> {
+    return this.emitLog(body, "debug", options);
+  }
+
+  /**
+   * Capture an info-level application log. Bodies may be any JSON-serializable value.
+   * Logs share the active span's IDs, or a baseline trace ID for this logger.
+   * Use {@link Logger.fmt} to preserve a native JavaScript template and its values
+   * in `braintrust.template` metadata fields.
+   * Returns the row ID, or a promise resolving after flush when asyncFlush is false.
+   *
+   * @example
+   * logger.info(logger.fmt`User ${userId} paid ${amount.toFixed(2)}`, {
+   *   metadata: { source: "checkout" },
+   * });
+   */
+  public info(
+    body: unknown,
+    options?: ApplicationLogOptions,
+  ): PromiseUnless<IsAsyncFlush, string> {
+    return this.emitLog(body, "info", options);
+  }
+
+  /** Capture a warn-level application log. Supports {@link Logger.fmt} templates. */
+  public warn(
+    body: unknown,
+    options?: ApplicationLogOptions,
+  ): PromiseUnless<IsAsyncFlush, string> {
+    return this.emitLog(body, "warn", options);
+  }
+
+  /** Capture an error-level application log. Supports {@link Logger.fmt} templates. */
+  public error(
+    body: unknown,
+    options?: ApplicationLogOptions,
+  ): PromiseUnless<IsAsyncFlush, string> {
+    return this.emitLog(body, "error", options);
+  }
+
+  /** Capture a fatal-level application log. Supports {@link Logger.fmt} templates. */
+  public fatal(
+    body: unknown,
+    options?: ApplicationLogOptions,
+  ): PromiseUnless<IsAsyncFlush, string> {
+    return this.emitLog(body, "fatal", options);
   }
 
   /**
@@ -5948,13 +6073,16 @@ async function loginToLoaderRequestState({
   } else {
     let loginResponse: Response;
     try {
-      loginResponse = await fetch(_urljoin(appUrl, `/api/apikey/login`), {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${apiKey}`,
+      loginResponse = await internalFetch(fetch)(
+        _urljoin(appUrl, `/api/apikey/login`),
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${apiKey}`,
+          },
         },
-      });
+      );
     } catch (error) {
       throw new HTTPTransportError(error);
     }
@@ -6031,14 +6159,17 @@ export async function loginToState(options: LoginOptions = {}) {
       // cancellation, so a stalled request cannot block subsequent logins.
       info = await Promise.race([
         (async () => {
-          const response = await fetch(_urljoin(appUrl, `/api/apikey/login`), {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              Authorization: `Bearer ${apiKey}`,
+          const response = await internalFetch(fetch)(
+            _urljoin(appUrl, `/api/apikey/login`),
+            {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                Authorization: `Bearer ${apiKey}`,
+              },
+              signal: controller.signal,
             },
-            signal: controller.signal,
-          });
+          );
           return readJSONResponse(await checkResponse(response));
         })(),
         new Promise<never>((_, reject) => {
