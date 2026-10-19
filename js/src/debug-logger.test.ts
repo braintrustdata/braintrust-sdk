@@ -172,6 +172,16 @@ describe("debug logger", () => {
     expect(getEnvDebugLogLevel()).toBe("debug");
   });
 
+  test("BRAINTRUST_DEBUG_LOG_LEVEL fallback tolerates a process shim without env", () => {
+    vi.spyOn(iso, "getEnv").mockReturnValue(undefined);
+    vi.stubGlobal("process", {});
+    try {
+      expect(getEnvDebugLogLevel()).toBeUndefined();
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
   test("BRAINTRUST_DEBUG_LOG_LEVEL rejects invalid values and warns once", () => {
     const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
     process.env.BRAINTRUST_DEBUG_LOG_LEVEL = "true";
