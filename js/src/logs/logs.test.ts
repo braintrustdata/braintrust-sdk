@@ -13,6 +13,7 @@ import { configureNode } from "../node/config";
 import iso from "../isomorph";
 import type { ExperimentEvent } from "../util";
 import { debugLogger } from "../debug-logger";
+import { OTELIDGenerator } from "../id-gen";
 import { isApplicationLogSuppressed, suppressApplicationLogs } from "./context";
 
 configureNode();
@@ -259,6 +260,38 @@ describe("application logs", () => {
     expect(one.root_span_id).toBe(two.root_span_id);
     expect(three.root_span_id).not.toBe(one.root_span_id);
     expect(one.span_parents).toEqual([]);
+  });
+
+  test("uses the current ID generator for the first standalone log after late OpenTelemetry setup", async () => {
+    vi.stubEnv("BRAINTRUST_LEGACY_IDS", "true");
+    vi.stubEnv("BRAINTRUST_OTEL_COMPAT", undefined);
+    vi.stubGlobal("BRAINTRUST_ID_GENERATOR", undefined);
+    try {
+      const { logger, background, state } = setup(true);
+      const root = logger.startSpan({ name: "before-otel" });
+      state.contextManager.runInContext(root, () => logger.info("inside span"));
+      root.end();
+      expect(root.rootSpanId).toContain("-");
+
+      // Match setupOtelCompat(): install the hex generator and reset the cache.
+      vi.stubGlobal("BRAINTRUST_ID_GENERATOR", OTELIDGenerator);
+      state.resetIdGenState();
+      logger.info("first standalone log");
+      logger.warn("second standalone log");
+
+      const logs = (await drain(background)).filter(
+        (row) => row.span_attributes?.type === "log",
+      );
+      expect(logs).toHaveLength(3);
+      expect(logs[0].root_span_id).toBe(root.rootSpanId);
+      expect(logs[1].root_span_id).toMatch(/^[0-9a-f]{32}$/);
+      expect(logs[1].span_id).toMatch(/^[0-9a-f]{16}$/);
+      expect(logs[2].root_span_id).toBe(logs[1].root_span_id);
+      expect(logs[2].span_id).toMatch(/^[0-9a-f]{16}$/);
+    } finally {
+      vi.unstubAllGlobals();
+      vi.unstubAllEnvs();
+    }
   });
 
   test("correlates SDK and console logs across awaits without modifying the active span", async () => {

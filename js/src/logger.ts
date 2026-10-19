@@ -2908,7 +2908,7 @@ export class Logger<IsAsyncFlush extends boolean> implements Exportable {
   private lastStartTime: number;
   private lazyId: LazyValue<string>;
   private calledStartSpan: boolean;
-  private readonly baselineTraceId: string;
+  private baselineTraceId?: string;
 
   // For type identification.
   public kind = "logger" as const;
@@ -2926,7 +2926,6 @@ export class Logger<IsAsyncFlush extends boolean> implements Exportable {
     this.lazyId = new LazyValue(async () => await this.id);
     this.calledStartSpan = false;
     this.state = state;
-    this.baselineTraceId = state.idGenerator.getTraceId();
   }
 
   public get org_id(): Promise<string> {
@@ -3014,7 +3013,11 @@ export class Logger<IsAsyncFlush extends boolean> implements Exportable {
       parentObjectId: this.lazyId,
       parentComputeObjectMetadataArgs: this.computeMetadataArgs,
       parentSpanIds: {
-        rootSpanId: current?.rootSpanId ?? this.baselineTraceId,
+        // Late OpenTelemetry setup can replace the ID generator. Resolve the
+        // baseline only when a standalone log first needs it.
+        rootSpanId:
+          current?.rootSpanId ??
+          (this.baselineTraceId ??= this.state.idGenerator.getTraceId()),
         parentSpanIds: [],
       },
       spanId: current?.spanParents[0],
