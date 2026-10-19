@@ -54,7 +54,7 @@ describe("wrapOllama", () => {
     const client = {};
     const warn = vi
       .spyOn(debugLogger.notice, "warn")
-      .mockImplementation(() => {});
+      .mockImplementation(() => true);
 
     expect(wrapOllama(client)).toBe(client);
     expect(warn).toHaveBeenCalledWith(

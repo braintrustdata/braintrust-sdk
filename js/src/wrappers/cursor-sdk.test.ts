@@ -26,7 +26,7 @@ describe("wrapCursorSDK", () => {
   it("returns invalid modules unchanged", () => {
     const warnSpy = vi
       .spyOn(debugLogger.notice, "warn")
-      .mockImplementation(() => {});
+      .mockImplementation(() => true);
     const sdk = { Cursor: {} };
 
     expect(wrapCursorSDK(sdk)).toBe(sdk);

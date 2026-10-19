@@ -26,7 +26,7 @@ describe("wrapGoogleADK", () => {
   it("should return the module unchanged if invalid", () => {
     const warnSpy = vi
       .spyOn(debugLogger.notice, "warn")
-      .mockImplementation(() => {});
+      .mockImplementation(() => true);
 
     const result = wrapGoogleADK(null as any);
     expect(result).toBeNull();
@@ -40,7 +40,7 @@ describe("wrapGoogleADK", () => {
   it("should return module unchanged if no Runner or LlmAgent found", () => {
     const warnSpy = vi
       .spyOn(debugLogger.notice, "warn")
-      .mockImplementation(() => {});
+      .mockImplementation(() => true);
 
     const fakeModule = { SomeOtherClass: class {} };
     const result = wrapGoogleADK(fakeModule as any);

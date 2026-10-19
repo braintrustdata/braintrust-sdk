@@ -52,7 +52,7 @@ describe("openrouter wrapper", () => {
   test("returns the original object for unsupported clients", () => {
     const warnSpy = vi
       .spyOn(debugLogger.notice, "warn")
-      .mockImplementation(() => {});
+      .mockImplementation(() => true);
     const invalid = { foo: "bar" };
 
     expect(wrapOpenRouter(invalid)).toBe(invalid);

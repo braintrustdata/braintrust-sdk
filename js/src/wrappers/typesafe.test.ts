@@ -115,7 +115,7 @@ describe("TypeSafe wrapper", () => {
   it("returns unsupported clients unchanged", () => {
     const warnSpy = vi
       .spyOn(debugLogger.notice, "warn")
-      .mockImplementation(() => {});
+      .mockImplementation(() => true);
     const unsupported = { models: {} };
 
     expect(wrapTypeSafe(unsupported)).toBe(unsupported);

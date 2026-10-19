@@ -111,7 +111,7 @@ describe("Plugin Registry", () => {
     const testRegistry = new (registry.constructor as any)();
     const warnSpy = vi
       .spyOn(debugLogger.notice, "warn")
-      .mockImplementation(() => {});
+      .mockImplementation(() => true);
 
     try {
       testRegistry.enable();
@@ -130,7 +130,7 @@ describe("Plugin Registry", () => {
     const testRegistry = new (registry.constructor as any)();
     const warnSpy = vi
       .spyOn(debugLogger.notice, "warn")
-      .mockImplementation(() => {});
+      .mockImplementation(() => true);
 
     try {
       testRegistry.configure({ integrations: { openai: false } });

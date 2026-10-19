@@ -26,7 +26,7 @@ describe("wrapStrandsAgentSDK", () => {
   it("returns invalid modules unchanged", () => {
     const warnSpy = vi
       .spyOn(debugLogger.notice, "warn")
-      .mockImplementation(() => {});
+      .mockImplementation(() => true);
     const sdk = { AgentSession: class {} };
 
     expect(wrapStrandsAgentSDK(sdk)).toBe(sdk);

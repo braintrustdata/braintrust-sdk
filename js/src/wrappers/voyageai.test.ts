@@ -43,7 +43,7 @@ describe("Voyage AI wrapper", () => {
   it("returns unsupported clients unchanged", () => {
     const warnSpy = vi
       .spyOn(debugLogger.notice, "warn")
-      .mockImplementation(() => {});
+      .mockImplementation(() => true);
     const unsupported = { tokenize: vi.fn() };
 
     expect(wrapVoyageAI(unsupported)).toBe(unsupported);
