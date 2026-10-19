@@ -1,5 +1,22 @@
 # braintrust
 
+## 3.38.0
+
+### Minor Changes
+
+- feat(typesafe): Capture image inputs (https://github.com/braintrustdata/braintrust-sdk-javascript/pull/2625)
+- feat(ai-sdk): Trace decision calls and media (https://github.com/braintrustdata/braintrust-sdk-javascript/pull/2621)
+- feat: support OpenTelemetry span customizers Thanks @realark! (https://github.com/braintrustdata/braintrust-sdk-javascript/pull/2615)
+- feat(openai): Trace Decisions API calls (https://github.com/braintrustdata/braintrust-sdk-javascript/pull/2620)
+
+### Patch Changes
+
+- fix: Prevent conflicting queued logins from replacing active credentials (https://github.com/braintrustdata/braintrust-sdk-javascript/pull/2623)
+- refactor(instrumentation): Separate API wrapping from tracing (https://github.com/braintrustdata/braintrust-sdk-javascript/pull/2575)
+- fix: Ignore empty `BRAINTRUST_API_URL` and `BRAINTRUST_PROXY_URL` environment variables and use the organization URLs instead Thanks @raphaelfakhri! (https://github.com/braintrustdata/braintrust-sdk-javascript/pull/2600)
+- fix: fail closed on span customizer errors without dropping records Thanks @realark! (https://github.com/braintrustdata/braintrust-sdk-javascript/pull/2614)
+- fix(sdk): Restore tree shaking for browser and edge builds (https://github.com/braintrustdata/braintrust-sdk-javascript/pull/2622)
+
 ## 3.37.2
 
 ### Patch Changes

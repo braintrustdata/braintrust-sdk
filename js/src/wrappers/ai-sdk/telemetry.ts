@@ -1,3 +1,4 @@
+import { debugLogger } from "../../debug-logger";
 import {
   AI_SDK_TOOL_CALL_ID,
   AI_SDK_TOOL_CAPTURE,
@@ -101,8 +102,7 @@ export function braintrustAISDKTelemetry(): any {
     try {
       callback();
     } catch (error) {
-      // eslint-disable-next-line no-restricted-properties
-      console.error(`Error in Braintrust AI SDK telemetry ${name}:`, error);
+      debugLogger.error(`Error in Braintrust AI SDK telemetry ${name}:`, error);
     }
   };
 
