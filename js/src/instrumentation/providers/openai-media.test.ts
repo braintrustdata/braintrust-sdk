@@ -8,7 +8,7 @@ import { openAIChannels } from "./openai-channels";
 configureNode();
 registerInstrumentation();
 const originalAutoCaptureAttachments =
-  process.env.BRAINTRUST_CAPTURE_ATTACHMENTS;
+  process.env.BRAINTRUST_AUTO_CAPTURE_ATTACHMENTS;
 let background: ReturnType<
   typeof _exportsForTestingOnly.useTestBackgroundLogger
 >;
@@ -16,7 +16,7 @@ beforeAll(async () => {
   await _exportsForTestingOnly.simulateLoginForTests();
 });
 beforeEach(() => {
-  process.env.BRAINTRUST_CAPTURE_ATTACHMENTS = "true";
+  process.env.BRAINTRUST_AUTO_CAPTURE_ATTACHMENTS = "true";
   background = _exportsForTestingOnly.useTestBackgroundLogger();
   initLogger({
     projectName: "tmp-luca-openai-media-tests",
@@ -25,9 +25,10 @@ beforeEach(() => {
 });
 afterEach(() => {
   if (originalAutoCaptureAttachments === undefined) {
-    delete process.env.BRAINTRUST_CAPTURE_ATTACHMENTS;
+    delete process.env.BRAINTRUST_AUTO_CAPTURE_ATTACHMENTS;
   } else {
-    process.env.BRAINTRUST_CAPTURE_ATTACHMENTS = originalAutoCaptureAttachments;
+    process.env.BRAINTRUST_AUTO_CAPTURE_ATTACHMENTS =
+      originalAutoCaptureAttachments;
   }
   _exportsForTestingOnly.clearTestBackgroundLogger();
 });
@@ -130,7 +131,7 @@ it("does not upload incomplete speech and preserves response identity", async ()
 });
 
 it("does not capture speech response bytes without attachment opt-in", async () => {
-  delete process.env.BRAINTRUST_CAPTURE_ATTACHMENTS;
+  delete process.env.BRAINTRUST_AUTO_CAPTURE_ATTACHMENTS;
   const response = new Response(new Uint8Array([1, 2, 3]), {
     headers: { "content-type": "audio/mpeg" },
   });
@@ -153,7 +154,7 @@ it("does not capture speech response bytes without attachment opt-in", async () 
 });
 
 it("does not read media upload values without attachment opt-in", async () => {
-  delete process.env.BRAINTRUST_CAPTURE_ATTACHMENTS;
+  delete process.env.BRAINTRUST_AUTO_CAPTURE_ATTACHMENTS;
   let reads = 0;
   const image = {
     name: "input.png",

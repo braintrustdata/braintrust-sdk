@@ -44,7 +44,7 @@ describe.concurrent("variants", () => {
           await runScenarioDir({
             entry: "scenario.ts",
             env: {
-              BRAINTRUST_CAPTURE_ATTACHMENTS: "true",
+              BRAINTRUST_AUTO_CAPTURE_ATTACHMENTS: "true",
               GROQ_AUDIO_FILE: audioFile,
               GROQ_PACKAGE_NAME: scenario.dependencyName,
             },
@@ -67,7 +67,7 @@ describe.concurrent("variants", () => {
           await runNodeScenarioDir({
             entry: "scenario.mjs",
             env: {
-              BRAINTRUST_CAPTURE_ATTACHMENTS: "true",
+              BRAINTRUST_AUTO_CAPTURE_ATTACHMENTS: "true",
               GROQ_AUDIO_FILE: audioFile,
               GROQ_PACKAGE_NAME: scenario.dependencyName,
             },

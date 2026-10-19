@@ -54,7 +54,7 @@ describe.concurrent("variants", () => {
           await runScenarioDir({
             entry: scenario.wrapperEntry,
             env: {
-              BRAINTRUST_CAPTURE_ATTACHMENTS: "true",
+              BRAINTRUST_AUTO_CAPTURE_ATTACHMENTS: "true",
               ANTHROPIC_PACKAGE_NAME: scenario.dependencyName,
             },
             runContext: {
@@ -81,7 +81,7 @@ describe.concurrent("variants", () => {
           await runNodeScenarioDir({
             entry: scenario.autoEntry,
             env: {
-              BRAINTRUST_CAPTURE_ATTACHMENTS: "true",
+              BRAINTRUST_AUTO_CAPTURE_ATTACHMENTS: "true",
               ANTHROPIC_PACKAGE_NAME: scenario.dependencyName,
             },
             nodeArgs: ["--import", "braintrust/hook.mjs"],

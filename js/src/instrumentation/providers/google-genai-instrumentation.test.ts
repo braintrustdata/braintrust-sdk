@@ -27,7 +27,7 @@ vi.mock("#braintrust-platform", () => ({
     }),
     newTracingChannel: vi.fn(),
     getEnv: vi.fn((name: string) =>
-      name === "BRAINTRUST_CAPTURE_ATTACHMENTS" ? "true" : undefined,
+      name === "BRAINTRUST_AUTO_CAPTURE_ATTACHMENTS" ? "true" : undefined,
     ),
   },
 }));
@@ -44,7 +44,7 @@ vi.mock("../../logger/core", async () => {
   const { default: iso } = await import("#braintrust-platform");
   return {
     _internalCaptureAttachmentsEnabled: () =>
-      iso.getEnv("BRAINTRUST_CAPTURE_ATTACHMENTS") === "true",
+      iso.getEnv("BRAINTRUST_AUTO_CAPTURE_ATTACHMENTS") === "true",
     BaseAttachment: class {},
     CAPTURE_ATTACHMENTS: Symbol.for("braintrust.captureAttachments"),
     startSpan: vi.fn(() => ({
@@ -1116,7 +1116,7 @@ describe("registerGoogleGenAIInstrumentation", () => {
         const getEnv = vi.mocked(iso.getEnv);
         const originalGetEnv = getEnv.getMockImplementation()!;
         getEnv.mockImplementation((name) =>
-          name === "BRAINTRUST_CAPTURE_ATTACHMENTS"
+          name === "BRAINTRUST_AUTO_CAPTURE_ATTACHMENTS"
             ? String(captureAttachments)
             : undefined,
         );

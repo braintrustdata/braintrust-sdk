@@ -31,7 +31,7 @@ describe("registerVoyageAIInstrumentation", () => {
   beforeEach(() => {
     backgroundLogger = _exportsForTestingOnly.useTestBackgroundLogger();
     initLogger({
-      captureAttachments: true,
+      autoCaptureAttachments: true,
       projectName: "voyageai-instrumentation.test.ts",
       projectId: "test-project-id",
     });

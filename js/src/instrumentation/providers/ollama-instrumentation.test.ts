@@ -19,7 +19,7 @@ import {
 } from "./ollama-instrumentation";
 
 configureNode();
-beforeEach(() => vi.stubEnv("BRAINTRUST_CAPTURE_ATTACHMENTS", "true"));
+beforeEach(() => vi.stubEnv("BRAINTRUST_AUTO_CAPTURE_ATTACHMENTS", "true"));
 afterEach(() => vi.unstubAllEnvs());
 
 describe("Ollama instrumentation extraction", () => {

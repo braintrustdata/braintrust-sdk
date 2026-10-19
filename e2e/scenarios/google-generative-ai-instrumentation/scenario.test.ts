@@ -35,7 +35,7 @@ describe.concurrent("variants", () => {
               entry: "scenario.ts",
               env: {
                 GOOGLE_GENERATIVE_AI_PACKAGE_NAME: scenario.dependencyName,
-                BRAINTRUST_CAPTURE_ATTACHMENTS: "true",
+                BRAINTRUST_AUTO_CAPTURE_ATTACHMENTS: "true",
               },
               runContext: {
                 originalScenarioDir,
@@ -58,7 +58,7 @@ describe.concurrent("variants", () => {
               nodeArgs: ["--import", "braintrust/hook.mjs"],
               env: {
                 GOOGLE_GENERATIVE_AI_PACKAGE_NAME: scenario.dependencyName,
-                BRAINTRUST_CAPTURE_ATTACHMENTS: "true",
+                BRAINTRUST_AUTO_CAPTURE_ATTACHMENTS: "true",
               },
               runContext: {
                 originalScenarioDir,

@@ -44,15 +44,15 @@ beforeAll(() => {
   return _exportsForTestingOnly.simulateLoginForTests();
 });
 beforeEach(() => {
-  vi.stubEnv("BRAINTRUST_CAPTURE_ATTACHMENTS", undefined);
-  state.captureAttachments = undefined;
+  vi.stubEnv("BRAINTRUST_AUTO_CAPTURE_ATTACHMENTS", undefined);
+  state.autoCaptureAttachments = undefined;
   state.currentLogger = undefined;
   background = _exportsForTestingOnly.useTestBackgroundLogger();
 });
 afterEach(async () => {
   await background.drain();
   _exportsForTestingOnly.clearTestBackgroundLogger();
-  state.captureAttachments = undefined;
+  state.autoCaptureAttachments = undefined;
   state.currentLogger = undefined;
   vi.restoreAllMocks();
   vi.unstubAllEnvs();
@@ -112,11 +112,14 @@ it.each([false, true])(
 it.each([false, true])(
   "applies the owning policy to AI SDK tool-result media (%s)",
   async (captureAttachments) => {
-    initLogger({ ...loggerOptions, captureAttachments: !captureAttachments });
+    initLogger({
+      ...loggerOptions,
+      autoCaptureAttachments: !captureAttachments,
+    });
     const local = initLogger({
       ...loggerOptions,
       setCurrent: false,
-      captureAttachments,
+      autoCaptureAttachments: captureAttachments,
     });
     const media = ["image-data", "file-data", "media"].map((type) => ({
       type,
@@ -167,7 +170,10 @@ it.each([false, true])(
 it.each([false, true])(
   "processes AI SDK media throughout output containers with capture=%s",
   (captureAttachments) => {
-    initLogger({ ...loggerOptions, captureAttachments });
+    initLogger({
+      ...loggerOptions,
+      autoCaptureAttachments: captureAttachments,
+    });
     const readBytes = vi.fn(() => "AQID");
     const generatedFile = {
       mediaType: "image/png",
@@ -238,7 +244,7 @@ it.each([false, true])(
     const logger = initLogger({
       ...loggerOptions,
       setCurrent: false,
-      captureAttachments,
+      autoCaptureAttachments: captureAttachments,
     });
     const processor = new OpenAIAgentsTraceProcessor({ logger });
     const trace = {
@@ -274,7 +280,10 @@ it.each([false, true])(
     };
     await processor.onTraceStart(trace);
     await processor.onSpanStart(span);
-    initLogger({ ...loggerOptions, captureAttachments: !captureAttachments });
+    initLogger({
+      ...loggerOptions,
+      autoCaptureAttachments: !captureAttachments,
+    });
     await processor.onSpanEnd(span);
     const rows = await background.drain();
     const output = rows.find(
@@ -309,7 +318,7 @@ it.each([false, true])(
     const local = initLogger({
       ...loggerOptions,
       setCurrent: false,
-      captureAttachments,
+      autoCaptureAttachments: captureAttachments,
     });
     const span = local.startSpan({ name: "streamed media" });
     const part = {
@@ -333,7 +342,10 @@ it.each([false, true])(
         startTime: Date.now() / 1000,
       }),
     ).toBe(true);
-    initLogger({ ...loggerOptions, captureAttachments: !captureAttachments });
+    initLogger({
+      ...loggerOptions,
+      autoCaptureAttachments: !captureAttachments,
+    });
     for await (const chunk of result.fullStream) expect(chunk).toBe(part);
     const rows = await background.drain();
     expect(rows.find((row) => "output" in row)).toHaveProperty("output", {
@@ -356,7 +368,7 @@ it.each([false, true])(
     const local = initLogger({
       ...loggerOptions,
       setCurrent: false,
-      captureAttachments,
+      autoCaptureAttachments: captureAttachments,
     });
     const processor = new OpenAIAgentsTraceProcessor({ logger: local });
     const trace = {
@@ -382,7 +394,10 @@ it.each([false, true])(
             : { type, input: audio, output: "Hello" },
       };
       await processor.onSpanStart(span);
-      initLogger({ ...loggerOptions, captureAttachments: !captureAttachments });
+      initLogger({
+        ...loggerOptions,
+        autoCaptureAttachments: !captureAttachments,
+      });
       await processor.onSpanEnd(span);
       const payload = (await background.drain()).find((row) => "output" in row);
       expect(payload).toHaveProperty(type === "speech" ? "output" : "input", {
@@ -402,11 +417,14 @@ it.each([
 ])(
   "applies capture=%s to AI SDK image-edit inputs and masks (URL object: %s)",
   async (captureAttachments, maskAsURL) => {
-    initLogger({ ...loggerOptions, captureAttachments: !captureAttachments });
+    initLogger({
+      ...loggerOptions,
+      autoCaptureAttachments: !captureAttachments,
+    });
     const local = initLogger({
       ...loggerOptions,
       setCurrent: false,
-      captureAttachments,
+      autoCaptureAttachments: captureAttachments,
     });
     const data = new URL("data:image/png;base64,AQID");
     const remote = new URL("https://example.com/image.png");
@@ -458,7 +476,7 @@ it.each([
 );
 
 it("preserves AI SDK image-edit inputs when conversion fails", () => {
-  initLogger({ ...loggerOptions, captureAttachments: true });
+  initLogger({ ...loggerOptions, autoCaptureAttachments: true });
   const prompt = {
     images: ["not valid base64!"],
     mask: "not valid base64!",
@@ -474,7 +492,10 @@ it("preserves AI SDK image-edit inputs when conversion fails", () => {
 it.each([false, true])(
   "applies capture=%s to AI SDK content parts containing data URL objects",
   (captureAttachments) => {
-    initLogger({ ...loggerOptions, captureAttachments });
+    initLogger({
+      ...loggerOptions,
+      autoCaptureAttachments: captureAttachments,
+    });
     const data = new URL("data:image/png;base64,AQID");
     const content = [
       { type: "image", image: data },
@@ -505,7 +526,7 @@ it.each([false, true])(
 );
 
 it("keeps explicit AI SDK attachments with capture disabled", () => {
-  initLogger({ ...loggerOptions, captureAttachments: false });
+  initLogger({ ...loggerOptions, autoCaptureAttachments: false });
   const external = new ExternalAttachment({
     url: "s3://bucket/image.png",
     filename: "image.png",
@@ -525,8 +546,14 @@ it("keeps explicit AI SDK attachments with capture disabled", () => {
 it.each([true, false])(
   "explicit %s overrides an opposing environment setting",
   (captureAttachments) => {
-    vi.stubEnv("BRAINTRUST_CAPTURE_ATTACHMENTS", String(!captureAttachments));
-    const logger = initLogger({ ...loggerOptions, captureAttachments });
+    vi.stubEnv(
+      "BRAINTRUST_AUTO_CAPTURE_ATTACHMENTS",
+      String(!captureAttachments),
+    );
+    const logger = initLogger({
+      ...loggerOptions,
+      autoCaptureAttachments: captureAttachments,
+    });
     expect(_internalCaptureAttachmentsEnabled(logger)).toBe(captureAttachments);
     expect(_internalCaptureAttachmentsEnabled()).toBe(captureAttachments);
     initLogger(loggerOptions);
@@ -535,30 +562,30 @@ it.each([true, false])(
 );
 
 it("local loggers use the environment, and never inherit or update the global override", () => {
-  initLogger({ ...loggerOptions, captureAttachments: true });
+  initLogger({ ...loggerOptions, autoCaptureAttachments: true });
   const local = initLogger({ ...loggerOptions, setCurrent: false });
   expect(_internalCaptureAttachmentsEnabled(local)).toBe(false);
   initLogger({
     ...loggerOptions,
     setCurrent: false,
-    captureAttachments: false,
+    autoCaptureAttachments: false,
   });
   expect(_internalCaptureAttachmentsEnabled()).toBe(true);
-  vi.stubEnv("BRAINTRUST_CAPTURE_ATTACHMENTS", "true");
-  initLogger({ ...loggerOptions, captureAttachments: false });
+  vi.stubEnv("BRAINTRUST_AUTO_CAPTURE_ATTACHMENTS", "true");
+  initLogger({ ...loggerOptions, autoCaptureAttachments: false });
   expect(_internalCaptureAttachmentsEnabled(local)).toBe(true);
 });
 
 it("isolates SDK state defaults", () => {
   const other = new BraintrustState({});
-  initLogger({ ...loggerOptions, captureAttachments: true });
+  initLogger({ ...loggerOptions, autoCaptureAttachments: true });
   const otherLogger = initLogger({
     ...loggerOptions,
     state: other,
-    captureAttachments: false,
+    autoCaptureAttachments: false,
   });
   expect(_internalCaptureAttachmentsEnabled(otherLogger)).toBe(false);
-  expect(other.captureAttachments).toBe(false);
+  expect(other.autoCaptureAttachments).toBe(false);
   expect(_internalCaptureAttachmentsEnabled()).toBe(true);
 });
 
@@ -566,18 +593,18 @@ it("keeps concurrent local traces and descendants isolated after global replacem
   const enabled = initLogger({
     ...loggerOptions,
     setCurrent: false,
-    captureAttachments: true,
+    autoCaptureAttachments: true,
   });
   const disabled = initLogger({
     ...loggerOptions,
     setCurrent: false,
-    captureAttachments: false,
+    autoCaptureAttachments: false,
   });
   await Promise.all(
     [enabled, disabled].map(async (logger, index) => {
       await logger.traced(async (parent) => {
         await Promise.resolve();
-        initLogger({ ...loggerOptions, captureAttachments: index !== 0 });
+        initLogger({ ...loggerOptions, autoCaptureAttachments: index !== 0 });
         await parent.traced(async () => {
           await Promise.resolve();
           const output = processInputAttachments(inlineImage);
@@ -591,7 +618,7 @@ it("keeps concurrent local traces and descendants isolated after global replacem
 });
 
 it("does not decode inline media, read local images, or evaluate generated binary getters when disabled", () => {
-  initLogger({ ...loggerOptions, captureAttachments: false });
+  initLogger({ ...loggerOptions, autoCaptureAttachments: false });
   const decode = vi.spyOn(globalThis, "atob");
   const stat = vi.spyOn(iso, "statSync");
   const binary = vi.fn(() => {
@@ -644,7 +671,10 @@ it("does not decode inline media, read local images, or evaluate generated binar
 });
 
 it("preserves explicit attachments and remote references with capture disabled", async () => {
-  const logger = initLogger({ ...loggerOptions, captureAttachments: false });
+  const logger = initLogger({
+    ...loggerOptions,
+    autoCaptureAttachments: false,
+  });
   const attachment = new Attachment({
     data: new Blob(["explicit"]),
     filename: "explicit.txt",
@@ -675,7 +705,7 @@ it("preserves explicit attachments and remote references with capture disabled",
 });
 
 it("preserves a deferred instrumentation policy when a different logger supplies the span parent", async () => {
-  initLogger({ ...loggerOptions, captureAttachments: true });
+  initLogger({ ...loggerOptions, autoCaptureAttachments: true });
   const args = { name: "deferred", [CAPTURE_ATTACHMENTS]: false };
   const deferred = startSpan(args);
   const child = deferred.startSpan();
@@ -688,7 +718,10 @@ it("preserves a deferred instrumentation policy when a different logger supplies
 it.each([false, true])(
   "preserves AI SDK application JSON that resembles media (capture=%s)",
   async (captureAttachments) => {
-    const logger = initLogger({ ...loggerOptions, captureAttachments });
+    const logger = initLogger({
+      ...loggerOptions,
+      autoCaptureAttachments: captureAttachments,
+    });
     const object = { type: "file", data: "report text" };
     const toolCall = {
       type: "tool-call",
@@ -758,7 +791,7 @@ it.each([false, true])(
   async (captureAttachments) => {
     const logger = initLogger({
       ...loggerOptions,
-      captureAttachments,
+      autoCaptureAttachments: captureAttachments,
       setCurrent: false,
     });
     const processor = new OpenAIAgentsTraceProcessor({ logger });
@@ -787,7 +820,10 @@ it.each([false, true])(
     };
     await processor.onTraceStart(trace);
     await processor.onSpanStart(span);
-    initLogger({ ...loggerOptions, captureAttachments: !captureAttachments });
+    initLogger({
+      ...loggerOptions,
+      autoCaptureAttachments: !captureAttachments,
+    });
     await processor.onSpanEnd(span);
     const rows = await background.drain();
     const row = rows.find((row) => "output" in row && row.output !== undefined);
@@ -820,7 +856,10 @@ it.each([false, true])(
 it.each([false, true])(
   "preserves custom Agents JSON without mutating SDK span data (%s)",
   async (captureAttachments) => {
-    const logger = initLogger({ ...loggerOptions, captureAttachments });
+    const logger = initLogger({
+      ...loggerOptions,
+      autoCaptureAttachments: captureAttachments,
+    });
     const processor = new OpenAIAgentsTraceProcessor({ logger });
     const trace = {
       type: "trace" as const,
@@ -859,7 +898,10 @@ it.each([false, true])(
 it.each([false, true])(
   "applies capture policy to Chat Completions audio (%s)",
   async (captureAttachments) => {
-    initLogger({ ...loggerOptions, captureAttachments });
+    initLogger({
+      ...loggerOptions,
+      autoCaptureAttachments: captureAttachments,
+    });
     const audio = { data: "AQID", transcript: "Hello", id: "audio-1" };
     const result = {
       choices: [
@@ -892,7 +934,10 @@ it.each([false, true])(
 it.each([false, true])(
   "handles raw base64 chat files without changing references (capture=%s)",
   async (captureAttachments) => {
-    initLogger({ ...loggerOptions, captureAttachments });
+    initLogger({
+      ...loggerOptions,
+      autoCaptureAttachments: captureAttachments,
+    });
     const messages = [
       {
         role: "user",
@@ -940,7 +985,10 @@ it.each([false, true])(
 it.each([false, true])(
   "preserves parsed OpenAI output and tool arguments that resemble media (capture=%s)",
   async (captureAttachments) => {
-    initLogger({ ...loggerOptions, captureAttachments });
+    initLogger({
+      ...loggerOptions,
+      autoCaptureAttachments: captureAttachments,
+    });
     const parsed = { type: "file", data: "report text" };
     const parsedArguments = {
       type: "input_image",
@@ -997,7 +1045,7 @@ it.each([
 ] as const)(
   "uses the requested %s format for generated chat audio",
   async (format, contentType, extension) => {
-    initLogger({ ...loggerOptions, captureAttachments: true });
+    initLogger({ ...loggerOptions, autoCaptureAttachments: true });
     const audio = { data: "AQID", transcript: "Hello", id: "audio-1" };
     const choices = [
       { index: 0, message: { role: "assistant", content: null, audio } },

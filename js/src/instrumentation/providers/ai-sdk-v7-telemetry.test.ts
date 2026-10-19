@@ -55,7 +55,7 @@ describe("braintrustAISDKTelemetry", () => {
       initLogger({
         projectName: "tmp-luca-telemetry-capture",
         projectId: "test-project-id",
-        captureAttachments,
+        autoCaptureAttachments: captureAttachments,
       });
       const telemetry = braintrustAISDKTelemetry();
       const callId = "delayed-media";
@@ -63,7 +63,7 @@ describe("braintrustAISDKTelemetry", () => {
       initLogger({
         projectName: "tmp-luca-telemetry-capture",
         projectId: "test-project-id",
-        captureAttachments: !captureAttachments,
+        autoCaptureAttachments: !captureAttachments,
       });
       const messages = [
         {

@@ -63,7 +63,7 @@ describe("braintrustEveInstrumentation", () => {
     initLogger({
       projectName: "eve-instrumentation.test.ts",
       projectId: "test-project-id",
-      captureAttachments: false,
+      autoCaptureAttachments: false,
     });
   });
 
@@ -1146,12 +1146,12 @@ describe("braintrustEveInstrumentation", () => {
     "applies the persisted or current policy to model media and preserves action JSON ($option, $env, legacy: $legacy)",
     async ({ option, env, enabled, legacy }) => {
       const captureAttachments = legacy ? !enabled : enabled;
-      vi.stubEnv("BRAINTRUST_CAPTURE_ATTACHMENTS", env);
+      vi.stubEnv("BRAINTRUST_AUTO_CAPTURE_ATTACHMENTS", env);
       const logger = initLogger({
         projectName: "eve-instrumentation.test.ts",
         projectId: "test-project-id",
         setCurrent: false,
-        captureAttachments: option,
+        autoCaptureAttachments: option,
       });
       const provider = braintrustEveInstrumentation();
       const actionContext = providerContext();
@@ -1172,7 +1172,7 @@ describe("braintrustEveInstrumentation", () => {
       initLogger({
         projectName: "eve-instrumentation.test.ts",
         projectId: "test-project-id",
-        captureAttachments: !enabled,
+        autoCaptureAttachments: !enabled,
       });
       const persistedTurn = {
         ...(turnContext.state.get() as Record<string, EveJsonValue>),

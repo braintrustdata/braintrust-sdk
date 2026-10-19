@@ -153,10 +153,10 @@ describe("DeepSeek Harness plugin", () => {
   });
 
   test("passes the attachment capture setting to its logger", () => {
-    createContext({ captureAttachments: true });
+    createContext({ autoCaptureAttachments: true });
 
     expect(mock.initLogger).toHaveBeenCalledWith(
-      expect.objectContaining({ captureAttachments: true }),
+      expect.objectContaining({ autoCaptureAttachments: true }),
     );
   });
 
@@ -242,8 +242,8 @@ describe("DeepSeek Harness plugin", () => {
 
   test.each([true, false])(
     "processes Harness images with capture=%s",
-    async (captureAttachments) => {
-      mock.captureAttachmentsEnabled.mockReturnValue(captureAttachments);
+    async (autoCaptureAttachments) => {
+      mock.captureAttachmentsEnabled.mockReturnValue(autoCaptureAttachments);
       const harness = createContext();
       const currentSession = session();
       const image = {
@@ -288,7 +288,7 @@ describe("DeepSeek Harness plugin", () => {
       await harness.listener("session/flush")(currentSession);
 
       let expectedImagePart: Record<string, unknown>;
-      if (captureAttachments) {
+      if (autoCaptureAttachments) {
         expect(harness.readImage).toHaveBeenCalledOnce();
         expect(harness.readImage).toHaveBeenCalledWith(image);
         expect(mock.attachments).toHaveLength(1);

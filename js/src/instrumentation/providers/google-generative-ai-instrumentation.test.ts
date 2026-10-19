@@ -23,7 +23,7 @@ describe("Google Generative AI instrumentation", () => {
   beforeEach(() => {
     logger = _exportsForTestingOnly.useTestBackgroundLogger();
     initLogger({
-      captureAttachments: true,
+      autoCaptureAttachments: true,
       projectName: "tmp-luca-google-generative-ai-tests",
       projectId: "test-project-id",
     });
@@ -374,7 +374,7 @@ describe("Google Generative AI instrumentation", () => {
       initLogger({
         projectName: "tmp-luca-google-generative-ai-tests",
         projectId: "test-project-id",
-        captureAttachments,
+        autoCaptureAttachments: captureAttachments,
       });
       const inlineData = { data: "aGVsbG8=", mimeType: "image/png" };
       const request = [{ inlineData }];

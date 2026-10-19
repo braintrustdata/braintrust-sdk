@@ -59,7 +59,7 @@ describe.concurrent("variants", () => {
               entry: scenario.wrapperEntry,
               env: {
                 GOOGLE_GENAI_PACKAGE_NAME: scenario.dependencyName,
-                BRAINTRUST_CAPTURE_ATTACHMENTS: "true",
+                BRAINTRUST_AUTO_CAPTURE_ATTACHMENTS: "true",
               },
               runContext: {
                 variantKey: scenario.snapshotName,
@@ -81,7 +81,7 @@ describe.concurrent("variants", () => {
               entry: scenario.autoEntry,
               env: {
                 GOOGLE_GENAI_PACKAGE_NAME: scenario.dependencyName,
-                BRAINTRUST_CAPTURE_ATTACHMENTS: "true",
+                BRAINTRUST_AUTO_CAPTURE_ATTACHMENTS: "true",
               },
               nodeArgs: ["--import", "braintrust/hook.mjs"],
               runContext: {

@@ -16,7 +16,7 @@ vi.mock("#braintrust-platform", () => ({
   default: {
     newTracingChannel: vi.fn(),
     getEnv: vi.fn((name: string) =>
-      name === "BRAINTRUST_CAPTURE_ATTACHMENTS" ? "true" : undefined,
+      name === "BRAINTRUST_AUTO_CAPTURE_ATTACHMENTS" ? "true" : undefined,
     ),
     newAsyncLocalStorage: () => ({
       getStore: () => undefined,

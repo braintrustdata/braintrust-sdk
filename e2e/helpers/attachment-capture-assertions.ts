@@ -20,7 +20,7 @@ export function defineAttachmentCaptureTests(options: {
           env: {
             CAPTURE_PACKAGE_NAME: options.packageName,
             CAPTURE_WRAPPED: String(mode === "wrapped"),
-            BRAINTRUST_CAPTURE_ATTACHMENTS: "",
+            BRAINTRUST_AUTO_CAPTURE_ATTACHMENTS: "",
           },
           runContext: {
             variantKey: options.variantKey,
