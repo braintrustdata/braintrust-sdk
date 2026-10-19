@@ -50,6 +50,7 @@ const processor = automatic
   : new ScenarioProcessor({
       logger,
       captureContent: true,
+      audioFormat: process.env.LIVEKIT_SEGMENTS === "1" ? "ogg" : "wav",
       ...(process.env.LIVEKIT_SEGMENTS === "1"
         ? {
             recording: {

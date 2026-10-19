@@ -19,20 +19,20 @@ if (mode !== "defaults")
         mode === "integration-off"
           ? false
           : {
+              ...(mode === "wav" ? { audioFormat: "wav" } : {}),
               ...(mode === "env"
                 ? {}
                 : {
-                    captureAudio: mode === "wav",
+                    captureAudio: ["wav", "without-codec"].includes(mode),
                   }),
             },
     },
   });
 const cwd = process.cwd();
-const isolated =
-  mode === "defaults"
-    ? await mkdtemp(join(tmpdir(), "braintrust-no-audio-"))
-    : undefined;
-if (mode === "defaults") {
+const isolated = ["defaults", "without-codec"].includes(mode)
+  ? await mkdtemp(join(tmpdir(), "braintrust-no-audio-"))
+  : undefined;
+if (isolated) {
   // Model a pnpm app that installs LiveKit but not its OTel dependency directly.
   const entry = createRequire(import.meta.url).resolve(
     process.env.LIVEKIT_PACKAGE,
@@ -40,6 +40,13 @@ if (mode === "defaults") {
   const scope = join(isolated, "node_modules", "@livekit");
   await mkdir(scope, { recursive: true });
   await symlink(dirname(dirname(entry)), join(scope, "agents"), "junction");
+  // The app installs Braintrust itself, but no optional compression package.
+  const sdk = createRequire(import.meta.url).resolve("braintrust/package.json");
+  await symlink(
+    dirname(sdk),
+    join(isolated, "node_modules", "braintrust"),
+    "junction",
+  );
 }
 if (isolated) process.chdir(isolated);
 const logger = initLogger({ projectName: scopedName("e2e-livekit-auto") });
@@ -109,11 +116,11 @@ try {
     agent: new voice.Agent({ instructions: "Fictional order assistant" }),
     record: false,
   });
-  if (!["wav", "env"].includes(mode))
+  if (!["wav", "env", "without-codec"].includes(mode))
     assert.equal(
       output.captureFrame,
       original,
-      "disabled or unavailable recording must not wrap the sink",
+      "disabled recording must not wrap the sink",
     );
   const audio = new ReadableStream({
     start(c) {

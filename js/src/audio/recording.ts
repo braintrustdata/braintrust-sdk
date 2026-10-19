@@ -5,11 +5,13 @@ import {
   type RecordingContext,
 } from "./publisher";
 import { SegmentExporter, type CreateAttachment } from "./exporter";
+import { resolveEncoder } from "./encoding";
 import { createEncoder } from "./worker";
 import type { Packet, Segment } from "./segment";
 
 export interface AudioRecordingConfig {
   options?: RecordingOptions;
+  audioFormat?: "wav" | "ogg";
   encoder?: { module: string };
   span: RecordingSpan;
   flush: () => Promise<void>;
@@ -29,7 +31,7 @@ class Recording {
     this.recorder = new Recorder(
       config.options ?? {},
       new SegmentExporter(
-        createEncoder(config.encoder),
+        createEncoder(config.encoder ?? resolveEncoder(config.audioFormat)),
         config.createAttachment,
       ),
       (segment) => this.publisher.publish(segment),

@@ -482,6 +482,7 @@ export class LiveKitSpanProcessor {
     const row = this.rows.get(nativeId(session.sessionSpan)!);
     if (!row) return;
     const voice = this.audio.createVoiceRecording({
+      audioFormat: this.options.audioFormat,
       options: this.options.recording,
       encoder: this.options.recording?.encoder,
       span: row.span,

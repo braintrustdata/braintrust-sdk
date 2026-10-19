@@ -5,5 +5,6 @@ export interface LiveKitOptions {
   captureAudio?: boolean;
   captureUserAudio?: boolean;
   captureAgentAudio?: boolean;
+  audioFormat?: "wav" | "ogg";
   recording?: RecordingOptions;
 }
