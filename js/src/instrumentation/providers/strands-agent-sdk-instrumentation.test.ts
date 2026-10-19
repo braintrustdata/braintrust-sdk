@@ -32,7 +32,7 @@ const { mockWithCurrent, mockNewAsyncLocalStorage, mockStartSpan } = vi.hoisted(
 vi.mock("#braintrust-platform", () => ({
   default: {
     getEnv: vi.fn((name: string) =>
-      name === "BRAINTRUST_CAPTURE_ATTACHMENTS" ? "true" : undefined,
+      name === "BRAINTRUST_AUTO_CAPTURE_ATTACHMENTS" ? "true" : undefined,
     ),
     newAsyncLocalStorage: mockNewAsyncLocalStorage,
     newTracingChannel: vi.fn(),
@@ -338,7 +338,7 @@ describe("registerStrandsAgentSDKInstrumentation", () => {
     "converts media from %s to one attachment shared by agent and model spans",
     async (_description, bytes, captureAttachments) => {
       vi.mocked(iso.getEnv).mockImplementation((name) =>
-        name === "BRAINTRUST_CAPTURE_ATTACHMENTS"
+        name === "BRAINTRUST_AUTO_CAPTURE_ATTACHMENTS"
           ? String(captureAttachments)
           : undefined,
       );

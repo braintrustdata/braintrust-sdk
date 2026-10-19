@@ -52,9 +52,9 @@ export interface Config {
   appUrl?: string;
   /**
    * Capture inline Harness images as attachments.
-   * Falls back to BRAINTRUST_CAPTURE_ATTACHMENTS when omitted.
+   * Falls back to BRAINTRUST_AUTO_CAPTURE_ATTACHMENTS when omitted.
    */
-  captureAttachments?: boolean;
+  autoCaptureAttachments?: boolean;
 }
 
 export const Config: z<Config> = z.object({
@@ -63,7 +63,7 @@ export const Config: z<Config> = z.object({
   metadata: z.dict(z.any()),
   orgName: z.string(),
   appUrl: z.string(),
-  captureAttachments: z.boolean(),
+  autoCaptureAttachments: z.boolean(),
 });
 
 type TokenMetrics = Record<string, number> & {
@@ -380,7 +380,7 @@ export function apply(ctx: Context, config: Config = {}): void {
     projectName: config.projectName ?? DEFAULT_PROJECT_NAME,
     ...(config.orgName ? { orgName: config.orgName } : {}),
     ...(config.appUrl ? { appUrl: config.appUrl } : {}),
-    captureAttachments: config.captureAttachments,
+    autoCaptureAttachments: config.autoCaptureAttachments,
     setCurrent: false,
   });
   const turns = new Map<string, Map<number, TurnState>>();

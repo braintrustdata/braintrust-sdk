@@ -667,9 +667,10 @@ export const CAPTURE_ATTACHMENTS: unique symbol = Symbol.for(
   "braintrust.captureAttachments",
 );
 
-function captureAttachmentsFromEnv(): boolean {
+function autoCaptureAttachmentsFromEnv(): boolean {
   return ["1", "true"].includes(
-    iso.getEnv("BRAINTRUST_CAPTURE_ATTACHMENTS")?.trim().toLowerCase() ?? "",
+    iso.getEnv("BRAINTRUST_AUTO_CAPTURE_ATTACHMENTS")?.trim().toLowerCase() ??
+      "",
   );
 }
 
@@ -683,7 +684,7 @@ export function _internalCaptureAttachmentsEnabled(parent?: object): boolean {
   const policy = owner && Reflect.get(owner, CAPTURE_ATTACHMENTS);
   return typeof policy === "boolean"
     ? policy
-    : (_globalState?.captureAttachments ?? captureAttachmentsFromEnv());
+    : (_globalState?.autoCaptureAttachments ?? autoCaptureAttachmentsFromEnv());
 }
 
 export class BraintrustState {
@@ -709,7 +710,7 @@ export class BraintrustState {
   public loggedIn: boolean = false;
   public gitMetadataSettings?: GitMetadataSettings;
   /** @internal Default for instrumentation without a logger-specific policy. */
-  public captureAttachments?: boolean;
+  public autoCaptureAttachments?: boolean;
   public debugLogLevel?: DebugLogLevel;
   private debugLogLevelConfigured = false;
 
@@ -2759,7 +2760,7 @@ export class Logger implements Exportable {
   private lastStartTime: number;
   private lazyId: LazyValue<string>;
   private calledStartSpan: boolean;
-  private readonly captureAttachments: boolean | undefined;
+  private readonly autoCaptureAttachments: boolean | undefined;
 
   // For type identification.
   public kind = "logger" as const;
@@ -2770,7 +2771,7 @@ export class Logger implements Exportable {
     options: {
       computeMetadataArgs?: ProjectMetadataArgs;
       linkArgs?: LinkArgs;
-      captureAttachments?: boolean;
+      autoCaptureAttachments?: boolean;
     } = {},
   ) {
     this.lazyMetadata = lazyMetadata;
@@ -2779,7 +2780,7 @@ export class Logger implements Exportable {
     this.lastStartTime = getCurrentUnixTimestamp();
     this.lazyId = new LazyValue(() => this.id);
     this.calledStartSpan = false;
-    this.captureAttachments = options.captureAttachments;
+    this.autoCaptureAttachments = options.autoCaptureAttachments;
     this.state = state;
   }
 
@@ -2807,7 +2808,7 @@ export class Logger implements Exportable {
     Object.defineProperty(this.prototype, CAPTURE_ATTACHMENTS, {
       configurable: true,
       get(this: Logger): boolean {
-        return this.captureAttachments ?? captureAttachmentsFromEnv();
+        return this.autoCaptureAttachments ?? autoCaptureAttachmentsFromEnv();
       },
     });
   }
@@ -4093,14 +4094,14 @@ async function computeLoggerMetadata(
 
 export type InitLoggerOptions = FullLoginOptions & {
   /**
-   * Capture inline media as attachments in instrumentation. Explicit booleans override
-   * BRAINTRUST_CAPTURE_ATTACHMENTS (1 or true); capture is otherwise disabled.
+   * Automatically capture inline media as attachments in instrumentation. Explicit booleans override
+   * BRAINTRUST_AUTO_CAPTURE_ATTACHMENTS (1 or true); capture is otherwise disabled.
    * With setCurrent: false, this logger and its child spans have an independent policy
    * and an omitted option uses the environment, not the global logger's setting.
    * Current loggers also update the state's default when this option is supplied;
    * omitting it preserves that default. Explicitly logged attachments are unaffected.
    */
-  captureAttachments?: boolean;
+  autoCaptureAttachments?: boolean;
   projectName?: string;
   projectId?: string;
   _createInProjectGroup?: string;
@@ -4174,13 +4175,13 @@ export function initLogger(options: Readonly<InitLoggerOptions> = {}): Logger {
   );
 
   const setCurrent = options.setCurrent ?? true;
-  if (setCurrent && options.captureAttachments !== undefined) {
-    state.captureAttachments = options.captureAttachments;
+  if (setCurrent && options.autoCaptureAttachments !== undefined) {
+    state.autoCaptureAttachments = options.autoCaptureAttachments;
   }
   const ret = new Logger(state, lazyMetadata, {
-    captureAttachments:
-      options.captureAttachments ??
-      (setCurrent ? state.captureAttachments : undefined),
+    autoCaptureAttachments:
+      options.autoCaptureAttachments ??
+      (setCurrent ? state.autoCaptureAttachments : undefined),
     computeMetadataArgs,
     linkArgs,
   });
@@ -6137,8 +6138,8 @@ export class SpanImpl implements Span {
     Object.defineProperty(this, CAPTURE_ATTACHMENTS, {
       value:
         args[CAPTURE_ATTACHMENTS] ??
-        args.state.captureAttachments ??
-        captureAttachmentsFromEnv(),
+        args.state.autoCaptureAttachments ??
+        autoCaptureAttachmentsFromEnv(),
       enumerable: true,
       configurable: true,
       writable: true,

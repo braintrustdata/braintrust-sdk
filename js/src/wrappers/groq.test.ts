@@ -31,7 +31,7 @@ describe("groq wrapper", () => {
   beforeEach(() => {
     backgroundLogger = _exportsForTestingOnly.useTestBackgroundLogger();
     initLogger({
-      captureAttachments: true,
+      autoCaptureAttachments: true,
       projectId: "test-project-id",
       projectName: "groq.test.ts",
     });
@@ -434,7 +434,7 @@ describe("groq wrapper", () => {
       initLogger({
         projectName: "groq.test.ts",
         projectId: "test-project-id",
-        captureAttachments,
+        autoCaptureAttachments: captureAttachments,
       });
       const wrapped = wrapGroq({
         audio: {

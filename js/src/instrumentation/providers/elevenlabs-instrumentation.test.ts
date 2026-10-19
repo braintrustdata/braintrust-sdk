@@ -31,7 +31,7 @@ describe("ElevenLabs instrumentation", () => {
   beforeEach(() => {
     logger = _exportsForTestingOnly.useTestBackgroundLogger();
     initLogger({
-      captureAttachments: true,
+      autoCaptureAttachments: true,
       projectName: "tmp-luca-elevenlabs-unit",
       projectId: "test-project-id",
     });
@@ -46,7 +46,7 @@ describe("ElevenLabs instrumentation", () => {
       initLogger({
         projectName: "tmp-luca-elevenlabs-unit",
         projectId: "test-project-id",
-        captureAttachments,
+        autoCaptureAttachments: captureAttachments,
       });
       const bytes = new Uint8Array([0, 1, 2, 3]);
       const stream = new ReadableStream<Uint8Array>({

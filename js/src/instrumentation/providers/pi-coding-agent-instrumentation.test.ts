@@ -36,7 +36,7 @@ vi.mock("../../logger/core", async () => {
   const { default: iso } = await import("#braintrust-platform");
   return {
     _internalCaptureAttachmentsEnabled: () =>
-      iso.getEnv("BRAINTRUST_CAPTURE_ATTACHMENTS") === "true",
+      iso.getEnv("BRAINTRUST_AUTO_CAPTURE_ATTACHMENTS") === "true",
     CAPTURE_ATTACHMENTS: Symbol.for("braintrust.captureAttachments"),
     BaseAttachment: class {},
     _internalStartSpan: (...args: unknown[]) => mockStartSpan(...args),

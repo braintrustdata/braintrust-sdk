@@ -5,7 +5,7 @@ vi.mock("#braintrust-platform", () => ({
   default: {
     newTracingChannel: vi.fn(),
     getEnv: vi.fn((name: string) =>
-      name === "BRAINTRUST_CAPTURE_ATTACHMENTS" ? "true" : undefined,
+      name === "BRAINTRUST_AUTO_CAPTURE_ATTACHMENTS" ? "true" : undefined,
     ),
   },
 }));
@@ -28,7 +28,7 @@ vi.mock("../../logger/core", async () => {
   const { default: iso } = await import("#braintrust-platform");
   return {
     _internalCaptureAttachmentsEnabled: () =>
-      iso.getEnv("BRAINTRUST_CAPTURE_ATTACHMENTS") === "true",
+      iso.getEnv("BRAINTRUST_AUTO_CAPTURE_ATTACHMENTS") === "true",
     withCurrent: (_span: unknown, callback: () => unknown) => callback(),
     startSpan: vi.fn(() => ({
       log: vi.fn(),

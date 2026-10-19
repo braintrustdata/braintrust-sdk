@@ -76,8 +76,8 @@ describe("provider wrapper", () => {
 
   test("OpenAI responses image outputs are converted to attachments", async () => {
     const originalAutoCaptureAttachments =
-      process.env.BRAINTRUST_CAPTURE_ATTACHMENTS;
-    process.env.BRAINTRUST_CAPTURE_ATTACHMENTS = "true";
+      process.env.BRAINTRUST_AUTO_CAPTURE_ATTACHMENTS;
+    process.env.BRAINTRUST_AUTO_CAPTURE_ATTACHMENTS = "true";
     expect(await backgroundLogger.drain()).toHaveLength(0);
 
     const rawClient = new OpenAI({ apiKey: "sk-test" });
@@ -122,9 +122,9 @@ describe("provider wrapper", () => {
     } finally {
       client.responses.create = originalCreate;
       if (originalAutoCaptureAttachments === undefined) {
-        delete process.env.BRAINTRUST_CAPTURE_ATTACHMENTS;
+        delete process.env.BRAINTRUST_AUTO_CAPTURE_ATTACHMENTS;
       } else {
-        process.env.BRAINTRUST_CAPTURE_ATTACHMENTS =
+        process.env.BRAINTRUST_AUTO_CAPTURE_ATTACHMENTS =
           originalAutoCaptureAttachments;
       }
     }
@@ -132,8 +132,8 @@ describe("provider wrapper", () => {
 
   test("OpenAI responses image data is omitted by default", async () => {
     const originalAutoCaptureAttachments =
-      process.env.BRAINTRUST_CAPTURE_ATTACHMENTS;
-    delete process.env.BRAINTRUST_CAPTURE_ATTACHMENTS;
+      process.env.BRAINTRUST_AUTO_CAPTURE_ATTACHMENTS;
+    delete process.env.BRAINTRUST_AUTO_CAPTURE_ATTACHMENTS;
     const rawClient = new OpenAI({ apiKey: "sk-test" });
     const client = wrapOpenAI(rawClient);
     const mockData = {
@@ -163,9 +163,9 @@ describe("provider wrapper", () => {
     } finally {
       client.responses.create = originalCreate;
       if (originalAutoCaptureAttachments === undefined) {
-        delete process.env.BRAINTRUST_CAPTURE_ATTACHMENTS;
+        delete process.env.BRAINTRUST_AUTO_CAPTURE_ATTACHMENTS;
       } else {
-        process.env.BRAINTRUST_CAPTURE_ATTACHMENTS =
+        process.env.BRAINTRUST_AUTO_CAPTURE_ATTACHMENTS =
           originalAutoCaptureAttachments;
       }
     }

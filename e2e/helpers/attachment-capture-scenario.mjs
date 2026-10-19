@@ -103,13 +103,13 @@ export async function runAttachmentCaptureScenario(provider, scenarioUrl, sdk) {
   }
   const projectName = scopedName("tmp-luca-attachment-capture");
   for (const testCase of captureCases) {
-    process.env.BRAINTRUST_CAPTURE_ATTACHMENTS = testCase.env;
+    process.env.BRAINTRUST_AUTO_CAPTURE_ATTACHMENTS = testCase.env;
     if (testCase.local)
-      initLogger({ projectName, captureAttachments: testCase.global });
+      initLogger({ projectName, autoCaptureAttachments: testCase.global });
     const logger = initLogger({
       projectName,
       setCurrent: !testCase.local,
-      captureAttachments: testCase.option,
+      autoCaptureAttachments: testCase.option,
     });
     await logger.traced(request, {
       name: `attachment-capture-${testCase.name}`,

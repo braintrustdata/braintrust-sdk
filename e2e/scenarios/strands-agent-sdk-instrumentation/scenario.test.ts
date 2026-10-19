@@ -54,7 +54,7 @@ describe.concurrent("variants", () => {
               entry: scenario.wrapperEntry,
               env: {
                 STRANDS_AGENT_SDK_PACKAGE_NAME: scenario.dependencyName,
-                BRAINTRUST_CAPTURE_ATTACHMENTS: "true",
+                BRAINTRUST_AUTO_CAPTURE_ATTACHMENTS: "true",
               },
               runContext: {
                 variantKey: scenario.variantKey,
@@ -76,7 +76,7 @@ describe.concurrent("variants", () => {
               entry: scenario.autoEntry,
               env: {
                 STRANDS_AGENT_SDK_PACKAGE_NAME: scenario.dependencyName,
-                BRAINTRUST_CAPTURE_ATTACHMENTS: "true",
+                BRAINTRUST_AUTO_CAPTURE_ATTACHMENTS: "true",
               },
               nodeArgs: ["--import", "braintrust/hook.mjs"],
               runContext: {
