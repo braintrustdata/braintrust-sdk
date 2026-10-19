@@ -1,5 +1,22 @@
 # braintrust
 
+## 3.38.0
+
+### Minor Changes
+
+- feat(typesafe): Capture image inputs (https://github.com/braintrustdata/braintrust-sdk-javascript/pull/2625)
+- feat(ai-sdk): Trace decision calls and media (https://github.com/braintrustdata/braintrust-sdk-javascript/pull/2621)
+- feat: support OpenTelemetry span customizers Run the existing synchronous `onSpanExport` registration on isolated plain OTel snapshots after filtering and origin enrichment. Preserve identity, timing and routing, honor content removal, and fail closed before OTLP serialization by stripping failed spans using the native pipeline's once-only safe diagnostics. Support public processors/exporters, compatibility mode, OTel 1.x/2.x, and ESM/CJS bundles without duplicate customization. Keep resource snapshots isolated throughout the customizer chain so a later callback cannot mutate another span's export, including when the callback throws. Deduplicate pending-resource waits within each customizer batch while preserving delayed attribute redaction and per-span snapshot isolation. Thanks @realark! (https://github.com/braintrustdata/braintrust-sdk-javascript/pull/2615)
+- feat(openai): Trace Decisions API calls (https://github.com/braintrustdata/braintrust-sdk-javascript/pull/2620)
+
+### Patch Changes
+
+- fix: Prevent conflicting queued logins from replacing active credentials (https://github.com/braintrustdata/braintrust-sdk-javascript/pull/2623)
+- refactor(instrumentation): Separate API wrapping from tracing (https://github.com/braintrustdata/braintrust-sdk-javascript/pull/2575)
+- fix: Ignore empty `BRAINTRUST_API_URL` and `BRAINTRUST_PROXY_URL` environment variables and use the organization URLs instead Thanks @raphaelfakhri! (https://github.com/braintrustdata/braintrust-sdk-javascript/pull/2600)
+- fix: fail closed on span customizer errors without dropping records Preserve original identity, routing, and duration timestamps with `context.customizer_error: true`; strip all other content and prevent attachment uploads. Log safely at most once across SDK bundles, reuse stripped records on retries, and isolate them from merging and masking in ordered export requests. Thanks @realark! (https://github.com/braintrustdata/braintrust-sdk-javascript/pull/2614)
+- fix(sdk): Restore tree shaking for browser and edge builds (https://github.com/braintrustdata/braintrust-sdk-javascript/pull/2622)
+
 ## 3.37.2
 
 ### Patch Changes
