@@ -71,17 +71,18 @@ If your code calls `.then()` on a wrapped synchronous function, update it to use
 ### Attachment capture
 
 Instrumentation no longer captures inline images, audio, video, or files by default.
-To continue capturing these as attachments, set `captureAttachments: true` when initializing the logger:
+To continue capturing these as attachments, set `autoCaptureAttachments: true` when initializing the logger:
 
 ```ts
 initLogger({
   projectName: "my-project",
-  captureAttachments: true,
+  autoCaptureAttachments: true,
 });
 ```
 
-You can also enable capture with the `BRAINTRUST_CAPTURE_ATTACHMENTS` environment variable, set to `true` or `1`.
-An explicit `captureAttachments` option overrides the environment variable, including when set to `false`.
+You can also enable capture with the `BRAINTRUST_AUTO_CAPTURE_ATTACHMENTS` environment variable, set to `true` or `1`.
+The old names `captureAttachments` and `BRAINTRUST_CAPTURE_ATTACHMENTS` are no longer supported.
+An explicit `autoCaptureAttachments` option overrides the environment variable, including when set to `false`.
 Child spans inherit the policy.
 Loggers created with `setCurrent: false` have an independent policy and use the environment variable when the option is omitted.
 
@@ -89,7 +90,7 @@ With capture disabled, inline media payloads are omitted from logged inputs and 
 Text, remote URLs, and file references can still appear in traces.
 Explicitly logged `Attachment`, `ExternalAttachment`, and `JSONAttachment` objects are unaffected by this option.
 
-This also applies to `@braintrust/deepseek-harness`, which accepts `captureAttachments` in its configuration.
+This also applies to `@braintrust/deepseek-harness`, which accepts `autoCaptureAttachments` in its configuration.
 
 ### Trace propagation
 
