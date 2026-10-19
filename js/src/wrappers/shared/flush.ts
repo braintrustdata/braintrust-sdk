@@ -1,4 +1,4 @@
-import { suppressApplicationLogs } from "../../logs/context";
+import { sdkConsole } from "../../logs/console";
 import type { Experiment } from "../../logger";
 import { formatExperimentSummary } from "./format";
 
@@ -18,8 +18,5 @@ export async function summarizeAndFlush(
   }
 
   const summary = await experiment.summarize();
-  suppressApplicationLogs(() => {
-    // eslint-disable-next-line no-restricted-properties -- user-requested summary output is independent of SDK diagnostics.
-    console.log(formatExperimentSummary(summary));
-  });
+  sdkConsole.log(formatExperimentSummary(summary));
 }

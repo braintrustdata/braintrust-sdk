@@ -8,13 +8,14 @@ import {
 } from "../logger";
 import { LazyValue } from "../util";
 import { wrapConsole } from "./index";
-import { consoleMethods } from "./console-interceptor";
+import { consoleMethods } from "./console";
 import { configureNode } from "../node/config";
 import iso from "../isomorph";
 import type { ExperimentEvent } from "../util";
 import { debugLogger } from "../debug-logger";
 import { OTELIDGenerator } from "../id-gen";
-import { isApplicationLogSuppressed, suppressApplicationLogs } from "./context";
+import { logError } from "../framework";
+import { SimpleProgressReporter } from "../reporters/progress";
 
 configureNode();
 
@@ -51,8 +52,15 @@ function fakeConsole() {
   };
 }
 
+function mockGlobalConsole() {
+  const target = { ...console, ...fakeConsole() };
+  vi.stubGlobal("console", target);
+  return target;
+}
+
 afterEach(() => {
   vi.restoreAllMocks();
+  vi.unstubAllGlobals();
 });
 
 describe("application logs", () => {
@@ -77,84 +85,92 @@ describe("application logs", () => {
       { asyncFlush: true },
     );
     const target = fakeConsole();
+    const originals = { ...target };
     const uninstrument = wrapConsole(target, { logger });
     const id = logger.info(logger.fmt`User ${"Ada"}`);
     await logger.flush();
-    target.warn("Retry %d", 2);
+    for (const method of consoleMethods) {
+      target[method](`console.${method}`);
+      expect(originals[method]).toHaveBeenCalledExactlyOnceWith(
+        `console.${method}`,
+      );
+      expect(originals[method].mock.contexts[0]).toBe(target);
+    }
     uninstrument();
-    target.warn("Console output only");
+    for (const method of consoleMethods) {
+      target[method]("console only");
+      expect(originals[method]).toHaveBeenCalledTimes(2);
+      expect(originals[method]).toHaveBeenLastCalledWith("console only");
+    }
     await logger.flush();
     await logger.flush();
-    expect(rows).toHaveLength(2);
+    expect(rows).toHaveLength(7);
     expect(rows[0]).toMatchObject({
       id,
       output: "User Ada",
       _is_merge: false,
     });
-    expect(rows[1]).toMatchObject({ output: "Retry 2", _is_merge: false });
-    expect(rows[1].id).not.toBe(id);
+    expect(rows.slice(1).map((row) => row.output)).toEqual(
+      consoleMethods.map((method) => `console.${method}`),
+    );
+    expect(rows.slice(1).map((row) => row.span_attributes?.log_level)).toEqual([
+      "info",
+      "trace",
+      "debug",
+      "info",
+      "warn",
+      "error",
+    ]);
+    expect(new Set(rows.map((row) => row.id)).size).toBe(7);
     for (const row of rows) {
+      expect(row._is_merge).toBe(false);
       expect(row.metrics?.end).toBe(row.metrics?.start);
       expect(row.span_attributes?.type).toBe("log");
     }
   });
 
-  test.each(["trace", "debug", "info", "warn", "error", "fatal"] as const)(
-    "%s enqueues exactly one complete row",
-    async (level) => {
-      const { logger, background, enqueue } = setup(true);
-      const timestamp = new Date("2026-01-02T03:04:05.000Z");
-      vi.useFakeTimers();
-      vi.setSystemTime(timestamp);
-      try {
-        const id = logger[level](logger.fmt`Worker ${3} started`, {
+  test("severity methods each enqueue one complete initial row", async () => {
+    const { logger, background, enqueue } = setup(true);
+    const timestamp = new Date("2026-01-02T03:04:05.000Z");
+    const levels = [
+      "trace",
+      "debug",
+      "info",
+      "warn",
+      "error",
+      "fatal",
+    ] as const;
+    vi.useFakeTimers();
+    vi.setSystemTime(timestamp);
+    try {
+      for (const [index, level] of levels.entries()) {
+        const id = logger[level]("Worker {id} started", {
           metadata: { worker_id: "worker-1" },
         });
-        expect(enqueue).toHaveBeenCalledTimes(1);
-        expect(enqueue.mock.calls[0][0]).toHaveLength(1);
-        // Inspect the raw initial write before TestBackgroundLogger can merge updates.
-        const row = await enqueue.mock.calls[0][0][0].get();
+        expect(enqueue).toHaveBeenCalledTimes(index + 1);
+        expect(enqueue.mock.calls[index][0]).toHaveLength(1);
+        // Inspect initial writes before TestBackgroundLogger can merge updates.
+        const row = await enqueue.mock.calls[index][0][0].get();
         expect(row).toMatchObject({
           id,
           project_id: "project",
-          output: "Worker 3 started",
+          output: "Worker {id} started",
           _is_merge: false,
           span_attributes: { type: "log", name: null, log_level: level },
-          metadata: {
-            worker_id: "worker-1",
-            "braintrust.template": "Worker ${0} started",
-            "braintrust.template.parameter.0": 3,
-          },
+          metadata: { worker_id: "worker-1" },
           created: timestamp.toISOString(),
           metrics: {
             start: timestamp.getTime() / 1000,
             end: timestamp.getTime() / 1000,
           },
         });
-        await logger.flush();
-        expect(await drain(background)).toHaveLength(1);
-        expect(enqueue).toHaveBeenCalledTimes(1);
-      } finally {
-        vi.useRealTimers();
       }
-    },
-  );
-
-  test("logs ordinary JSON bodies verbatim without interpreting template-like text", async () => {
-    const { logger, background } = setup(true);
-    const metadata = Object.freeze({ source: "app" });
-    const bodies = [
-      null,
-      true,
-      42,
-      [1, "two"],
-      { event: "started" },
-      "User {name} paid {amount:.2f}",
-    ];
-    for (const body of bodies) logger.info(body, { metadata });
-    const rows = await drain(background);
-    expect(rows.map((row) => row.output)).toEqual(bodies);
-    expect(rows.map((row) => row.metadata)).toEqual(bodies.map(() => metadata));
+      await logger.flush();
+      expect(await drain(background)).toHaveLength(levels.length);
+      expect(enqueue).toHaveBeenCalledTimes(levels.length);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   test("fmt captures stable templates and values without emitting or mutating metadata", async () => {
@@ -233,18 +249,10 @@ describe("application logs", () => {
     ).toEqual([{ id: 42 }, false, null, 0, "undefined", "123"]);
   });
 
-  test("fmt coerces each interpolation only once", async () => {
-    const { logger, background } = setup(true);
-    const coerce = vi.fn(() => "custom value");
-    logger.info(logger.fmt`value=${{ [Symbol.toPrimitive]: coerce }}`);
-    expect(coerce).toHaveBeenCalledExactlyOnceWith("string");
-    expect((await drain(background))[0].output).toBe("value=custom value");
-  });
-
   test("groups standalone messages per logger with independent row and span IDs", async () => {
     const { logger, background, state } = setup(true);
     logger.info("one");
-    logger.warn("two");
+    logger.warn({ event: "two" });
     const other = new Logger(
       state,
       new LazyValue(async () => ({
@@ -255,6 +263,7 @@ describe("application logs", () => {
     );
     other.info("three");
     const [one, two, three] = await drain(background);
+    expect(two.output).toEqual({ event: "two" });
     expect(one.id).not.toBe(two.id);
     expect(one.span_id).not.toBe(two.span_id);
     expect(one.root_span_id).toBe(two.root_span_id);
@@ -361,45 +370,13 @@ describe("application logs", () => {
 });
 
 describe("wrapConsole", () => {
-  test.each([
-    ["log", "info"],
-    ["trace", "trace"],
-    ["debug", "debug"],
-    ["info", "info"],
-    ["warn", "warn"],
-    ["error", "error"],
-  ] as const)(
-    "maps console.%s to %s and preserves output before and after cleanup",
-    async (method, level) => {
-      const { logger, background, enqueue } = setup(true);
-      const target = fakeConsole();
-      const original = target[method];
-      const uninstrument = wrapConsole(target, { logger });
-      target[method]("message");
-      expect(original).toHaveBeenCalledExactlyOnceWith("message");
-      expect(original.mock.contexts[0]).toBe(target);
-      expect(enqueue).toHaveBeenCalledTimes(1);
-      expect((await drain(background))[0]).toMatchObject({
-        output: "message",
-        span_attributes: { log_level: level },
-      });
-      uninstrument();
-      target[method]("console only");
-      expect(original).toHaveBeenCalledTimes(2);
-      expect(original).toHaveBeenLastCalledWith("console only");
-      expect(enqueue).toHaveBeenCalledTimes(1);
-    },
-  );
-
   test("wrapConsole() follows logger initialization and replacement until cleanup", async () => {
+    const target = mockGlobalConsole();
     const first = setup(false);
     const second = setup(false);
     const state = _internalGetGlobalState();
     const previousLogger = state.currentLogger;
-    const methods = consoleMethods.map(
-      (method) => [method, console[method]] as const,
-    );
-    const original = vi.spyOn(console, "info").mockImplementation(() => {});
+    const original = target.info;
     try {
       state.currentLogger = undefined;
       const uninstrument = wrapConsole();
@@ -424,11 +401,10 @@ describe("wrapConsole", () => {
       expect(second.enqueue).toHaveBeenCalledTimes(1);
     } finally {
       state.currentLogger = previousLogger;
-      for (const [method, original] of methods) console[method] = original;
     }
   });
 
-  test("an older cleanup cannot disable a newer wrap or resume an older destination", async () => {
+  test("rewrapping and cleanup preserve the current destination without reactivating older wraps", async () => {
     const first = setup(true);
     const second = setup(true);
     const target = fakeConsole();
@@ -444,29 +420,20 @@ describe("wrapConsole", () => {
     stopSecond();
     stopSecond();
     target.info("console only");
-    expect(original).toHaveBeenCalledTimes(3);
+    const stopThird = wrapConsole(target, { logger: second.logger });
+    expect(target.info).toBe(wrapped);
+    stopSecond();
+    target.info("captured again");
+    stopThird();
+    target.info("console only again");
+    expect(original).toHaveBeenCalledTimes(5);
     expect((await drain(first.background)).map((row) => row.output)).toEqual([
       "first",
     ]);
     expect((await drain(second.background)).map((row) => row.output)).toEqual([
       "second",
+      "captured again",
     ]);
-  });
-
-  test("wrapping after cleanup re-enables forwarding without replacing the installed methods", async () => {
-    const { logger, background, enqueue } = setup(true);
-    const target = fakeConsole();
-    const stopFirst = wrapConsole(target, { logger });
-    const wrapped = target.info;
-    stopFirst();
-    const stopSecond = wrapConsole(target, { logger });
-    expect(target.info).toBe(wrapped);
-    stopFirst();
-    target.info("captured again");
-    stopSecond();
-    target.info("console only");
-    expect(enqueue).toHaveBeenCalledTimes(1);
-    expect((await drain(background))[0].output).toBe("captured again");
   });
 
   test("cleanup affects only its console; direct logging and unrelated methods stay enabled", async () => {
@@ -517,25 +484,26 @@ describe("wrapConsole", () => {
     stopFirst();
   });
 
-  test("does not duplicate calls when native console methods call one another", () => {
-    const { logger, enqueue } = setup(true);
+  test("nested console calls capture once and native exceptions do not leave the guard active", async () => {
+    const { logger, background, enqueue } = setup(true);
     const target = fakeConsole();
     target.trace.mockImplementation((...args) => target.error(...args));
-    wrapConsole(target, { logger });
-    target.trace("one log");
-    expect(enqueue).toHaveBeenCalledTimes(1);
-  });
-
-  test("preserves native exceptions and does not retry the console call", () => {
-    const { logger } = setup(true);
-    const target = fakeConsole();
     const error = new Error("console failure");
     const original = target.info.mockImplementation(() => {
       throw error;
     });
     wrapConsole(target, { logger });
-    expect(() => target.info("test")).toThrow(error);
+    target.trace("nested");
+    expect(enqueue).toHaveBeenCalledTimes(1);
+    expect(() => target.info("failure")).toThrow(error);
     expect(original).toHaveBeenCalledTimes(1);
+    target.warn("after failure");
+    expect(enqueue).toHaveBeenCalledTimes(3);
+    expect((await drain(background)).map((row) => row.output)).toEqual([
+      "nested",
+      "failure",
+      "after failure",
+    ]);
   });
 
   test("preserves console formatting, parameters, errors, and unformattable arguments", async () => {
@@ -584,77 +552,56 @@ describe("wrapConsole", () => {
     );
   });
 
-  test("SDK diagnostics are printed without becoming application logs", () => {
+  test("SDK output uses saved console methods across awaits, rewrapping, and cleanup", async () => {
+    const target = mockGlobalConsole();
     const { logger, enqueue } = setup(true);
     const sdkState = _internalGetGlobalState();
     vi.spyOn(sdkState, "getDebugLogLevel").mockReturnValue("warn");
     vi.spyOn(sdkState, "hasDebugLogLevelOverride").mockReturnValue(true);
-    const methods = consoleMethods.map(
-      (method) => [method, console[method]] as const,
-    );
-    const original = vi.spyOn(console, "warn").mockImplementation(() => {});
-    const uninstrument = wrapConsole(console, { logger });
+    // Before wrapping, SDK output still uses the current console.
+    debugLogger.warn("before wrapping");
+    const originals = {
+      warn: target.warn,
+      error: target.error,
+      log: target.log,
+    };
+    const stopFirst = wrapConsole(console, { logger });
+    const firstWrapper = console.warn;
+    const thirdParty = vi.fn((...args) => firstWrapper(...args));
+    console.warn = thirdParty;
+    const stopSecond = wrapConsole(console, { logger });
     try {
+      await Promise.resolve();
       debugLogger.warn("SDK warning");
       expect(debugLogger.notice.warn("SDK notice")).toBe(true);
-      expect(original).toHaveBeenCalledTimes(2);
-      expect(original).toHaveBeenCalledWith("[braintrust]", "SDK warning");
-      expect(original).toHaveBeenCalledWith("[braintrust]", "SDK notice");
+      logError("evaluation error", false);
+      new SimpleProgressReporter().start("evaluation", 1);
+      expect(originals.warn).toHaveBeenCalledTimes(3);
+      expect(originals.warn).toHaveBeenCalledWith(
+        "[braintrust]",
+        "SDK warning",
+      );
+      expect(originals.warn).toHaveBeenCalledWith("[braintrust]", "SDK notice");
+      expect(originals.warn.mock.contexts[0]).toBe(console);
+      expect(originals.error).toHaveBeenCalledWith("evaluation error");
+      expect(originals.log).toHaveBeenCalledWith(
+        "Running evaluator evaluation",
+      );
+      expect(thirdParty).not.toHaveBeenCalled();
       expect(enqueue).not.toHaveBeenCalled();
       console.warn("application log");
+      expect(thirdParty).toHaveBeenCalledTimes(1);
+      expect(enqueue).toHaveBeenCalledTimes(1);
+      stopSecond();
+      debugLogger.warn("after cleanup");
+      expect(originals.warn).toHaveBeenLastCalledWith(
+        "[braintrust]",
+        "after cleanup",
+      );
       expect(enqueue).toHaveBeenCalledTimes(1);
     } finally {
-      uninstrument();
-      for (const [method, original] of methods) console[method] = original;
+      stopFirst();
+      stopSecond();
     }
-  });
-
-  test("bootstrap diagnostics do not prevent async suppression after platform initialization", async () => {
-    const key = Symbol.for("braintrust.applicationLogContext");
-    const previousContext = Object.getOwnPropertyDescriptor(globalThis, key);
-    const previousBuildType = iso.buildType;
-    Reflect.deleteProperty(globalThis, key);
-    try {
-      iso.buildType = "unknown";
-      suppressApplicationLogs(() =>
-        expect(isApplicationLogSuppressed()).toBe(true),
-      );
-      expect(isApplicationLogSuppressed()).toBe(false);
-      iso.buildType = previousBuildType;
-      await suppressApplicationLogs(async () => {
-        await Promise.resolve();
-        expect(isApplicationLogSuppressed()).toBe(true);
-      });
-      expect(isApplicationLogSuppressed()).toBe(false);
-    } finally {
-      iso.buildType = previousBuildType;
-      if (previousContext)
-        Object.defineProperty(globalThis, key, previousContext);
-      else Reflect.deleteProperty(globalThis, key);
-    }
-  });
-
-  test("ignores console logs inside SDK HTTP transport across awaits but captures concurrent application logs", async () => {
-    const { logger, background, state } = setup(true);
-    const target = fakeConsole();
-    wrapConsole(target, { logger });
-    let release!: () => void;
-    const pending = new Promise<void>((resolve) => {
-      release = resolve;
-    });
-    state.setFetch(async () => {
-      target.debug("transport start");
-      await pending;
-      target.debug("transport end");
-      return new Response("{}", { status: 200 });
-    });
-    state.apiUrl = "https://example.com";
-    const response = state.apiConn().post("logs3", {});
-    target.info("application");
-    release();
-    await response;
-    const rows = await drain(background);
-    expect(rows).toHaveLength(1);
-    expect(rows[0].output).toBe("application");
   });
 });

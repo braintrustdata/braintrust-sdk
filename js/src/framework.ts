@@ -1,3 +1,4 @@
+import { sdkConsole } from "./logs/console";
 import {
   makeScorerPropagatedEvent,
   Classification,
@@ -20,7 +21,6 @@ import { v5 as uuidv5 } from "uuid";
 
 import iso from "./isomorph";
 import { debugLogger } from "./debug-logger";
-import { suppressApplicationLogs } from "./logs/context";
 import { GenericFunction } from "./framework-types";
 import { CodeFunction, CodePrompt, CodeParameters } from "./framework2";
 import { Trace, LocalTrace } from "./trace";
@@ -894,11 +894,9 @@ export async function Eval<
       return ret;
     } finally {
       if (experiment) {
-        // eslint-disable-next-line no-restricted-properties -- preserving intentional console usage.
-        await experiment.flush().catch(console.error);
+        await experiment.flush().catch(sdkConsole.error);
       } else if (options.parent) {
-        // eslint-disable-next-line no-restricted-properties -- preserving intentional console usage.
-        await flush({ state: evaluator.state }).catch(console.error);
+        await flush({ state: evaluator.state }).catch(sdkConsole.error);
       }
     }
   } finally {
@@ -1787,15 +1785,11 @@ export const error = (text: string) => `Error: ${text}`;
 export const warning = (text: string) => `Warning: ${text}`;
 
 export function logError(e: unknown, verbose: boolean) {
-  suppressApplicationLogs(() => {
-    if (!verbose) {
-      // eslint-disable-next-line no-restricted-properties -- user-facing evaluation error output is independent of SDK diagnostics.
-      console.error(`${e}`);
-    } else {
-      // eslint-disable-next-line no-restricted-properties -- user-facing evaluation error output is independent of SDK diagnostics.
-      console.error(e);
-    }
-  });
+  if (!verbose) {
+    sdkConsole.error(`${e}`);
+  } else {
+    sdkConsole.error(e);
+  }
 }
 
 type ScoreAccumulator = {
@@ -1868,42 +1862,37 @@ export function reportFailures<
   failingResults: EvalResult<Input, Output, Expected, Metadata>[],
   { verbose, jsonl }: ReporterOpts,
 ) {
-  suppressApplicationLogs(() => {
-    if (failingResults.length > 0) {
-      // TODO: We may want to support a non-strict mode (and make this the "strict" behavior), so that
-      // users can still log imperfect evaluations. In the meantime, they should handle these cases inside
-      // of their tasks.
-      // eslint-disable-next-line no-restricted-properties -- user-facing evaluation report output is independent of SDK diagnostics.
-      console.error(
-        warning(
-          `Evaluator ${evaluator.evalName} failed with ${failingResults.length} error${failingResults.length === 1 ? "" : "s"}. This evaluation ("${evaluator.evalName}") will not be fully logged.`,
-        ),
-      );
-      if (jsonl) {
-        // eslint-disable-next-line no-restricted-properties -- user-facing evaluation report output is independent of SDK diagnostics.
-        console.log(
-          JSON.stringify({
-            evaluatorName: evaluator.evalName,
-            errors: failingResults.map(
-              (r) => `${r.error instanceof Error ? r.error.stack : r.error}`,
-            ),
-          }),
-        );
-      } else {
-        for (const result of failingResults) {
-          logError(result.error, verbose);
-        }
-      }
-      if (!verbose && !jsonl) {
-        // eslint-disable-next-line no-restricted-properties -- user-facing evaluation report output is independent of SDK diagnostics.
-        console.error(
-          warning(
-            "Use --debug-logging debug to see full stack traces and troubleshooting details.",
+  if (failingResults.length > 0) {
+    // TODO: We may want to support a non-strict mode (and make this the "strict" behavior), so that
+    // users can still log imperfect evaluations. In the meantime, they should handle these cases inside
+    // of their tasks.
+    sdkConsole.error(
+      warning(
+        `Evaluator ${evaluator.evalName} failed with ${failingResults.length} error${failingResults.length === 1 ? "" : "s"}. This evaluation ("${evaluator.evalName}") will not be fully logged.`,
+      ),
+    );
+    if (jsonl) {
+      sdkConsole.log(
+        JSON.stringify({
+          evaluatorName: evaluator.evalName,
+          errors: failingResults.map(
+            (r) => `${r.error instanceof Error ? r.error.stack : r.error}`,
           ),
-        );
+        }),
+      );
+    } else {
+      for (const result of failingResults) {
+        logError(result.error, verbose);
       }
     }
-  });
+    if (!verbose && !jsonl) {
+      sdkConsole.error(
+        warning(
+          "Use --debug-logging debug to see full stack traces and troubleshooting details.",
+        ),
+      );
+    }
+  }
 }
 
 /**
@@ -1923,114 +1912,110 @@ const defaultReporter: ReporterDef<boolean> = {
     result: EvalResultWithSummary<any, any, any, any>,
     { verbose, jsonl }: ReporterOpts,
   ) {
-    return suppressApplicationLogs(() => {
-      const { results, summary } = result;
-      const failingResults = results.filter(
-        (r: { error: unknown }) => r.error !== undefined,
-      );
+    const { results, summary } = result;
+    const failingResults = results.filter(
+      (r: { error: unknown }) => r.error !== undefined,
+    );
 
-      if (failingResults.length > 0) {
-        reportFailures(evaluator, failingResults, { verbose, jsonl });
+    if (failingResults.length > 0) {
+      reportFailures(evaluator, failingResults, { verbose, jsonl });
+    }
+
+    if (jsonl) {
+      iso.writeln(JSON.stringify(summary));
+    } else {
+      // Simple plain-text output without fancy formatting
+      iso.writeln("Experiment summary");
+      iso.writeln("==================");
+
+      if (summary.comparisonExperimentName) {
+        iso.writeln(
+          `${summary.comparisonExperimentName} (baseline) <- ${summary.experimentName} (comparison)`,
+        );
+        iso.writeln("");
       }
 
-      if (jsonl) {
-        iso.writeln(JSON.stringify(summary));
-      } else {
-        // Simple plain-text output without fancy formatting
-        iso.writeln("Experiment summary");
-        iso.writeln("==================");
+      const hasScores = Object.keys(summary.scores).length > 0;
+      const hasMetrics = Object.keys(summary.metrics ?? {}).length > 0;
+      const hasComparison = !!summary.comparisonExperimentName;
 
-        if (summary.comparisonExperimentName) {
+      if (hasScores || hasMetrics) {
+        if (hasComparison) {
           iso.writeln(
-            `${summary.comparisonExperimentName} (baseline) <- ${summary.experimentName} (comparison)`,
+            "Name                Value      Change     Improvements Regressions",
           );
-          iso.writeln("");
+          iso.writeln(
+            "----------------------------------------------------------------",
+          );
         }
 
-        const hasScores = Object.keys(summary.scores).length > 0;
-        const hasMetrics = Object.keys(summary.metrics ?? {}).length > 0;
-        const hasComparison = !!summary.comparisonExperimentName;
+        // Scores
+        for (const score of Object.values(summary.scores)) {
+          const scorePercent = (score.score * 100).toFixed(2);
+          const scoreValue = `${scorePercent}%`;
 
-        if (hasScores || hasMetrics) {
           if (hasComparison) {
-            iso.writeln(
-              "Name                Value      Change     Improvements Regressions",
-            );
-            iso.writeln(
-              "----------------------------------------------------------------",
-            );
-          }
-
-          // Scores
-          for (const score of Object.values(summary.scores)) {
-            const scorePercent = (score.score * 100).toFixed(2);
-            const scoreValue = `${scorePercent}%`;
-
-            if (hasComparison) {
-              let diffString = "-";
-              if (!isEmpty(score.diff)) {
-                const diffPercent = (score.diff! * 100).toFixed(2);
-                const diffSign = score.diff! > 0 ? "+" : "";
-                diffString = `${diffSign}${diffPercent}%`;
-              }
-
-              const improvements =
-                score.improvements > 0 ? score.improvements.toString() : "-";
-              const regressions =
-                score.regressions > 0 ? score.regressions.toString() : "-";
-
-              iso.writeln(
-                `${score.name.padEnd(18)} ${scoreValue.padStart(10)} ${diffString.padStart(10)} ${improvements.padStart(12)} ${regressions.padStart(11)}`,
-              );
-            } else {
-              iso.writeln(
-                `${score.name.padEnd(20)} ${scoreValue.padStart(15)}`,
-              );
+            let diffString = "-";
+            if (!isEmpty(score.diff)) {
+              const diffPercent = (score.diff! * 100).toFixed(2);
+              const diffSign = score.diff! > 0 ? "+" : "";
+              diffString = `${diffSign}${diffPercent}%`;
             }
-          }
 
-          // Metrics
-          for (const metric of Object.values(summary.metrics ?? {})) {
-            const fractionDigits = Number.isInteger(metric.metric) ? 0 : 2;
-            const formattedValue = metric.metric.toFixed(fractionDigits);
-            const metricValue =
-              metric.unit === "$"
-                ? `${metric.unit}${formattedValue}`
-                : `${formattedValue}${metric.unit}`;
+            const improvements =
+              score.improvements > 0 ? score.improvements.toString() : "-";
+            const regressions =
+              score.regressions > 0 ? score.regressions.toString() : "-";
 
-            if (hasComparison) {
-              let diffString = "-";
-              if (!isEmpty(metric.diff)) {
-                const diffPercent = (metric.diff! * 100).toFixed(2);
-                const diffSign = metric.diff! > 0 ? "+" : "";
-                diffString = `${diffSign}${diffPercent}%`;
-              }
-
-              const improvements =
-                metric.improvements > 0 ? metric.improvements.toString() : "-";
-              const regressions =
-                metric.regressions > 0 ? metric.regressions.toString() : "-";
-
-              iso.writeln(
-                `${metric.name.padEnd(18)} ${metricValue.padStart(10)} ${diffString.padStart(10)} ${improvements.padStart(12)} ${regressions.padStart(11)}`,
-              );
-            } else {
-              iso.writeln(
-                `${metric.name.padEnd(20)} ${metricValue.padStart(15)}`,
-              );
-            }
+            iso.writeln(
+              `${score.name.padEnd(18)} ${scoreValue.padStart(10)} ${diffString.padStart(10)} ${improvements.padStart(12)} ${regressions.padStart(11)}`,
+            );
+          } else {
+            iso.writeln(`${score.name.padEnd(20)} ${scoreValue.padStart(15)}`);
           }
         }
 
-        if (summary.experimentUrl) {
-          iso.writeln("");
-          iso.writeln(`View results for ${summary.experimentName}`);
-          iso.writeln(`See results at ${summary.experimentUrl}`);
+        // Metrics
+        for (const metric of Object.values(summary.metrics ?? {})) {
+          const fractionDigits = Number.isInteger(metric.metric) ? 0 : 2;
+          const formattedValue = metric.metric.toFixed(fractionDigits);
+          const metricValue =
+            metric.unit === "$"
+              ? `${metric.unit}${formattedValue}`
+              : `${formattedValue}${metric.unit}`;
+
+          if (hasComparison) {
+            let diffString = "-";
+            if (!isEmpty(metric.diff)) {
+              const diffPercent = (metric.diff! * 100).toFixed(2);
+              const diffSign = metric.diff! > 0 ? "+" : "";
+              diffString = `${diffSign}${diffPercent}%`;
+            }
+
+            const improvements =
+              metric.improvements > 0 ? metric.improvements.toString() : "-";
+            const regressions =
+              metric.regressions > 0 ? metric.regressions.toString() : "-";
+
+            iso.writeln(
+              `${metric.name.padEnd(18)} ${metricValue.padStart(10)} ${diffString.padStart(10)} ${improvements.padStart(12)} ${regressions.padStart(11)}`,
+            );
+          } else {
+            iso.writeln(
+              `${metric.name.padEnd(20)} ${metricValue.padStart(15)}`,
+            );
+          }
         }
       }
-      iso.writeln("");
-      return failingResults.length === 0;
-    });
+
+      if (summary.experimentUrl) {
+        iso.writeln("");
+        iso.writeln(`View results for ${summary.experimentName}`);
+        iso.writeln(`See results at ${summary.experimentUrl}`);
+      }
+    }
+    iso.writeln("");
+    return failingResults.length === 0;
   },
   async reportRun(evalReports: boolean[]) {
     return evalReports.every((r) => r);

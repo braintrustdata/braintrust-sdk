@@ -1,3 +1,5 @@
+import { sdkConsole } from "./logs/console";
+
 import {
   type GitMetadataSettingsType as GitMetadataSettings,
   type RepoInfoType as RepoInfo,
@@ -103,7 +105,6 @@ const iso: Common = {
 
   processOn: (_0, _1) => {},
   basename: (filepath: string) => filepath.split(/[\\/]/).pop() || filepath,
-  // eslint-disable-next-line no-restricted-properties -- preserving intentional console usage.
-  writeln: (text: string) => console.log(text),
+  writeln: (text: string) => sdkConsole.log(text),
 };
 export default iso;

@@ -1,5 +1,5 @@
 import iso from "./isomorph";
-import { suppressApplicationLogs } from "./logs/context";
+import { sdkConsole } from "./logs/console";
 import { setGlobalHookErrorReporter } from "./global-instrumentation-hooks";
 
 export type DebugLogLevel = "error" | "warn" | "info" | "debug";
@@ -46,12 +46,9 @@ function warnInvalidEnvValue(value: string) {
     return;
   }
   hasWarnedAboutInvalidEnvValue = true;
-  suppressApplicationLogs(() =>
-    // eslint-disable-next-line no-restricted-properties -- preserving intentional console usage.
-    console.warn(
-      PREFIX,
-      `Invalid BRAINTRUST_DEBUG_LOG_LEVEL value "${value}". Expected "error", "warn", "info", or "debug".`,
-    ),
+  sdkConsole.warn(
+    PREFIX,
+    `Invalid BRAINTRUST_DEBUG_LOG_LEVEL value "${value}". Expected "error", "warn", "info", or "debug".`,
   );
 }
 
@@ -158,21 +155,7 @@ function emit(
     return false;
   }
 
-  suppressApplicationLogs(() => {
-    if (method === "info") {
-      // eslint-disable-next-line no-restricted-properties -- preserving intentional console usage.
-      console.log(PREFIX, ...args);
-    } else if (method === "debug") {
-      // eslint-disable-next-line no-restricted-properties -- preserving intentional console usage.
-      console.debug(PREFIX, ...args);
-    } else if (method === "warn") {
-      // eslint-disable-next-line no-restricted-properties -- preserving intentional console usage.
-      console.warn(PREFIX, ...args);
-    } else {
-      // eslint-disable-next-line no-restricted-properties -- preserving intentional console usage.
-      console.error(PREFIX, ...args);
-    }
-  });
+  sdkConsole[method === "info" ? "log" : method](PREFIX, ...args);
   return true;
 }
 

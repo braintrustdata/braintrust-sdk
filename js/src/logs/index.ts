@@ -1,13 +1,8 @@
 import { currentLogger, type Logger } from "../logger";
 import iso from "../isomorph";
 import { debugLogger } from "../debug-logger";
-import {
-  consoleHooks,
-  wrapConsoleMethods,
-  type ConsoleMethod,
-  type LogConsole,
-} from "./console-interceptor";
-import { isApplicationLogSuppressed, suppressApplicationLogs } from "./context";
+import { consoleHooks, wrapConsoleMethods } from "./console-interceptor";
+import { runConsoleCall, type ConsoleMethod, type LogConsole } from "./console";
 import type { ApplicationLogLevel } from "./templates";
 
 function display(value: unknown): string {
@@ -40,32 +35,28 @@ function forwardConsoleCall(
   method: ConsoleMethod,
   args: unknown[],
 ): void {
-  if (logger && !isApplicationLogSuppressed()) {
-    suppressApplicationLogs(() => {
-      const body = formatConsole(args);
-      const metadata: Record<string, unknown> = { "logger.name": "console" };
-      if (typeof args[0] === "string" && args.length > 1) {
-        metadata["braintrust.template"] = args[0];
-        args.slice(1).forEach((value, index) => {
-          metadata[`braintrust.template.parameter.${index}`] =
-            value === null ||
-            ["string", "number", "boolean"].includes(typeof value)
-              ? value
-              : formatConsole([value]);
-        });
-      }
-      const level: ApplicationLogLevel = method === "log" ? "info" : method;
-      const result = logger[level](body, { metadata });
-      if (result instanceof Promise) {
-        void result.catch((error) =>
-          debugLogger.error("Application log flush failed:", error),
-        );
-      }
-    });
+  if (logger) {
+    const body = formatConsole(args);
+    const metadata: Record<string, unknown> = { "logger.name": "console" };
+    if (typeof args[0] === "string" && args.length > 1) {
+      metadata["braintrust.template"] = args[0];
+      args.slice(1).forEach((value, index) => {
+        metadata[`braintrust.template.parameter.${index}`] =
+          value === null ||
+          ["string", "number", "boolean"].includes(typeof value)
+            ? value
+            : formatConsole([value]);
+      });
+    }
+    const level: ApplicationLogLevel = method === "log" ? "info" : method;
+    const result = logger[level](body, { metadata });
+    if (result instanceof Promise) {
+      void result.catch((error) =>
+        debugLogger.error("Application log flush failed:", error),
+      );
+    }
   }
-  // Native console implementations and nested wrappers can call other console
-  // methods. Only the outermost wrapped call should emit an application log.
-  return suppressApplicationLogs(call);
+  return call();
 }
 
 type WrapConsoleOptions = {
@@ -83,15 +74,17 @@ function enableConsoleForwarding(): void {
     const call = () => Reflect.apply(target, receiver, args);
     const registration = consoleRegistrations.get(additional.registration);
     if (registration === undefined) return call();
-    // A disabled outer wrapper must not reactivate older wrappers that another
-    // console patch may still invoke. Null also releases the destination logger.
-    if (registration === null) return suppressApplicationLogs(call);
-    return forwardConsoleCall(
-      call,
-      registration.logger ?? currentLogger(),
-      additional.method,
-      args,
-    );
+    // A disabled outer wrapper must not reactivate an older wrapper kept alive
+    // by another console patch. Null also releases the destination logger.
+    return runConsoleCall((nested) => {
+      if (nested || registration === null) return call();
+      return forwardConsoleCall(
+        call,
+        registration.logger ?? currentLogger(),
+        additional.method,
+        args,
+      );
+    });
   });
 }
 

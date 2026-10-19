@@ -2,17 +2,12 @@ import {
   channel,
   defineInterceptor,
 } from "../instrumentation/core/interceptor-definitions";
-
-export const consoleMethods = [
-  "log",
-  "trace",
-  "debug",
-  "info",
-  "warn",
-  "error",
-] as const;
-export type ConsoleMethod = (typeof consoleMethods)[number];
-export type LogConsole = Pick<Console, ConsoleMethod>;
+import {
+  consoleMethods,
+  saveConsoleMethods,
+  type ConsoleMethod,
+  type LogConsole,
+} from "./console";
 
 export const consoleHooks = defineInterceptor("console", {
   write: channel<
@@ -29,6 +24,7 @@ export function wrapConsoleMethods(
   target: LogConsole,
   registration: object,
 ): void {
+  saveConsoleMethods(target);
   for (const method of consoleMethods) {
     const original = target[method];
     if (typeof original !== "function") continue;

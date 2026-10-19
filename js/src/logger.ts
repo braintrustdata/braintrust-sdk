@@ -1,7 +1,6 @@
 /// <reference lib="dom" />
 
 import { DecisionAttachmentProcessor } from "./decision-attachments";
-import { internalFetch } from "./logs/context";
 import {
   formatLogTemplate,
   renderLogBody,
@@ -1639,11 +1638,11 @@ class HTTPConnection {
     this.headers = {};
 
     this._reset();
-    this.fetch = internalFetch(fetch);
+    this.fetch = fetch;
   }
 
   public setFetch(fetch: typeof globalThis.fetch) {
-    this.fetch = internalFetch(fetch);
+    this.fetch = fetch;
   }
 
   async ping() {
@@ -2066,7 +2065,7 @@ export class Attachment extends BaseAttachment {
       try {
         objectStoreResponse = await withRetry(async () =>
           checkResponse(
-            await internalFetch(fetch)(signedUrl, {
+            await fetch(signedUrl, {
               method: "PUT" satisfies RequestInit["method"],
               headers,
               body: data,
@@ -2341,7 +2340,7 @@ export class ReadonlyAttachment {
         );
       }
 
-      const objResponse = await internalFetch(fetch)(downloadUrl);
+      const objResponse = await fetch(downloadUrl);
       if (objResponse.status !== 200) {
         const error = await objResponse.text();
         throw new Error(`Couldn't download attachment: ${error}`);
@@ -6076,16 +6075,13 @@ async function loginToLoaderRequestState({
   } else {
     let loginResponse: Response;
     try {
-      loginResponse = await internalFetch(fetch)(
-        _urljoin(appUrl, `/api/apikey/login`),
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${apiKey}`,
-          },
+      loginResponse = await fetch(_urljoin(appUrl, `/api/apikey/login`), {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${apiKey}`,
         },
-      );
+      });
     } catch (error) {
       throw new HTTPTransportError(error);
     }
@@ -6162,17 +6158,14 @@ export async function loginToState(options: LoginOptions = {}) {
       // cancellation, so a stalled request cannot block subsequent logins.
       info = await Promise.race([
         (async () => {
-          const response = await internalFetch(fetch)(
-            _urljoin(appUrl, `/api/apikey/login`),
-            {
-              method: "POST",
-              headers: {
-                "Content-Type": "application/json",
-                Authorization: `Bearer ${apiKey}`,
-              },
-              signal: controller.signal,
+          const response = await fetch(_urljoin(appUrl, `/api/apikey/login`), {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${apiKey}`,
             },
-          );
+            signal: controller.signal,
+          });
           return readJSONResponse(await checkResponse(response));
         })(),
         new Promise<never>((_, reject) => {
