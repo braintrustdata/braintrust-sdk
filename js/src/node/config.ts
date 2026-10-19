@@ -4,7 +4,7 @@ import * as fs from "node:fs/promises";
 import * as os from "node:os";
 import * as fsSync from "node:fs";
 import * as crypto from "node:crypto";
-import { format, promisify } from "node:util";
+import { formatWithOptions, promisify } from "node:util";
 import * as zlib from "node:zlib";
 import * as dotenv from "dotenv";
 
@@ -108,7 +108,10 @@ export function configureNode() {
     return undefined;
   };
   iso.getCallerLocation = getCallerLocation;
-  iso.formatLogMessage = format;
+  // Capture structural text without invoking application-defined inspectors.
+  // The native console receives the original arguments and runs its own hooks.
+  iso.formatLogMessage = (...args) =>
+    formatWithOptions({ customInspect: false }, ...args);
   iso.newAsyncLocalStorage = <T>() => new AsyncLocalStorage<T>();
   iso.processOn = (event: string, handler: (code: unknown) => void) => {
     process.on(event, handler);

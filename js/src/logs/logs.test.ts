@@ -1,5 +1,7 @@
 import { afterEach, describe, expect, test, vi } from "vitest";
 import { inspect } from "node:util";
+import { Console } from "node:console";
+import { Writable } from "node:stream";
 import {
   BraintrustState,
   Logger,
@@ -506,6 +508,45 @@ describe("wrapConsole", () => {
     ]);
   });
 
+  test("custom inspectors run only in the native console, not during message or metadata capture", async () => {
+    const { logger, background } = setup(true);
+    const output: string[] = [];
+    const stdout = new Writable({
+      write(chunk, _encoding, callback) {
+        output.push(String(chunk));
+        callback();
+      },
+    });
+    const target = new Console({ stdout, stderr: stdout, colorMode: false });
+    const stop = wrapConsole(target, { logger });
+    let inspections = 0;
+    const customInspect = vi.fn(() => `custom-${++inspections}`);
+    const value = { id: 42, [inspect.custom]: customInspect };
+    const calls = [[value], ["value %o", value], ["value %s", value]];
+    try {
+      for (const [index, args] of calls.entries()) {
+        target.info(...args);
+        expect(customInspect).toHaveBeenCalledTimes(index + 1);
+      }
+      expect(output).toEqual([
+        "custom-1\n",
+        "value custom-2\n",
+        "value custom-3\n",
+      ]);
+      const rows = await drain(background);
+      expect(rows).toHaveLength(3);
+      for (const row of rows) expect(row.output).toContain("id: 42");
+      for (const row of rows.slice(1)) {
+        expect(row.metadata?.["braintrust.template.parameter.0"]).toContain(
+          "id: 42",
+        );
+      }
+    } finally {
+      stop();
+      stdout.destroy();
+    }
+  });
+
   test("preserves console formatting, parameters, errors, and unformattable arguments", async () => {
     const { logger, background } = setup(true);
     const target = fakeConsole();
@@ -515,9 +556,9 @@ describe("wrapConsole", () => {
     const circular: Record<string, unknown> = {};
     circular.self = circular;
     target.info("value %o", circular);
-    target.info("value %o", {
-      [inspect.custom]() {
-        throw new Error("bad inspector");
+    target.info("value %j", {
+      toJSON() {
+        throw new Error("bad serializer");
       },
     });
     const rows = await drain(background);
