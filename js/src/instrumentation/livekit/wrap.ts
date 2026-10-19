@@ -83,6 +83,7 @@ export function wrapLiveKitSession<T extends object>(session: T): T {
       ["_startSessionImpl", "activity"],
       ["onEndOfTurn", "userTurn"],
       ["userTurnCompleted", "userCompleted"],
+      ["_realtimeGenerationTaskImpl", "realtime"],
       ["_pipelineReplyTaskImpl", "pipeline"],
     ] as const)
       method(activity, name, channel);

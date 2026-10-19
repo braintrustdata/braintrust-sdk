@@ -78,6 +78,14 @@ interface LiveKitRuntime {
   rows: Map<string, Row>;
   captures: WeakMap<object, Capture>;
   begin(session: AgentSession): void;
+  realtime(
+    activity: AgentActivity,
+    generation?: {
+      ev?: { responseId?: string };
+      inferenceSpan?: NativeSpan;
+      span?: NativeSpan;
+    },
+  ): void;
   input(activity: AgentActivity, stream: ReadableStream<AudioFrame>): void;
   output(session: AgentSession): void;
   userTurn(activity: AgentActivity, info: EndOfTurnInfo): void;

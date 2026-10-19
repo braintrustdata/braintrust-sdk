@@ -19,6 +19,9 @@ export const livekitChannels = defineInterceptor("@livekit/agents", {
   pipeline: channel<unknown[], unknown>({
     channelName: "activity.pipeline",
   }),
+  realtime: channel<unknown[], unknown>({
+    channelName: "activity.realtime",
+  }),
   start: channel<unknown[], unknown>({
     channelName: "session.start",
   }),

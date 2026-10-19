@@ -1,4 +1,5 @@
 import type { NativeSpan } from "./runtime";
+import type { RealtimeSession } from "./realtime";
 
 /** Relevant LiveKit 1.9.x boundaries, vendored to avoid a runtime dependency. */
 export interface AudioFrame {
@@ -10,6 +11,7 @@ export interface SpeechHandle {
   _agentTurnSpan?: NativeSpan;
 }
 export interface AgentSession {
+  llm?: { duplexModel?: unknown };
   sessionSpan?: NativeSpan;
   agentSpeakingSpan?: NativeSpan;
   _userSpeakingSpan?: NativeSpan;
@@ -17,8 +19,10 @@ export interface AgentSession {
   output?: { audio?: AudioOutput | null };
 }
 export interface AgentActivity {
+  llm?: { duplexModel?: unknown };
   agentSession: AgentSession;
   currentSpeech?: SpeechHandle;
+  realtimeSession?: RealtimeSession;
 }
 export interface AudioOutput {
   captureFrame(frame: AudioFrame): Promise<unknown>;
@@ -39,4 +43,17 @@ export interface ChatMessage {
   textContent?: string;
   interrupted?: boolean;
   metrics?: { startedSpeakingAt?: number; stoppedSpeakingAt?: number };
+}
+
+export interface RealtimeGeneration {
+  ev?: {
+    responseId?: string;
+    messageStream?: ReadableStream<{
+      messageId: string;
+      textStream: ReadableStream<string | { text: string }>;
+    }>;
+    functionStream?: ReadableStream<unknown>;
+  };
+  inferenceSpan?: NativeSpan;
+  span?: NativeSpan;
 }

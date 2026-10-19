@@ -5,6 +5,12 @@ export const livekitConfigs: InstrumentationConfig[] = [
   ["pipeline", "agent_activity", "AgentActivity", "_pipelineReplyTaskImpl"],
   ["conversation", "agent_session", "AgentSession", "_conversationItemAdded"],
   ["userCompleted", "agent_activity", "AgentActivity", "userTurnCompleted"],
+  [
+    "realtime",
+    "agent_activity",
+    "AgentActivity",
+    "_realtimeGenerationTaskImpl",
+  ],
   ["start", "agent_session", "AgentSession", "_startImpl"],
   ["close", "agent_session", "AgentSession", "closeImpl"],
   ["output", "agent_session", "AgentSession", "onAudioOutputChanged"],

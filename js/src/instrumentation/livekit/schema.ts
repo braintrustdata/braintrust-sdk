@@ -23,6 +23,7 @@ export function operation(name: string): string {
     case "stt_node":
       return "stt";
     case "llm_node":
+    case "realtime_inference":
       return "llm_response";
     case "tts_node":
       return "tts";

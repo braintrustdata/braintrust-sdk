@@ -47,6 +47,7 @@ export class LiveKitPlugin extends BasePlugin {
       "pipeline",
       "conversation",
       "userCompleted",
+      "realtime",
       "start",
       "input",
       "output",
@@ -58,6 +59,7 @@ export class LiveKitPlugin extends BasePlugin {
           (target: any, self: any, args: unknown[]): any => {
             observe(() => {
               const rt = runtime();
+              if (key === "realtime") rt?.realtime(self, args[0] as any);
               if (key === "conversation")
                 rt?.conversation(self, args[0] as ChatMessage);
               if (key === "start") rt?.begin(self);
@@ -69,10 +71,19 @@ export class LiveKitPlugin extends BasePlugin {
                 rt?.userTurn(self, args[0] as EndOfTurnInfo);
             });
             const rt = runtime();
-            if (rt && (key === "userCompleted" || key === "pipeline")) {
+            if (
+              rt &&
+              (key === "userCompleted" ||
+                key === "realtime" ||
+                key === "pipeline")
+            ) {
               const first = args[0] as any;
               return rt.scope(
-                key === "userCompleted" ? first?.userTurnSpan : first?.span,
+                key === "userCompleted"
+                  ? first?.userTurnSpan
+                  : key === "pipeline"
+                    ? first?.span
+                    : first?.inferenceSpan,
                 () => Reflect.apply(target, self, args),
               );
             }

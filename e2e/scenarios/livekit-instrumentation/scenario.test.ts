@@ -226,9 +226,23 @@ for (const variant of ["livekit-v1", "livekit-v1-latest"]) {
 }
 
 for (const variant of ["livekit-v1", "livekit-v1-latest"]) {
-  for (const scheme of ["streaming-cascade"]) {
+  for (const [scheme, burst] of [
+    "realtime",
+    "duplex",
+    "duplex-overlap",
+    "streaming-cascade",
+    "half-cascade",
+    "reconnect",
+  ].flatMap<[string, boolean]>((scheme) =>
+    scheme === "half-cascade"
+      ? [
+          [scheme, false],
+          [scheme, true],
+        ]
+      : [[scheme, false]],
+  ))
     test.sequential(
-      `${variant} ${scheme} order conversation`,
+      `${variant} ${scheme}${burst ? " burst" : ""} order conversation`,
       async () => {
         await withScenarioHarness(async (harness) => {
           await harness.runNodeScenarioDir({
@@ -239,9 +253,13 @@ for (const variant of ["livekit-v1", "livekit-v1-latest"]) {
             env: {
               LIVEKIT_PACKAGE: variant,
               LIVEKIT_PROVIDER: "1",
-
-              LIVEKIT_STREAMING_STT: "1",
-
+              LIVEKIT_WS_BURST: burst ? "1" : "0",
+              LIVEKIT_REALTIME: scheme === "streaming-cascade" ? "0" : "1",
+              LIVEKIT_STREAMING_STT: scheme === "streaming-cascade" ? "1" : "0",
+              LIVEKIT_RECONNECT: scheme === "reconnect" ? "1" : "0",
+              LIVEKIT_HALF_CASCADE: scheme === "half-cascade" ? "1" : "0",
+              LIVEKIT_DUPLEX: scheme.startsWith("duplex") ? "1" : "0",
+              LIVEKIT_OVERLAP: scheme === "duplex-overlap" ? "1" : "0",
               LIVEKIT_AUDIO: "1",
               LIVEKIT_WS_PATH: `${originalScenarioDir}/__cassettes__/${variant}-${scheme}.websocket.json`,
               BRAINTRUST_E2E_CASSETTE_MODE:
@@ -252,7 +270,9 @@ for (const variant of ["livekit-v1", "livekit-v1-latest"]) {
             runContext: {
               variantKey: variant,
               originalScenarioDir,
-              cassette: { variantKey: `${variant}-${scheme}` },
+              cassette: ["streaming-cascade", "half-cascade"].includes(scheme)
+                ? { variantKey: `${variant}-${scheme}` }
+                : false,
             },
           });
           const stable = normalizer();
@@ -267,6 +287,25 @@ for (const variant of ["livekit-v1", "livekit-v1-latest"]) {
           expect(
             events.filter((e) => e.span.name === "llm_response").length,
           ).toBeGreaterThanOrEqual(2);
+          if (scheme.startsWith("duplex")) {
+            expect(
+              events.filter((e) =>
+                ["user_turn", "agent_turn"].includes(e.span.name ?? ""),
+              ),
+            ).toEqual([]);
+            expect(
+              events
+                .flatMap((e) => Object.keys(e.row.metadata ?? {}))
+                .filter((key) => key.startsWith("turn.")),
+            ).toEqual([]);
+            const root = findLatestSpan(events, "livekit.agent_session")!;
+            for (const event of events.filter((e) =>
+              ["user_speech", "agent_speech", "llm_response"].includes(
+                e.span.name ?? "",
+              ),
+            ))
+              expect(event.row.span_parents).toEqual([root.span.id]);
+          }
           expect(findLatestSpan(events, "agent_speech")?.row.output).toEqual(
             expect.arrayContaining([
               expect.objectContaining({
@@ -285,6 +324,8 @@ for (const variant of ["livekit-v1", "livekit-v1-latest"]) {
             )
             .join(" ");
           expect(transcript).toMatch(/Where\s+is\s+my\s+order/i);
+          if (scheme === "duplex-overlap")
+            expect(transcript).toMatch(/Thanks.*delivery.*detail/i);
           const user = users.find(
             (e) =>
               Array.isArray(e.row.input) && e.row.input.some((m) => m.content),
@@ -299,10 +340,13 @@ for (const variant of ["livekit-v1", "livekit-v1-latest"]) {
               .filter((e) => e.span.name === "llm_response")
               .every((e) => Array.isArray(e.row.output)),
           ).toBe(true);
-          expect(findLatestSpan(events, "tts")).toBeDefined();
-          expect(findLatestSpan(events, "user_turn")?.row.metadata?.model).toBe(
-            "gpt-4o-mini-transcribe",
-          );
+          if (["half-cascade", "streaming-cascade"].includes(scheme))
+            expect(findLatestSpan(events, "tts")).toBeDefined();
+          else expect(findLatestSpan(events, "tts")).toBeUndefined();
+          if (scheme === "streaming-cascade")
+            expect(
+              findLatestSpan(events, "user_turn")?.row.metadata?.model,
+            ).toBe("gpt-4o-mini-transcribe");
           await matchSpanTreeSnapshot(
             events.map((event) => ({
               event,
@@ -320,7 +364,6 @@ for (const variant of ["livekit-v1", "livekit-v1-latest"]) {
       },
       120000,
     );
-  }
 }
 
 for (const variant of ["livekit-v1", "livekit-v1-latest"]) {
@@ -569,7 +612,7 @@ for (const variant of ["livekit-v1", "livekit-v1-latest"]) {
   );
 }
 
-// Automatic setup and recording opt-in, with no optional audio package installed.
+// Keep setup failures here; real cascade/realtime replays below cover explicit Ogg.
 for (const variant of ["livekit-v1", "livekit-v1-latest"]) {
   for (const mode of [
     "off",
@@ -673,63 +716,69 @@ for (const variant of ["livekit-v1", "livekit-v1-latest"]) {
 }
 
 for (const variant of ["livekit-v1", "livekit-v1-latest"]) {
-  test.sequential(
-    `${variant} automatic cascade conversation`,
-    async () => {
-      await withScenarioHarness(async (harness) => {
-        await harness.runNodeScenarioDir({
-          scenarioDir,
-          entry: "scenario.mjs",
-          timeoutMs: 90000,
-          nodeArgs: ["--import", "braintrust/hook.mjs"],
-          env: {
-            LIVEKIT_PACKAGE: variant,
-            LIVEKIT_AUTOMATIC: "1",
-            LIVEKIT_PROVIDER: "1",
-            LIVEKIT_AUDIO: "1",
-          },
-          runContext: {
-            variantKey: variant,
-            originalScenarioDir,
-            cassette: {
-              variantKey: `${variant}-order`,
+  for (const realtime of [false, true]) {
+    test.sequential(
+      `${variant} automatic ${realtime ? "realtime" : "cascade"} conversation`,
+      async () => {
+        await withScenarioHarness(async (harness) => {
+          await harness.runNodeScenarioDir({
+            scenarioDir,
+            entry: "scenario.mjs",
+            timeoutMs: 90000,
+            nodeArgs: ["--import", "braintrust/hook.mjs"],
+            env: {
+              LIVEKIT_PACKAGE: variant,
+              LIVEKIT_AUTOMATIC: "1",
+              LIVEKIT_PROVIDER: "1",
+              LIVEKIT_AUDIO: "1",
+              LIVEKIT_REALTIME: realtime ? "1" : "0",
+              LIVEKIT_WS_PATH: `${originalScenarioDir}/__cassettes__/${variant}-realtime.websocket.json`,
             },
-          },
-        });
-        const events = harness.events();
-        assertAudioTrace(events);
-        expect(findAllSpans(events, "livekit.agent_session")).toHaveLength(1);
-        const turns = findAllSpans(events, "agent_turn");
-        const turnIds = new Set(turns.map((t) => t.span.id));
-        for (const response of findAllSpans(events, "llm_response"))
+            runContext: {
+              variantKey: variant,
+              originalScenarioDir,
+              cassette: {
+                variantKey: `${variant}-${realtime ? "realtime" : "order"}`,
+              },
+            },
+          });
+          const events = harness.events();
+          assertAudioTrace(events);
+          expect(findAllSpans(events, "livekit.agent_session")).toHaveLength(1);
+          const turns = findAllSpans(events, "agent_turn");
+          const turnIds = new Set(turns.map((t) => t.span.id));
+          for (const response of findAllSpans(events, "llm_response"))
+            expect(
+              turnIds.has(
+                (response.row.span_parents as string[] | undefined)?.[0],
+              ),
+            ).toBe(true);
           expect(
-            turnIds.has(
-              (response.row.span_parents as string[] | undefined)?.[0],
-            ),
+            turns.some((t) => {
+              const metadata = t.row.metadata as
+                | Record<string, unknown>
+                | undefined;
+              const selections = metadata?.["audio.selections"];
+              return Array.isArray(selections) && selections.length > 0;
+            }),
           ).toBe(true);
-        expect(
-          turns.some((t) => {
-            const metadata = t.row.metadata as
-              | Record<string, unknown>
-              | undefined;
-            const selections = metadata?.["audio.selections"];
-            return Array.isArray(selections) && selections.length > 0;
-          }),
-        ).toBe(true);
-        expect(findAllSpans(events, "lookup_order")).toHaveLength(1);
-        expect(findAllSpans(events, "llm_response").length).toBeGreaterThan(0);
-        expect(
-          findLatestSpan(events, "livekit.agent_session")?.row,
-        ).toMatchObject({
-          metadata: {
-            "audio.recordings": [{ state: "ready", mime_type: "audio/ogg" }],
-          },
+          expect(findAllSpans(events, "lookup_order")).toHaveLength(1);
+          expect(findAllSpans(events, "llm_response").length).toBeGreaterThan(
+            0,
+          );
+          expect(
+            findLatestSpan(events, "livekit.agent_session")?.row,
+          ).toMatchObject({
+            metadata: {
+              "audio.recordings": [{ state: "ready", mime_type: "audio/ogg" }],
+            },
+          });
+          expect(
+            JSON.stringify(findLatestSpan(events, "agent_speech")?.row.output),
+          ).toContain("Friday");
         });
-        expect(
-          JSON.stringify(findLatestSpan(events, "agent_speech")?.row.output),
-        ).toContain("Friday");
-      });
-    },
-    120000,
-  );
+      },
+      120000,
+    );
+  }
 }

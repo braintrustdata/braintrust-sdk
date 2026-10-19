@@ -50,16 +50,19 @@ const processor = automatic
   : new ScenarioProcessor({
       logger,
       captureContent: true,
-      audioFormat: process.env.LIVEKIT_SEGMENTS === "1" ? "ogg" : "wav",
+      audioFormat: "wav",
       ...(process.env.LIVEKIT_SEGMENTS === "1"
         ? {
             recording: {
               segmentDurationSeconds: 0.2,
+              encoder: (await import("@braintrust/audio-utils")).oggOpus(),
             },
           }
         : {}),
       captureAgentAudio: process.env.LIVEKIT_AUDIO === "1",
-      captureUserAudio: process.env.LIVEKIT_STREAMING_STT === "1",
+      captureUserAudio:
+        process.env.LIVEKIT_REALTIME === "1" ||
+        process.env.LIVEKIT_STREAMING_STT === "1",
     });
 const provider = automatic
   ? undefined
@@ -149,8 +152,14 @@ class Output extends voice.AudioOutput {
   }
 }
 const options = {};
+const realtimeMode = process.env.LIVEKIT_REALTIME === "1";
+const duplexMode = process.env.LIVEKIT_DUPLEX === "1";
+const overlap = process.env.LIVEKIT_OVERLAP === "1";
+const halfCascade = process.env.LIVEKIT_HALF_CASCADE === "1";
 const streamingStt = process.env.LIVEKIT_STREAMING_STT === "1";
-const audioInput = streamingStt;
+const audioInput = realtimeMode || streamingStt;
+// The synthetic overlap fixture has no acoustic echo to suppress.
+if (overlap) options.aecWarmupDuration = null;
 let ws;
 if (providerMode) {
   const { LLM, TTS } = await import("@livekit/agents-plugin-openai");
@@ -170,14 +179,30 @@ if (audioInput) {
   ws = await websocketCassette(
     process.env.LIVEKIT_WS_PATH,
     process.env.BRAINTRUST_E2E_CASSETTE_MODE === "record",
+    {
+      concurrentAudio: duplexMode,
+      burst: process.env.LIVEKIT_WS_BURST === "1",
+    },
   );
-  const { STT } = await import("@livekit/agents-plugin-openai");
-  options.stt = new STT({
-    model: "gpt-4o-mini-transcribe",
-    useRealtime: true,
-    baseURL: ws.baseURL,
-  });
-  options.turnDetection = "manual";
+  const { realtime, STT } = await import("@livekit/agents-plugin-openai");
+  if (streamingStt) {
+    options.stt = new STT({
+      model: "gpt-4o-mini-transcribe",
+      useRealtime: true,
+      baseURL: ws.baseURL,
+    });
+    options.turnDetection = "manual";
+  } else {
+    options.llm = duplexMode
+      ? new realtime.GPTLiveModel({ model: "gpt-live-1", baseURL: ws.baseURL })
+      : new realtime.RealtimeModel({
+          model: "gpt-realtime-mini",
+          ...(halfCascade ? { modalities: ["text"] } : {}),
+          baseURL: ws.baseURL,
+          turnDetection: { type: "server_vad", silence_duration_ms: 500 },
+        });
+    if (!halfCascade) delete options.tts;
+  }
 }
 const session = new voice.AgentSession(options);
 if (process.env.LIVEKIT_WRAP === "1") {
@@ -246,7 +271,10 @@ try {
     },
   });
   if (providerMode) {
-    const feedCaller = async (fixture = "order", silenceBytes = 96000) => {
+    const feedCaller = async (
+      fixture = "order",
+      silenceBytes = duplexMode ? 960000 : 96000,
+    ) => {
       const { readFile } = await import("node:fs/promises");
       const bytes = Buffer.concat([
         await readFile(
@@ -259,8 +287,8 @@ try {
         for (let i = 0; i < 480 && at + i * 2 + 1 < bytes.length; i++)
           pcm[i] = bytes.readInt16LE(at + i * 2);
         inputController.enqueue(new AudioFrame(pcm, 24000, 1, 480));
-        // Pace microphone frames to preserve capture timing.
-        if (streamingStt)
+        // Duplex models process a continuous microphone stream, including silence.
+        if (duplexMode || streamingStt)
           await new Promise((resolve) => setTimeout(resolve, 20));
         // Buffered fixture input preserves the sample clock without wall-clock jitter.
       }
@@ -273,7 +301,23 @@ try {
         session.commitUserTurn();
       }
     };
-    if (audioInput) await feedCaller();
+    if (overlap) {
+      await feedCaller("order", 96000);
+      const deadline = Date.now() + 30000;
+      while (output.samples < 4800) {
+        if (Date.now() > deadline)
+          throw new Error("No playback before caller overlap");
+        await new Promise((resolve) => setTimeout(resolve, 20));
+      }
+      await feedCaller("followup");
+      assert.match(
+        committed
+          .filter((item) => item.role === "user")
+          .map((item) => item.textContent)
+          .join(""),
+        /detail/i,
+      );
+    } else if (audioInput) await feedCaller();
     else
       await session
         .generateReply({ userInput: "Hi, could you check order 1042 for me?" })
@@ -300,6 +344,34 @@ try {
         committed.at(-1)?.role === "assistant" && !committed.at(-1).interrupted,
       );
       assert.match(committed.at(-1).textContent, /Friday/i);
+    }
+    if (process.env.LIVEKIT_RECONNECT === "1") {
+      let reconnected = false;
+      session.activity.realtimeSession.once("session_reconnected", () => {
+        reconnected = true;
+      });
+      ws.disconnect();
+      const deadline = Date.now() + 30000;
+      while (!reconnected) {
+        if (Date.now() > deadline) throw new Error("No native reconnect event");
+        await new Promise((resolve) => setTimeout(resolve, 20));
+      }
+      assert.equal(ws.connections, 2);
+      const before = committed.length;
+      await feedCaller();
+      while (
+        !committed
+          .slice(before)
+          .some(
+            (item) =>
+              item.role === "assistant" &&
+              /Friday/i.test(item.textContent ?? ""),
+          )
+      ) {
+        if (Date.now() > deadline) throw new Error("No reply after reconnect");
+        await new Promise((resolve) => setTimeout(resolve, 20));
+      }
+      await session.activity?.currentSpeech?.waitForPlayout();
     }
   } else await session.say("Fixture playback", { audio }).waitForPlayout();
   if (process.env.LIVEKIT_SEGMENTS === "1") {

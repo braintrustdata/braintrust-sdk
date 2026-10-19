@@ -939,7 +939,7 @@
   },
   {
     "scenarioDirName": "livekit-instrumentation",
-    "label": "LiveKit cascade instrumentation and WAV recording (streaming STT, tools, interruption recovery; automatic and manual)",
+    "label": "LiveKit voice instrumentation (cascade, realtime, duplex, half-cascade, reconnect; automatic and manual)",
     "metadataScenario": "livekit-instrumentation",
     "variants": [
       {

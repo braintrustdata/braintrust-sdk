@@ -9,6 +9,7 @@ import type {
   ChatMessage,
   AudioFrame,
   AudioOutput,
+  RealtimeGeneration,
 } from "./types";
 import iso from "../../isomorph";
 import { runWithAutoInstrumentationSuppressed } from "../auto-instrumentation-suppression";
@@ -21,6 +22,8 @@ import {
 } from "./schema";
 import { SpeechTracker } from "./speech";
 import { Relationships } from "./relationships";
+import { RealtimeObserver } from "./realtime";
+import { observeStream } from "./streams";
 import {
   Attachment,
   currentSpan,
@@ -56,6 +59,7 @@ export class LiveKitSpanProcessor {
   readonly captures = new WeakMap<object, Capture>();
   private active = new Set<Capture>();
   private speakingByTurn = new Map<string, Set<Row>>();
+  private realtimeObservers = new Map<AgentSession, RealtimeObserver>();
   private jobs = new Set<Promise<void>>();
   private uninstall: () => void;
   private captureContent: boolean;
@@ -64,7 +68,7 @@ export class LiveKitSpanProcessor {
   private agent: boolean;
   private sessions = new Map<
     string,
-    { speech: SpeechTracker; relationships: Relationships }
+    { speech: SpeechTracker; relationships: Relationships; duplex?: boolean }
   >();
   private outputCleanups = new Map<AgentSession, () => void>();
   private outputs = new Map<AgentSession, AudioOutput>();
@@ -95,12 +99,21 @@ export class LiveKitSpanProcessor {
     const parent = native.parentSpanContext?.spanId ?? native.parentSpanId;
     const parentRow = this.rows.get(parent);
     if (native.name !== "agent_session" && !parentRow) return;
-    // Native request spans duplicate the public inference lifecycle.
+    const duplexTurn =
+      this.state(parentRow?.session)?.duplex &&
+      ["user_turn", "agent_turn"].includes(native.name);
+    // Duplex adapter turns are scheduling containers, not conversational turns.
+    // Native request/run spans duplicate the public inference lifecycle. Keep their
+    // measured usage on that operation without exporting another generation row.
     if (
       parentRow &&
-      ["llm_request", "llm_request_run", "tts_request_run"].includes(
-        native.name,
-      )
+      (duplexTurn ||
+        [
+          "llm_request",
+          "llm_request_run",
+          "tts_request_run",
+          "realtime_metrics",
+        ].includes(native.name))
     ) {
       const context = native.spanContext();
       this.rows.set(id, {
@@ -108,6 +121,7 @@ export class LiveKitSpanProcessor {
         native: { name: native.name, spanContext: () => context },
         parent,
         // Retain the native identity for transcript association, not trace grouping.
+        ...(duplexTurn ? { turn: id, replyTo: undefined } : {}),
         folded: true,
         ended: false,
       });
@@ -117,12 +131,11 @@ export class LiveKitSpanProcessor {
       withSpanInstrumentationName(
         {
           name: operation(native.name),
-          type:
-            native.name === "llm_node"
-              ? ("llm" as const)
-              : native.name === "function_tool"
-                ? ("tool" as const)
-                : ("task" as const),
+          type: ["llm_node", "realtime_inference"].includes(native.name)
+            ? ("llm" as const)
+            : native.name === "function_tool"
+              ? ("tool" as const)
+              : ("task" as const),
           startTime: seconds(native.startTime),
         },
         INSTRUMENTATION_NAMES.LIVEKIT,
@@ -154,7 +167,8 @@ export class LiveKitSpanProcessor {
     if (["user_speaking", "agent_speaking"].includes(native.name))
       state?.speech.add(row);
     const execution = this.execution.getStore();
-    if (native.name === "llm_node" && execution) execution.model = row;
+    if (["llm_node", "realtime_inference"].includes(native.name) && execution)
+      execution.model = row;
     if (
       ["tts_node", "agent_speaking"].includes(native.name) &&
       execution?.model
@@ -180,7 +194,7 @@ export class LiveKitSpanProcessor {
       const request = [...this.rows.values()].find(
         (r) =>
           r.span.spanId === currentSpan().spanId &&
-          r.native.name === "llm_node" &&
+          ["realtime_inference", "llm_node"].includes(r.native.name) &&
           r.session === row.session,
       );
       if (request)
@@ -200,7 +214,7 @@ export class LiveKitSpanProcessor {
         });
       }
     }
-    if (row.turn)
+    if (row.turn && !state?.duplex)
       span.log({
         metadata: {
           "turn.id": this.rows.get(row.turn)?.span.spanId,
@@ -215,15 +229,19 @@ export class LiveKitSpanProcessor {
       if (!this.captureContent && isContentKey(key)) delete attrs[key];
     const metadata = Object.fromEntries(
       Object.entries(attrs).filter(
-        ([key]) => !isContentKey(key) && !key.startsWith("langfuse."),
+        ([key]) =>
+          !isContentKey(key) &&
+          key !== "contrib.livekit.realtime_model_metrics" &&
+          !key.startsWith("langfuse."),
       ),
     );
     if (row.folded) {
-      if (native.name === "llm_request") {
+      if (["llm_request", "realtime_metrics"].includes(native.name)) {
         const fields = modelFields(attrs);
         row.span.log({
           ...fields,
           metadata: {
+            ...(native.name === "realtime_metrics" ? metadata : {}),
             ...fields.metadata,
           },
         });
@@ -261,10 +279,12 @@ export class LiveKitSpanProcessor {
     const fields = modelFields(attrs);
     row.span.log({
       metadata: fields.metadata,
-      ...(native.name === "llm_node" ? { metrics: fields.metrics } : {}),
+      ...(["llm_node", "realtime_inference"].includes(native.name)
+        ? { metrics: fields.metrics }
+        : {}),
     });
     if (this.captureContent) {
-      if (native.name === "llm_node") {
+      if (["llm_node", "realtime_inference"].includes(native.name)) {
         const input =
           messages(attrs["contrib.livekit.pii.chat_ctx"]) ??
           messages(attrs["gen_ai.input.messages"]);
@@ -371,7 +391,9 @@ export class LiveKitSpanProcessor {
     return row
       ? this.execution.run(
           {
-            model: row.native.name === "llm_node" ? row : undefined,
+            model: ["llm_node", "realtime_inference"].includes(row.native.name)
+              ? row
+              : undefined,
           },
           () => withCurrent(row.span, fn),
         )
@@ -468,11 +490,20 @@ export class LiveKitSpanProcessor {
       relationships?.register(`tool:${callId}`, row.span);
       relationships?.reference(row.span, `request:${callId}`, "requested_by");
     }
-    if (row.native.name === "llm_node")
+    if (["llm_node", "realtime_inference"].includes(row.native.name))
       this.context(row, attrs["contrib.livekit.pii.chat_ctx"]);
   }
 
+  private observeMode(
+    session: AgentSession,
+    activity = session.activity,
+  ): void {
+    const state = this.state(nativeId(session.sessionSpan));
+    const model = activity?.llm ?? session.llm;
+    if (state && model) state.duplex = model.duplexModel !== undefined;
+  }
   begin(session: AgentSession): void {
+    this.observeMode(session);
     if (
       this.captures.has(session) ||
       !this.audio ||
@@ -529,11 +560,122 @@ export class LiveKitSpanProcessor {
       metadata: { "audio.recordings": [{ id: "call", state: "pending" }] },
     });
   }
+  realtime(activity: AgentActivity, generation?: RealtimeGeneration): void {
+    this.observeMode(activity.agentSession, activity);
+    let observer = this.realtimeObservers.get(activity.agentSession);
+    const root = this.rows.get(
+      nativeId(activity.agentSession.sessionSpan) ?? "",
+    );
+    if (observer && observer.session !== activity.realtimeSession) {
+      observer.close();
+      this.realtimeObservers.delete(activity.agentSession);
+      observer = undefined;
+    }
+    if (!observer && root && activity.realtimeSession) {
+      observer = new RealtimeObserver(
+        activity.realtimeSession,
+        this.captureContent,
+        (event, sameDispatch) => {
+          if (typeof event.itemId !== "string") return;
+          this.state(root.session)?.speech.message(
+            {
+              type: "message",
+              id: event.itemId,
+              role: "user",
+              textContent:
+                typeof event.transcript === "string"
+                  ? event.transcript
+                  : undefined,
+              metrics:
+                typeof event.turnStartedAt === "number"
+                  ? { startedSpeakingAt: event.turnStartedAt / 1000 }
+                  : undefined,
+            },
+            {
+              transcribed: true,
+              speech: sameDispatch
+                ? this.rows.get(
+                    nativeId(activity.agentSession._userSpeakingSpan) ?? "",
+                  )
+                : undefined,
+            },
+          );
+        },
+      );
+      this.realtimeObservers.set(activity.agentSession, observer);
+    }
+    const model = this.rows.get(nativeId(generation?.inferenceSpan) ?? "");
+    const event = generation?.ev;
+    if (!model || !event) return;
+    if (event.responseId) {
+      observer?.captureMetrics(event.responseId, model.span);
+      model.span.log({
+        metadata: { "contrib.livekit.response_id": event.responseId },
+      });
+    }
+    const input = observer?.captureInput(model.span, (items) =>
+      this.context(model, items),
+    );
+    const output = new Map<
+      string,
+      NonNullable<ReturnType<typeof messages>>[number]
+    >();
+    const publish = () => {
+      if (this.captureContent) model.span.log({ output: [...output.values()] });
+    };
+    if (event.messageStream)
+      event.messageStream = observeStream(
+        event.messageStream,
+        (message) => {
+          input?.exclude(message.messageId);
+          this.state(model.session)?.relationships.register(
+            `generation:${message.messageId}`,
+            model.span,
+          );
+          const parts: string[] = [];
+          message.textStream = observeStream(
+            message.textStream,
+            (value) => {
+              const text = typeof value === "string" ? value : value.text;
+              if (this.captureContent && typeof text === "string")
+                parts.push(text);
+            },
+            () => {
+              output.set(message.messageId, {
+                role: "assistant",
+                content: parts.join(""),
+              });
+              publish();
+            },
+          );
+        },
+        () => input?.finish(),
+      );
+    else input?.finish();
+    if (event.functionStream)
+      event.functionStream = observeStream(event.functionStream, (call) => {
+        for (const message of messages([call]) ?? []) {
+          const id = message.tool_calls?.map((call) => call.id).join(":");
+          if (id) {
+            output.set(id, message);
+            for (const call of message.tool_calls ?? [])
+              this.state(model.session)?.relationships.register(
+                `request:${call.id}`,
+                model.span,
+              );
+            publish();
+          }
+        }
+      });
+  }
+
   input(activity: AgentActivity, stream: ReadableStream<AudioFrame>): void {
+    this.realtime(activity);
     const capture = this.captures.get(activity.agentSession);
     if (capture) instrumentInput(capture, stream);
   }
   output(session: AgentSession): void {
+    this.observeMode(session);
     const sink = session.output?.audio;
     if (this.outputs.get(session) !== sink) {
       this.outputCleanups.get(session)?.();
@@ -595,6 +737,8 @@ export class LiveKitSpanProcessor {
     this.outputCleanups.get(session)?.();
     this.outputCleanups.delete(session);
     this.outputs.delete(session);
+    this.realtimeObservers.get(session)?.close();
+    this.realtimeObservers.delete(session);
     const c = this.captures.get(session);
     if (!c) return Promise.resolve();
     if (!c.finish) {
@@ -684,6 +828,8 @@ export class LiveKitSpanProcessor {
         });
         row.span.end();
       }
+    for (const observer of this.realtimeObservers.values()) observer.close();
+    this.realtimeObservers.clear();
     for (const [id, state] of this.sessions) {
       const root = this.rows.get(id);
       if (root) state.speech.finish(root.span);

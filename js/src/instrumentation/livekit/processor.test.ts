@@ -78,6 +78,32 @@ function fixture(
   });
   return { rows, span, p: processor };
 }
+test("native hierarchy and inference types survive; namespace and tool payloads are normalized", () => {
+  const { rows, span, p } = fixture(true);
+  const root = span("s", "agent_session"),
+    turn = span("t", "agent_turn", "s"),
+    model = span("m", "realtime_inference", "t"),
+    tool = span("f", "function_tool", "t", {
+      "lk.function_tool.name": "lookup_order",
+      "gen_ai.tool.call.id": "call-1",
+      "lk.pii.function_tool.arguments": '{"id":1}',
+      "lk.pii.function_tool.output": '{"ok":true}',
+    });
+  for (const s of [root, turn, model, tool]) p.onStart(s);
+  for (const s of [model, tool, turn, root]) p.onEnd(s);
+  expect(rows.map((r) => r.parent)).toEqual([
+    undefined,
+    rows[0].spanId,
+    rows[1].spanId,
+    rows[1].spanId,
+  ]);
+  expect(rows[2].args.type).toBe("llm");
+  expect(
+    rows[3].logs.some((e: any) => e.span_attributes?.name === "lookup_order"),
+  ).toBe(true);
+  expect(rows[3].logs.find((e: any) => e.input)?.input).toEqual({ id: 1 });
+  expect(rows.every((r) => r.end.endTime === 2)).toBe(true);
+});
 test("content opt-out retains timing and IDs without logging transcript or tool content", () => {
   const { rows, span, p } = fixture(false),
     root = span("s", "agent_session"),
@@ -364,6 +390,157 @@ test("failed shutdown flush still releases the runtime for another processor", a
   expect(() => fixture()).not.toThrow();
 });
 
+test("duplex generation content comes from LiveKit streams without provider events", async () => {
+  const { rows, span, p } = fixture(true);
+  const root = span("root", "agent_session");
+  const turn = span("turn", "agent_turn", "root");
+  const inference = span("model", "realtime_inference", "turn");
+  for (const native of [root, turn, inference]) p.onStart(native);
+  const session = Object.assign(new EventEmitter(), {
+    chatCtx: {
+      items: [
+        {
+          type: "message",
+          id: "user",
+          role: "user",
+          content: ["Where is order 1042?"],
+        },
+      ],
+    },
+  });
+  const stream = <T>(items: T[]) =>
+    new ReadableStream<T>({
+      start(c) {
+        for (const item of items) c.enqueue(item);
+        c.close();
+      },
+    });
+  const textStream = stream(["It arrives ", "Friday."]);
+  const ev = {
+    responseId: "native-response",
+    messageStream: stream([{ messageId: "answer", textStream }]),
+    functionStream: stream([
+      {
+        type: "function_call",
+        callId: "call",
+        name: "lookup_order",
+        args: '{"order_id":"1042"}',
+      },
+    ]),
+  };
+  p.realtime(
+    { agentSession: { sessionSpan: root }, realtimeSession: session },
+    { ev, inferenceSpan: inference, span: turn },
+  );
+  expect(textStream.locked).toBe(false);
+  const consumed: string[] = [];
+  await ev.messageStream.pipeTo(
+    new WritableStream({
+      async write(message) {
+        await message.textStream.pipeTo(
+          new WritableStream({
+            write(text) {
+              consumed.push(text);
+            },
+          }),
+        );
+      },
+    }),
+  );
+  expect(consumed).toEqual(["It arrives ", "Friday."]);
+  await ev.functionStream.pipeTo(new WritableStream());
+  p.onEnd(inference);
+  expect(rows[2].logs).toContainEqual(
+    expect.objectContaining({
+      input: [{ role: "user", content: "Where is order 1042?" }],
+    }),
+  );
+  expect(rows[2].logs).toContainEqual({
+    output: [{ role: "assistant", content: "It arrives Friday." }],
+  });
+  expect(
+    rows[2].logs.some((e: any) =>
+      e.output?.some((m: any) => m.tool_calls?.[0]?.id === "call"),
+    ),
+  ).toBe(true);
+  p.onEnd(turn);
+  p.onEnd(root);
+});
+
+test("installing a realtime observer never hides a native caller turn", () => {
+  const { rows, span, p } = fixture();
+  const root = span("root", "agent_session");
+  p.onStart(root);
+  p.realtime({
+    agentSession: { sessionSpan: root },
+    realtimeSession: new EventEmitter(),
+  });
+  const user = span("user", "user_turn", "root");
+  p.onStart(user);
+  p.onEnd(user);
+  expect(rows[1].args.name).toBe("user_turn");
+  expect(JSON.stringify(rows[1])).not.toContain("input_observation");
+  p.onEnd(root);
+});
+
+test("late native realtime metrics update their model operation without another span", () => {
+  const { rows, span, p } = fixture();
+  const root = span("s", "agent_session");
+  const model = span("m", "realtime_inference", "s");
+  const late = span("late", "realtime_metrics", "m", {
+    "gen_ai.response.id": "response-1",
+    "gen_ai.usage.input_tokens": 10,
+    "gen_ai.usage.output_tokens": 3,
+  });
+  p.onStart(root);
+  p.onStart(model);
+  p.onEnd(model);
+  p.onStart(late);
+  p.onEnd(late);
+  expect(rows).toHaveLength(2);
+  expect(rows[1].logs).toContainEqual(
+    expect.objectContaining({
+      metrics: expect.objectContaining({
+        prompt_tokens: 10,
+        completion_tokens: 3,
+        tokens: 13,
+      }),
+      metadata: expect.objectContaining({ "gen_ai.response.id": "response-1" }),
+    }),
+  );
+});
+
+test("early native realtime usage reaches its inference with content capture disabled", () => {
+  const { rows, span, p } = fixture(false);
+  const root = span("root", "agent_session");
+  const session = { sessionSpan: root } as any;
+  const realtimeSession = new EventEmitter();
+  const activity = { agentSession: session, realtimeSession } as any;
+  p.onStart(root);
+  p.realtime(activity);
+  realtimeSession.emit("metrics_collected", {
+    type: "realtime_model_metrics",
+    requestId: "response",
+    inputTokens: 10,
+    outputTokens: 2,
+    transcript: "must not be logged",
+  });
+  const inference = span("model", "realtime_inference", "root");
+  p.onStart(inference);
+  p.realtime(activity, {
+    inferenceSpan: inference,
+    ev: { responseId: "response" },
+  } as any);
+  p.onEnd(inference);
+  expect(rows[1].logs).toContainEqual(
+    expect.objectContaining({
+      metrics: { prompt_tokens: 10, completion_tokens: 2, tokens: 12 },
+    }),
+  );
+  expect(JSON.stringify(rows)).not.toContain("must not be logged");
+  p.onEnd(root);
+});
+
 test("native speech preserves overlap, segmentation, late transcript timing and session ownership", () => {
   const { rows, span, p } = fixture(true);
   const root = span("root", "agent_session");
@@ -410,6 +587,40 @@ test("native speech preserves overlap, segmentation, late transcript timing and 
     output: [{ role: "assistant", content: "It arrives Friday." }],
   });
   expect(rows[2].parent).toBe(rows[0].spanId);
+});
+
+test("native user fragments remain speech segments instead of pause-grouped turns", () => {
+  const { rows, span, p } = fixture(true);
+  const root = span("root", "agent_session");
+  p.onStart(root);
+  const provider = new EventEmitter();
+  p.realtime({
+    agentSession: { sessionSpan: root },
+    realtimeSession: provider,
+  });
+  for (const [id, text] of [
+    ["a", "Where is my order"],
+    ["b", "1042?"],
+  ]) {
+    const speech = span(id, "user_speaking", "root");
+    p.onStart(speech);
+    provider.emit("input_audio_transcription_completed", {
+      itemId: id,
+      transcript: text,
+      isFinal: true,
+    });
+    p.onEnd(speech);
+  }
+  expect(rows.map((row) => row.args.name)).toEqual([
+    "livekit.agent_session",
+    "user_speech",
+    "user_speech",
+  ]);
+  expect(
+    rows
+      .slice(1)
+      .map((r) => r.logs.filter((log) => log.input).at(-1).input[0].content),
+  ).toEqual(["Where is my order", "1042?"]);
 });
 
 test("tool request, continuation, input speech and generated speech use exported link identities", () => {
@@ -539,6 +750,68 @@ test.each([undefined, "Heard prefix"])(
   },
 );
 
+test("an untimed final transcript resolves only an unambiguous native speech interval", () => {
+  const { rows, span, p } = fixture(true);
+  const root = span("s", "agent_session"),
+    first = span("first", "user_speaking", "s");
+  p.onStart(root);
+  const provider = new EventEmitter();
+  p.realtime({
+    agentSession: { sessionSpan: root },
+    realtimeSession: provider,
+  });
+  p.onStart(first);
+  p.onEnd(first);
+  provider.emit("input_audio_transcription_completed", {
+    itemId: "first-text",
+    transcript: "Order 1042",
+    isFinal: true,
+  });
+  expect(rows[1].logs).toContainEqual({
+    input: [{ role: "user", content: "Order 1042" }],
+  });
+  const second = span("second", "user_speaking", "s"),
+    third = span("third", "user_speaking", "s");
+  p.onStart(second);
+  p.onEnd(second);
+  p.onStart(third);
+  provider.emit("input_audio_transcription_completed", {
+    itemId: "ambiguous",
+    transcript: "Unattributed",
+    isFinal: true,
+  });
+  expect(rows.slice(2).some((row) => row.logs.some((log) => log.input))).toBe(
+    false,
+  );
+});
+
+test("synchronous realtime speech dispatch supplies identity even when native start follows transcript epoch", () => {
+  const { rows, span, p } = fixture(true);
+  const root = span("s", "agent_session"),
+    speech = span("speech", "user_speaking", "s");
+  speech.startTime = [1, 5_000_000];
+  p.onStart(root);
+  const provider = new EventEmitter();
+  const session: any = { sessionSpan: root };
+  provider.on("input_speech_started", () => {
+    p.onStart(speech);
+    session._userSpeakingSpan = speech;
+  });
+  p.realtime({ agentSession: session, realtimeSession: provider });
+  provider.emit("input_speech_started", {});
+  provider.emit("input_audio_transcription_completed", {
+    itemId: "user",
+    transcript: "Where is my order?",
+    turnStartedAt: 1000,
+    isFinal: false,
+  });
+  p.onEnd(speech);
+  expect(rows[1].logs).toContainEqual({
+    input: [{ role: "user", content: "Where is my order?" }],
+  });
+  expect(rows[1].args.startTime).toBe(1.005);
+});
+
 test("output replacement removes stale transcript evidence and can restore an earlier output", () => {
   const { rows, span, p } = fixture(true);
   const root = span("s", "agent_session"),
@@ -636,4 +909,88 @@ test("native recognition ownership survives independently sampled speech timesta
     input: [{ role: "user", content: "Where is my order?" }],
   });
   expect(rows[2].args.startTime).toBe(1.005);
+});
+
+test("duplex omits adapter turns while preserving speech, models and tool parentage", () => {
+  const { rows, span, p } = fixture(true);
+  const root = span("s", "agent_session");
+  p.onStart(root);
+  p.begin({ sessionSpan: root, llm: { duplexModel: {} } });
+  const user = span("u", "user_turn", "s");
+  const caller = span("us", "user_speaking", "u");
+  const agent = span("a", "agent_turn", "s");
+  const model = span("m", "realtime_inference", "a");
+  const tool = span("t", "function_tool", "m");
+  const speech = span("as", "agent_speaking", "a");
+  for (const native of [user, caller, agent, model, tool, speech])
+    p.onStart(native);
+  for (const native of [caller, user, tool, model, speech, agent, root])
+    p.onEnd(native);
+  expect(rows.map((row) => row.args.name)).toEqual([
+    "livekit.agent_session",
+    "user_speech",
+    "llm_response",
+    "livekit.function_tool",
+    "agent_speech",
+  ]);
+  expect(rows.slice(1).map((row) => row.parent)).toEqual([
+    rows[0].spanId,
+    rows[0].spanId,
+    rows[2].spanId,
+    rows[0].spanId,
+  ]);
+  expect(rows.every((row) => row.end)).toBe(true);
+  expect(
+    rows
+      .flatMap((row) => row.logs)
+      .flatMap((log) => Object.keys(log.metadata ?? {}))
+      .filter((key) => key.startsWith("turn.")),
+  ).toEqual([]);
+});
+
+test("realtime response links observed caller speech and accepts its late final transcript", () => {
+  const { rows, span, p } = fixture(true);
+  const root = span("root", "agent_session");
+  const speech = span("speech", "user_speaking", "root");
+  const realtimeSession = new EventEmitter();
+  const session: any = { sessionSpan: root, _userSpeakingSpan: speech };
+  const activity: any = { agentSession: session, realtimeSession };
+  p.onStart(root);
+  p.onStart(speech);
+  p.realtime(activity);
+  realtimeSession.emit("input_audio_transcription_completed", {
+    itemId: "thanks",
+    transcript: "Alright",
+    isFinal: false,
+  });
+  const inference = span("model", "realtime_inference", "root");
+  p.onStart(inference);
+  p.realtime(activity, {
+    inferenceSpan: inference,
+    ev: { responseId: "response" },
+  } as any);
+  p.onEnd(inference);
+  realtimeSession.emit("input_audio_transcription_completed", {
+    itemId: "thanks",
+    transcript: "Alright, thank you",
+    isFinal: true,
+  });
+  const model = rows[2];
+  expect(model.logs.filter((log) => log.input).at(-1)?.input).toEqual([
+    { role: "user", content: "Alright, thank you" },
+  ]);
+  expect(
+    model.logs.filter((log) => log.metadata?.links).at(-1)?.metadata.links,
+  ).toEqual([
+    {
+      context: {
+        traceId: "1234567890abcdef1234567890abcdef",
+        spanId: rows[1].spanId,
+        traceFlags: 1,
+      },
+      attributes: { "braintrust.relationship.type": "input_context" },
+    },
+  ]);
+  p.onEnd(speech);
+  p.onEnd(root);
 });
