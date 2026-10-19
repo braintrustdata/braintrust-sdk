@@ -3,6 +3,7 @@
 import { SpanTypeAttribute } from "../../../util";
 import {
   aiSDKChannels,
+  codeModeChannels,
   BRAINTRUST_WRAPPED_AI_SDK_MODEL,
   harnessAgentChannels,
 } from "../../instrumentation/plugins/ai-sdk-interceptors";
@@ -29,6 +30,10 @@ import type {
   AISDKStreamFunction,
   AISDKWorkflowAgentClass,
 } from "../../vendor-sdk-types/ai-sdk";
+import type {
+  AISDKRunCodeMode,
+  AISDKRunCodeModeInput,
+} from "../../vendor-sdk-types/ai-sdk-code-mode";
 import { currentWorkflowAgentWrapperSpan } from "./workflow-agent-context";
 
 interface WrapAISDKOptions {
@@ -92,6 +97,10 @@ function isModuleNamespace(obj: unknown): obj is AISDKNamespaceObject {
 /**
  * Wraps Vercel AI SDK methods with Braintrust tracing.
  *
+ * For code-mode without a loader hook, wrap the code-mode namespace and call
+ * `wrapAISDK(codeMode).experimental_runCodeMode(...)`. Factory-created tools
+ * call runCodeMode internally and require auto-instrumentation.
+ *
  * @param ai - The AI SDK namespace (e.g., import * as ai from "ai")
  * @returns AI SDK with Braintrust tracing.
  *
@@ -137,6 +146,17 @@ export function wrapAISDK<T>(aiSDK: T, options: WrapAISDKOptions = {}): T {
     get(target, prop, receiver) {
       const original = Reflect.get(target, prop, receiver);
       switch (prop) {
+        case "experimental_runCodeMode":
+          return typeof original === "function"
+            ? function (this: unknown, input: AISDKRunCodeModeInput) {
+                return codeModeChannels.run.invoke(
+                  original as AISDKRunCodeMode,
+                  this,
+                  [input],
+                  {},
+                );
+              }
+            : original;
         case "experimental_decide":
         case "experimental_evaluate": {
           const evaluate = typedAISDK[prop];

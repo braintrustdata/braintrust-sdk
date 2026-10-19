@@ -622,11 +622,11 @@
       },
       {
         "variantKey": "ai-sdk-v7",
-        "label": "v7 pinned (including evaluate)"
+        "label": "v7 pinned (including evaluate and code-mode v1 pinned)"
       },
       {
         "variantKey": "ai-sdk-v7-latest",
-        "label": "v7 latest (including decide)"
+        "label": "v7 latest (including decide and code-mode v1 latest)"
       }
     ]
   },

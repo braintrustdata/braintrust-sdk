@@ -1,6 +1,7 @@
 import type { InstrumentationConfig } from "../orchestrion-js";
 import {
   aiSDKChannels,
+  codeModeChannels,
   harnessAgentChannels,
 } from "../../instrumentation/plugins/ai-sdk-interceptors";
 
@@ -16,6 +17,15 @@ import {
  * "orchestrion:ai-sdk:generateText"
  */
 export const aiSDKConfigs: InstrumentationConfig[] = [
+  {
+    channelName: codeModeChannels.run.channelName,
+    module: {
+      name: "@ai-sdk/code-mode",
+      versionRange: ">=1.0.100 <2.0.0",
+      filePath: "dist/run-code-mode.js",
+    },
+    functionQuery: { functionName: "runCodeMode" },
+  },
   // Older evaluation releases have no telemetry callbacks. Newer versions use
   // the telemetry dispatcher below, including the renamed decision API.
   {

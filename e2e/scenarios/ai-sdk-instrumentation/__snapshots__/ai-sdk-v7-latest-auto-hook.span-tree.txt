@@ -6914,79 +6914,3412 @@ span_tree:
     │             "prompt_tokens": 27,
     │             "tokens": 31
     │           }
-    └── ai-sdk-agent-tool-loop-operation
+    ├── ai-sdk-agent-tool-loop-operation
+    │   metadata: {
+    │     "operation": "agent-tool-loop",
+    │     "testRunId": "<run:1>"
+    │   }
+    │   └── generateText [function]
+    │       input: {
+    │         "instructions": "You are a shopping assistant. Use the tools before answering pricing questions.",
+    │         "maxOutputTokens": 256,
+    │         "maxRetries": 2,
+    │         "messages": [
+    │           {
+    │             "content": "I need help comparing laptop prices before checkout.",
+    │             "role": "user"
+    │           },
+    │           {
+    │             "content": "I can compare store prices and apply a discount code.",
+    │             "role": "assistant"
+    │           },
+    │           {
+    │             "content": "Call get_store_price for a laptop at StoreA and StoreB, then call apply_discount with code SAVE20 for the cheaper price. Finish with the discounted total.",
+    │             "role": "user"
+    │           }
+    │         ],
+    │         "model": {
+    │           "modelId": "gpt-4o-mini-2024-07-18",
+    │           "provider": "openai.responses"
+    │         },
+    │         "temperature": 0,
+    │         "tools": {
+    │           "apply_discount": {
+    │             "description": "Apply a discount code to a total",
+    │             "inputSchema": {
+    │               "$schema": "http://json-schema.org/draft-07/schema#",
+    │               "additionalProperties": false,
+    │               "properties": {
+    │                 "discountCode": {
+    │                   "description": "The discount code to apply",
+    │                   "type": "string"
+    │                 },
+    │                 "total": {
+    │                   "description": "The original total",
+    │                   "type": "number"
+    │                 }
+    │               },
+    │               "required": [
+    │                 "discountCode",
+    │                 "total"
+    │               ],
+    │               "type": "object"
+    │             }
+    │           },
+    │           "get_store_price": {
+    │             "description": "Get the price of an item at a store",
+    │             "inputSchema": {
+    │               "$schema": "http://json-schema.org/draft-07/schema#",
+    │               "additionalProperties": false,
+    │               "properties": {
+    │                 "item": {
+    │                   "description": "The item to price",
+    │                   "type": "string"
+    │                 },
+    │                 "store": {
+    │                   "description": "The store name",
+    │                   "type": "string"
+    │                 }
+    │               },
+    │               "required": [
+    │                 "item",
+    │                 "store"
+    │               ],
+    │               "type": "object"
+    │             }
+    │           }
+    │         }
+    │       }
+    │       output: {
+    │         "content": [
+    │           {
+    │             "input": {
+    │               "item": "laptop",
+    │               "store": "StoreA"
+    │             },
+    │             "providerMetadata": {
+    │               "openai": {
+    │                 "itemId": "<itemId:3>"
+    │               }
+    │             },
+    │             "toolCallId": "<toolCallId:2>",
+    │             "toolName": "get_store_price",
+    │             "type": "tool-call"
+    │           },
+    │           {
+    │             "input": {
+    │               "item": "laptop",
+    │               "store": "StoreB"
+    │             },
+    │             "providerMetadata": {
+    │               "openai": {
+    │                 "itemId": "<itemId:5>"
+    │               }
+    │             },
+    │             "toolCallId": "<toolCallId:4>",
+    │             "toolName": "get_store_price",
+    │             "type": "tool-call"
+    │           },
+    │           {
+    │             "dynamic": false,
+    │             "input": {
+    │               "item": "laptop",
+    │               "store": "StoreA"
+    │             },
+    │             "output": "{\"item\":\"laptop\",\"price\":999,\"store\":\"StoreA\"}",
+    │             "providerMetadata": {
+    │               "openai": {
+    │                 "itemId": "<itemId:3>"
+    │               }
+    │             },
+    │             "toolCallId": "<toolCallId:2>",
+    │             "toolName": "get_store_price",
+    │             "type": "tool-result"
+    │           },
+    │           {
+    │             "dynamic": false,
+    │             "input": {
+    │               "item": "laptop",
+    │               "store": "StoreB"
+    │             },
+    │             "output": "{\"item\":\"laptop\",\"price\":1099,\"store\":\"StoreB\"}",
+    │             "providerMetadata": {
+    │               "openai": {
+    │                 "itemId": "<itemId:5>"
+    │               }
+    │             },
+    │             "toolCallId": "<toolCallId:4>",
+    │             "toolName": "get_store_price",
+    │             "type": "tool-result"
+    │           },
+    │           {
+    │             "input": {
+    │               "discountCode": "SAVE20",
+    │               "total": 999
+    │             },
+    │             "providerMetadata": {
+    │               "openai": {
+    │                 "itemId": "<itemId:8>"
+    │               }
+    │             },
+    │             "toolCallId": "<toolCallId:7>",
+    │             "toolName": "apply_discount",
+    │             "type": "tool-call"
+    │           },
+    │           {
+    │             "dynamic": false,
+    │             "input": {
+    │               "discountCode": "SAVE20",
+    │               "total": 999
+    │             },
+    │             "output": "{\"discountCode\":\"SAVE20\",\"finalTotal\":799.2,\"originalTotal\":999}",
+    │             "providerMetadata": {
+    │               "openai": {
+    │                 "itemId": "<itemId:8>"
+    │               }
+    │             },
+    │             "toolCallId": "<toolCallId:7>",
+    │             "toolName": "apply_discount",
+    │             "type": "tool-result"
+    │           },
+    │           {
+    │             "providerMetadata": {
+    │               "openai": {
+    │                 "itemId": "<itemId:10>"
+    │               }
+    │             },
+    │             "text": "Here are the prices for the laptop:\n\n- **Store A**: $999\n- **Store B**: $1099\n\nThe cheaper price is from **Store A**. After applying the discount code **SAVE20**, the final total is **$799.20**.",
+    │             "type": "text"
+    │           }
+    │         ],
+    │         "finishReason": "stop",
+    │         "providerMetadata": {
+    │           "openai": {
+    │             "responseId": "<responseId:11>",
+    │             "serviceTier": "default"
+    │           }
+    │         },
+    │         "response": {
+    │           "messages": [
+    │             {
+    │               "content": [
+    │                 {
+    │                   "providerOptions": {
+    │                     "openai": {
+    │                       "itemId": "<itemId:10>"
+    │                     }
+    │                   },
+    │                   "text": "Here are the prices for the laptop:\n\n- **Store A**: $999\n- **Store B**: $1099\n\nThe cheaper price is from **Store A**. After applying the discount code **SAVE20**, the final total is **$799.20**.",
+    │                   "type": "text"
+    │                 }
+    │               ],
+    │               "role": "assistant"
+    │             }
+    │           ],
+    │           "modelId": "gpt-4o-mini-2024-07-18",
+    │           "timestamp": "<timestamp>"
+    │         },
+    │         "responseMessages": "<omitted>",
+    │         "steps": [
+    │           {
+    │             "callId": "<callId:1>",
+    │             "content": [
+    │               {
+    │                 "input": {
+    │                   "item": "laptop",
+    │                   "store": "StoreA"
+    │                 },
+    │                 "providerMetadata": {
+    │                   "openai": {
+    │                     "itemId": "<itemId:3>"
+    │                   }
+    │                 },
+    │                 "toolCallId": "<toolCallId:2>",
+    │                 "toolName": "get_store_price",
+    │                 "type": "tool-call"
+    │               },
+    │               {
+    │                 "input": {
+    │                   "item": "laptop",
+    │                   "store": "StoreB"
+    │                 },
+    │                 "providerMetadata": {
+    │                   "openai": {
+    │                     "itemId": "<itemId:5>"
+    │                   }
+    │                 },
+    │                 "toolCallId": "<toolCallId:4>",
+    │                 "toolName": "get_store_price",
+    │                 "type": "tool-call"
+    │               },
+    │               {
+    │                 "dynamic": false,
+    │                 "input": {
+    │                   "item": "laptop",
+    │                   "store": "StoreA"
+    │                 },
+    │                 "output": "{\"item\":\"laptop\",\"price\":999,\"store\":\"StoreA\"}",
+    │                 "providerMetadata": {
+    │                   "openai": {
+    │                     "itemId": "<itemId:3>"
+    │                   }
+    │                 },
+    │                 "toolCallId": "<toolCallId:2>",
+    │                 "toolName": "get_store_price",
+    │                 "type": "tool-result"
+    │               },
+    │               {
+    │                 "dynamic": false,
+    │                 "input": {
+    │                   "item": "laptop",
+    │                   "store": "StoreB"
+    │                 },
+    │                 "output": "{\"item\":\"laptop\",\"price\":1099,\"store\":\"StoreB\"}",
+    │                 "providerMetadata": {
+    │                   "openai": {
+    │                     "itemId": "<itemId:5>"
+    │                   }
+    │                 },
+    │                 "toolCallId": "<toolCallId:4>",
+    │                 "toolName": "get_store_price",
+    │                 "type": "tool-result"
+    │               }
+    │             ],
+    │             "finishReason": "tool-calls",
+    │             "model": {
+    │               "modelId": "gpt-4o-mini-2024-07-18",
+    │               "provider": "openai.responses"
+    │             },
+    │             "providerMetadata": {
+    │               "openai": {
+    │                 "responseId": "<responseId:6>",
+    │                 "serviceTier": "default"
+    │               }
+    │             },
+    │             "response": {
+    │               "messages": [
+    │                 {
+    │                   "content": [
+    │                     {
+    │                       "input": {
+    │                         "item": "laptop",
+    │                         "store": "StoreA"
+    │                       },
+    │                       "providerOptions": {
+    │                         "openai": {
+    │                           "itemId": "<itemId:3>"
+    │                         }
+    │                       },
+    │                       "toolCallId": "<toolCallId:2>",
+    │                       "toolName": "get_store_price",
+    │                       "type": "tool-call"
+    │                     },
+    │                     {
+    │                       "input": {
+    │                         "item": "laptop",
+    │                         "store": "StoreB"
+    │                       },
+    │                       "providerOptions": {
+    │                         "openai": {
+    │                           "itemId": "<itemId:5>"
+    │                         }
+    │                       },
+    │                       "toolCallId": "<toolCallId:4>",
+    │                       "toolName": "get_store_price",
+    │                       "type": "tool-call"
+    │                     }
+    │                   ],
+    │                   "role": "assistant"
+    │                 },
+    │                 {
+    │                   "content": [
+    │                     {
+    │                       "output": {
+    │                         "type": "text",
+    │                         "value": "{\"item\":\"laptop\",\"price\":999,\"store\":\"StoreA\"}"
+    │                       },
+    │                       "providerOptions": {
+    │                         "openai": {
+    │                           "itemId": "<itemId:3>"
+    │                         }
+    │                       },
+    │                       "toolCallId": "<toolCallId:2>",
+    │                       "toolName": "get_store_price",
+    │                       "type": "tool-result"
+    │                     },
+    │                     {
+    │                       "output": {
+    │                         "type": "text",
+    │                         "value": "{\"item\":\"laptop\",\"price\":1099,\"store\":\"StoreB\"}"
+    │                       },
+    │                       "providerOptions": {
+    │                         "openai": {
+    │                           "itemId": "<itemId:5>"
+    │                         }
+    │                       },
+    │                       "toolCallId": "<toolCallId:4>",
+    │                       "toolName": "get_store_price",
+    │                       "type": "tool-result"
+    │                     }
+    │                   ],
+    │                   "role": "tool"
+    │                 }
+    │               ],
+    │               "modelId": "gpt-4o-mini-2024-07-18",
+    │               "timestamp": "<timestamp>"
+    │             },
+    │             "runtimeContext": {},
+    │             "stepNumber": 0,
+    │             "toolsContext": {},
+    │             "usage": {
+    │               "inputTokenDetails": {
+    │                 "cacheReadTokens": 0,
+    │                 "cacheWriteTokens": 0,
+    │                 "noCacheTokens": 173
+    │               },
+    │               "inputTokens": 173,
+    │               "outputTokenDetails": {
+    │                 "reasoningTokens": 0,
+    │                 "textTokens": 59
+    │               },
+    │               "outputTokens": 59,
+    │               "raw": {
+    │                 "input_tokens": 173,
+    │                 "input_tokens_details": {
+    │                   "cache_write_tokens": 0,
+    │                   "cached_tokens": 0
+    │                 },
+    │                 "output_tokens": 59,
+    │                 "output_tokens_details": {
+    │                   "reasoning_tokens": 0
+    │                 },
+    │                 "total_tokens": 232
+    │               },
+    │               "totalTokens": 232
+    │             },
+    │             "warnings": []
+    │           },
+    │           {
+    │             "callId": "<callId:1>",
+    │             "content": [
+    │               {
+    │                 "input": {
+    │                   "discountCode": "SAVE20",
+    │                   "total": 999
+    │                 },
+    │                 "providerMetadata": {
+    │                   "openai": {
+    │                     "itemId": "<itemId:8>"
+    │                   }
+    │                 },
+    │                 "toolCallId": "<toolCallId:7>",
+    │                 "toolName": "apply_discount",
+    │                 "type": "tool-call"
+    │               },
+    │               {
+    │                 "dynamic": false,
+    │                 "input": {
+    │                   "discountCode": "SAVE20",
+    │                   "total": 999
+    │                 },
+    │                 "output": "{\"discountCode\":\"SAVE20\",\"finalTotal\":799.2,\"originalTotal\":999}",
+    │                 "providerMetadata": {
+    │                   "openai": {
+    │                     "itemId": "<itemId:8>"
+    │                   }
+    │                 },
+    │                 "toolCallId": "<toolCallId:7>",
+    │                 "toolName": "apply_discount",
+    │                 "type": "tool-result"
+    │               }
+    │             ],
+    │             "finishReason": "tool-calls",
+    │             "model": {
+    │               "modelId": "gpt-4o-mini-2024-07-18",
+    │               "provider": "openai.responses"
+    │             },
+    │             "providerMetadata": {
+    │               "openai": {
+    │                 "responseId": "<responseId:9>",
+    │                 "serviceTier": "default"
+    │               }
+    │             },
+    │             "response": {
+    │               "messages": [
+    │                 {
+    │                   "content": [
+    │                     {
+    │                       "input": {
+    │                         "discountCode": "SAVE20",
+    │                         "total": 999
+    │                       },
+    │                       "providerOptions": {
+    │                         "openai": {
+    │                           "itemId": "<itemId:8>"
+    │                         }
+    │                       },
+    │                       "toolCallId": "<toolCallId:7>",
+    │                       "toolName": "apply_discount",
+    │                       "type": "tool-call"
+    │                     }
+    │                   ],
+    │                   "role": "assistant"
+    │                 },
+    │                 {
+    │                   "content": [
+    │                     {
+    │                       "output": {
+    │                         "type": "text",
+    │                         "value": "{\"discountCode\":\"SAVE20\",\"finalTotal\":799.2,\"originalTotal\":999}"
+    │                       },
+    │                       "providerOptions": {
+    │                         "openai": {
+    │                           "itemId": "<itemId:8>"
+    │                         }
+    │                       },
+    │                       "toolCallId": "<toolCallId:7>",
+    │                       "toolName": "apply_discount",
+    │                       "type": "tool-result"
+    │                     }
+    │                   ],
+    │                   "role": "tool"
+    │                 }
+    │               ],
+    │               "modelId": "gpt-4o-mini-2024-07-18",
+    │               "timestamp": "<timestamp>"
+    │             },
+    │             "runtimeContext": {},
+    │             "stepNumber": 1,
+    │             "toolsContext": {},
+    │             "usage": {
+    │               "inputTokenDetails": {
+    │                 "cacheReadTokens": 0,
+    │                 "cacheWriteTokens": 0,
+    │                 "noCacheTokens": 260
+    │               },
+    │               "inputTokens": 260,
+    │               "outputTokenDetails": {
+    │                 "reasoningTokens": 0,
+    │                 "textTokens": 21
+    │               },
+    │               "outputTokens": 21,
+    │               "raw": {
+    │                 "input_tokens": 260,
+    │                 "input_tokens_details": {
+    │                   "cache_write_tokens": 0,
+    │                   "cached_tokens": 0
+    │                 },
+    │                 "output_tokens": 21,
+    │                 "output_tokens_details": {
+    │                   "reasoning_tokens": 0
+    │                 },
+    │                 "total_tokens": 281
+    │               },
+    │               "totalTokens": 281
+    │             },
+    │             "warnings": []
+    │           },
+    │           {
+    │             "callId": "<callId:1>",
+    │             "content": [
+    │               {
+    │                 "providerMetadata": {
+    │                   "openai": {
+    │                     "itemId": "<itemId:10>"
+    │                   }
+    │                 },
+    │                 "text": "Here are the prices for the laptop:\n\n- **Store A**: $999\n- **Store B**: $1099\n\nThe cheaper price is from **Store A**. After applying the discount code **SAVE20**, the final total is **$799.20**.",
+    │                 "type": "text"
+    │               }
+    │             ],
+    │             "finishReason": "stop",
+    │             "model": {
+    │               "modelId": "gpt-4o-mini-2024-07-18",
+    │               "provider": "openai.responses"
+    │             },
+    │             "providerMetadata": {
+    │               "openai": {
+    │                 "responseId": "<responseId:11>",
+    │                 "serviceTier": "default"
+    │               }
+    │             },
+    │             "response": {
+    │               "messages": [
+    │                 {
+    │                   "content": [
+    │                     {
+    │                       "providerOptions": {
+    │                         "openai": {
+    │                           "itemId": "<itemId:10>"
+    │                         }
+    │                       },
+    │                       "text": "Here are the prices for the laptop:\n\n- **Store A**: $999\n- **Store B**: $1099\n\nThe cheaper price is from **Store A**. After applying the discount code **SAVE20**, the final total is **$799.20**.",
+    │                       "type": "text"
+    │                     }
+    │                   ],
+    │                   "role": "assistant"
+    │                 }
+    │               ],
+    │               "modelId": "gpt-4o-mini-2024-07-18",
+    │               "timestamp": "<timestamp>"
+    │             },
+    │             "runtimeContext": {},
+    │             "stepNumber": 2,
+    │             "toolsContext": {},
+    │             "usage": {
+    │               "inputTokenDetails": {
+    │                 "cacheReadTokens": 0,
+    │                 "cacheWriteTokens": 0,
+    │                 "noCacheTokens": 305
+    │               },
+    │               "inputTokens": 305,
+    │               "outputTokenDetails": {
+    │                 "reasoningTokens": 0,
+    │                 "textTokens": 59
+    │               },
+    │               "outputTokens": 59,
+    │               "raw": {
+    │                 "input_tokens": 305,
+    │                 "input_tokens_details": {
+    │                   "cache_write_tokens": 0,
+    │                   "cached_tokens": 0
+    │                 },
+    │                 "output_tokens": 59,
+    │                 "output_tokens_details": {
+    │                   "reasoning_tokens": 0
+    │                 },
+    │                 "total_tokens": 364
+    │               },
+    │               "totalTokens": 364
+    │             },
+    │             "warnings": []
+    │           }
+    │         ],
+    │         "text": "Here are the prices for the laptop:\n\n- **Store A**: $999\n- **Store B**: $1099\n\nThe cheaper price is from **Store A**. After applying the discount code **SAVE20**, the final total is **$799.20**.",
+    │         "toolCalls": [
+    │           {
+    │             "input": {
+    │               "item": "laptop",
+    │               "store": "StoreA"
+    │             },
+    │             "providerMetadata": {
+    │               "openai": {
+    │                 "itemId": "<itemId:3>"
+    │               }
+    │             },
+    │             "toolCallId": "<toolCallId:2>",
+    │             "toolName": "get_store_price",
+    │             "type": "tool-call"
+    │           },
+    │           {
+    │             "input": {
+    │               "item": "laptop",
+    │               "store": "StoreB"
+    │             },
+    │             "providerMetadata": {
+    │               "openai": {
+    │                 "itemId": "<itemId:5>"
+    │               }
+    │             },
+    │             "toolCallId": "<toolCallId:4>",
+    │             "toolName": "get_store_price",
+    │             "type": "tool-call"
+    │           },
+    │           {
+    │             "input": {
+    │               "discountCode": "SAVE20",
+    │               "total": 999
+    │             },
+    │             "providerMetadata": {
+    │               "openai": {
+    │                 "itemId": "<itemId:8>"
+    │               }
+    │             },
+    │             "toolCallId": "<toolCallId:7>",
+    │             "toolName": "apply_discount",
+    │             "type": "tool-call"
+    │           }
+    │         ],
+    │         "toolResults": [
+    │           {
+    │             "dynamic": false,
+    │             "input": {
+    │               "item": "laptop",
+    │               "store": "StoreA"
+    │             },
+    │             "output": "{\"item\":\"laptop\",\"price\":999,\"store\":\"StoreA\"}",
+    │             "providerMetadata": {
+    │               "openai": {
+    │                 "itemId": "<itemId:3>"
+    │               }
+    │             },
+    │             "toolCallId": "<toolCallId:2>",
+    │             "toolName": "get_store_price",
+    │             "type": "tool-result"
+    │           },
+    │           {
+    │             "dynamic": false,
+    │             "input": {
+    │               "item": "laptop",
+    │               "store": "StoreB"
+    │             },
+    │             "output": "{\"item\":\"laptop\",\"price\":1099,\"store\":\"StoreB\"}",
+    │             "providerMetadata": {
+    │               "openai": {
+    │                 "itemId": "<itemId:5>"
+    │               }
+    │             },
+    │             "toolCallId": "<toolCallId:4>",
+    │             "toolName": "get_store_price",
+    │             "type": "tool-result"
+    │           },
+    │           {
+    │             "dynamic": false,
+    │             "input": {
+    │               "discountCode": "SAVE20",
+    │               "total": 999
+    │             },
+    │             "output": "{\"discountCode\":\"SAVE20\",\"finalTotal\":799.2,\"originalTotal\":999}",
+    │             "providerMetadata": {
+    │               "openai": {
+    │                 "itemId": "<itemId:8>"
+    │               }
+    │             },
+    │             "toolCallId": "<toolCallId:7>",
+    │             "toolName": "apply_discount",
+    │             "type": "tool-result"
+    │           }
+    │         ],
+    │         "totalUsage": {
+    │           "inputTokenDetails": {
+    │             "cacheReadTokens": 0,
+    │             "cacheWriteTokens": 0,
+    │             "noCacheTokens": 738
+    │           },
+    │           "inputTokens": 738,
+    │           "outputTokenDetails": {
+    │             "reasoningTokens": 0,
+    │             "textTokens": 139
+    │           },
+    │           "outputTokens": 139,
+    │           "totalTokens": 877
+    │         },
+    │         "usage": {
+    │           "inputTokenDetails": {
+    │             "cacheReadTokens": 0,
+    │             "cacheWriteTokens": 0,
+    │             "noCacheTokens": 738
+    │           },
+    │           "inputTokens": 738,
+    │           "outputTokenDetails": {
+    │             "reasoningTokens": 0,
+    │             "textTokens": 139
+    │           },
+    │           "outputTokens": 139,
+    │           "totalTokens": 877
+    │         },
+    │         "warnings": []
+    │       }
+    │       metadata: {
+    │         "braintrust": {
+    │           "integration_name": "ai-sdk",
+    │           "sdk_language": "typescript"
+    │         },
+    │         "model": "gpt-4o-mini-2024-07-18",
+    │         "provider": "openai.responses"
+    │       }
+    │       ├── doGenerate [llm]
+    │       │   input: {
+    │       │     "instructions": "You are a shopping assistant. Use the tools before answering pricing questions.",
+    │       │     "maxOutputTokens": 256,
+    │       │     "messages": [
+    │       │       {
+    │       │         "content": "I need help comparing laptop prices before checkout.",
+    │       │         "role": "user"
+    │       │       },
+    │       │       {
+    │       │         "content": "I can compare store prices and apply a discount code.",
+    │       │         "role": "assistant"
+    │       │       },
+    │       │       {
+    │       │         "content": "Call get_store_price for a laptop at StoreA and StoreB, then call apply_discount with code SAVE20 for the cheaper price. Finish with the discounted total.",
+    │       │         "role": "user"
+    │       │       }
+    │       │     ],
+    │       │     "model": {
+    │       │       "modelId": "gpt-4o-mini-2024-07-18",
+    │       │       "provider": "openai.responses"
+    │       │     },
+    │       │     "temperature": 0,
+    │       │     "tools": [
+    │       │       {
+    │       │         "description": "Get the price of an item at a store",
+    │       │         "inputSchema": {
+    │       │           "$schema": "http://json-schema.org/draft-07/schema#",
+    │       │           "additionalProperties": false,
+    │       │           "properties": {
+    │       │             "item": {
+    │       │               "description": "The item to price",
+    │       │               "type": "string"
+    │       │             },
+    │       │             "store": {
+    │       │               "description": "The store name",
+    │       │               "type": "string"
+    │       │             }
+    │       │           },
+    │       │           "required": [
+    │       │             "item",
+    │       │             "store"
+    │       │           ],
+    │       │           "type": "object"
+    │       │         },
+    │       │         "name": "get_store_price",
+    │       │         "type": "function"
+    │       │       },
+    │       │       {
+    │       │         "description": "Apply a discount code to a total",
+    │       │         "inputSchema": {
+    │       │           "$schema": "http://json-schema.org/draft-07/schema#",
+    │       │           "additionalProperties": false,
+    │       │           "properties": {
+    │       │             "discountCode": {
+    │       │               "description": "The discount code to apply",
+    │       │               "type": "string"
+    │       │             },
+    │       │             "total": {
+    │       │               "description": "The original total",
+    │       │               "type": "number"
+    │       │             }
+    │       │           },
+    │       │           "required": [
+    │       │             "discountCode",
+    │       │             "total"
+    │       │           ],
+    │       │           "type": "object"
+    │       │         },
+    │       │         "name": "apply_discount",
+    │       │         "type": "function"
+    │       │       }
+    │       │     ]
+    │       │   }
+    │       │   output: {
+    │       │     "content": [
+    │       │       {
+    │       │         "input": {
+    │       │           "item": "laptop",
+    │       │           "store": "StoreA"
+    │       │         },
+    │       │         "providerMetadata": {
+    │       │           "openai": {
+    │       │             "itemId": "<itemId:3>"
+    │       │           }
+    │       │         },
+    │       │         "toolCallId": "<toolCallId:2>",
+    │       │         "toolName": "get_store_price",
+    │       │         "type": "tool-call"
+    │       │       },
+    │       │       {
+    │       │         "input": {
+    │       │           "item": "laptop",
+    │       │           "store": "StoreB"
+    │       │         },
+    │       │         "providerMetadata": {
+    │       │           "openai": {
+    │       │             "itemId": "<itemId:5>"
+    │       │           }
+    │       │         },
+    │       │         "toolCallId": "<toolCallId:4>",
+    │       │         "toolName": "get_store_price",
+    │       │         "type": "tool-call"
+    │       │       }
+    │       │     ],
+    │       │     "finishReason": "tool-calls",
+    │       │     "providerMetadata": {
+    │       │       "openai": {
+    │       │         "responseId": "<responseId:1>",
+    │       │         "serviceTier": "default"
+    │       │       }
+    │       │     },
+    │       │     "response": {},
+    │       │     "usage": {
+    │       │       "inputTokenDetails": {
+    │       │         "cacheReadTokens": 0,
+    │       │         "cacheWriteTokens": 0,
+    │       │         "noCacheTokens": 173
+    │       │       },
+    │       │       "inputTokens": 173,
+    │       │       "outputTokenDetails": {
+    │       │         "reasoningTokens": 0,
+    │       │         "textTokens": 59
+    │       │       },
+    │       │       "outputTokens": 59,
+    │       │       "raw": {
+    │       │         "input_tokens": 173,
+    │       │         "input_tokens_details": {
+    │       │           "cache_write_tokens": 0,
+    │       │           "cached_tokens": 0
+    │       │         },
+    │       │         "output_tokens": 59,
+    │       │         "output_tokens_details": {
+    │       │           "reasoning_tokens": 0
+    │       │         },
+    │       │         "total_tokens": 232
+    │       │       },
+    │       │       "totalTokens": 232
+    │       │     }
+    │       │   }
+    │       │   metadata: {
+    │       │     "braintrust": {
+    │       │       "integration_name": "ai-sdk",
+    │       │       "sdk_language": "typescript"
+    │       │     },
+    │       │     "model": "gpt-4o-mini-2024-07-18",
+    │       │     "provider": "openai.responses"
+    │       │   }
+    │       │   metrics: {
+    │       │     "completion_tokens": 59,
+    │       │     "prompt_cache_creation_tokens": 0,
+    │       │     "prompt_cached_tokens": 0,
+    │       │     "prompt_tokens": 173,
+    │       │     "tokens": 232
+    │       │   }
+    │       ├── get_store_price [tool]
+    │       │   input: {
+    │       │     "item": "laptop",
+    │       │     "store": "StoreA"
+    │       │   }
+    │       │   output: "{\"item\":\"laptop\",\"price\":999,\"store\":\"StoreA\"}"
+    │       │   metadata: {
+    │       │     "braintrust": {
+    │       │       "integration_name": "ai-sdk",
+    │       │       "sdk_language": "typescript"
+    │       │     },
+    │       │     "toolCallId": "<toolCallId:1>",
+    │       │     "toolName": "get_store_price"
+    │       │   }
+    │       ├── get_store_price [tool]
+    │       │   input: {
+    │       │     "item": "laptop",
+    │       │     "store": "StoreB"
+    │       │   }
+    │       │   output: "{\"item\":\"laptop\",\"price\":1099,\"store\":\"StoreB\"}"
+    │       │   metadata: {
+    │       │     "braintrust": {
+    │       │       "integration_name": "ai-sdk",
+    │       │       "sdk_language": "typescript"
+    │       │     },
+    │       │     "toolCallId": "<toolCallId:1>",
+    │       │     "toolName": "get_store_price"
+    │       │   }
+    │       ├── doGenerate [llm]
+    │       │   input: {
+    │       │     "instructions": "You are a shopping assistant. Use the tools before answering pricing questions.",
+    │       │     "maxOutputTokens": 256,
+    │       │     "messages": [
+    │       │       {
+    │       │         "content": "I need help comparing laptop prices before checkout.",
+    │       │         "role": "user"
+    │       │       },
+    │       │       {
+    │       │         "content": "I can compare store prices and apply a discount code.",
+    │       │         "role": "assistant"
+    │       │       },
+    │       │       {
+    │       │         "content": "Call get_store_price for a laptop at StoreA and StoreB, then call apply_discount with code SAVE20 for the cheaper price. Finish with the discounted total.",
+    │       │         "role": "user"
+    │       │       },
+    │       │       {
+    │       │         "content": [
+    │       │           {
+    │       │             "input": {
+    │       │               "item": "laptop",
+    │       │               "store": "StoreA"
+    │       │             },
+    │       │             "providerOptions": {
+    │       │               "openai": {
+    │       │                 "itemId": "<itemId:2>"
+    │       │               }
+    │       │             },
+    │       │             "toolCallId": "<toolCallId:1>",
+    │       │             "toolName": "get_store_price",
+    │       │             "type": "tool-call"
+    │       │           },
+    │       │           {
+    │       │             "input": {
+    │       │               "item": "laptop",
+    │       │               "store": "StoreB"
+    │       │             },
+    │       │             "providerOptions": {
+    │       │               "openai": {
+    │       │                 "itemId": "<itemId:4>"
+    │       │               }
+    │       │             },
+    │       │             "toolCallId": "<toolCallId:3>",
+    │       │             "toolName": "get_store_price",
+    │       │             "type": "tool-call"
+    │       │           }
+    │       │         ],
+    │       │         "role": "assistant"
+    │       │       },
+    │       │       {
+    │       │         "content": [
+    │       │           {
+    │       │             "output": {
+    │       │               "type": "text",
+    │       │               "value": "{\"item\":\"laptop\",\"price\":999,\"store\":\"StoreA\"}"
+    │       │             },
+    │       │             "providerOptions": {
+    │       │               "openai": {
+    │       │                 "itemId": "<itemId:2>"
+    │       │               }
+    │       │             },
+    │       │             "toolCallId": "<toolCallId:1>",
+    │       │             "toolName": "get_store_price",
+    │       │             "type": "tool-result"
+    │       │           },
+    │       │           {
+    │       │             "output": {
+    │       │               "type": "text",
+    │       │               "value": "{\"item\":\"laptop\",\"price\":1099,\"store\":\"StoreB\"}"
+    │       │             },
+    │       │             "providerOptions": {
+    │       │               "openai": {
+    │       │                 "itemId": "<itemId:4>"
+    │       │               }
+    │       │             },
+    │       │             "toolCallId": "<toolCallId:3>",
+    │       │             "toolName": "get_store_price",
+    │       │             "type": "tool-result"
+    │       │           }
+    │       │         ],
+    │       │         "role": "tool"
+    │       │       }
+    │       │     ],
+    │       │     "model": {
+    │       │       "modelId": "gpt-4o-mini-2024-07-18",
+    │       │       "provider": "openai.responses"
+    │       │     },
+    │       │     "temperature": 0,
+    │       │     "tools": [
+    │       │       {
+    │       │         "description": "Get the price of an item at a store",
+    │       │         "inputSchema": {
+    │       │           "$schema": "http://json-schema.org/draft-07/schema#",
+    │       │           "additionalProperties": false,
+    │       │           "properties": {
+    │       │             "item": {
+    │       │               "description": "The item to price",
+    │       │               "type": "string"
+    │       │             },
+    │       │             "store": {
+    │       │               "description": "The store name",
+    │       │               "type": "string"
+    │       │             }
+    │       │           },
+    │       │           "required": [
+    │       │             "item",
+    │       │             "store"
+    │       │           ],
+    │       │           "type": "object"
+    │       │         },
+    │       │         "name": "get_store_price",
+    │       │         "type": "function"
+    │       │       },
+    │       │       {
+    │       │         "description": "Apply a discount code to a total",
+    │       │         "inputSchema": {
+    │       │           "$schema": "http://json-schema.org/draft-07/schema#",
+    │       │           "additionalProperties": false,
+    │       │           "properties": {
+    │       │             "discountCode": {
+    │       │               "description": "The discount code to apply",
+    │       │               "type": "string"
+    │       │             },
+    │       │             "total": {
+    │       │               "description": "The original total",
+    │       │               "type": "number"
+    │       │             }
+    │       │           },
+    │       │           "required": [
+    │       │             "discountCode",
+    │       │             "total"
+    │       │           ],
+    │       │           "type": "object"
+    │       │         },
+    │       │         "name": "apply_discount",
+    │       │         "type": "function"
+    │       │       }
+    │       │     ]
+    │       │   }
+    │       │   output: {
+    │       │     "content": [
+    │       │       {
+    │       │         "input": {
+    │       │           "discountCode": "SAVE20",
+    │       │           "total": 999
+    │       │         },
+    │       │         "providerMetadata": {
+    │       │           "openai": {
+    │       │             "itemId": "<itemId:3>"
+    │       │           }
+    │       │         },
+    │       │         "toolCallId": "<toolCallId:2>",
+    │       │         "toolName": "apply_discount",
+    │       │         "type": "tool-call"
+    │       │       }
+    │       │     ],
+    │       │     "finishReason": "tool-calls",
+    │       │     "providerMetadata": {
+    │       │       "openai": {
+    │       │         "responseId": "<responseId:1>",
+    │       │         "serviceTier": "default"
+    │       │       }
+    │       │     },
+    │       │     "response": {},
+    │       │     "usage": {
+    │       │       "inputTokenDetails": {
+    │       │         "cacheReadTokens": 0,
+    │       │         "cacheWriteTokens": 0,
+    │       │         "noCacheTokens": 260
+    │       │       },
+    │       │       "inputTokens": 260,
+    │       │       "outputTokenDetails": {
+    │       │         "reasoningTokens": 0,
+    │       │         "textTokens": 21
+    │       │       },
+    │       │       "outputTokens": 21,
+    │       │       "raw": {
+    │       │         "input_tokens": 260,
+    │       │         "input_tokens_details": {
+    │       │           "cache_write_tokens": 0,
+    │       │           "cached_tokens": 0
+    │       │         },
+    │       │         "output_tokens": 21,
+    │       │         "output_tokens_details": {
+    │       │           "reasoning_tokens": 0
+    │       │         },
+    │       │         "total_tokens": 281
+    │       │       },
+    │       │       "totalTokens": 281
+    │       │     }
+    │       │   }
+    │       │   metadata: {
+    │       │     "braintrust": {
+    │       │       "integration_name": "ai-sdk",
+    │       │       "sdk_language": "typescript"
+    │       │     },
+    │       │     "model": "gpt-4o-mini-2024-07-18",
+    │       │     "provider": "openai.responses"
+    │       │   }
+    │       │   metrics: {
+    │       │     "completion_tokens": 21,
+    │       │     "prompt_cache_creation_tokens": 0,
+    │       │     "prompt_cached_tokens": 0,
+    │       │     "prompt_tokens": 260,
+    │       │     "tokens": 281
+    │       │   }
+    │       ├── apply_discount [tool]
+    │       │   input: {
+    │       │     "discountCode": "SAVE20",
+    │       │     "total": 999
+    │       │   }
+    │       │   output: "{\"discountCode\":\"SAVE20\",\"finalTotal\":799.2,\"originalTotal\":999}"
+    │       │   metadata: {
+    │       │     "braintrust": {
+    │       │       "integration_name": "ai-sdk",
+    │       │       "sdk_language": "typescript"
+    │       │     },
+    │       │     "toolCallId": "<toolCallId:1>",
+    │       │     "toolName": "apply_discount"
+    │       │   }
+    │       └── doGenerate [llm]
+    │           input: {
+    │             "instructions": "You are a shopping assistant. Use the tools before answering pricing questions.",
+    │             "maxOutputTokens": 256,
+    │             "messages": [
+    │               {
+    │                 "content": "I need help comparing laptop prices before checkout.",
+    │                 "role": "user"
+    │               },
+    │               {
+    │                 "content": "I can compare store prices and apply a discount code.",
+    │                 "role": "assistant"
+    │               },
+    │               {
+    │                 "content": "Call get_store_price for a laptop at StoreA and StoreB, then call apply_discount with code SAVE20 for the cheaper price. Finish with the discounted total.",
+    │                 "role": "user"
+    │               },
+    │               {
+    │                 "content": [
+    │                   {
+    │                     "input": {
+    │                       "item": "laptop",
+    │                       "store": "StoreA"
+    │                     },
+    │                     "providerOptions": {
+    │                       "openai": {
+    │                         "itemId": "<itemId:2>"
+    │                       }
+    │                     },
+    │                     "toolCallId": "<toolCallId:1>",
+    │                     "toolName": "get_store_price",
+    │                     "type": "tool-call"
+    │                   },
+    │                   {
+    │                     "input": {
+    │                       "item": "laptop",
+    │                       "store": "StoreB"
+    │                     },
+    │                     "providerOptions": {
+    │                       "openai": {
+    │                         "itemId": "<itemId:4>"
+    │                       }
+    │                     },
+    │                     "toolCallId": "<toolCallId:3>",
+    │                     "toolName": "get_store_price",
+    │                     "type": "tool-call"
+    │                   }
+    │                 ],
+    │                 "role": "assistant"
+    │               },
+    │               {
+    │                 "content": [
+    │                   {
+    │                     "output": {
+    │                       "type": "text",
+    │                       "value": "{\"item\":\"laptop\",\"price\":999,\"store\":\"StoreA\"}"
+    │                     },
+    │                     "providerOptions": {
+    │                       "openai": {
+    │                         "itemId": "<itemId:2>"
+    │                       }
+    │                     },
+    │                     "toolCallId": "<toolCallId:1>",
+    │                     "toolName": "get_store_price",
+    │                     "type": "tool-result"
+    │                   },
+    │                   {
+    │                     "output": {
+    │                       "type": "text",
+    │                       "value": "{\"item\":\"laptop\",\"price\":1099,\"store\":\"StoreB\"}"
+    │                     },
+    │                     "providerOptions": {
+    │                       "openai": {
+    │                         "itemId": "<itemId:4>"
+    │                       }
+    │                     },
+    │                     "toolCallId": "<toolCallId:3>",
+    │                     "toolName": "get_store_price",
+    │                     "type": "tool-result"
+    │                   }
+    │                 ],
+    │                 "role": "tool"
+    │               },
+    │               {
+    │                 "content": [
+    │                   {
+    │                     "input": {
+    │                       "discountCode": "SAVE20",
+    │                       "total": 999
+    │                     },
+    │                     "providerOptions": {
+    │                       "openai": {
+    │                         "itemId": "<itemId:6>"
+    │                       }
+    │                     },
+    │                     "toolCallId": "<toolCallId:5>",
+    │                     "toolName": "apply_discount",
+    │                     "type": "tool-call"
+    │                   }
+    │                 ],
+    │                 "role": "assistant"
+    │               },
+    │               {
+    │                 "content": [
+    │                   {
+    │                     "output": {
+    │                       "type": "text",
+    │                       "value": "{\"discountCode\":\"SAVE20\",\"finalTotal\":799.2,\"originalTotal\":999}"
+    │                     },
+    │                     "providerOptions": {
+    │                       "openai": {
+    │                         "itemId": "<itemId:6>"
+    │                       }
+    │                     },
+    │                     "toolCallId": "<toolCallId:5>",
+    │                     "toolName": "apply_discount",
+    │                     "type": "tool-result"
+    │                   }
+    │                 ],
+    │                 "role": "tool"
+    │               }
+    │             ],
+    │             "model": {
+    │               "modelId": "gpt-4o-mini-2024-07-18",
+    │               "provider": "openai.responses"
+    │             },
+    │             "temperature": 0,
+    │             "tools": [
+    │               {
+    │                 "description": "Get the price of an item at a store",
+    │                 "inputSchema": {
+    │                   "$schema": "http://json-schema.org/draft-07/schema#",
+    │                   "additionalProperties": false,
+    │                   "properties": {
+    │                     "item": {
+    │                       "description": "The item to price",
+    │                       "type": "string"
+    │                     },
+    │                     "store": {
+    │                       "description": "The store name",
+    │                       "type": "string"
+    │                     }
+    │                   },
+    │                   "required": [
+    │                     "item",
+    │                     "store"
+    │                   ],
+    │                   "type": "object"
+    │                 },
+    │                 "name": "get_store_price",
+    │                 "type": "function"
+    │               },
+    │               {
+    │                 "description": "Apply a discount code to a total",
+    │                 "inputSchema": {
+    │                   "$schema": "http://json-schema.org/draft-07/schema#",
+    │                   "additionalProperties": false,
+    │                   "properties": {
+    │                     "discountCode": {
+    │                       "description": "The discount code to apply",
+    │                       "type": "string"
+    │                     },
+    │                     "total": {
+    │                       "description": "The original total",
+    │                       "type": "number"
+    │                     }
+    │                   },
+    │                   "required": [
+    │                     "discountCode",
+    │                     "total"
+    │                   ],
+    │                   "type": "object"
+    │                 },
+    │                 "name": "apply_discount",
+    │                 "type": "function"
+    │               }
+    │             ]
+    │           }
+    │           output: {
+    │             "content": [
+    │               {
+    │                 "providerMetadata": {
+    │                   "openai": {
+    │                     "itemId": "<itemId:2>"
+    │                   }
+    │                 },
+    │                 "text": "Here are the prices for the laptop:\n\n- **Store A**: $999\n- **Store B**: $1099\n\nThe cheaper price is from **Store A**. After applying the discount code **SAVE20**, the final total is **$799.20**.",
+    │                 "type": "text"
+    │               }
+    │             ],
+    │             "finishReason": "stop",
+    │             "providerMetadata": {
+    │               "openai": {
+    │                 "responseId": "<responseId:1>",
+    │                 "serviceTier": "default"
+    │               }
+    │             },
+    │             "response": {},
+    │             "usage": {
+    │               "inputTokenDetails": {
+    │                 "cacheReadTokens": 0,
+    │                 "cacheWriteTokens": 0,
+    │                 "noCacheTokens": 305
+    │               },
+    │               "inputTokens": 305,
+    │               "outputTokenDetails": {
+    │                 "reasoningTokens": 0,
+    │                 "textTokens": 59
+    │               },
+    │               "outputTokens": 59,
+    │               "raw": {
+    │                 "input_tokens": 305,
+    │                 "input_tokens_details": {
+    │                   "cache_write_tokens": 0,
+    │                   "cached_tokens": 0
+    │                 },
+    │                 "output_tokens": 59,
+    │                 "output_tokens_details": {
+    │                   "reasoning_tokens": 0
+    │                 },
+    │                 "total_tokens": 364
+    │               },
+    │               "totalTokens": 364
+    │             }
+    │           }
+    │           metadata: {
+    │             "braintrust": {
+    │               "integration_name": "ai-sdk",
+    │               "sdk_language": "typescript"
+    │             },
+    │             "model": "gpt-4o-mini-2024-07-18",
+    │             "provider": "openai.responses"
+    │           }
+    │           metrics: {
+    │             "completion_tokens": 59,
+    │             "prompt_cache_creation_tokens": 0,
+    │             "prompt_cached_tokens": 0,
+    │             "prompt_tokens": 305,
+    │             "tokens": 364
+    │           }
+    ├── ai-sdk-code-mode-auto-hook-sequential-operation
+    │   metadata: {
+    │     "operation": "code-mode-auto-hook-sequential",
+    │     "testRunId": "<run:1>"
+    │   }
+    │   └── codeMode [tool]
+    │       input: {
+    │         "js": "const a = await tools.host({value: 2}); return await tools.host(a);"
+    │       }
+    │       output: {
+    │         "value": 8
+    │       }
+    │       metadata: {
+    │         "toolCallId": "<toolCallId:1>"
+    │       }
+    │       ├── host [function]
+    │       │   input: {
+    │       │     "value": 2
+    │       │   }
+    │       │   output: {
+    │       │     "value": 4
+    │       │   }
+    │       │   metadata: {
+    │       │     "toolCallId": "<toolCallId:1>"
+    │       │   }
+    │       └── host [function]
+    │           input: {
+    │             "value": 4
+    │           }
+    │           output: {
+    │             "value": 8
+    │           }
+    │           metadata: {
+    │             "toolCallId": "<toolCallId:1>"
+    │           }
+    ├── ai-sdk-code-mode-auto-hook-parallel-operation
+    │   metadata: {
+    │     "operation": "code-mode-auto-hook-parallel",
+    │     "testRunId": "<run:1>"
+    │   }
+    │   └── codeMode [tool]
+    │       input: {
+    │         "js": "return await Promise.all([tools.parallel({value: 1}), tools.parallel({value: 2})]);"
+    │       }
+    │       output: [
+    │         {
+    │           "value": 1
+    │         },
+    │         {
+    │           "value": 2
+    │         }
+    │       ]
+    │       metadata: {
+    │         "toolCallId": "<toolCallId:1>"
+    │       }
+    │       ├── parallel [function]
+    │       │   input: {
+    │       │     "value": 1
+    │       │   }
+    │       │   output: {
+    │       │     "value": 1
+    │       │   }
+    │       │   metadata: {
+    │       │     "toolCallId": "<toolCallId:1>"
+    │       │   }
+    │       └── parallel [function]
+    │           input: {
+    │             "value": 2
+    │           }
+    │           output: {
+    │             "value": 2
+    │           }
+    │           metadata: {
+    │             "toolCallId": "<toolCallId:1>"
+    │           }
+    ├── ai-sdk-code-mode-auto-hook-nested-operation
+    │   metadata: {
+    │     "operation": "code-mode-auto-hook-nested",
+    │     "testRunId": "<run:1>"
+    │   }
+    │   └── codeMode [tool]
+    │       input: {
+    │         "js": "return await tools.nested({value: 3});"
+    │       }
+    │       output: {
+    │         "value": 6
+    │       }
+    │       metadata: {
+    │         "toolCallId": "<toolCallId:1>"
+    │       }
+    │       └── nested [function]
+    │           input: {
+    │             "value": 3
+    │           }
+    │           output: {
+    │             "value": 6
+    │           }
+    │           metadata: {
+    │             "toolCallId": "<toolCallId:1>"
+    │           }
+    │           └── host [function]
+    │               input: {
+    │                 "value": 3
+    │               }
+    │               output: {
+    │                 "value": 6
+    │               }
+    │               metadata: {
+    │                 "toolCallId": "<toolCallId:1>"
+    │               }
+    ├── ai-sdk-code-mode-auto-hook-host-error-operation
+    │   metadata: {
+    │     "operation": "code-mode-auto-hook-host-error",
+    │     "testRunId": "<run:1>"
+    │   }
+    │   └── codeMode [tool]
+    │       input: {
+    │         "js": "return await tools.fail({value: 1});"
+    │       }
+    │       metadata: {
+    │         "toolCallId": "<toolCallId:1>"
+    │       }
+    │       error: "Host tool failed."
+    │       └── fail [function]
+    │           input: {
+    │             "value": 1
+    │           }
+    │           metadata: {
+    │             "toolCallId": "<toolCallId:1>"
+    │           }
+    │           error: "host failure"
+    ├── ai-sdk-code-mode-auto-hook-code-error-operation
+    │   metadata: {
+    │     "operation": "code-mode-auto-hook-code-error",
+    │     "testRunId": "<run:1>"
+    │   }
+    │   └── codeMode [tool]
+    │       input: {
+    │         "js": "throw new Error(\"code failure\");"
+    │       }
+    │       metadata: {
+    │         "toolCallId": "<toolCallId:1>"
+    │       }
+    │       error: "code failure"
+    ├── ai-sdk-code-mode-auto-hook-caught-error-operation
+    │   metadata: {
+    │     "operation": "code-mode-auto-hook-caught-error",
+    │     "testRunId": "<run:1>"
+    │   }
+    │   └── codeMode [tool]
+    │       input: {
+    │         "js": "try { await tools.fail({value: 1}); } catch { return \"recovered\"; }"
+    │       }
+    │       output: "recovered"
+    │       metadata: {
+    │         "toolCallId": "<toolCallId:1>"
+    │       }
+    │       └── fail [function]
+    │           input: {
+    │             "value": 1
+    │           }
+    │           metadata: {
+    │             "toolCallId": "<toolCallId:1>"
+    │           }
+    │           error: "host failure"
+    ├── ai-sdk-code-mode-auto-hook-stream-output-operation
+    │   metadata: {
+    │     "operation": "code-mode-auto-hook-stream-output",
+    │     "testRunId": "<run:1>"
+    │   }
+    │   └── codeMode [tool]
+    │       input: {
+    │         "js": "return await tools.stream({value: 9});"
+    │       }
+    │       output: {
+    │         "value": 9
+    │       }
+    │       metadata: {
+    │         "toolCallId": "<toolCallId:1>"
+    │       }
+    │       └── stream [function]
+    │           input: {
+    │             "value": 9
+    │           }
+    │           output: {
+    │             "value": 9
+    │           }
+    │           metadata: {
+    │             "toolCallId": "<toolCallId:1>"
+    │           }
+    ├── ai-sdk-code-mode-auto-hook-concurrent-operation
+    │   metadata: {
+    │     "operation": "code-mode-auto-hook-concurrent",
+    │     "testRunId": "<run:1>"
+    │   }
+    │   ├── codeMode [tool]
+    │   │   input: {
+    │   │     "js": "return await tools.host({value: 4});"
+    │   │   }
+    │   │   output: {
+    │   │     "value": 8
+    │   │   }
+    │   │   metadata: {
+    │   │     "toolCallId": "<toolCallId:1>"
+    │   │   }
+    │   │   └── host [function]
+    │   │       input: {
+    │   │         "value": 4
+    │   │       }
+    │   │       output: {
+    │   │         "value": 8
+    │   │       }
+    │   │       metadata: {
+    │   │         "toolCallId": "<toolCallId:1>"
+    │   │       }
+    │   └── codeMode [tool]
+    │       input: {
+    │         "js": "return await tools.host({value: 5});"
+    │       }
+    │       output: {
+    │         "value": 10
+    │       }
+    │       metadata: {
+    │         "toolCallId": "<toolCallId:1>"
+    │       }
+    │       └── host [function]
+    │           input: {
+    │             "value": 5
+    │           }
+    │           output: {
+    │             "value": 10
+    │           }
+    │           metadata: {
+    │             "toolCallId": "<toolCallId:1>"
+    │           }
+    ├── ai-sdk-code-mode-auto-hook-direct-operation
+    │   metadata: {
+    │     "operation": "code-mode-auto-hook-direct",
+    │     "testRunId": "<run:1>"
+    │   }
+    │   └── codeMode [tool]
+    │       input: {
+    │         "js": "return 42;"
+    │       }
+    │       output: 42
+    ├── ai-sdk-code-mode-auto-hook-factory-operation
+    │   metadata: {
+    │     "operation": "code-mode-auto-hook-factory",
+    │     "testRunId": "<run:1>"
+    │   }
+    │   └── codeMode [tool]
+    │       input: {
+    │         "js": "return await tools.host({value: 7});"
+    │       }
+    │       output: {
+    │         "value": 14
+    │       }
+    │       metadata: {
+    │         "toolCallId": "<toolCallId:1>"
+    │       }
+    │       └── host [function]
+    │           input: {
+    │             "value": 7
+    │           }
+    │           output: {
+    │             "value": 14
+    │           }
+    │           metadata: {
+    │             "toolCallId": "<toolCallId:1>"
+    │           }
+    ├── ai-sdk-code-mode-auto-hook-generation-operation
+    │   metadata: {
+    │     "operation": "code-mode-auto-hook-generation",
+    │     "testRunId": "<run:1>"
+    │   }
+    │   ├── generateText [function]
+    │   │   input: {
+    │   │     "maxOutputTokens": 120,
+    │   │     "maxRetries": 2,
+    │   │     "messages": [
+    │   │       {
+    │   │         "content": "Call code with exactly this JavaScript: return await tools.host({value: 6});",
+    │   │         "role": "user"
+    │   │       }
+    │   │     ],
+    │   │     "model": {
+    │   │       "modelId": "gpt-4.1-nano",
+    │   │       "provider": "openai.responses"
+    │   │     },
+    │   │     "toolChoice": {
+    │   │       "toolName": "code",
+    │   │       "type": "tool"
+    │   │     },
+    │   │     "tools": {
+    │   │       "code": {
+    │   │         "description": "Execute code-mode TypeScript in an isolated sandbox.\n\nPut the full program in `js`; top-level `await`/`return` work. Return a JSON-serializable result.\nCall host tools only as async `tools.name(input)`; await each or use `Promise.all` for independent calls.\nUse exact names/types below. `JSON.parse`/`JSON.stringify` are available.\nFetch: `fetch` is not available.\n\nTools:\nNo host tools. Do not call `tools.*`.",
+    │   │         "inputSchema": {
+    │   │           "jsonSchema": {
+    │   │             "additionalProperties": false,
+    │   │             "properties": {
+    │   │               "js": {
+    │   │                 "description": "Code-mode TypeScript source to execute. The code-mode context lists the available global `tools` API, input types, and call examples.",
+    │   │                 "type": "string"
+    │   │               }
+    │   │             },
+    │   │             "required": [
+    │   │               "js"
+    │   │             ],
+    │   │             "type": "object"
+    │   │           }
+    │   │         }
+    │   │       },
+    │   │       "host": {
+    │   │         "inputSchema": {
+    │   │           "jsonSchema": {
+    │   │             "additionalProperties": false,
+    │   │             "properties": {
+    │   │               "value": {
+    │   │                 "type": "number"
+    │   │               }
+    │   │             },
+    │   │             "required": [
+    │   │               "value"
+    │   │             ],
+    │   │             "type": "object"
+    │   │           }
+    │   │         },
+    │   │         "label": "original receiver"
+    │   │       }
+    │   │     }
+    │   │   }
+    │   │   output: {
+    │   │     "content": [
+    │   │       {
+    │   │         "input": {
+    │   │           "js": "return await tools.host({value: 6});"
+    │   │         },
+    │   │         "providerMetadata": {
+    │   │           "openai": {
+    │   │             "itemId": "<itemId:3>"
+    │   │           }
+    │   │         },
+    │   │         "toolCallId": "<toolCallId:2>",
+    │   │         "toolName": "code",
+    │   │         "type": "tool-call"
+    │   │       },
+    │   │       {
+    │   │         "dynamic": false,
+    │   │         "input": {
+    │   │           "js": "return await tools.host({value: 6});"
+    │   │         },
+    │   │         "output": {
+    │   │           "value": 12
+    │   │         },
+    │   │         "providerMetadata": {
+    │   │           "openai": {
+    │   │             "itemId": "<itemId:3>"
+    │   │           }
+    │   │         },
+    │   │         "toolCallId": "<toolCallId:2>",
+    │   │         "toolName": "code",
+    │   │         "type": "tool-result"
+    │   │       }
+    │   │     ],
+    │   │     "finishReason": "tool-calls",
+    │   │     "providerMetadata": {
+    │   │       "openai": {
+    │   │         "responseId": "<responseId:4>",
+    │   │         "serviceTier": "default"
+    │   │       }
+    │   │     },
+    │   │     "response": {
+    │   │       "messages": [
+    │   │         {
+    │   │           "content": [
+    │   │             {
+    │   │               "input": {
+    │   │                 "js": "return await tools.host({value: 6});"
+    │   │               },
+    │   │               "providerOptions": {
+    │   │                 "openai": {
+    │   │                   "itemId": "<itemId:3>"
+    │   │                 }
+    │   │               },
+    │   │               "toolCallId": "<toolCallId:2>",
+    │   │               "toolName": "code",
+    │   │               "type": "tool-call"
+    │   │             }
+    │   │           ],
+    │   │           "role": "assistant"
+    │   │         },
+    │   │         {
+    │   │           "content": [
+    │   │             {
+    │   │               "output": {
+    │   │                 "type": "json",
+    │   │                 "value": {
+    │   │                   "value": 12
+    │   │                 }
+    │   │               },
+    │   │               "providerOptions": {
+    │   │                 "openai": {
+    │   │                   "itemId": "<itemId:3>"
+    │   │                 }
+    │   │               },
+    │   │               "toolCallId": "<toolCallId:2>",
+    │   │               "toolName": "code",
+    │   │               "type": "tool-result"
+    │   │             }
+    │   │           ],
+    │   │           "role": "tool"
+    │   │         }
+    │   │       ],
+    │   │       "modelId": "gpt-4.1-nano-2025-04-14",
+    │   │       "timestamp": "<timestamp>"
+    │   │     },
+    │   │     "responseMessages": "<omitted>",
+    │   │     "steps": [
+    │   │       {
+    │   │         "callId": "<callId:1>",
+    │   │         "content": [
+    │   │           {
+    │   │             "input": {
+    │   │               "js": "return await tools.host({value: 6});"
+    │   │             },
+    │   │             "providerMetadata": {
+    │   │               "openai": {
+    │   │                 "itemId": "<itemId:3>"
+    │   │               }
+    │   │             },
+    │   │             "toolCallId": "<toolCallId:2>",
+    │   │             "toolName": "code",
+    │   │             "type": "tool-call"
+    │   │           },
+    │   │           {
+    │   │             "dynamic": false,
+    │   │             "input": {
+    │   │               "js": "return await tools.host({value: 6});"
+    │   │             },
+    │   │             "output": {
+    │   │               "value": 12
+    │   │             },
+    │   │             "providerMetadata": {
+    │   │               "openai": {
+    │   │                 "itemId": "<itemId:3>"
+    │   │               }
+    │   │             },
+    │   │             "toolCallId": "<toolCallId:2>",
+    │   │             "toolName": "code",
+    │   │             "type": "tool-result"
+    │   │           }
+    │   │         ],
+    │   │         "finishReason": "tool-calls",
+    │   │         "model": {
+    │   │           "modelId": "gpt-4.1-nano",
+    │   │           "provider": "openai.responses"
+    │   │         },
+    │   │         "providerMetadata": {
+    │   │           "openai": {
+    │   │             "responseId": "<responseId:4>",
+    │   │             "serviceTier": "default"
+    │   │           }
+    │   │         },
+    │   │         "response": {
+    │   │           "messages": [
+    │   │             {
+    │   │               "content": [
+    │   │                 {
+    │   │                   "input": {
+    │   │                     "js": "return await tools.host({value: 6});"
+    │   │                   },
+    │   │                   "providerOptions": {
+    │   │                     "openai": {
+    │   │                       "itemId": "<itemId:3>"
+    │   │                     }
+    │   │                   },
+    │   │                   "toolCallId": "<toolCallId:2>",
+    │   │                   "toolName": "code",
+    │   │                   "type": "tool-call"
+    │   │                 }
+    │   │               ],
+    │   │               "role": "assistant"
+    │   │             },
+    │   │             {
+    │   │               "content": [
+    │   │                 {
+    │   │                   "output": {
+    │   │                     "type": "json",
+    │   │                     "value": {
+    │   │                       "value": 12
+    │   │                     }
+    │   │                   },
+    │   │                   "providerOptions": {
+    │   │                     "openai": {
+    │   │                       "itemId": "<itemId:3>"
+    │   │                     }
+    │   │                   },
+    │   │                   "toolCallId": "<toolCallId:2>",
+    │   │                   "toolName": "code",
+    │   │                   "type": "tool-result"
+    │   │                 }
+    │   │               ],
+    │   │               "role": "tool"
+    │   │             }
+    │   │           ],
+    │   │           "modelId": "gpt-4.1-nano-2025-04-14",
+    │   │           "timestamp": "<timestamp>"
+    │   │         },
+    │   │         "runtimeContext": {},
+    │   │         "stepNumber": 0,
+    │   │         "toolsContext": {},
+    │   │         "usage": {
+    │   │           "inputTokenDetails": {
+    │   │             "cacheReadTokens": 0,
+    │   │             "cacheWriteTokens": 0,
+    │   │             "noCacheTokens": 240
+    │   │           },
+    │   │           "inputTokens": 240,
+    │   │           "outputTokenDetails": {
+    │   │             "reasoningTokens": 0,
+    │   │             "textTokens": 15
+    │   │           },
+    │   │           "outputTokens": 15,
+    │   │           "raw": {
+    │   │             "input_tokens": 240,
+    │   │             "input_tokens_details": {
+    │   │               "cache_write_tokens": 0,
+    │   │               "cached_tokens": 0
+    │   │             },
+    │   │             "output_tokens": 15,
+    │   │             "output_tokens_details": {
+    │   │               "reasoning_tokens": 0
+    │   │             },
+    │   │             "total_tokens": 255
+    │   │           },
+    │   │           "totalTokens": 255
+    │   │         },
+    │   │         "warnings": []
+    │   │       }
+    │   │     ],
+    │   │     "text": "",
+    │   │     "toolCalls": [
+    │   │       {
+    │   │         "input": {
+    │   │           "js": "return await tools.host({value: 6});"
+    │   │         },
+    │   │         "providerMetadata": {
+    │   │           "openai": {
+    │   │             "itemId": "<itemId:3>"
+    │   │           }
+    │   │         },
+    │   │         "toolCallId": "<toolCallId:2>",
+    │   │         "toolName": "code",
+    │   │         "type": "tool-call"
+    │   │       }
+    │   │     ],
+    │   │     "toolResults": [
+    │   │       {
+    │   │         "dynamic": false,
+    │   │         "input": {
+    │   │           "js": "return await tools.host({value: 6});"
+    │   │         },
+    │   │         "output": {
+    │   │           "value": 12
+    │   │         },
+    │   │         "providerMetadata": {
+    │   │           "openai": {
+    │   │             "itemId": "<itemId:3>"
+    │   │           }
+    │   │         },
+    │   │         "toolCallId": "<toolCallId:2>",
+    │   │         "toolName": "code",
+    │   │         "type": "tool-result"
+    │   │       }
+    │   │     ],
+    │   │     "totalUsage": {
+    │   │       "inputTokenDetails": {
+    │   │         "cacheReadTokens": 0,
+    │   │         "cacheWriteTokens": 0,
+    │   │         "noCacheTokens": 240
+    │   │       },
+    │   │       "inputTokens": 240,
+    │   │       "outputTokenDetails": {
+    │   │         "reasoningTokens": 0,
+    │   │         "textTokens": 15
+    │   │       },
+    │   │       "outputTokens": 15,
+    │   │       "raw": {
+    │   │         "input_tokens": 240,
+    │   │         "input_tokens_details": {
+    │   │           "cache_write_tokens": 0,
+    │   │           "cached_tokens": 0
+    │   │         },
+    │   │         "output_tokens": 15,
+    │   │         "output_tokens_details": {
+    │   │           "reasoning_tokens": 0
+    │   │         },
+    │   │         "total_tokens": 255
+    │   │       },
+    │   │       "totalTokens": 255
+    │   │     },
+    │   │     "usage": {
+    │   │       "inputTokenDetails": {
+    │   │         "cacheReadTokens": 0,
+    │   │         "cacheWriteTokens": 0,
+    │   │         "noCacheTokens": 240
+    │   │       },
+    │   │       "inputTokens": 240,
+    │   │       "outputTokenDetails": {
+    │   │         "reasoningTokens": 0,
+    │   │         "textTokens": 15
+    │   │       },
+    │   │       "outputTokens": 15,
+    │   │       "raw": {
+    │   │         "input_tokens": 240,
+    │   │         "input_tokens_details": {
+    │   │           "cache_write_tokens": 0,
+    │   │           "cached_tokens": 0
+    │   │         },
+    │   │         "output_tokens": 15,
+    │   │         "output_tokens_details": {
+    │   │           "reasoning_tokens": 0
+    │   │         },
+    │   │         "total_tokens": 255
+    │   │       },
+    │   │       "totalTokens": 255
+    │   │     },
+    │   │     "warnings": []
+    │   │   }
+    │   │   metadata: {
+    │   │     "braintrust": {
+    │   │       "integration_name": "ai-sdk",
+    │   │       "sdk_language": "typescript"
+    │   │     },
+    │   │     "model": "gpt-4.1-nano",
+    │   │     "provider": "openai.responses"
+    │   │   }
+    │   │   ├── doGenerate [llm]
+    │   │   │   input: {
+    │   │   │     "maxOutputTokens": 120,
+    │   │   │     "messages": [
+    │   │   │       {
+    │   │   │         "content": "Call code with exactly this JavaScript: return await tools.host({value: 6});",
+    │   │   │         "role": "user"
+    │   │   │       }
+    │   │   │     ],
+    │   │   │     "model": {
+    │   │   │       "modelId": "gpt-4.1-nano",
+    │   │   │       "provider": "openai.responses"
+    │   │   │     },
+    │   │   │     "tools": [
+    │   │   │       {
+    │   │   │         "description": "Execute code-mode TypeScript in an isolated sandbox.\n\nPut the full program in `js`; top-level `await`/`return` work. Return a JSON-serializable result.\nCall host tools only as async `tools.name(input)`; await each or use `Promise.all` for independent calls.\nUse exact names/types below. `JSON.parse`/`JSON.stringify` are available.\nFetch: `fetch` is not available.\n\nTools:\n```ts\ndeclare const tools: {\n  host: (input: { value: number; }) => Promise<unknown>;\n};\n```\n\nTool call examples:\n```ts\nconst result = await tools.host({\"value\":1});\nreturn result;\n```",
+    │   │   │         "inputSchema": {
+    │   │   │           "additionalProperties": false,
+    │   │   │           "properties": {
+    │   │   │             "js": {
+    │   │   │               "description": "Code-mode TypeScript source to execute. The code-mode context lists the available global `tools` API, input types, and call examples.",
+    │   │   │               "type": "string"
+    │   │   │             }
+    │   │   │           },
+    │   │   │           "required": [
+    │   │   │             "js"
+    │   │   │           ],
+    │   │   │           "type": "object"
+    │   │   │         },
+    │   │   │         "name": "code",
+    │   │   │         "type": "function"
+    │   │   │       },
+    │   │   │       {
+    │   │   │         "inputSchema": {
+    │   │   │           "additionalProperties": false,
+    │   │   │           "properties": {
+    │   │   │             "value": {
+    │   │   │               "type": "number"
+    │   │   │             }
+    │   │   │           },
+    │   │   │           "required": [
+    │   │   │             "value"
+    │   │   │           ],
+    │   │   │           "type": "object"
+    │   │   │         },
+    │   │   │         "name": "host",
+    │   │   │         "type": "function"
+    │   │   │       }
+    │   │   │     ]
+    │   │   │   }
+    │   │   │   output: {
+    │   │   │     "content": [
+    │   │   │       {
+    │   │   │         "input": {
+    │   │   │           "js": "return await tools.host({value: 6});"
+    │   │   │         },
+    │   │   │         "providerMetadata": {
+    │   │   │           "openai": {
+    │   │   │             "itemId": "<itemId:3>"
+    │   │   │           }
+    │   │   │         },
+    │   │   │         "toolCallId": "<toolCallId:2>",
+    │   │   │         "toolName": "code",
+    │   │   │         "type": "tool-call"
+    │   │   │       }
+    │   │   │     ],
+    │   │   │     "finishReason": "tool-calls",
+    │   │   │     "providerMetadata": {
+    │   │   │       "openai": {
+    │   │   │         "responseId": "<responseId:1>",
+    │   │   │         "serviceTier": "default"
+    │   │   │       }
+    │   │   │     },
+    │   │   │     "response": {},
+    │   │   │     "usage": {
+    │   │   │       "inputTokenDetails": {
+    │   │   │         "cacheReadTokens": 0,
+    │   │   │         "cacheWriteTokens": 0,
+    │   │   │         "noCacheTokens": 240
+    │   │   │       },
+    │   │   │       "inputTokens": 240,
+    │   │   │       "outputTokenDetails": {
+    │   │   │         "reasoningTokens": 0,
+    │   │   │         "textTokens": 15
+    │   │   │       },
+    │   │   │       "outputTokens": 15,
+    │   │   │       "raw": {
+    │   │   │         "input_tokens": 240,
+    │   │   │         "input_tokens_details": {
+    │   │   │           "cache_write_tokens": 0,
+    │   │   │           "cached_tokens": 0
+    │   │   │         },
+    │   │   │         "output_tokens": 15,
+    │   │   │         "output_tokens_details": {
+    │   │   │           "reasoning_tokens": 0
+    │   │   │         },
+    │   │   │         "total_tokens": 255
+    │   │   │       },
+    │   │   │       "totalTokens": 255
+    │   │   │     }
+    │   │   │   }
+    │   │   │   metadata: {
+    │   │   │     "braintrust": {
+    │   │   │       "integration_name": "ai-sdk",
+    │   │   │       "sdk_language": "typescript"
+    │   │   │     },
+    │   │   │     "model": "gpt-4.1-nano",
+    │   │   │     "provider": "openai.responses"
+    │   │   │   }
+    │   │   │   metrics: {
+    │   │   │     "completion_tokens": 15,
+    │   │   │     "prompt_cache_creation_tokens": 0,
+    │   │   │     "prompt_cached_tokens": 0,
+    │   │   │     "prompt_tokens": 240,
+    │   │   │     "tokens": 255
+    │   │   │   }
+    │   │   └── code [tool]
+    │   │       input: {
+    │   │         "js": "return await tools.host({value: 6});"
+    │   │       }
+    │   │       output: {
+    │   │         "value": 12
+    │   │       }
+    │   │       metadata: {
+    │   │         "braintrust": {
+    │   │           "integration_name": "ai-sdk",
+    │   │           "sdk_language": "typescript"
+    │   │         },
+    │   │         "toolCallId": "<toolCallId:1>",
+    │   │         "toolName": "code"
+    │   │       }
+    │   │       └── host [function]
+    │   │           input: {
+    │   │             "value": 6
+    │   │           }
+    │   │           output: {
+    │   │             "value": 12
+    │   │           }
+    │   │           metadata: {
+    │   │             "toolCallId": "<toolCallId:1>"
+    │   │           }
+    │   └── generateText [function]
+    │       input: {
+    │         "maxOutputTokens": 80,
+    │         "maxRetries": 2,
+    │         "messages": [
+    │           {
+    │             "content": "Call host with value 8.",
+    │             "role": "user"
+    │           }
+    │         ],
+    │         "model": {
+    │           "modelId": "gpt-4.1-nano",
+    │           "provider": "openai.responses"
+    │         },
+    │         "toolChoice": {
+    │           "toolName": "host",
+    │           "type": "tool"
+    │         },
+    │         "tools": {
+    │           "host": {
+    │             "inputSchema": {
+    │               "jsonSchema": {
+    │                 "additionalProperties": false,
+    │                 "properties": {
+    │                   "value": {
+    │                     "type": "number"
+    │                   }
+    │                 },
+    │                 "required": [
+    │                   "value"
+    │                 ],
+    │                 "type": "object"
+    │               }
+    │             },
+    │             "label": "original receiver"
+    │           }
+    │         }
+    │       }
+    │       output: {
+    │         "content": [
+    │           {
+    │             "input": {
+    │               "value": 8
+    │             },
+    │             "providerMetadata": {
+    │               "openai": {
+    │                 "itemId": "<itemId:3>"
+    │               }
+    │             },
+    │             "toolCallId": "<toolCallId:2>",
+    │             "toolName": "host",
+    │             "type": "tool-call"
+    │           },
+    │           {
+    │             "dynamic": false,
+    │             "input": {
+    │               "value": 8
+    │             },
+    │             "output": {
+    │               "value": 16
+    │             },
+    │             "providerMetadata": {
+    │               "openai": {
+    │                 "itemId": "<itemId:3>"
+    │               }
+    │             },
+    │             "toolCallId": "<toolCallId:2>",
+    │             "toolName": "host",
+    │             "type": "tool-result"
+    │           }
+    │         ],
+    │         "finishReason": "tool-calls",
+    │         "providerMetadata": {
+    │           "openai": {
+    │             "responseId": "<responseId:4>",
+    │             "serviceTier": "default"
+    │           }
+    │         },
+    │         "response": {
+    │           "messages": [
+    │             {
+    │               "content": [
+    │                 {
+    │                   "input": {
+    │                     "value": 8
+    │                   },
+    │                   "providerOptions": {
+    │                     "openai": {
+    │                       "itemId": "<itemId:3>"
+    │                     }
+    │                   },
+    │                   "toolCallId": "<toolCallId:2>",
+    │                   "toolName": "host",
+    │                   "type": "tool-call"
+    │                 }
+    │               ],
+    │               "role": "assistant"
+    │             },
+    │             {
+    │               "content": [
+    │                 {
+    │                   "output": {
+    │                     "type": "json",
+    │                     "value": {
+    │                       "value": 16
+    │                     }
+    │                   },
+    │                   "providerOptions": {
+    │                     "openai": {
+    │                       "itemId": "<itemId:3>"
+    │                     }
+    │                   },
+    │                   "toolCallId": "<toolCallId:2>",
+    │                   "toolName": "host",
+    │                   "type": "tool-result"
+    │                 }
+    │               ],
+    │               "role": "tool"
+    │             }
+    │           ],
+    │           "modelId": "gpt-4.1-nano-2025-04-14",
+    │           "timestamp": "<timestamp>"
+    │         },
+    │         "responseMessages": "<omitted>",
+    │         "steps": [
+    │           {
+    │             "callId": "<callId:1>",
+    │             "content": [
+    │               {
+    │                 "input": {
+    │                   "value": 8
+    │                 },
+    │                 "providerMetadata": {
+    │                   "openai": {
+    │                     "itemId": "<itemId:3>"
+    │                   }
+    │                 },
+    │                 "toolCallId": "<toolCallId:2>",
+    │                 "toolName": "host",
+    │                 "type": "tool-call"
+    │               },
+    │               {
+    │                 "dynamic": false,
+    │                 "input": {
+    │                   "value": 8
+    │                 },
+    │                 "output": {
+    │                   "value": 16
+    │                 },
+    │                 "providerMetadata": {
+    │                   "openai": {
+    │                     "itemId": "<itemId:3>"
+    │                   }
+    │                 },
+    │                 "toolCallId": "<toolCallId:2>",
+    │                 "toolName": "host",
+    │                 "type": "tool-result"
+    │               }
+    │             ],
+    │             "finishReason": "tool-calls",
+    │             "model": {
+    │               "modelId": "gpt-4.1-nano",
+    │               "provider": "openai.responses"
+    │             },
+    │             "providerMetadata": {
+    │               "openai": {
+    │                 "responseId": "<responseId:4>",
+    │                 "serviceTier": "default"
+    │               }
+    │             },
+    │             "response": {
+    │               "messages": [
+    │                 {
+    │                   "content": [
+    │                     {
+    │                       "input": {
+    │                         "value": 8
+    │                       },
+    │                       "providerOptions": {
+    │                         "openai": {
+    │                           "itemId": "<itemId:3>"
+    │                         }
+    │                       },
+    │                       "toolCallId": "<toolCallId:2>",
+    │                       "toolName": "host",
+    │                       "type": "tool-call"
+    │                     }
+    │                   ],
+    │                   "role": "assistant"
+    │                 },
+    │                 {
+    │                   "content": [
+    │                     {
+    │                       "output": {
+    │                         "type": "json",
+    │                         "value": {
+    │                           "value": 16
+    │                         }
+    │                       },
+    │                       "providerOptions": {
+    │                         "openai": {
+    │                           "itemId": "<itemId:3>"
+    │                         }
+    │                       },
+    │                       "toolCallId": "<toolCallId:2>",
+    │                       "toolName": "host",
+    │                       "type": "tool-result"
+    │                     }
+    │                   ],
+    │                   "role": "tool"
+    │                 }
+    │               ],
+    │               "modelId": "gpt-4.1-nano-2025-04-14",
+    │               "timestamp": "<timestamp>"
+    │             },
+    │             "runtimeContext": {},
+    │             "stepNumber": 0,
+    │             "toolsContext": {},
+    │             "usage": {
+    │               "inputTokenDetails": {
+    │                 "cacheReadTokens": 0,
+    │                 "cacheWriteTokens": 0,
+    │                 "noCacheTokens": 45
+    │               },
+    │               "inputTokens": 45,
+    │               "outputTokenDetails": {
+    │                 "reasoningTokens": 0,
+    │                 "textTokens": 6
+    │               },
+    │               "outputTokens": 6,
+    │               "raw": {
+    │                 "input_tokens": 45,
+    │                 "input_tokens_details": {
+    │                   "cache_write_tokens": 0,
+    │                   "cached_tokens": 0
+    │                 },
+    │                 "output_tokens": 6,
+    │                 "output_tokens_details": {
+    │                   "reasoning_tokens": 0
+    │                 },
+    │                 "total_tokens": 51
+    │               },
+    │               "totalTokens": 51
+    │             },
+    │             "warnings": []
+    │           }
+    │         ],
+    │         "text": "",
+    │         "toolCalls": [
+    │           {
+    │             "input": {
+    │               "value": 8
+    │             },
+    │             "providerMetadata": {
+    │               "openai": {
+    │                 "itemId": "<itemId:3>"
+    │               }
+    │             },
+    │             "toolCallId": "<toolCallId:2>",
+    │             "toolName": "host",
+    │             "type": "tool-call"
+    │           }
+    │         ],
+    │         "toolResults": [
+    │           {
+    │             "dynamic": false,
+    │             "input": {
+    │               "value": 8
+    │             },
+    │             "output": {
+    │               "value": 16
+    │             },
+    │             "providerMetadata": {
+    │               "openai": {
+    │                 "itemId": "<itemId:3>"
+    │               }
+    │             },
+    │             "toolCallId": "<toolCallId:2>",
+    │             "toolName": "host",
+    │             "type": "tool-result"
+    │           }
+    │         ],
+    │         "totalUsage": {
+    │           "inputTokenDetails": {
+    │             "cacheReadTokens": 0,
+    │             "cacheWriteTokens": 0,
+    │             "noCacheTokens": 45
+    │           },
+    │           "inputTokens": 45,
+    │           "outputTokenDetails": {
+    │             "reasoningTokens": 0,
+    │             "textTokens": 6
+    │           },
+    │           "outputTokens": 6,
+    │           "raw": {
+    │             "input_tokens": 45,
+    │             "input_tokens_details": {
+    │               "cache_write_tokens": 0,
+    │               "cached_tokens": 0
+    │             },
+    │             "output_tokens": 6,
+    │             "output_tokens_details": {
+    │               "reasoning_tokens": 0
+    │             },
+    │             "total_tokens": 51
+    │           },
+    │           "totalTokens": 51
+    │         },
+    │         "usage": {
+    │           "inputTokenDetails": {
+    │             "cacheReadTokens": 0,
+    │             "cacheWriteTokens": 0,
+    │             "noCacheTokens": 45
+    │           },
+    │           "inputTokens": 45,
+    │           "outputTokenDetails": {
+    │             "reasoningTokens": 0,
+    │             "textTokens": 6
+    │           },
+    │           "outputTokens": 6,
+    │           "raw": {
+    │             "input_tokens": 45,
+    │             "input_tokens_details": {
+    │               "cache_write_tokens": 0,
+    │               "cached_tokens": 0
+    │             },
+    │             "output_tokens": 6,
+    │             "output_tokens_details": {
+    │               "reasoning_tokens": 0
+    │             },
+    │             "total_tokens": 51
+    │           },
+    │           "totalTokens": 51
+    │         },
+    │         "warnings": []
+    │       }
+    │       metadata: {
+    │         "braintrust": {
+    │           "integration_name": "ai-sdk",
+    │           "sdk_language": "typescript"
+    │         },
+    │         "model": "gpt-4.1-nano",
+    │         "provider": "openai.responses"
+    │       }
+    │       ├── doGenerate [llm]
+    │       │   input: {
+    │       │     "maxOutputTokens": 80,
+    │       │     "messages": [
+    │       │       {
+    │       │         "content": "Call host with value 8.",
+    │       │         "role": "user"
+    │       │       }
+    │       │     ],
+    │       │     "model": {
+    │       │       "modelId": "gpt-4.1-nano",
+    │       │       "provider": "openai.responses"
+    │       │     },
+    │       │     "tools": [
+    │       │       {
+    │       │         "inputSchema": {
+    │       │           "additionalProperties": false,
+    │       │           "properties": {
+    │       │             "value": {
+    │       │               "type": "number"
+    │       │             }
+    │       │           },
+    │       │           "required": [
+    │       │             "value"
+    │       │           ],
+    │       │           "type": "object"
+    │       │         },
+    │       │         "name": "host",
+    │       │         "type": "function"
+    │       │       }
+    │       │     ]
+    │       │   }
+    │       │   output: {
+    │       │     "content": [
+    │       │       {
+    │       │         "input": {
+    │       │           "value": 8
+    │       │         },
+    │       │         "providerMetadata": {
+    │       │           "openai": {
+    │       │             "itemId": "<itemId:3>"
+    │       │           }
+    │       │         },
+    │       │         "toolCallId": "<toolCallId:2>",
+    │       │         "toolName": "host",
+    │       │         "type": "tool-call"
+    │       │       }
+    │       │     ],
+    │       │     "finishReason": "tool-calls",
+    │       │     "providerMetadata": {
+    │       │       "openai": {
+    │       │         "responseId": "<responseId:1>",
+    │       │         "serviceTier": "default"
+    │       │       }
+    │       │     },
+    │       │     "response": {},
+    │       │     "usage": {
+    │       │       "inputTokenDetails": {
+    │       │         "cacheReadTokens": 0,
+    │       │         "cacheWriteTokens": 0,
+    │       │         "noCacheTokens": 45
+    │       │       },
+    │       │       "inputTokens": 45,
+    │       │       "outputTokenDetails": {
+    │       │         "reasoningTokens": 0,
+    │       │         "textTokens": 6
+    │       │       },
+    │       │       "outputTokens": 6,
+    │       │       "raw": {
+    │       │         "input_tokens": 45,
+    │       │         "input_tokens_details": {
+    │       │           "cache_write_tokens": 0,
+    │       │           "cached_tokens": 0
+    │       │         },
+    │       │         "output_tokens": 6,
+    │       │         "output_tokens_details": {
+    │       │           "reasoning_tokens": 0
+    │       │         },
+    │       │         "total_tokens": 51
+    │       │       },
+    │       │       "totalTokens": 51
+    │       │     }
+    │       │   }
+    │       │   metadata: {
+    │       │     "braintrust": {
+    │       │       "integration_name": "ai-sdk",
+    │       │       "sdk_language": "typescript"
+    │       │     },
+    │       │     "model": "gpt-4.1-nano",
+    │       │     "provider": "openai.responses"
+    │       │   }
+    │       │   metrics: {
+    │       │     "completion_tokens": 6,
+    │       │     "prompt_cache_creation_tokens": 0,
+    │       │     "prompt_cached_tokens": 0,
+    │       │     "prompt_tokens": 45,
+    │       │     "tokens": 51
+    │       │   }
+    │       └── host [tool]
+    │           input: {
+    │             "value": 8
+    │           }
+    │           output: {
+    │             "value": 16
+    │           }
+    │           metadata: {
+    │             "braintrust": {
+    │               "integration_name": "ai-sdk",
+    │               "sdk_language": "typescript"
+    │             },
+    │             "toolCallId": "<toolCallId:1>",
+    │             "toolName": "host"
+    │           }
+    ├── ai-sdk-code-mode-combined-sequential-operation
+    │   metadata: {
+    │     "operation": "code-mode-combined-sequential",
+    │     "testRunId": "<run:1>"
+    │   }
+    │   └── codeMode [tool]
+    │       input: {
+    │         "js": "const a = await tools.host({value: 2}); return await tools.host(a);"
+    │       }
+    │       output: {
+    │         "value": 8
+    │       }
+    │       metadata: {
+    │         "toolCallId": "<toolCallId:1>"
+    │       }
+    │       ├── host [function]
+    │       │   input: {
+    │       │     "value": 2
+    │       │   }
+    │       │   output: {
+    │       │     "value": 4
+    │       │   }
+    │       │   metadata: {
+    │       │     "toolCallId": "<toolCallId:1>"
+    │       │   }
+    │       └── host [function]
+    │           input: {
+    │             "value": 4
+    │           }
+    │           output: {
+    │             "value": 8
+    │           }
+    │           metadata: {
+    │             "toolCallId": "<toolCallId:1>"
+    │           }
+    ├── ai-sdk-code-mode-combined-parallel-operation
+    │   metadata: {
+    │     "operation": "code-mode-combined-parallel",
+    │     "testRunId": "<run:1>"
+    │   }
+    │   └── codeMode [tool]
+    │       input: {
+    │         "js": "return await Promise.all([tools.parallel({value: 1}), tools.parallel({value: 2})]);"
+    │       }
+    │       output: [
+    │         {
+    │           "value": 1
+    │         },
+    │         {
+    │           "value": 2
+    │         }
+    │       ]
+    │       metadata: {
+    │         "toolCallId": "<toolCallId:1>"
+    │       }
+    │       ├── parallel [function]
+    │       │   input: {
+    │       │     "value": 1
+    │       │   }
+    │       │   output: {
+    │       │     "value": 1
+    │       │   }
+    │       │   metadata: {
+    │       │     "toolCallId": "<toolCallId:1>"
+    │       │   }
+    │       └── parallel [function]
+    │           input: {
+    │             "value": 2
+    │           }
+    │           output: {
+    │             "value": 2
+    │           }
+    │           metadata: {
+    │             "toolCallId": "<toolCallId:1>"
+    │           }
+    ├── ai-sdk-code-mode-combined-nested-operation
+    │   metadata: {
+    │     "operation": "code-mode-combined-nested",
+    │     "testRunId": "<run:1>"
+    │   }
+    │   └── codeMode [tool]
+    │       input: {
+    │         "js": "return await tools.nested({value: 3});"
+    │       }
+    │       output: {
+    │         "value": 6
+    │       }
+    │       metadata: {
+    │         "toolCallId": "<toolCallId:1>"
+    │       }
+    │       └── nested [function]
+    │           input: {
+    │             "value": 3
+    │           }
+    │           output: {
+    │             "value": 6
+    │           }
+    │           metadata: {
+    │             "toolCallId": "<toolCallId:1>"
+    │           }
+    │           └── host [function]
+    │               input: {
+    │                 "value": 3
+    │               }
+    │               output: {
+    │                 "value": 6
+    │               }
+    │               metadata: {
+    │                 "toolCallId": "<toolCallId:1>"
+    │               }
+    ├── ai-sdk-code-mode-combined-host-error-operation
+    │   metadata: {
+    │     "operation": "code-mode-combined-host-error",
+    │     "testRunId": "<run:1>"
+    │   }
+    │   └── codeMode [tool]
+    │       input: {
+    │         "js": "return await tools.fail({value: 1});"
+    │       }
+    │       metadata: {
+    │         "toolCallId": "<toolCallId:1>"
+    │       }
+    │       error: "Host tool failed."
+    │       └── fail [function]
+    │           input: {
+    │             "value": 1
+    │           }
+    │           metadata: {
+    │             "toolCallId": "<toolCallId:1>"
+    │           }
+    │           error: "host failure"
+    ├── ai-sdk-code-mode-combined-code-error-operation
+    │   metadata: {
+    │     "operation": "code-mode-combined-code-error",
+    │     "testRunId": "<run:1>"
+    │   }
+    │   └── codeMode [tool]
+    │       input: {
+    │         "js": "throw new Error(\"code failure\");"
+    │       }
+    │       metadata: {
+    │         "toolCallId": "<toolCallId:1>"
+    │       }
+    │       error: "code failure"
+    ├── ai-sdk-code-mode-combined-caught-error-operation
+    │   metadata: {
+    │     "operation": "code-mode-combined-caught-error",
+    │     "testRunId": "<run:1>"
+    │   }
+    │   └── codeMode [tool]
+    │       input: {
+    │         "js": "try { await tools.fail({value: 1}); } catch { return \"recovered\"; }"
+    │       }
+    │       output: "recovered"
+    │       metadata: {
+    │         "toolCallId": "<toolCallId:1>"
+    │       }
+    │       └── fail [function]
+    │           input: {
+    │             "value": 1
+    │           }
+    │           metadata: {
+    │             "toolCallId": "<toolCallId:1>"
+    │           }
+    │           error: "host failure"
+    ├── ai-sdk-code-mode-combined-stream-output-operation
+    │   metadata: {
+    │     "operation": "code-mode-combined-stream-output",
+    │     "testRunId": "<run:1>"
+    │   }
+    │   └── codeMode [tool]
+    │       input: {
+    │         "js": "return await tools.stream({value: 9});"
+    │       }
+    │       output: {
+    │         "value": 9
+    │       }
+    │       metadata: {
+    │         "toolCallId": "<toolCallId:1>"
+    │       }
+    │       └── stream [function]
+    │           input: {
+    │             "value": 9
+    │           }
+    │           output: {
+    │             "value": 9
+    │           }
+    │           metadata: {
+    │             "toolCallId": "<toolCallId:1>"
+    │           }
+    ├── ai-sdk-code-mode-combined-concurrent-operation
+    │   metadata: {
+    │     "operation": "code-mode-combined-concurrent",
+    │     "testRunId": "<run:1>"
+    │   }
+    │   ├── codeMode [tool]
+    │   │   input: {
+    │   │     "js": "return await tools.host({value: 4});"
+    │   │   }
+    │   │   output: {
+    │   │     "value": 8
+    │   │   }
+    │   │   metadata: {
+    │   │     "toolCallId": "<toolCallId:1>"
+    │   │   }
+    │   │   └── host [function]
+    │   │       input: {
+    │   │         "value": 4
+    │   │       }
+    │   │       output: {
+    │   │         "value": 8
+    │   │       }
+    │   │       metadata: {
+    │   │         "toolCallId": "<toolCallId:1>"
+    │   │       }
+    │   └── codeMode [tool]
+    │       input: {
+    │         "js": "return await tools.host({value: 5});"
+    │       }
+    │       output: {
+    │         "value": 10
+    │       }
+    │       metadata: {
+    │         "toolCallId": "<toolCallId:1>"
+    │       }
+    │       └── host [function]
+    │           input: {
+    │             "value": 5
+    │           }
+    │           output: {
+    │             "value": 10
+    │           }
+    │           metadata: {
+    │             "toolCallId": "<toolCallId:1>"
+    │           }
+    ├── ai-sdk-code-mode-combined-direct-operation
+    │   metadata: {
+    │     "operation": "code-mode-combined-direct",
+    │     "testRunId": "<run:1>"
+    │   }
+    │   └── codeMode [tool]
+    │       input: {
+    │         "js": "return 42;"
+    │       }
+    │       output: 42
+    ├── ai-sdk-code-mode-combined-factory-operation
+    │   metadata: {
+    │     "operation": "code-mode-combined-factory",
+    │     "testRunId": "<run:1>"
+    │   }
+    │   └── codeMode [tool]
+    │       input: {
+    │         "js": "return await tools.host({value: 7});"
+    │       }
+    │       output: {
+    │         "value": 14
+    │       }
+    │       metadata: {
+    │         "toolCallId": "<toolCallId:1>"
+    │       }
+    │       └── host [function]
+    │           input: {
+    │             "value": 7
+    │           }
+    │           output: {
+    │             "value": 14
+    │           }
+    │           metadata: {
+    │             "toolCallId": "<toolCallId:1>"
+    │           }
+    └── ai-sdk-code-mode-combined-generation-operation
         metadata: {
-          "operation": "agent-tool-loop",
+          "operation": "code-mode-combined-generation",
           "testRunId": "<run:1>"
         }
+        ├── generateText [function]
+        │   input: {
+        │     "maxOutputTokens": 120,
+        │     "maxRetries": 2,
+        │     "messages": [
+        │       {
+        │         "content": "Call code with exactly this JavaScript: return await tools.host({value: 6});",
+        │         "role": "user"
+        │       }
+        │     ],
+        │     "model": {
+        │       "modelId": "gpt-4.1-nano",
+        │       "provider": "openai.responses"
+        │     },
+        │     "toolChoice": {
+        │       "toolName": "code",
+        │       "type": "tool"
+        │     },
+        │     "tools": {
+        │       "code": {
+        │         "description": "Execute code-mode TypeScript in an isolated sandbox.\n\nPut the full program in `js`; top-level `await`/`return` work. Return a JSON-serializable result.\nCall host tools only as async `tools.name(input)`; await each or use `Promise.all` for independent calls.\nUse exact names/types below. `JSON.parse`/`JSON.stringify` are available.\nFetch: `fetch` is not available.\n\nTools:\nNo host tools. Do not call `tools.*`.",
+        │         "inputSchema": {
+        │           "jsonSchema": {
+        │             "additionalProperties": false,
+        │             "properties": {
+        │               "js": {
+        │                 "description": "Code-mode TypeScript source to execute. The code-mode context lists the available global `tools` API, input types, and call examples.",
+        │                 "type": "string"
+        │               }
+        │             },
+        │             "required": [
+        │               "js"
+        │             ],
+        │             "type": "object"
+        │           }
+        │         }
+        │       },
+        │       "host": {
+        │         "inputSchema": {
+        │           "jsonSchema": {
+        │             "additionalProperties": false,
+        │             "properties": {
+        │               "value": {
+        │                 "type": "number"
+        │               }
+        │             },
+        │             "required": [
+        │               "value"
+        │             ],
+        │             "type": "object"
+        │           }
+        │         },
+        │         "label": "original receiver"
+        │       }
+        │     }
+        │   }
+        │   output: {
+        │     "content": [
+        │       {
+        │         "input": {
+        │           "js": "return await tools.host({value: 6});"
+        │         },
+        │         "providerMetadata": {
+        │           "openai": {
+        │             "itemId": "<itemId:3>"
+        │           }
+        │         },
+        │         "toolCallId": "<toolCallId:2>",
+        │         "toolName": "code",
+        │         "type": "tool-call"
+        │       },
+        │       {
+        │         "dynamic": false,
+        │         "input": {
+        │           "js": "return await tools.host({value: 6});"
+        │         },
+        │         "output": {
+        │           "value": 12
+        │         },
+        │         "providerMetadata": {
+        │           "openai": {
+        │             "itemId": "<itemId:3>"
+        │           }
+        │         },
+        │         "toolCallId": "<toolCallId:2>",
+        │         "toolName": "code",
+        │         "type": "tool-result"
+        │       }
+        │     ],
+        │     "finishReason": "tool-calls",
+        │     "providerMetadata": {
+        │       "openai": {
+        │         "responseId": "<responseId:4>",
+        │         "serviceTier": "default"
+        │       }
+        │     },
+        │     "response": {
+        │       "messages": [
+        │         {
+        │           "content": [
+        │             {
+        │               "input": {
+        │                 "js": "return await tools.host({value: 6});"
+        │               },
+        │               "providerOptions": {
+        │                 "openai": {
+        │                   "itemId": "<itemId:3>"
+        │                 }
+        │               },
+        │               "toolCallId": "<toolCallId:2>",
+        │               "toolName": "code",
+        │               "type": "tool-call"
+        │             }
+        │           ],
+        │           "role": "assistant"
+        │         },
+        │         {
+        │           "content": [
+        │             {
+        │               "output": {
+        │                 "type": "json",
+        │                 "value": {
+        │                   "value": 12
+        │                 }
+        │               },
+        │               "providerOptions": {
+        │                 "openai": {
+        │                   "itemId": "<itemId:3>"
+        │                 }
+        │               },
+        │               "toolCallId": "<toolCallId:2>",
+        │               "toolName": "code",
+        │               "type": "tool-result"
+        │             }
+        │           ],
+        │           "role": "tool"
+        │         }
+        │       ],
+        │       "modelId": "gpt-4.1-nano-2025-04-14",
+        │       "timestamp": "<timestamp>"
+        │     },
+        │     "responseMessages": "<omitted>",
+        │     "steps": [
+        │       {
+        │         "callId": "<callId:1>",
+        │         "content": [
+        │           {
+        │             "input": {
+        │               "js": "return await tools.host({value: 6});"
+        │             },
+        │             "providerMetadata": {
+        │               "openai": {
+        │                 "itemId": "<itemId:3>"
+        │               }
+        │             },
+        │             "toolCallId": "<toolCallId:2>",
+        │             "toolName": "code",
+        │             "type": "tool-call"
+        │           },
+        │           {
+        │             "dynamic": false,
+        │             "input": {
+        │               "js": "return await tools.host({value: 6});"
+        │             },
+        │             "output": {
+        │               "value": 12
+        │             },
+        │             "providerMetadata": {
+        │               "openai": {
+        │                 "itemId": "<itemId:3>"
+        │               }
+        │             },
+        │             "toolCallId": "<toolCallId:2>",
+        │             "toolName": "code",
+        │             "type": "tool-result"
+        │           }
+        │         ],
+        │         "finishReason": "tool-calls",
+        │         "model": {
+        │           "modelId": "gpt-4.1-nano",
+        │           "provider": "openai.responses"
+        │         },
+        │         "providerMetadata": {
+        │           "openai": {
+        │             "responseId": "<responseId:4>",
+        │             "serviceTier": "default"
+        │           }
+        │         },
+        │         "response": {
+        │           "messages": [
+        │             {
+        │               "content": [
+        │                 {
+        │                   "input": {
+        │                     "js": "return await tools.host({value: 6});"
+        │                   },
+        │                   "providerOptions": {
+        │                     "openai": {
+        │                       "itemId": "<itemId:3>"
+        │                     }
+        │                   },
+        │                   "toolCallId": "<toolCallId:2>",
+        │                   "toolName": "code",
+        │                   "type": "tool-call"
+        │                 }
+        │               ],
+        │               "role": "assistant"
+        │             },
+        │             {
+        │               "content": [
+        │                 {
+        │                   "output": {
+        │                     "type": "json",
+        │                     "value": {
+        │                       "value": 12
+        │                     }
+        │                   },
+        │                   "providerOptions": {
+        │                     "openai": {
+        │                       "itemId": "<itemId:3>"
+        │                     }
+        │                   },
+        │                   "toolCallId": "<toolCallId:2>",
+        │                   "toolName": "code",
+        │                   "type": "tool-result"
+        │                 }
+        │               ],
+        │               "role": "tool"
+        │             }
+        │           ],
+        │           "modelId": "gpt-4.1-nano-2025-04-14",
+        │           "timestamp": "<timestamp>"
+        │         },
+        │         "runtimeContext": {},
+        │         "stepNumber": 0,
+        │         "toolsContext": {},
+        │         "usage": {
+        │           "inputTokenDetails": {
+        │             "cacheReadTokens": 0,
+        │             "cacheWriteTokens": 0,
+        │             "noCacheTokens": 240
+        │           },
+        │           "inputTokens": 240,
+        │           "outputTokenDetails": {
+        │             "reasoningTokens": 0,
+        │             "textTokens": 15
+        │           },
+        │           "outputTokens": 15,
+        │           "raw": {
+        │             "input_tokens": 240,
+        │             "input_tokens_details": {
+        │               "cache_write_tokens": 0,
+        │               "cached_tokens": 0
+        │             },
+        │             "output_tokens": 15,
+        │             "output_tokens_details": {
+        │               "reasoning_tokens": 0
+        │             },
+        │             "total_tokens": 255
+        │           },
+        │           "totalTokens": 255
+        │         },
+        │         "warnings": []
+        │       }
+        │     ],
+        │     "text": "",
+        │     "toolCalls": [
+        │       {
+        │         "input": {
+        │           "js": "return await tools.host({value: 6});"
+        │         },
+        │         "providerMetadata": {
+        │           "openai": {
+        │             "itemId": "<itemId:3>"
+        │           }
+        │         },
+        │         "toolCallId": "<toolCallId:2>",
+        │         "toolName": "code",
+        │         "type": "tool-call"
+        │       }
+        │     ],
+        │     "toolResults": [
+        │       {
+        │         "dynamic": false,
+        │         "input": {
+        │           "js": "return await tools.host({value: 6});"
+        │         },
+        │         "output": {
+        │           "value": 12
+        │         },
+        │         "providerMetadata": {
+        │           "openai": {
+        │             "itemId": "<itemId:3>"
+        │           }
+        │         },
+        │         "toolCallId": "<toolCallId:2>",
+        │         "toolName": "code",
+        │         "type": "tool-result"
+        │       }
+        │     ],
+        │     "totalUsage": {
+        │       "inputTokenDetails": {
+        │         "cacheReadTokens": 0,
+        │         "cacheWriteTokens": 0,
+        │         "noCacheTokens": 240
+        │       },
+        │       "inputTokens": 240,
+        │       "outputTokenDetails": {
+        │         "reasoningTokens": 0,
+        │         "textTokens": 15
+        │       },
+        │       "outputTokens": 15,
+        │       "raw": {
+        │         "input_tokens": 240,
+        │         "input_tokens_details": {
+        │           "cache_write_tokens": 0,
+        │           "cached_tokens": 0
+        │         },
+        │         "output_tokens": 15,
+        │         "output_tokens_details": {
+        │           "reasoning_tokens": 0
+        │         },
+        │         "total_tokens": 255
+        │       },
+        │       "totalTokens": 255
+        │     },
+        │     "usage": {
+        │       "inputTokenDetails": {
+        │         "cacheReadTokens": 0,
+        │         "cacheWriteTokens": 0,
+        │         "noCacheTokens": 240
+        │       },
+        │       "inputTokens": 240,
+        │       "outputTokenDetails": {
+        │         "reasoningTokens": 0,
+        │         "textTokens": 15
+        │       },
+        │       "outputTokens": 15,
+        │       "raw": {
+        │         "input_tokens": 240,
+        │         "input_tokens_details": {
+        │           "cache_write_tokens": 0,
+        │           "cached_tokens": 0
+        │         },
+        │         "output_tokens": 15,
+        │         "output_tokens_details": {
+        │           "reasoning_tokens": 0
+        │         },
+        │         "total_tokens": 255
+        │       },
+        │       "totalTokens": 255
+        │     },
+        │     "warnings": []
+        │   }
+        │   metadata: {
+        │     "braintrust": {
+        │       "integration_name": "ai-sdk",
+        │       "sdk_language": "typescript"
+        │     },
+        │     "model": "gpt-4.1-nano",
+        │     "provider": "openai.responses"
+        │   }
+        │   ├── doGenerate [llm]
+        │   │   input: {
+        │   │     "maxOutputTokens": 120,
+        │   │     "messages": [
+        │   │       {
+        │   │         "content": "Call code with exactly this JavaScript: return await tools.host({value: 6});",
+        │   │         "role": "user"
+        │   │       }
+        │   │     ],
+        │   │     "model": {
+        │   │       "modelId": "gpt-4.1-nano",
+        │   │       "provider": "openai.responses"
+        │   │     },
+        │   │     "tools": [
+        │   │       {
+        │   │         "description": "Execute code-mode TypeScript in an isolated sandbox.\n\nPut the full program in `js`; top-level `await`/`return` work. Return a JSON-serializable result.\nCall host tools only as async `tools.name(input)`; await each or use `Promise.all` for independent calls.\nUse exact names/types below. `JSON.parse`/`JSON.stringify` are available.\nFetch: `fetch` is not available.\n\nTools:\n```ts\ndeclare const tools: {\n  host: (input: { value: number; }) => Promise<unknown>;\n};\n```\n\nTool call examples:\n```ts\nconst result = await tools.host({\"value\":1});\nreturn result;\n```",
+        │   │         "inputSchema": {
+        │   │           "additionalProperties": false,
+        │   │           "properties": {
+        │   │             "js": {
+        │   │               "description": "Code-mode TypeScript source to execute. The code-mode context lists the available global `tools` API, input types, and call examples.",
+        │   │               "type": "string"
+        │   │             }
+        │   │           },
+        │   │           "required": [
+        │   │             "js"
+        │   │           ],
+        │   │           "type": "object"
+        │   │         },
+        │   │         "name": "code",
+        │   │         "type": "function"
+        │   │       },
+        │   │       {
+        │   │         "inputSchema": {
+        │   │           "additionalProperties": false,
+        │   │           "properties": {
+        │   │             "value": {
+        │   │               "type": "number"
+        │   │             }
+        │   │           },
+        │   │           "required": [
+        │   │             "value"
+        │   │           ],
+        │   │           "type": "object"
+        │   │         },
+        │   │         "name": "host",
+        │   │         "type": "function"
+        │   │       }
+        │   │     ]
+        │   │   }
+        │   │   output: {
+        │   │     "content": [
+        │   │       {
+        │   │         "input": {
+        │   │           "js": "return await tools.host({value: 6});"
+        │   │         },
+        │   │         "providerMetadata": {
+        │   │           "openai": {
+        │   │             "itemId": "<itemId:3>"
+        │   │           }
+        │   │         },
+        │   │         "toolCallId": "<toolCallId:2>",
+        │   │         "toolName": "code",
+        │   │         "type": "tool-call"
+        │   │       }
+        │   │     ],
+        │   │     "finishReason": "tool-calls",
+        │   │     "providerMetadata": {
+        │   │       "openai": {
+        │   │         "responseId": "<responseId:1>",
+        │   │         "serviceTier": "default"
+        │   │       }
+        │   │     },
+        │   │     "response": {},
+        │   │     "usage": {
+        │   │       "inputTokenDetails": {
+        │   │         "cacheReadTokens": 0,
+        │   │         "cacheWriteTokens": 0,
+        │   │         "noCacheTokens": 240
+        │   │       },
+        │   │       "inputTokens": 240,
+        │   │       "outputTokenDetails": {
+        │   │         "reasoningTokens": 0,
+        │   │         "textTokens": 15
+        │   │       },
+        │   │       "outputTokens": 15,
+        │   │       "raw": {
+        │   │         "input_tokens": 240,
+        │   │         "input_tokens_details": {
+        │   │           "cache_write_tokens": 0,
+        │   │           "cached_tokens": 0
+        │   │         },
+        │   │         "output_tokens": 15,
+        │   │         "output_tokens_details": {
+        │   │           "reasoning_tokens": 0
+        │   │         },
+        │   │         "total_tokens": 255
+        │   │       },
+        │   │       "totalTokens": 255
+        │   │     }
+        │   │   }
+        │   │   metadata: {
+        │   │     "braintrust": {
+        │   │       "integration_name": "ai-sdk",
+        │   │       "sdk_language": "typescript"
+        │   │     },
+        │   │     "model": "gpt-4.1-nano",
+        │   │     "provider": "openai.responses"
+        │   │   }
+        │   │   metrics: {
+        │   │     "completion_tokens": 15,
+        │   │     "prompt_cache_creation_tokens": 0,
+        │   │     "prompt_cached_tokens": 0,
+        │   │     "prompt_tokens": 240,
+        │   │     "tokens": 255
+        │   │   }
+        │   └── code [tool]
+        │       input: {
+        │         "js": "return await tools.host({value: 6});"
+        │       }
+        │       output: {
+        │         "value": 12
+        │       }
+        │       metadata: {
+        │         "braintrust": {
+        │           "integration_name": "ai-sdk",
+        │           "sdk_language": "typescript"
+        │         },
+        │         "toolCallId": "<toolCallId:1>",
+        │         "toolName": "code"
+        │       }
+        │       └── host [function]
+        │           input: {
+        │             "value": 6
+        │           }
+        │           output: {
+        │             "value": 12
+        │           }
+        │           metadata: {
+        │             "toolCallId": "<toolCallId:1>"
+        │           }
         └── generateText [function]
             input: {
-              "instructions": "You are a shopping assistant. Use the tools before answering pricing questions.",
-              "maxOutputTokens": 256,
+              "maxOutputTokens": 80,
               "maxRetries": 2,
               "messages": [
                 {
-                  "content": "I need help comparing laptop prices before checkout.",
-                  "role": "user"
-                },
-                {
-                  "content": "I can compare store prices and apply a discount code.",
-                  "role": "assistant"
-                },
-                {
-                  "content": "Call get_store_price for a laptop at StoreA and StoreB, then call apply_discount with code SAVE20 for the cheaper price. Finish with the discounted total.",
+                  "content": "Call host with value 8.",
                   "role": "user"
                 }
               ],
               "model": {
-                "modelId": "gpt-4o-mini-2024-07-18",
+                "modelId": "gpt-4.1-nano",
                 "provider": "openai.responses"
               },
-              "temperature": 0,
+              "toolChoice": {
+                "toolName": "host",
+                "type": "tool"
+              },
               "tools": {
-                "apply_discount": {
-                  "description": "Apply a discount code to a total",
+                "host": {
                   "inputSchema": {
-                    "$schema": "http://json-schema.org/draft-07/schema#",
-                    "additionalProperties": false,
-                    "properties": {
-                      "discountCode": {
-                        "description": "The discount code to apply",
-                        "type": "string"
+                    "jsonSchema": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "value": {
+                          "type": "number"
+                        }
                       },
-                      "total": {
-                        "description": "The original total",
-                        "type": "number"
-                      }
-                    },
-                    "required": [
-                      "discountCode",
-                      "total"
-                    ],
-                    "type": "object"
-                  }
-                },
-                "get_store_price": {
-                  "description": "Get the price of an item at a store",
-                  "inputSchema": {
-                    "$schema": "http://json-schema.org/draft-07/schema#",
-                    "additionalProperties": false,
-                    "properties": {
-                      "item": {
-                        "description": "The item to price",
-                        "type": "string"
-                      },
-                      "store": {
-                        "description": "The store name",
-                        "type": "string"
-                      }
-                    },
-                    "required": [
-                      "item",
-                      "store"
-                    ],
-                    "type": "object"
-                  }
+                      "required": [
+                        "value"
+                      ],
+                      "type": "object"
+                    }
+                  },
+                  "label": "original receiver"
                 }
               }
             }
@@ -6994,8 +10327,7 @@ span_tree:
               "content": [
                 {
                   "input": {
-                    "item": "laptop",
-                    "store": "StoreA"
+                    "value": 8
                   },
                   "providerMetadata": {
                     "openai": {
@@ -7003,99 +10335,31 @@ span_tree:
                     }
                   },
                   "toolCallId": "<toolCallId:2>",
-                  "toolName": "get_store_price",
-                  "type": "tool-call"
-                },
-                {
-                  "input": {
-                    "item": "laptop",
-                    "store": "StoreB"
-                  },
-                  "providerMetadata": {
-                    "openai": {
-                      "itemId": "<itemId:5>"
-                    }
-                  },
-                  "toolCallId": "<toolCallId:4>",
-                  "toolName": "get_store_price",
+                  "toolName": "host",
                   "type": "tool-call"
                 },
                 {
                   "dynamic": false,
                   "input": {
-                    "item": "laptop",
-                    "store": "StoreA"
+                    "value": 8
                   },
-                  "output": "{\"item\":\"laptop\",\"price\":999,\"store\":\"StoreA\"}",
+                  "output": {
+                    "value": 16
+                  },
                   "providerMetadata": {
                     "openai": {
                       "itemId": "<itemId:3>"
                     }
                   },
                   "toolCallId": "<toolCallId:2>",
-                  "toolName": "get_store_price",
+                  "toolName": "host",
                   "type": "tool-result"
-                },
-                {
-                  "dynamic": false,
-                  "input": {
-                    "item": "laptop",
-                    "store": "StoreB"
-                  },
-                  "output": "{\"item\":\"laptop\",\"price\":1099,\"store\":\"StoreB\"}",
-                  "providerMetadata": {
-                    "openai": {
-                      "itemId": "<itemId:5>"
-                    }
-                  },
-                  "toolCallId": "<toolCallId:4>",
-                  "toolName": "get_store_price",
-                  "type": "tool-result"
-                },
-                {
-                  "input": {
-                    "discountCode": "SAVE20",
-                    "total": 999
-                  },
-                  "providerMetadata": {
-                    "openai": {
-                      "itemId": "<itemId:8>"
-                    }
-                  },
-                  "toolCallId": "<toolCallId:7>",
-                  "toolName": "apply_discount",
-                  "type": "tool-call"
-                },
-                {
-                  "dynamic": false,
-                  "input": {
-                    "discountCode": "SAVE20",
-                    "total": 999
-                  },
-                  "output": "{\"discountCode\":\"SAVE20\",\"finalTotal\":799.2,\"originalTotal\":999}",
-                  "providerMetadata": {
-                    "openai": {
-                      "itemId": "<itemId:8>"
-                    }
-                  },
-                  "toolCallId": "<toolCallId:7>",
-                  "toolName": "apply_discount",
-                  "type": "tool-result"
-                },
-                {
-                  "providerMetadata": {
-                    "openai": {
-                      "itemId": "<itemId:10>"
-                    }
-                  },
-                  "text": "Here are the prices for the laptop:\n\n- **Store A**: $999\n- **Store B**: $1099\n\nThe cheaper price is from **Store A**. After applying the discount code **SAVE20**, the final total is **$799.20**.",
-                  "type": "text"
                 }
               ],
-              "finishReason": "stop",
+              "finishReason": "tool-calls",
               "providerMetadata": {
                 "openai": {
-                  "responseId": "<responseId:11>",
+                  "responseId": "<responseId:4>",
                   "serviceTier": "default"
                 }
               },
@@ -7104,19 +10368,44 @@ span_tree:
                   {
                     "content": [
                       {
+                        "input": {
+                          "value": 8
+                        },
                         "providerOptions": {
                           "openai": {
-                            "itemId": "<itemId:10>"
+                            "itemId": "<itemId:3>"
                           }
                         },
-                        "text": "Here are the prices for the laptop:\n\n- **Store A**: $999\n- **Store B**: $1099\n\nThe cheaper price is from **Store A**. After applying the discount code **SAVE20**, the final total is **$799.20**.",
-                        "type": "text"
+                        "toolCallId": "<toolCallId:2>",
+                        "toolName": "host",
+                        "type": "tool-call"
                       }
                     ],
                     "role": "assistant"
+                  },
+                  {
+                    "content": [
+                      {
+                        "output": {
+                          "type": "json",
+                          "value": {
+                            "value": 16
+                          }
+                        },
+                        "providerOptions": {
+                          "openai": {
+                            "itemId": "<itemId:3>"
+                          }
+                        },
+                        "toolCallId": "<toolCallId:2>",
+                        "toolName": "host",
+                        "type": "tool-result"
+                      }
+                    ],
+                    "role": "tool"
                   }
                 ],
-                "modelId": "gpt-4o-mini-2024-07-18",
+                "modelId": "gpt-4.1-nano-2025-04-14",
                 "timestamp": "<timestamp>"
               },
               "responseMessages": "<omitted>",
@@ -7126,8 +10415,7 @@ span_tree:
                   "content": [
                     {
                       "input": {
-                        "item": "laptop",
-                        "store": "StoreA"
+                        "value": 8
                       },
                       "providerMetadata": {
                         "openai": {
@@ -7135,64 +10423,35 @@ span_tree:
                         }
                       },
                       "toolCallId": "<toolCallId:2>",
-                      "toolName": "get_store_price",
-                      "type": "tool-call"
-                    },
-                    {
-                      "input": {
-                        "item": "laptop",
-                        "store": "StoreB"
-                      },
-                      "providerMetadata": {
-                        "openai": {
-                          "itemId": "<itemId:5>"
-                        }
-                      },
-                      "toolCallId": "<toolCallId:4>",
-                      "toolName": "get_store_price",
+                      "toolName": "host",
                       "type": "tool-call"
                     },
                     {
                       "dynamic": false,
                       "input": {
-                        "item": "laptop",
-                        "store": "StoreA"
+                        "value": 8
                       },
-                      "output": "{\"item\":\"laptop\",\"price\":999,\"store\":\"StoreA\"}",
+                      "output": {
+                        "value": 16
+                      },
                       "providerMetadata": {
                         "openai": {
                           "itemId": "<itemId:3>"
                         }
                       },
                       "toolCallId": "<toolCallId:2>",
-                      "toolName": "get_store_price",
-                      "type": "tool-result"
-                    },
-                    {
-                      "dynamic": false,
-                      "input": {
-                        "item": "laptop",
-                        "store": "StoreB"
-                      },
-                      "output": "{\"item\":\"laptop\",\"price\":1099,\"store\":\"StoreB\"}",
-                      "providerMetadata": {
-                        "openai": {
-                          "itemId": "<itemId:5>"
-                        }
-                      },
-                      "toolCallId": "<toolCallId:4>",
-                      "toolName": "get_store_price",
+                      "toolName": "host",
                       "type": "tool-result"
                     }
                   ],
                   "finishReason": "tool-calls",
                   "model": {
-                    "modelId": "gpt-4o-mini-2024-07-18",
+                    "modelId": "gpt-4.1-nano",
                     "provider": "openai.responses"
                   },
                   "providerMetadata": {
                     "openai": {
-                      "responseId": "<responseId:6>",
+                      "responseId": "<responseId:4>",
                       "serviceTier": "default"
                     }
                   },
@@ -7202,8 +10461,7 @@ span_tree:
                         "content": [
                           {
                             "input": {
-                              "item": "laptop",
-                              "store": "StoreA"
+                              "value": 8
                             },
                             "providerOptions": {
                               "openai": {
@@ -7211,21 +10469,7 @@ span_tree:
                               }
                             },
                             "toolCallId": "<toolCallId:2>",
-                            "toolName": "get_store_price",
-                            "type": "tool-call"
-                          },
-                          {
-                            "input": {
-                              "item": "laptop",
-                              "store": "StoreB"
-                            },
-                            "providerOptions": {
-                              "openai": {
-                                "itemId": "<itemId:5>"
-                              }
-                            },
-                            "toolCallId": "<toolCallId:4>",
-                            "toolName": "get_store_price",
+                            "toolName": "host",
                             "type": "tool-call"
                           }
                         ],
@@ -7235,8 +10479,10 @@ span_tree:
                         "content": [
                           {
                             "output": {
-                              "type": "text",
-                              "value": "{\"item\":\"laptop\",\"price\":999,\"store\":\"StoreA\"}"
+                              "type": "json",
+                              "value": {
+                                "value": 16
+                              }
                             },
                             "providerOptions": {
                               "openai": {
@@ -7244,28 +10490,14 @@ span_tree:
                               }
                             },
                             "toolCallId": "<toolCallId:2>",
-                            "toolName": "get_store_price",
-                            "type": "tool-result"
-                          },
-                          {
-                            "output": {
-                              "type": "text",
-                              "value": "{\"item\":\"laptop\",\"price\":1099,\"store\":\"StoreB\"}"
-                            },
-                            "providerOptions": {
-                              "openai": {
-                                "itemId": "<itemId:5>"
-                              }
-                            },
-                            "toolCallId": "<toolCallId:4>",
-                            "toolName": "get_store_price",
+                            "toolName": "host",
                             "type": "tool-result"
                           }
                         ],
                         "role": "tool"
                       }
                     ],
-                    "modelId": "gpt-4o-mini-2024-07-18",
+                    "modelId": "gpt-4.1-nano-2025-04-14",
                     "timestamp": "<timestamp>"
                   },
                   "runtimeContext": {},
@@ -7275,232 +10507,36 @@ span_tree:
                     "inputTokenDetails": {
                       "cacheReadTokens": 0,
                       "cacheWriteTokens": 0,
-                      "noCacheTokens": 173
+                      "noCacheTokens": 45
                     },
-                    "inputTokens": 173,
+                    "inputTokens": 45,
                     "outputTokenDetails": {
                       "reasoningTokens": 0,
-                      "textTokens": 59
+                      "textTokens": 6
                     },
-                    "outputTokens": 59,
+                    "outputTokens": 6,
                     "raw": {
-                      "input_tokens": 173,
+                      "input_tokens": 45,
                       "input_tokens_details": {
                         "cache_write_tokens": 0,
                         "cached_tokens": 0
                       },
-                      "output_tokens": 59,
+                      "output_tokens": 6,
                       "output_tokens_details": {
                         "reasoning_tokens": 0
                       },
-                      "total_tokens": 232
+                      "total_tokens": 51
                     },
-                    "totalTokens": 232
-                  },
-                  "warnings": []
-                },
-                {
-                  "callId": "<callId:1>",
-                  "content": [
-                    {
-                      "input": {
-                        "discountCode": "SAVE20",
-                        "total": 999
-                      },
-                      "providerMetadata": {
-                        "openai": {
-                          "itemId": "<itemId:8>"
-                        }
-                      },
-                      "toolCallId": "<toolCallId:7>",
-                      "toolName": "apply_discount",
-                      "type": "tool-call"
-                    },
-                    {
-                      "dynamic": false,
-                      "input": {
-                        "discountCode": "SAVE20",
-                        "total": 999
-                      },
-                      "output": "{\"discountCode\":\"SAVE20\",\"finalTotal\":799.2,\"originalTotal\":999}",
-                      "providerMetadata": {
-                        "openai": {
-                          "itemId": "<itemId:8>"
-                        }
-                      },
-                      "toolCallId": "<toolCallId:7>",
-                      "toolName": "apply_discount",
-                      "type": "tool-result"
-                    }
-                  ],
-                  "finishReason": "tool-calls",
-                  "model": {
-                    "modelId": "gpt-4o-mini-2024-07-18",
-                    "provider": "openai.responses"
-                  },
-                  "providerMetadata": {
-                    "openai": {
-                      "responseId": "<responseId:9>",
-                      "serviceTier": "default"
-                    }
-                  },
-                  "response": {
-                    "messages": [
-                      {
-                        "content": [
-                          {
-                            "input": {
-                              "discountCode": "SAVE20",
-                              "total": 999
-                            },
-                            "providerOptions": {
-                              "openai": {
-                                "itemId": "<itemId:8>"
-                              }
-                            },
-                            "toolCallId": "<toolCallId:7>",
-                            "toolName": "apply_discount",
-                            "type": "tool-call"
-                          }
-                        ],
-                        "role": "assistant"
-                      },
-                      {
-                        "content": [
-                          {
-                            "output": {
-                              "type": "text",
-                              "value": "{\"discountCode\":\"SAVE20\",\"finalTotal\":799.2,\"originalTotal\":999}"
-                            },
-                            "providerOptions": {
-                              "openai": {
-                                "itemId": "<itemId:8>"
-                              }
-                            },
-                            "toolCallId": "<toolCallId:7>",
-                            "toolName": "apply_discount",
-                            "type": "tool-result"
-                          }
-                        ],
-                        "role": "tool"
-                      }
-                    ],
-                    "modelId": "gpt-4o-mini-2024-07-18",
-                    "timestamp": "<timestamp>"
-                  },
-                  "runtimeContext": {},
-                  "stepNumber": 1,
-                  "toolsContext": {},
-                  "usage": {
-                    "inputTokenDetails": {
-                      "cacheReadTokens": 0,
-                      "cacheWriteTokens": 0,
-                      "noCacheTokens": 260
-                    },
-                    "inputTokens": 260,
-                    "outputTokenDetails": {
-                      "reasoningTokens": 0,
-                      "textTokens": 21
-                    },
-                    "outputTokens": 21,
-                    "raw": {
-                      "input_tokens": 260,
-                      "input_tokens_details": {
-                        "cache_write_tokens": 0,
-                        "cached_tokens": 0
-                      },
-                      "output_tokens": 21,
-                      "output_tokens_details": {
-                        "reasoning_tokens": 0
-                      },
-                      "total_tokens": 281
-                    },
-                    "totalTokens": 281
-                  },
-                  "warnings": []
-                },
-                {
-                  "callId": "<callId:1>",
-                  "content": [
-                    {
-                      "providerMetadata": {
-                        "openai": {
-                          "itemId": "<itemId:10>"
-                        }
-                      },
-                      "text": "Here are the prices for the laptop:\n\n- **Store A**: $999\n- **Store B**: $1099\n\nThe cheaper price is from **Store A**. After applying the discount code **SAVE20**, the final total is **$799.20**.",
-                      "type": "text"
-                    }
-                  ],
-                  "finishReason": "stop",
-                  "model": {
-                    "modelId": "gpt-4o-mini-2024-07-18",
-                    "provider": "openai.responses"
-                  },
-                  "providerMetadata": {
-                    "openai": {
-                      "responseId": "<responseId:11>",
-                      "serviceTier": "default"
-                    }
-                  },
-                  "response": {
-                    "messages": [
-                      {
-                        "content": [
-                          {
-                            "providerOptions": {
-                              "openai": {
-                                "itemId": "<itemId:10>"
-                              }
-                            },
-                            "text": "Here are the prices for the laptop:\n\n- **Store A**: $999\n- **Store B**: $1099\n\nThe cheaper price is from **Store A**. After applying the discount code **SAVE20**, the final total is **$799.20**.",
-                            "type": "text"
-                          }
-                        ],
-                        "role": "assistant"
-                      }
-                    ],
-                    "modelId": "gpt-4o-mini-2024-07-18",
-                    "timestamp": "<timestamp>"
-                  },
-                  "runtimeContext": {},
-                  "stepNumber": 2,
-                  "toolsContext": {},
-                  "usage": {
-                    "inputTokenDetails": {
-                      "cacheReadTokens": 0,
-                      "cacheWriteTokens": 0,
-                      "noCacheTokens": 305
-                    },
-                    "inputTokens": 305,
-                    "outputTokenDetails": {
-                      "reasoningTokens": 0,
-                      "textTokens": 59
-                    },
-                    "outputTokens": 59,
-                    "raw": {
-                      "input_tokens": 305,
-                      "input_tokens_details": {
-                        "cache_write_tokens": 0,
-                        "cached_tokens": 0
-                      },
-                      "output_tokens": 59,
-                      "output_tokens_details": {
-                        "reasoning_tokens": 0
-                      },
-                      "total_tokens": 364
-                    },
-                    "totalTokens": 364
+                    "totalTokens": 51
                   },
                   "warnings": []
                 }
               ],
-              "text": "Here are the prices for the laptop:\n\n- **Store A**: $999\n- **Store B**: $1099\n\nThe cheaper price is from **Store A**. After applying the discount code **SAVE20**, the final total is **$799.20**.",
+              "text": "",
               "toolCalls": [
                 {
                   "input": {
-                    "item": "laptop",
-                    "store": "StoreA"
+                    "value": 8
                   },
                   "providerMetadata": {
                     "openai": {
@@ -7508,35 +10544,7 @@ span_tree:
                     }
                   },
                   "toolCallId": "<toolCallId:2>",
-                  "toolName": "get_store_price",
-                  "type": "tool-call"
-                },
-                {
-                  "input": {
-                    "item": "laptop",
-                    "store": "StoreB"
-                  },
-                  "providerMetadata": {
-                    "openai": {
-                      "itemId": "<itemId:5>"
-                    }
-                  },
-                  "toolCallId": "<toolCallId:4>",
-                  "toolName": "get_store_price",
-                  "type": "tool-call"
-                },
-                {
-                  "input": {
-                    "discountCode": "SAVE20",
-                    "total": 999
-                  },
-                  "providerMetadata": {
-                    "openai": {
-                      "itemId": "<itemId:8>"
-                    }
-                  },
-                  "toolCallId": "<toolCallId:7>",
-                  "toolName": "apply_discount",
+                  "toolName": "host",
                   "type": "tool-call"
                 }
               ],
@@ -7544,49 +10552,18 @@ span_tree:
                 {
                   "dynamic": false,
                   "input": {
-                    "item": "laptop",
-                    "store": "StoreA"
+                    "value": 8
                   },
-                  "output": "{\"item\":\"laptop\",\"price\":999,\"store\":\"StoreA\"}",
+                  "output": {
+                    "value": 16
+                  },
                   "providerMetadata": {
                     "openai": {
                       "itemId": "<itemId:3>"
                     }
                   },
                   "toolCallId": "<toolCallId:2>",
-                  "toolName": "get_store_price",
-                  "type": "tool-result"
-                },
-                {
-                  "dynamic": false,
-                  "input": {
-                    "item": "laptop",
-                    "store": "StoreB"
-                  },
-                  "output": "{\"item\":\"laptop\",\"price\":1099,\"store\":\"StoreB\"}",
-                  "providerMetadata": {
-                    "openai": {
-                      "itemId": "<itemId:5>"
-                    }
-                  },
-                  "toolCallId": "<toolCallId:4>",
-                  "toolName": "get_store_price",
-                  "type": "tool-result"
-                },
-                {
-                  "dynamic": false,
-                  "input": {
-                    "discountCode": "SAVE20",
-                    "total": 999
-                  },
-                  "output": "{\"discountCode\":\"SAVE20\",\"finalTotal\":799.2,\"originalTotal\":999}",
-                  "providerMetadata": {
-                    "openai": {
-                      "itemId": "<itemId:8>"
-                    }
-                  },
-                  "toolCallId": "<toolCallId:7>",
-                  "toolName": "apply_discount",
+                  "toolName": "host",
                   "type": "tool-result"
                 }
               ],
@@ -7594,29 +10571,53 @@ span_tree:
                 "inputTokenDetails": {
                   "cacheReadTokens": 0,
                   "cacheWriteTokens": 0,
-                  "noCacheTokens": 738
+                  "noCacheTokens": 45
                 },
-                "inputTokens": 738,
+                "inputTokens": 45,
                 "outputTokenDetails": {
                   "reasoningTokens": 0,
-                  "textTokens": 139
+                  "textTokens": 6
                 },
-                "outputTokens": 139,
-                "totalTokens": 877
+                "outputTokens": 6,
+                "raw": {
+                  "input_tokens": 45,
+                  "input_tokens_details": {
+                    "cache_write_tokens": 0,
+                    "cached_tokens": 0
+                  },
+                  "output_tokens": 6,
+                  "output_tokens_details": {
+                    "reasoning_tokens": 0
+                  },
+                  "total_tokens": 51
+                },
+                "totalTokens": 51
               },
               "usage": {
                 "inputTokenDetails": {
                   "cacheReadTokens": 0,
                   "cacheWriteTokens": 0,
-                  "noCacheTokens": 738
+                  "noCacheTokens": 45
                 },
-                "inputTokens": 738,
+                "inputTokens": 45,
                 "outputTokenDetails": {
                   "reasoningTokens": 0,
-                  "textTokens": 139
+                  "textTokens": 6
                 },
-                "outputTokens": 139,
-                "totalTokens": 877
+                "outputTokens": 6,
+                "raw": {
+                  "input_tokens": 45,
+                  "input_tokens_details": {
+                    "cache_write_tokens": 0,
+                    "cached_tokens": 0
+                  },
+                  "output_tokens": 6,
+                  "output_tokens_details": {
+                    "reasoning_tokens": 0
+                  },
+                  "total_tokens": 51
+                },
+                "totalTokens": 51
               },
               "warnings": []
             }
@@ -7625,79 +10626,37 @@ span_tree:
                 "integration_name": "ai-sdk",
                 "sdk_language": "typescript"
               },
-              "model": "gpt-4o-mini-2024-07-18",
+              "model": "gpt-4.1-nano",
               "provider": "openai.responses"
             }
             ├── doGenerate [llm]
             │   input: {
-            │     "instructions": "You are a shopping assistant. Use the tools before answering pricing questions.",
-            │     "maxOutputTokens": 256,
+            │     "maxOutputTokens": 80,
             │     "messages": [
             │       {
-            │         "content": "I need help comparing laptop prices before checkout.",
-            │         "role": "user"
-            │       },
-            │       {
-            │         "content": "I can compare store prices and apply a discount code.",
-            │         "role": "assistant"
-            │       },
-            │       {
-            │         "content": "Call get_store_price for a laptop at StoreA and StoreB, then call apply_discount with code SAVE20 for the cheaper price. Finish with the discounted total.",
+            │         "content": "Call host with value 8.",
             │         "role": "user"
             │       }
             │     ],
             │     "model": {
-            │       "modelId": "gpt-4o-mini-2024-07-18",
+            │       "modelId": "gpt-4.1-nano",
             │       "provider": "openai.responses"
             │     },
-            │     "temperature": 0,
             │     "tools": [
             │       {
-            │         "description": "Get the price of an item at a store",
             │         "inputSchema": {
-            │           "$schema": "http://json-schema.org/draft-07/schema#",
             │           "additionalProperties": false,
             │           "properties": {
-            │             "item": {
-            │               "description": "The item to price",
-            │               "type": "string"
-            │             },
-            │             "store": {
-            │               "description": "The store name",
-            │               "type": "string"
-            │             }
-            │           },
-            │           "required": [
-            │             "item",
-            │             "store"
-            │           ],
-            │           "type": "object"
-            │         },
-            │         "name": "get_store_price",
-            │         "type": "function"
-            │       },
-            │       {
-            │         "description": "Apply a discount code to a total",
-            │         "inputSchema": {
-            │           "$schema": "http://json-schema.org/draft-07/schema#",
-            │           "additionalProperties": false,
-            │           "properties": {
-            │             "discountCode": {
-            │               "description": "The discount code to apply",
-            │               "type": "string"
-            │             },
-            │             "total": {
-            │               "description": "The original total",
+            │             "value": {
             │               "type": "number"
             │             }
             │           },
             │           "required": [
-            │             "discountCode",
-            │             "total"
+            │             "value"
             │           ],
             │           "type": "object"
             │         },
-            │         "name": "apply_discount",
+            │         "name": "host",
             │         "type": "function"
             │       }
             │     ]
@@ -7706,8 +10665,7 @@ span_tree:
             │     "content": [
             │       {
             │         "input": {
-            │           "item": "laptop",
-            │           "store": "StoreA"
+            │           "value": 8
             │         },
             │         "providerMetadata": {
             │           "openai": {
@@ -7715,21 +10673,7 @@ span_tree:
             │           }
             │         },
             │         "toolCallId": "<toolCallId:2>",
-            │         "toolName": "get_store_price",
-            │         "type": "tool-call"
-            │       },
-            │       {
-            │         "input": {
-            │           "item": "laptop",
-            │           "store": "StoreB"
-            │         },
-            │         "providerMetadata": {
-            │           "openai": {
-            │             "itemId": "<itemId:5>"
-            │           }
-            │         },
-            │         "toolCallId": "<toolCallId:4>",
-            │         "toolName": "get_store_price",
+            │         "toolName": "host",
             │         "type": "tool-call"
             │       }
             │     ],
@@ -7745,27 +10689,27 @@ span_tree:
             │       "inputTokenDetails": {
             │         "cacheReadTokens": 0,
             │         "cacheWriteTokens": 0,
-            │         "noCacheTokens": 173
+            │         "noCacheTokens": 45
             │       },
-            │       "inputTokens": 173,
+            │       "inputTokens": 45,
             │       "outputTokenDetails": {
             │         "reasoningTokens": 0,
-            │         "textTokens": 59
+            │         "textTokens": 6
             │       },
-            │       "outputTokens": 59,
+            │       "outputTokens": 6,
             │       "raw": {
-            │         "input_tokens": 173,
+            │         "input_tokens": 45,
             │         "input_tokens_details": {
             │           "cache_write_tokens": 0,
             │           "cached_tokens": 0
             │         },
-            │         "output_tokens": 59,
+            │         "output_tokens": 6,
             │         "output_tokens_details": {
             │           "reasoning_tokens": 0
             │         },
-            │         "total_tokens": 232
+            │         "total_tokens": 51
             │       },
-            │       "totalTokens": 232
+            │       "totalTokens": 51
             │     }
             │   }
             │   metadata: {
@@ -7773,502 +10717,28 @@ span_tree:
             │       "integration_name": "ai-sdk",
             │       "sdk_language": "typescript"
             │     },
-            │     "model": "gpt-4o-mini-2024-07-18",
+            │     "model": "gpt-4.1-nano",
             │     "provider": "openai.responses"
             │   }
             │   metrics: {
-            │     "completion_tokens": 59,
+            │     "completion_tokens": 6,
             │     "prompt_cache_creation_tokens": 0,
             │     "prompt_cached_tokens": 0,
-            │     "prompt_tokens": 173,
-            │     "tokens": 232
+            │     "prompt_tokens": 45,
+            │     "tokens": 51
             │   }
-            ├── get_store_price [tool]
-            │   input: {
-            │     "item": "laptop",
-            │     "store": "StoreA"
-            │   }
-            │   output: "{\"item\":\"laptop\",\"price\":999,\"store\":\"StoreA\"}"
-            │   metadata: {
-            │     "braintrust": {
-            │       "integration_name": "ai-sdk",
-            │       "sdk_language": "typescript"
-            │     },
-            │     "toolCallId": "<toolCallId:1>",
-            │     "toolName": "get_store_price"
-            │   }
-            ├── get_store_price [tool]
-            │   input: {
-            │     "item": "laptop",
-            │     "store": "StoreB"
-            │   }
-            │   output: "{\"item\":\"laptop\",\"price\":1099,\"store\":\"StoreB\"}"
-            │   metadata: {
-            │     "braintrust": {
-            │       "integration_name": "ai-sdk",
-            │       "sdk_language": "typescript"
-            │     },
-            │     "toolCallId": "<toolCallId:1>",
-            │     "toolName": "get_store_price"
-            │   }
-            ├── doGenerate [llm]
-            │   input: {
-            │     "instructions": "You are a shopping assistant. Use the tools before answering pricing questions.",
-            │     "maxOutputTokens": 256,
-            │     "messages": [
-            │       {
-            │         "content": "I need help comparing laptop prices before checkout.",
-            │         "role": "user"
-            │       },
-            │       {
-            │         "content": "I can compare store prices and apply a discount code.",
-            │         "role": "assistant"
-            │       },
-            │       {
-            │         "content": "Call get_store_price for a laptop at StoreA and StoreB, then call apply_discount with code SAVE20 for the cheaper price. Finish with the discounted total.",
-            │         "role": "user"
-            │       },
-            │       {
-            │         "content": [
-            │           {
-            │             "input": {
-            │               "item": "laptop",
-            │               "store": "StoreA"
-            │             },
-            │             "providerOptions": {
-            │               "openai": {
-            │                 "itemId": "<itemId:2>"
-            │               }
-            │             },
-            │             "toolCallId": "<toolCallId:1>",
-            │             "toolName": "get_store_price",
-            │             "type": "tool-call"
-            │           },
-            │           {
-            │             "input": {
-            │               "item": "laptop",
-            │               "store": "StoreB"
-            │             },
-            │             "providerOptions": {
-            │               "openai": {
-            │                 "itemId": "<itemId:4>"
-            │               }
-            │             },
-            │             "toolCallId": "<toolCallId:3>",
-            │             "toolName": "get_store_price",
-            │             "type": "tool-call"
-            │           }
-            │         ],
-            │         "role": "assistant"
-            │       },
-            │       {
-            │         "content": [
-            │           {
-            │             "output": {
-            │               "type": "text",
-            │               "value": "{\"item\":\"laptop\",\"price\":999,\"store\":\"StoreA\"}"
-            │             },
-            │             "providerOptions": {
-            │               "openai": {
-            │                 "itemId": "<itemId:2>"
-            │               }
-            │             },
-            │             "toolCallId": "<toolCallId:1>",
-            │             "toolName": "get_store_price",
-            │             "type": "tool-result"
-            │           },
-            │           {
-            │             "output": {
-            │               "type": "text",
-            │               "value": "{\"item\":\"laptop\",\"price\":1099,\"store\":\"StoreB\"}"
-            │             },
-            │             "providerOptions": {
-            │               "openai": {
-            │                 "itemId": "<itemId:4>"
-            │               }
-            │             },
-            │             "toolCallId": "<toolCallId:3>",
-            │             "toolName": "get_store_price",
-            │             "type": "tool-result"
-            │           }
-            │         ],
-            │         "role": "tool"
-            │       }
-            │     ],
-            │     "model": {
-            │       "modelId": "gpt-4o-mini-2024-07-18",
-            │       "provider": "openai.responses"
-            │     },
-            │     "temperature": 0,
-            │     "tools": [
-            │       {
-            │         "description": "Get the price of an item at a store",
-            │         "inputSchema": {
-            │           "$schema": "http://json-schema.org/draft-07/schema#",
-            │           "additionalProperties": false,
-            │           "properties": {
-            │             "item": {
-            │               "description": "The item to price",
-            │               "type": "string"
-            │             },
-            │             "store": {
-            │               "description": "The store name",
-            │               "type": "string"
-            │             }
-            │           },
-            │           "required": [
-            │             "item",
-            │             "store"
-            │           ],
-            │           "type": "object"
-            │         },
-            │         "name": "get_store_price",
-            │         "type": "function"
-            │       },
-            │       {
-            │         "description": "Apply a discount code to a total",
-            │         "inputSchema": {
-            │           "$schema": "http://json-schema.org/draft-07/schema#",
-            │           "additionalProperties": false,
-            │           "properties": {
-            │             "discountCode": {
-            │               "description": "The discount code to apply",
-            │               "type": "string"
-            │             },
-            │             "total": {
-            │               "description": "The original total",
-            │               "type": "number"
-            │             }
-            │           },
-            │           "required": [
-            │             "discountCode",
-            │             "total"
-            │           ],
-            │           "type": "object"
-            │         },
-            │         "name": "apply_discount",
-            │         "type": "function"
-            │       }
-            │     ]
-            │   }
-            │   output: {
-            │     "content": [
-            │       {
-            │         "input": {
-            │           "discountCode": "SAVE20",
-            │           "total": 999
-            │         },
-            │         "providerMetadata": {
-            │           "openai": {
-            │             "itemId": "<itemId:3>"
-            │           }
-            │         },
-            │         "toolCallId": "<toolCallId:2>",
-            │         "toolName": "apply_discount",
-            │         "type": "tool-call"
-            │       }
-            │     ],
-            │     "finishReason": "tool-calls",
-            │     "providerMetadata": {
-            │       "openai": {
-            │         "responseId": "<responseId:1>",
-            │         "serviceTier": "default"
-            │       }
-            │     },
-            │     "response": {},
-            │     "usage": {
-            │       "inputTokenDetails": {
-            │         "cacheReadTokens": 0,
-            │         "cacheWriteTokens": 0,
-            │         "noCacheTokens": 260
-            │       },
-            │       "inputTokens": 260,
-            │       "outputTokenDetails": {
-            │         "reasoningTokens": 0,
-            │         "textTokens": 21
-            │       },
-            │       "outputTokens": 21,
-            │       "raw": {
-            │         "input_tokens": 260,
-            │         "input_tokens_details": {
-            │           "cache_write_tokens": 0,
-            │           "cached_tokens": 0
-            │         },
-            │         "output_tokens": 21,
-            │         "output_tokens_details": {
-            │           "reasoning_tokens": 0
-            │         },
-            │         "total_tokens": 281
-            │       },
-            │       "totalTokens": 281
-            │     }
-            │   }
-            │   metadata: {
-            │     "braintrust": {
-            │       "integration_name": "ai-sdk",
-            │       "sdk_language": "typescript"
-            │     },
-            │     "model": "gpt-4o-mini-2024-07-18",
-            │     "provider": "openai.responses"
-            │   }
-            │   metrics: {
-            │     "completion_tokens": 21,
-            │     "prompt_cache_creation_tokens": 0,
-            │     "prompt_cached_tokens": 0,
-            │     "prompt_tokens": 260,
-            │     "tokens": 281
-            │   }
-            ├── apply_discount [tool]
-            │   input: {
-            │     "discountCode": "SAVE20",
-            │     "total": 999
-            │   }
-            │   output: "{\"discountCode\":\"SAVE20\",\"finalTotal\":799.2,\"originalTotal\":999}"
-            │   metadata: {
-            │     "braintrust": {
-            │       "integration_name": "ai-sdk",
-            │       "sdk_language": "typescript"
-            │     },
-            │     "toolCallId": "<toolCallId:1>",
-            │     "toolName": "apply_discount"
-            │   }
-            └── doGenerate [llm]
+            └── host [tool]
                 input: {
-                  "instructions": "You are a shopping assistant. Use the tools before answering pricing questions.",
-                  "maxOutputTokens": 256,
-                  "messages": [
-                    {
-                      "content": "I need help comparing laptop prices before checkout.",
-                      "role": "user"
-                    },
-                    {
-                      "content": "I can compare store prices and apply a discount code.",
-                      "role": "assistant"
-                    },
-                    {
-                      "content": "Call get_store_price for a laptop at StoreA and StoreB, then call apply_discount with code SAVE20 for the cheaper price. Finish with the discounted total.",
-                      "role": "user"
-                    },
-                    {
-                      "content": [
-                        {
-                          "input": {
-                            "item": "laptop",
-                            "store": "StoreA"
-                          },
-                          "providerOptions": {
-                            "openai": {
-                              "itemId": "<itemId:2>"
-                            }
-                          },
-                          "toolCallId": "<toolCallId:1>",
-                          "toolName": "get_store_price",
-                          "type": "tool-call"
-                        },
-                        {
-                          "input": {
-                            "item": "laptop",
-                            "store": "StoreB"
-                          },
-                          "providerOptions": {
-                            "openai": {
-                              "itemId": "<itemId:4>"
-                            }
-                          },
-                          "toolCallId": "<toolCallId:3>",
-                          "toolName": "get_store_price",
-                          "type": "tool-call"
-                        }
-                      ],
-                      "role": "assistant"
-                    },
-                    {
-                      "content": [
-                        {
-                          "output": {
-                            "type": "text",
-                            "value": "{\"item\":\"laptop\",\"price\":999,\"store\":\"StoreA\"}"
-                          },
-                          "providerOptions": {
-                            "openai": {
-                              "itemId": "<itemId:2>"
-                            }
-                          },
-                          "toolCallId": "<toolCallId:1>",
-                          "toolName": "get_store_price",
-                          "type": "tool-result"
-                        },
-                        {
-                          "output": {
-                            "type": "text",
-                            "value": "{\"item\":\"laptop\",\"price\":1099,\"store\":\"StoreB\"}"
-                          },
-                          "providerOptions": {
-                            "openai": {
-                              "itemId": "<itemId:4>"
-                            }
-                          },
-                          "toolCallId": "<toolCallId:3>",
-                          "toolName": "get_store_price",
-                          "type": "tool-result"
-                        }
-                      ],
-                      "role": "tool"
-                    },
-                    {
-                      "content": [
-                        {
-                          "input": {
-                            "discountCode": "SAVE20",
-                            "total": 999
-                          },
-                          "providerOptions": {
-                            "openai": {
-                              "itemId": "<itemId:6>"
-                            }
-                          },
-                          "toolCallId": "<toolCallId:5>",
-                          "toolName": "apply_discount",
-                          "type": "tool-call"
-                        }
-                      ],
-                      "role": "assistant"
-                    },
-                    {
-                      "content": [
-                        {
-                          "output": {
-                            "type": "text",
-                            "value": "{\"discountCode\":\"SAVE20\",\"finalTotal\":799.2,\"originalTotal\":999}"
-                          },
-                          "providerOptions": {
-                            "openai": {
-                              "itemId": "<itemId:6>"
-                            }
-                          },
-                          "toolCallId": "<toolCallId:5>",
-                          "toolName": "apply_discount",
-                          "type": "tool-result"
-                        }
-                      ],
-                      "role": "tool"
-                    }
-                  ],
-                  "model": {
-                    "modelId": "gpt-4o-mini-2024-07-18",
-                    "provider": "openai.responses"
-                  },
-                  "temperature": 0,
-                  "tools": [
-                    {
-                      "description": "Get the price of an item at a store",
-                      "inputSchema": {
-                        "$schema": "http://json-schema.org/draft-07/schema#",
-                        "additionalProperties": false,
-                        "properties": {
-                          "item": {
-                            "description": "The item to price",
-                            "type": "string"
-                          },
-                          "store": {
-                            "description": "The store name",
-                            "type": "string"
-                          }
-                        },
-                        "required": [
-                          "item",
-                          "store"
-                        ],
-                        "type": "object"
-                      },
-                      "name": "get_store_price",
-                      "type": "function"
-                    },
-                    {
-                      "description": "Apply a discount code to a total",
-                      "inputSchema": {
-                        "$schema": "http://json-schema.org/draft-07/schema#",
-                        "additionalProperties": false,
-                        "properties": {
-                          "discountCode": {
-                            "description": "The discount code to apply",
-                            "type": "string"
-                          },
-                          "total": {
-                            "description": "The original total",
-                            "type": "number"
-                          }
-                        },
-                        "required": [
-                          "discountCode",
-                          "total"
-                        ],
-                        "type": "object"
-                      },
-                      "name": "apply_discount",
-                      "type": "function"
-                    }
-                  ]
+                  "value": 8
                 }
                 output: {
-                  "content": [
-                    {
-                      "providerMetadata": {
-                        "openai": {
-                          "itemId": "<itemId:2>"
-                        }
-                      },
-                      "text": "Here are the prices for the laptop:\n\n- **Store A**: $999\n- **Store B**: $1099\n\nThe cheaper price is from **Store A**. After applying the discount code **SAVE20**, the final total is **$799.20**.",
-                      "type": "text"
-                    }
-                  ],
-                  "finishReason": "stop",
-                  "providerMetadata": {
-                    "openai": {
-                      "responseId": "<responseId:1>",
-                      "serviceTier": "default"
-                    }
-                  },
-                  "response": {},
-                  "usage": {
-                    "inputTokenDetails": {
-                      "cacheReadTokens": 0,
-                      "cacheWriteTokens": 0,
-                      "noCacheTokens": 305
-                    },
-                    "inputTokens": 305,
-                    "outputTokenDetails": {
-                      "reasoningTokens": 0,
-                      "textTokens": 59
-                    },
-                    "outputTokens": 59,
-                    "raw": {
-                      "input_tokens": 305,
-                      "input_tokens_details": {
-                        "cache_write_tokens": 0,
-                        "cached_tokens": 0
-                      },
-                      "output_tokens": 59,
-                      "output_tokens_details": {
-                        "reasoning_tokens": 0
-                      },
-                      "total_tokens": 364
-                    },
-                    "totalTokens": 364
-                  }
+                  "value": 16
                 }
                 metadata: {
                   "braintrust": {
                     "integration_name": "ai-sdk",
                     "sdk_language": "typescript"
                   },
-                  "model": "gpt-4o-mini-2024-07-18",
-                  "provider": "openai.responses"
-                }
-                metrics: {
-                  "completion_tokens": 59,
-                  "prompt_cache_creation_tokens": 0,
-                  "prompt_cached_tokens": 0,
-                  "prompt_tokens": 305,
-                  "tokens": 364
+                  "toolCallId": "<toolCallId:1>",
+                  "toolName": "host"
                 }
