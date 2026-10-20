@@ -9,13 +9,8 @@
           "type": "llm",
           "children": [],
           "input": {
-            "abortSignal": "[AbortSignal]",
-            "includeRawChunks": false,
-            "prompt": [
-              {
-                "content": "You are a deterministic weather-test agent. You must call lookup_weather exactly once with Vienna before answering. After the tool result, reply with exactly: \"Vienna is sunny and 21°C.\"\n\nYou are running inside a Think agent.\n\nCapabilities available in this turn:\n- You can inspect and edit the agent workspace using the available file tools.\n- Use the tools exposed in this turn when they materially improve accuracy or let you act on the user's request. Treat tool descriptions and schemas as the source of truth.\n- Some tools may call server code, browser/client code, MCP servers, extensions, or delegated agents. Use them according to their descriptions.\n- Do not claim access to capabilities that are not exposed as tools in this turn.",
-                "role": "system"
-              },
+            "instructions": "You are a deterministic weather-test agent. You must call lookup_weather exactly once with Vienna before answering. After the tool result, reply with exactly: \"Vienna is sunny and 21°C.\"\n\nYou are running inside a Think agent.\n\nCapabilities available in this turn:\n- You can inspect and edit the agent workspace using the available file tools.\n- Use the tools exposed in this turn when they materially improve accuracy or let you act on the user's request. Treat tool descriptions and schemas as the source of truth.\n- Some tools may call server code, browser/client code, MCP servers, extensions, or delegated agents. Use them according to their descriptions.\n- Do not claim access to capabilities that are not exposed as tools in this turn.",
+            "messages": [
               {
                 "content": [
                   {
@@ -26,8 +21,9 @@
                 "role": "user"
               }
             ],
-            "toolChoice": {
-              "type": "auto"
+            "model": {
+              "modelId": "gpt-5-nano",
+              "provider": "openai.chat"
             },
             "tools": [
               {
@@ -266,53 +262,67 @@
             ]
           },
           "output": {
-            "finishReason": {
-              "raw": "tool_calls",
-              "unified": "tool-calls"
-            },
-            "text": "",
-            "toolCalls": [
+            "content": [
               {
-                "input": "{\"city\":\"Vienna\"}",
-                "toolCallId": "<toolCallId:1>",
+                "input": {
+                  "city": "Vienna"
+                },
+                "toolCallId": "<toolCallId:2>",
                 "toolName": "lookup_weather",
                 "type": "tool-call"
               }
             ],
+            "finishReason": "tool-calls",
+            "providerMetadata": {
+              "openai": {
+                "acceptedPredictionTokens": 0,
+                "rejectedPredictionTokens": 0
+              }
+            },
+            "response": {
+              "id": "<span:1>"
+            },
             "usage": {
-              "inputTokens": {
-                "cacheRead": 0,
-                "noCache": 1042,
-                "total": 1042
+              "inputTokenDetails": {
+                "cacheReadTokens": 0,
+                "noCacheTokens": 1042
               },
-              "outputTokens": {
-                "reasoning": 384,
-                "text": 24,
-                "total": 408
+              "inputTokens": 1042,
+              "outputTokenDetails": {
+                "reasoningTokens": 192,
+                "textTokens": 24
               },
+              "outputTokens": 216,
               "raw": {
-                "completion_tokens": 408,
+                "completion_tokens": 216,
                 "completion_tokens_details": {
                   "accepted_prediction_tokens": 0,
-                  "reasoning_tokens": 384,
+                  "reasoning_tokens": 192,
                   "rejected_prediction_tokens": 0
                 },
                 "prompt_tokens": 1042,
                 "prompt_tokens_details": {
                   "cached_tokens": 0
                 },
-                "total_tokens": 1450
-              }
+                "total_tokens": 1258
+              },
+              "totalTokens": 1258
             }
           },
           "metadata": {
+            "braintrust": {
+              "integration_name": "ai-sdk",
+              "sdk_language": "typescript"
+            },
+            "functionId": "TestThink",
             "model": "gpt-5-nano",
             "provider": "openai.chat"
           },
           "metrics": {
-            "completion_tokens": 408,
+            "completion_tokens": 216,
+            "prompt_cached_tokens": 0,
             "prompt_tokens": 1042,
-            "tokens": 1450
+            "tokens": 1258
           }
         },
         {
@@ -326,6 +336,14 @@
             "city": "Vienna",
             "condition": "sunny",
             "degreesC": 21
+          },
+          "metadata": {
+            "braintrust": {
+              "integration_name": "ai-sdk",
+              "sdk_language": "typescript"
+            },
+            "toolCallId": "<toolCallId:1>",
+            "toolName": "lookup_weather"
           }
         },
         {
@@ -333,13 +351,8 @@
           "type": "llm",
           "children": [],
           "input": {
-            "abortSignal": "[AbortSignal]",
-            "includeRawChunks": false,
-            "prompt": [
-              {
-                "content": "You are a deterministic weather-test agent. You must call lookup_weather exactly once with Vienna before answering. After the tool result, reply with exactly: \"Vienna is sunny and 21°C.\"\n\nYou are running inside a Think agent.\n\nCapabilities available in this turn:\n- You can inspect and edit the agent workspace using the available file tools.\n- Use the tools exposed in this turn when they materially improve accuracy or let you act on the user's request. Treat tool descriptions and schemas as the source of truth.\n- Some tools may call server code, browser/client code, MCP servers, extensions, or delegated agents. Use them according to their descriptions.\n- Do not claim access to capabilities that are not exposed as tools in this turn.",
-                "role": "system"
-              },
+            "instructions": "You are a deterministic weather-test agent. You must call lookup_weather exactly once with Vienna before answering. After the tool result, reply with exactly: \"Vienna is sunny and 21°C.\"\n\nYou are running inside a Think agent.\n\nCapabilities available in this turn:\n- You can inspect and edit the agent workspace using the available file tools.\n- Use the tools exposed in this turn when they materially improve accuracy or let you act on the user's request. Treat tool descriptions and schemas as the source of truth.\n- Some tools may call server code, browser/client code, MCP servers, extensions, or delegated agents. Use them according to their descriptions.\n- Do not claim access to capabilities that are not exposed as tools in this turn.",
+            "messages": [
               {
                 "content": [
                   {
@@ -381,8 +394,9 @@
                 "role": "tool"
               }
             ],
-            "toolChoice": {
-              "type": "auto"
+            "model": {
+              "modelId": "gpt-5-nano",
+              "provider": "openai.chat"
             },
             "tools": [
               {
@@ -621,50 +635,71 @@
             ]
           },
           "output": {
-            "finishReason": {
-              "raw": "stop",
-              "unified": "stop"
+            "content": [
+              {
+                "text": "Vienna is sunny and 21°C.",
+                "type": "text"
+              }
+            ],
+            "finishReason": "stop",
+            "providerMetadata": {
+              "openai": {
+                "acceptedPredictionTokens": 0,
+                "rejectedPredictionTokens": 0
+              }
             },
-            "text": "Vienna is sunny and 21°C.",
-            "toolCalls": [],
+            "response": {
+              "id": "<span:1>"
+            },
             "usage": {
-              "inputTokens": {
-                "cacheRead": 0,
-                "noCache": 1087,
-                "total": 1087
+              "inputTokenDetails": {
+                "cacheReadTokens": 0,
+                "noCacheTokens": 1087
               },
-              "outputTokens": {
-                "reasoning": 192,
-                "text": 18,
-                "total": 210
+              "inputTokens": 1087,
+              "outputTokenDetails": {
+                "reasoningTokens": 128,
+                "textTokens": 18
               },
+              "outputTokens": 146,
               "raw": {
-                "completion_tokens": 210,
+                "completion_tokens": 146,
                 "completion_tokens_details": {
                   "accepted_prediction_tokens": 0,
-                  "reasoning_tokens": 192,
+                  "reasoning_tokens": 128,
                   "rejected_prediction_tokens": 0
                 },
                 "prompt_tokens": 1087,
                 "prompt_tokens_details": {
                   "cached_tokens": 0
                 },
-                "total_tokens": 1297
-              }
+                "total_tokens": 1233
+              },
+              "totalTokens": 1233
             }
           },
           "metadata": {
+            "braintrust": {
+              "integration_name": "ai-sdk",
+              "sdk_language": "typescript"
+            },
+            "functionId": "TestThink",
             "model": "gpt-5-nano",
             "provider": "openai.chat"
           },
           "metrics": {
-            "completion_tokens": 210,
+            "completion_tokens": 146,
+            "prompt_cached_tokens": 0,
             "prompt_tokens": 1087,
-            "tokens": 1297
+            "tokens": 1233
           }
         }
       ],
       "input": [
+        {
+          "content": "You are a deterministic weather-test agent. You must call lookup_weather exactly once with Vienna before answering. After the tool result, reply with exactly: \"Vienna is sunny and 21°C.\"\n\nYou are running inside a Think agent.\n\nCapabilities available in this turn:\n- You can inspect and edit the agent workspace using the available file tools.\n- Use the tools exposed in this turn when they materially improve accuracy or let you act on the user's request. Treat tool descriptions and schemas as the source of truth.\n- Some tools may call server code, browser/client code, MCP servers, extensions, or delegated agents. Use them according to their descriptions.\n- Do not claim access to capabilities that are not exposed as tools in this turn.",
+          "role": "system"
+        },
         {
           "content": [
             {
@@ -684,13 +719,17 @@
           "integration_name": "cloudflare-think",
           "sdk_language": "typescript"
         },
+        "cloudflare_think.version": "0.20.2",
+        "functionId": "TestThink",
         "model": "gpt-5-nano",
         "provider": "openai.chat"
       },
       "metrics": {
-        "completion_tokens": 618,
+        "completion_tokens": 362,
+        "prompt_cached_tokens": 0,
         "prompt_tokens": 2129,
-        "tokens": 2747
+        "time_to_first_token": 0,
+        "tokens": 2491
       }
     }
   ]

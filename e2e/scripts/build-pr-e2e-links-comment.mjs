@@ -98,10 +98,21 @@ async function readScenarioConfig(configPath) {
               `Variant key/label must be non-empty at scenario index ${index}, variant index ${variantIndex} in ${configPath}`,
             );
           }
+          const variantKeys = variantEntry.variantKeys ?? [variantKey];
+          if (
+            !Array.isArray(variantKeys) ||
+            variantKeys.length === 0 ||
+            variantKeys.some((key) => typeof key !== "string" || !key.trim())
+          ) {
+            throw new Error(
+              `Invalid grouped variant keys at scenario index ${index}, variant index ${variantIndex}`,
+            );
+          }
 
           return {
             label: variantLabel,
             variantKey,
+            variantKeys: variantKeys.map((key) => key.trim()),
           };
         })
       : [];
@@ -492,7 +503,7 @@ function buildCommentBody(options) {
     }
 
     const configuredVariantKeys = new Set(
-      configuredVariants.map((variant) => variant.variantKey),
+      configuredVariants.flatMap((variant) => variant.variantKeys),
     );
     const evalOnlyVariantKeys = new Set(
       (scenario.evals ?? [])
@@ -502,7 +513,11 @@ function buildCommentBody(options) {
 
     for (const variant of configuredVariants) {
       const observedRunIds = [
-        ...(observedVariants.get(variant.variantKey) ?? []),
+        ...new Set(
+          variant.variantKeys.flatMap((key) => [
+            ...(observedVariants.get(key) ?? []),
+          ]),
+        ),
       ].sort();
       pushScenarioRow({
         metadataScenario: scenario.metadataScenario,

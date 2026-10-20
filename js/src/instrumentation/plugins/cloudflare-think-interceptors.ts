@@ -13,7 +13,7 @@ type CloudflareThinkChannelContext = {
 
 export const cloudflareThinkChannels = defineInterceptor("@cloudflare/think", {
   runInferenceLoop: channel<
-    [CloudflareThinkTurnInput],
+    [CloudflareThinkTurnInput, historyLeafId?: string | null],
     PromiseLike<CloudflareThinkStreamableResult>,
     CloudflareThinkChannelContext
   >({

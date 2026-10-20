@@ -1,10 +1,23 @@
 import { _internalGetGlobalState, type Span } from "../../logger";
 
-const cloudflareThinkSpans = new Map<string, Span>();
+export type CloudflareThinkRun = {
+  span: Span;
+  startTelemetry: (
+    input: unknown,
+    metadata: Record<string, unknown>,
+  ) => boolean;
+  finishTelemetry: (
+    output: unknown,
+    metrics: Record<string, number>,
+    error?: unknown,
+  ) => void;
+};
 
-export function registerCloudflareThinkSpan(span: Span): void {
-  if (span.spanId) {
-    cloudflareThinkSpans.set(span.spanId, span);
+const cloudflareThinkSpans = new Map<string, CloudflareThinkRun>();
+
+export function registerCloudflareThinkSpan(run: CloudflareThinkRun): void {
+  if (run.span.spanId) {
+    cloudflareThinkSpans.set(run.span.spanId, run);
   }
 }
 
@@ -14,7 +27,7 @@ export function unregisterCloudflareThinkSpan(span: Span): void {
   }
 }
 
-export function currentCloudflareThinkSpan(): Span | undefined {
+export function currentCloudflareThinkRun(): CloudflareThinkRun | undefined {
   const parentSpanIds =
     _internalGetGlobalState()?.contextManager.getParentSpanIds()?.spanParents ??
     [];

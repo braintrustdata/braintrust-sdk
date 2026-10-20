@@ -594,6 +594,209 @@ describe("aggregateInvokeModelResponseStreamChunks", () => {
     });
   });
 
+  it("aggregates OpenAI (gpt-oss) stream text and invocation metrics from InvokeModel response stream chunks", () => {
+    // gpt-oss sends Chat Completions chunks with no `usage`; the token counts
+    // only arrive in the last chunk's amazon-bedrock-invocationMetrics.
+    expect(
+      aggregateInvokeModelResponseStreamChunks(
+        [
+          {
+            choices: [
+              {
+                delta: { content: "", role: "assistant" },
+                finish_reason: null,
+                index: 0,
+              },
+            ],
+            object: "chat.completion.chunk",
+          },
+          {
+            choices: [
+              { delta: { content: "Hello" }, finish_reason: null, index: 0 },
+            ],
+            object: "chat.completion.chunk",
+          },
+          {
+            choices: [
+              { delta: { content: " world" }, finish_reason: null, index: 0 },
+            ],
+            object: "chat.completion.chunk",
+          },
+          {
+            choices: [{ delta: {}, finish_reason: "stop", index: 0 }],
+            object: "chat.completion.chunk",
+            "amazon-bedrock-invocationMetrics": {
+              inputTokenCount: 126,
+              outputTokenCount: 125,
+              invocationLatency: 2006,
+              firstByteLatency: 685,
+            },
+          },
+        ].map((event) => ({
+          chunk: { bytes: new TextEncoder().encode(JSON.stringify(event)) },
+        })),
+      ),
+    ).toEqual({
+      output: [
+        {
+          index: 0,
+          message: { role: "assistant", content: "Hello world" },
+          finish_reason: "stop",
+          logprobs: null,
+        },
+      ],
+      metrics: {
+        completion_tokens: 125,
+        prompt_tokens: 126,
+        tokens: 251,
+      },
+    });
+  });
+
+  it.each([undefined, "Checking the weather."])(
+    "preserves OpenAI tool calls alongside content %j",
+    (content) => {
+      const events = [
+        {
+          choices: [
+            {
+              index: 0,
+              delta: {
+                role: "assistant",
+                content,
+                reasoning_content: "Look up the weather.",
+              },
+            },
+          ],
+        },
+        {
+          choices: [
+            {
+              index: 0,
+              delta: {
+                tool_calls: [
+                  {
+                    index: 0,
+                    id: "call_weather",
+                    type: "function",
+                    function: {
+                      name: "get_weather",
+                      arguments: '{"city":',
+                    },
+                  },
+                ],
+              },
+            },
+          ],
+        },
+        {
+          choices: [
+            {
+              index: 0,
+              delta: {
+                tool_calls: [
+                  {
+                    index: 0,
+                    function: { arguments: '"Berlin"}' },
+                  },
+                ],
+              },
+            },
+          ],
+        },
+        {
+          choices: [{ index: 0, delta: {}, finish_reason: "tool_calls" }],
+          "amazon-bedrock-invocationMetrics": {
+            inputTokenCount: 12,
+            outputTokenCount: 20,
+          },
+        },
+      ];
+
+      expect(
+        aggregateInvokeModelResponseStreamChunks(
+          events.map((event) => ({
+            chunk: { bytes: new TextEncoder().encode(JSON.stringify(event)) },
+          })),
+        ),
+      ).toEqual({
+        output: [
+          {
+            index: 0,
+            message: {
+              role: "assistant",
+              content,
+              reasoning_content: "Look up the weather.",
+              tool_calls: [
+                {
+                  id: "call_weather",
+                  type: "function",
+                  function: {
+                    name: "get_weather",
+                    arguments: '{"city":"Berlin"}',
+                  },
+                },
+              ],
+            },
+            finish_reason: "tool_calls",
+            logprobs: null,
+          },
+        ],
+        metrics: {
+          prompt_tokens: 12,
+          completion_tokens: 20,
+          tokens: 32,
+        },
+      });
+    },
+  );
+
+  it("prefers Nova metadata usage over its zeroed invocation metrics in InvokeModel response stream chunks", () => {
+    // Nova reports inputTokenCount/outputTokenCount as 0 in
+    // amazon-bedrock-invocationMetrics; the real counts are in metadata.usage.
+    expect(
+      aggregateInvokeModelResponseStreamChunks(
+        [
+          { messageStart: { role: "assistant" } },
+          {
+            contentBlockDelta: {
+              delta: { text: "Hello" },
+              contentBlockIndex: 0,
+            },
+          },
+          { contentBlockStop: { contentBlockIndex: 0 } },
+          { messageStop: { stopReason: "end_turn" } },
+          {
+            metadata: {
+              usage: {
+                inputTokens: 6,
+                outputTokens: 5,
+                cacheReadInputTokenCount: 0,
+                cacheWriteInputTokenCount: 0,
+              },
+              metrics: {},
+              trace: {},
+            },
+            "amazon-bedrock-invocationMetrics": {
+              inputTokenCount: 0,
+              outputTokenCount: 0,
+              invocationLatency: 428,
+              firstByteLatency: 365,
+            },
+          },
+        ].map((event) => ({
+          chunk: { bytes: new TextEncoder().encode(JSON.stringify(event)) },
+        })),
+      ).metrics,
+    ).toEqual({
+      completion_tokens: 5,
+      prompt_cache_creation_tokens: 0,
+      prompt_cached_tokens: 0,
+      prompt_tokens: 6,
+      tokens: 11,
+    });
+  });
+
   it("aggregates Titan stream outputText from InvokeModel response stream chunks", () => {
     expect(
       aggregateInvokeModelResponseStreamChunks([

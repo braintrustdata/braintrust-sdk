@@ -59,6 +59,7 @@ import type {
   AISDKUsage,
 } from "../../vendor-sdk-types/ai-sdk";
 import type {
+  AISDKV7CreateTelemetryDispatcherArgs,
   AISDKV7Telemetry,
   AISDKV7TelemetryGlobal,
   AISDKV7TelemetryOptions,
@@ -102,7 +103,7 @@ import {
   harnessAgentChannels,
 } from "./ai-sdk-interceptors";
 import { extractTokenMetrics } from "./ai-sdk-metrics";
-import { currentCloudflareThinkSpan } from "./cloudflare-think-context";
+import { currentCloudflareThinkRun } from "./cloudflare-think-context";
 
 interface AISDKPluginConfig {
   /**
@@ -333,7 +334,7 @@ export class AISDKPlugin extends BasePlugin {
             instrumentationName: INSTRUMENTATION_NAMES.AI_SDK,
             name: "streamText",
             type: SpanTypeAttribute.FUNCTION,
-            shouldTrace: () => currentCloudflareThinkSpan() === undefined,
+            shouldTrace: () => currentCloudflareThinkRun() === undefined,
             extractInput: ([params], event, span) =>
               prepareAISDKCallInput(params, event, span, denyOutputPaths),
             extractOutput: (result, endEvent) =>
@@ -368,7 +369,7 @@ export class AISDKPlugin extends BasePlugin {
               instrumentationName: INSTRUMENTATION_NAMES.AI_SDK,
               name: "streamText",
               type: SpanTypeAttribute.FUNCTION,
-              shouldTrace: () => currentCloudflareThinkSpan() === undefined,
+              shouldTrace: () => currentCloudflareThinkRun() === undefined,
               extractInput: ([params], event, span) =>
                 prepareAISDKCallInput(params, event, span, denyOutputPaths),
               patchResult: ({ endEvent, result, span, startTime }) =>
@@ -1291,19 +1292,7 @@ function interceptAISDKV7TelemetryDispatcher(): () => void {
     (target, thisArg, args) => {
       const dispatcher = Reflect.apply(target, thisArg, args);
       const telemetryOptions = args[0]?.telemetry;
-      // Per-call integrations replace the global registry in AI SDK. Let an
-      // explicitly registered Braintrust integration own the whole lifecycle.
-      const integrations =
-        telemetryOptions?.integrations ??
-        (globalThis as AISDKV7TelemetryGlobal).AI_SDK_TELEMETRY_INTEGRATIONS;
-      const hasBraintrust = (
-        Array.isArray(integrations) ? integrations : [integrations]
-      ).some(
-        (integration) =>
-          isObject(integration) &&
-          Reflect.get(integration, BRAINTRUST_AI_SDK_V7_TELEMETRY) === true,
-      );
-      if (telemetryOptions?.isEnabled !== false && !hasBraintrust) {
+      if (telemetryOptions?.isEnabled !== false) {
         try {
           patchAISDKV7TelemetryDispatcher(
             dispatcher,
@@ -1507,12 +1496,29 @@ function interceptAISDKModelStream(
   );
 }
 
-function patchAISDKV7TelemetryDispatcher(
+export function patchAISDKV7TelemetryDispatcher(
   dispatcher: unknown,
   telemetry: AISDKV7Telemetry,
-  telemetryOptions?: AISDKV7TelemetryOptions,
+  telemetryOptions?: AISDKV7CreateTelemetryDispatcherArgs["telemetry"],
 ): void {
   if (!isObject(dispatcher)) {
+    return;
+  }
+
+  // Per-call integrations replace the global registry in AI SDK. Let an
+  // explicitly registered Braintrust integration own the whole lifecycle,
+  // including dispatchers patched by the Think integration.
+  const integrations =
+    telemetryOptions?.integrations ??
+    (globalThis as AISDKV7TelemetryGlobal).AI_SDK_TELEMETRY_INTEGRATIONS;
+  const hasBraintrust = (
+    Array.isArray(integrations) ? integrations : [integrations]
+  ).some(
+    (integration) =>
+      isObject(integration) &&
+      Reflect.get(integration, BRAINTRUST_AI_SDK_V7_TELEMETRY) === true,
+  );
+  if (hasBraintrust) {
     return;
   }
 
