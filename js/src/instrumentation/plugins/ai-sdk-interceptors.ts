@@ -95,6 +95,9 @@ export const aiSDKChannels = defineInterceptor("ai", {
   >({
     channelName: "streamText.sync",
   }),
+  streamTextV7: channel<[AISDKCallParams], AISDKResult, AISDKChannelContext>({
+    channelName: "streamText.v7",
+  }),
   generateObject: channel<
     [AISDKCallParams],
     PromiseLike<AISDKStreamResult> | AISDKStreamResult,

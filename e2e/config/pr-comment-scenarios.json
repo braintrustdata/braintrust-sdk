@@ -155,12 +155,220 @@
     "metadataScenario": "cloudflare-think-instrumentation",
     "variants": [
       {
-        "variantKey": "cloudflare-think-v0",
-        "label": "v0.13 pinned"
+        "variantKey": "cloudflare-think-v0-13-ai6",
+        "label": "v0.13 pinned / AI SDK 6",
+        "variantKeys": [
+          "cloudflare-think-v0-13-ai6-manual",
+          "cloudflare-think-v0-13-ai6-auto"
+        ]
       },
       {
-        "variantKey": "cloudflare-think-v0-latest",
-        "label": "v0.13 latest"
+        "variantKey": "cloudflare-think-v0-13-latest-ai6",
+        "label": "v0.13 latest / AI SDK 6",
+        "variantKeys": [
+          "cloudflare-think-v0-13-latest-ai6-manual",
+          "cloudflare-think-v0-13-latest-ai6-auto"
+        ]
+      },
+      {
+        "variantKey": "cloudflare-think-v0-14-ai6",
+        "label": "v0.14 pinned / AI SDK 6",
+        "variantKeys": [
+          "cloudflare-think-v0-14-ai6-manual",
+          "cloudflare-think-v0-14-ai6-auto"
+        ]
+      },
+      {
+        "variantKey": "cloudflare-think-v0-14-latest-ai6",
+        "label": "v0.14 latest / AI SDK 6",
+        "variantKeys": [
+          "cloudflare-think-v0-14-latest-ai6-manual",
+          "cloudflare-think-v0-14-latest-ai6-auto"
+        ]
+      },
+      {
+        "variantKey": "cloudflare-think-v0-15-ai6",
+        "label": "v0.15 pinned / AI SDK 6",
+        "variantKeys": [
+          "cloudflare-think-v0-15-ai6-manual",
+          "cloudflare-think-v0-15-ai6-auto"
+        ]
+      },
+      {
+        "variantKey": "cloudflare-think-v0-15-latest-ai6",
+        "label": "v0.15 latest / AI SDK 6",
+        "variantKeys": [
+          "cloudflare-think-v0-15-latest-ai6-manual",
+          "cloudflare-think-v0-15-latest-ai6-auto"
+        ]
+      },
+      {
+        "variantKey": "cloudflare-think-v0-16-ai6",
+        "label": "v0.16 pinned / AI SDK 6",
+        "variantKeys": [
+          "cloudflare-think-v0-16-ai6-manual",
+          "cloudflare-think-v0-16-ai6-auto"
+        ]
+      },
+      {
+        "variantKey": "cloudflare-think-v0-16-latest-ai6",
+        "label": "v0.16 latest / AI SDK 6",
+        "variantKeys": [
+          "cloudflare-think-v0-16-latest-ai6-manual",
+          "cloudflare-think-v0-16-latest-ai6-auto"
+        ]
+      },
+      {
+        "variantKey": "cloudflare-think-v0-17-ai6",
+        "label": "v0.17 pinned / AI SDK 6",
+        "variantKeys": [
+          "cloudflare-think-v0-17-ai6-manual",
+          "cloudflare-think-v0-17-ai6-auto"
+        ]
+      },
+      {
+        "variantKey": "cloudflare-think-v0-17-latest-ai6",
+        "label": "v0.17 latest / AI SDK 6",
+        "variantKeys": [
+          "cloudflare-think-v0-17-latest-ai6-manual",
+          "cloudflare-think-v0-17-latest-ai6-auto"
+        ]
+      },
+      {
+        "variantKey": "cloudflare-think-v0-18-ai6",
+        "label": "v0.18 pinned / AI SDK 6",
+        "variantKeys": [
+          "cloudflare-think-v0-18-ai6-manual",
+          "cloudflare-think-v0-18-ai6-auto"
+        ]
+      },
+      {
+        "variantKey": "cloudflare-think-v0-18-latest-ai6",
+        "label": "v0.18 latest / AI SDK 6",
+        "variantKeys": [
+          "cloudflare-think-v0-18-latest-ai6-manual",
+          "cloudflare-think-v0-18-latest-ai6-auto"
+        ]
+      },
+      {
+        "variantKey": "cloudflare-think-v0-19-ai6",
+        "label": "v0.19 pinned / AI SDK 6",
+        "variantKeys": [
+          "cloudflare-think-v0-19-ai6-manual",
+          "cloudflare-think-v0-19-ai6-auto"
+        ]
+      },
+      {
+        "variantKey": "cloudflare-think-v0-19-latest-ai6",
+        "label": "v0.19 latest / AI SDK 6",
+        "variantKeys": [
+          "cloudflare-think-v0-19-latest-ai6-manual",
+          "cloudflare-think-v0-19-latest-ai6-auto"
+        ]
+      },
+      {
+        "variantKey": "cloudflare-think-v0-15-ai7",
+        "label": "v0.15 pinned / AI SDK 7",
+        "variantKeys": [
+          "cloudflare-think-v0-15-ai7-manual",
+          "cloudflare-think-v0-15-ai7-auto"
+        ]
+      },
+      {
+        "variantKey": "cloudflare-think-v0-15-latest-ai7",
+        "label": "v0.15 latest / AI SDK 7",
+        "variantKeys": [
+          "cloudflare-think-v0-15-latest-ai7-manual",
+          "cloudflare-think-v0-15-latest-ai7-auto"
+        ]
+      },
+      {
+        "variantKey": "cloudflare-think-v0-16-ai7",
+        "label": "v0.16 pinned / AI SDK 7",
+        "variantKeys": [
+          "cloudflare-think-v0-16-ai7-manual",
+          "cloudflare-think-v0-16-ai7-auto"
+        ]
+      },
+      {
+        "variantKey": "cloudflare-think-v0-16-latest-ai7",
+        "label": "v0.16 latest / AI SDK 7",
+        "variantKeys": [
+          "cloudflare-think-v0-16-latest-ai7-manual",
+          "cloudflare-think-v0-16-latest-ai7-auto"
+        ]
+      },
+      {
+        "variantKey": "cloudflare-think-v0-17-ai7",
+        "label": "v0.17 pinned / AI SDK 7",
+        "variantKeys": [
+          "cloudflare-think-v0-17-ai7-manual",
+          "cloudflare-think-v0-17-ai7-auto"
+        ]
+      },
+      {
+        "variantKey": "cloudflare-think-v0-17-latest-ai7",
+        "label": "v0.17 latest / AI SDK 7",
+        "variantKeys": [
+          "cloudflare-think-v0-17-latest-ai7-manual",
+          "cloudflare-think-v0-17-latest-ai7-auto"
+        ]
+      },
+      {
+        "variantKey": "cloudflare-think-v0-18-ai7",
+        "label": "v0.18 pinned / AI SDK 7",
+        "variantKeys": [
+          "cloudflare-think-v0-18-ai7-manual",
+          "cloudflare-think-v0-18-ai7-auto"
+        ]
+      },
+      {
+        "variantKey": "cloudflare-think-v0-18-latest-ai7",
+        "label": "v0.18 latest / AI SDK 7",
+        "variantKeys": [
+          "cloudflare-think-v0-18-latest-ai7-manual",
+          "cloudflare-think-v0-18-latest-ai7-auto"
+        ]
+      },
+      {
+        "variantKey": "cloudflare-think-v0-19-ai7",
+        "label": "v0.19 pinned / AI SDK 7",
+        "variantKeys": [
+          "cloudflare-think-v0-19-ai7-manual",
+          "cloudflare-think-v0-19-ai7-auto"
+        ]
+      },
+      {
+        "variantKey": "cloudflare-think-v0-19-latest-ai7",
+        "label": "v0.19 latest / AI SDK 7",
+        "variantKeys": [
+          "cloudflare-think-v0-19-latest-ai7-manual",
+          "cloudflare-think-v0-19-latest-ai7-auto"
+        ]
+      },
+      {
+        "variantKey": "cloudflare-think-v0-20-ai7",
+        "label": "v0.20 pinned / AI SDK 7",
+        "variantKeys": [
+          "cloudflare-think-v0-20-ai7-manual",
+          "cloudflare-think-v0-20-ai7-auto"
+        ]
+      },
+      {
+        "variantKey": "cloudflare-think-v0-20-latest-ai7",
+        "label": "v0.20 latest / AI SDK 7",
+        "variantKeys": [
+          "cloudflare-think-v0-20-latest-ai7-manual",
+          "cloudflare-think-v0-20-latest-ai7-auto"
+        ]
+      },
+      {
+        "variantKey": "cloudflare-think-v0-20-1-ai7",
+        "label": "v0.20.1 / AI SDK 7",
+        "variantKeys": [
+          "cloudflare-think-v0-20-1-ai7-manual",
+          "cloudflare-think-v0-20-1-ai7-auto"
+        ]
       }
     ]
   },

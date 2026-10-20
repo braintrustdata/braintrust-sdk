@@ -3,7 +3,6 @@ import type {
   CloudflareThinkConstructor,
   CloudflareThinkInstance,
   CloudflareThinkModule,
-  CloudflareThinkTurnInput,
 } from "../vendor-sdk-types/cloudflare-think";
 
 const WRAPPED_THINK = Symbol.for("braintrust.cloudflare-think.wrapped");
@@ -55,9 +54,8 @@ function patchThinkClass(Think: CloudflareThinkConstructor): void {
     ...descriptor,
     value: function wrappedCloudflareThinkRunInferenceLoop(
       this: CloudflareThinkInstance,
-      input: CloudflareThinkTurnInput,
+      ...args: Parameters<typeof original>
     ) {
-      const args = [input] as [CloudflareThinkTurnInput];
       return cloudflareThinkChannels.runInferenceLoop.invoke(
         original,
         this,

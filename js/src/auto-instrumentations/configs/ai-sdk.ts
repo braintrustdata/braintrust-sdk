@@ -16,6 +16,17 @@ import {
  * "orchestrion:ai-sdk:generateText"
  */
 export const aiSDKConfigs: InstrumentationConfig[] = [
+  // Think needs the synchronous invocation boundary to keep its task open
+  // until v7's asynchronous telemetry callbacks take over.
+  {
+    channelName: aiSDKChannels.streamTextV7.channelName,
+    module: {
+      name: "ai",
+      versionRange: ">=7.0.0 <8.0.0",
+      filePath: "dist/index.js",
+    },
+    functionQuery: { functionName: "streamText" },
+  },
   // Older evaluation releases have no telemetry callbacks. Newer versions use
   // the telemetry dispatcher below, including the renamed decision API.
   {

@@ -90,7 +90,7 @@ import {
   harnessAgentChannels,
 } from "./ai-sdk-interceptors";
 import { extractTokenMetrics } from "./ai-sdk-metrics";
-import { currentCloudflareThinkSpan } from "./cloudflare-think-context";
+import { currentCloudflareThinkRun } from "./cloudflare-think-context";
 
 interface AISDKPluginConfig {
   /**
@@ -304,7 +304,7 @@ export class AISDKPlugin extends BasePlugin {
             instrumentationName: INSTRUMENTATION_NAMES.AI_SDK,
             name: "streamText",
             type: SpanTypeAttribute.FUNCTION,
-            shouldTrace: () => currentCloudflareThinkSpan() === undefined,
+            shouldTrace: () => currentCloudflareThinkRun() === undefined,
             extractInput: ([params], event, span) =>
               prepareAISDKCallInput(params, event, span, denyOutputPaths),
             extractOutput: (result, endEvent) =>
@@ -339,7 +339,7 @@ export class AISDKPlugin extends BasePlugin {
               instrumentationName: INSTRUMENTATION_NAMES.AI_SDK,
               name: "streamText",
               type: SpanTypeAttribute.FUNCTION,
-              shouldTrace: () => currentCloudflareThinkSpan() === undefined,
+              shouldTrace: () => currentCloudflareThinkRun() === undefined,
               extractInput: ([params], event, span) =>
                 prepareAISDKCallInput(params, event, span, denyOutputPaths),
               patchResult: ({ endEvent, result, span, startTime }) =>
@@ -1466,7 +1466,7 @@ function interceptAISDKModelStream(
   );
 }
 
-function patchAISDKV7TelemetryDispatcher(
+export function patchAISDKV7TelemetryDispatcher(
   dispatcher: unknown,
   telemetry: AISDKV7Telemetry,
   telemetryOptions?: AISDKV7TelemetryOptions,

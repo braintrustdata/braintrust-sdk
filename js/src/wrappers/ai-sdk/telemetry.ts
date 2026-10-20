@@ -44,6 +44,10 @@ import type {
 import { BRAINTRUST_AI_SDK_V7_OPERATION_KEY as AI_SDK_V7_OPERATION_KEY } from "../../vendor-sdk-types/ai-sdk-v7-telemetry";
 import { currentWorkflowAgentWrapperSpan } from "./workflow-agent-context";
 import {
+  currentCloudflareThinkRun,
+  type CloudflareThinkRun,
+} from "../../instrumentation/plugins/cloudflare-think-context";
+import {
   currentHarnessTurnParent,
   startHarnessTurnChildSpan,
 } from "./harness-agent-context";
@@ -57,6 +61,7 @@ type OperationState = {
   operationName: string;
   operationKey: string;
   ownsSpan: boolean;
+  thinkRun?: CloudflareThinkRun;
   span: Span;
   startTime: number;
   providerTools: Map<string, { span: Span; ended: boolean }>;
@@ -449,7 +454,7 @@ export function braintrustAISDKTelemetry(): any {
       if (!state) {
         return;
       }
-      if (!state.ownsSpan) {
+      if (!state.ownsSpan && !state.thinkRun) {
         deleteOperation(state.operationKey);
         return;
       }
@@ -472,15 +477,27 @@ export function braintrustAISDKTelemetry(): any {
       }
 
       const result = finishResult(event, state.operationName);
-      const metrics: Record<string, number> = state.hadModelChild
-        ? {}
-        : extractTokenMetrics(result);
+      const metrics: Record<string, number> =
+        state.hadModelChild && !state.thinkRun
+          ? {}
+          : extractTokenMetrics(result);
       const timeToFirstToken =
         state.operationName === "WorkflowAgent.stream"
           ? undefined
           : extractTimeToFirstToken(result, state);
       if (timeToFirstToken !== undefined) {
         metrics.time_to_first_token = timeToFirstToken;
+      }
+
+      if (state.thinkRun) {
+        state.thinkRun.finishTelemetry(
+          state.recordOutputs !== false && shouldRecordOutputs(event)
+            ? result
+            : undefined,
+          metrics,
+        );
+        deleteOperation(state.operationKey);
+        return;
       }
 
       state.span.log({
@@ -545,9 +562,25 @@ export function braintrustAISDKTelemetry(): any {
       runSafely("onStart", () => {
         const operationName = operationNameFromId(event.operationId);
         const workflowAgent = operationName === "WorkflowAgent.stream";
+        let thinkRun =
+          operationName === "streamText"
+            ? currentCloudflareThinkRun()
+            : undefined;
+        if (
+          thinkRun &&
+          !thinkRun.startTelemetry(
+            shouldRecordInputs(event)
+              ? processAISDKCallInput(operationInput(event, operationName))
+                  .input
+              : undefined,
+            metadataFromEvent(event),
+          )
+        ) {
+          thinkRun = undefined;
+        }
         const wrapperSpan = workflowAgent
           ? currentWorkflowAgentWrapperSpan()
-          : undefined;
+          : thinkRun?.span;
         const ownsSpan = !wrapperSpan;
         const harnessTurnParent = currentHarnessTurnParent();
         const span = ownsSpan
@@ -582,6 +615,7 @@ export function braintrustAISDKTelemetry(): any {
           operationName,
           operationKey,
           ownsSpan,
+          thinkRun,
           span,
           startTime: getCurrentUnixTimestamp(),
           providerTools: new Map(),
@@ -1031,16 +1065,18 @@ export function braintrustAISDKTelemetry(): any {
       runSafely("onAbort", () => {
         const operationKey = operationKeyFromEvent(event, "finish");
         const state = operationKey ? operations.get(operationKey) : undefined;
+        const error = abortReasonFromEvent(event);
         if (!operationKey || !state) {
+          currentCloudflareThinkRun()?.finishTelemetry(undefined, {}, error);
           return;
         }
 
-        const error = abortReasonFromEvent(event);
         closeOpenChildSpans(operationKey, error);
         if (state.ownsSpan) {
           logError(state.span, error);
           state.span.end();
         }
+        state.thinkRun?.finishTelemetry(undefined, {}, error);
         deleteOperation(operationKey);
       });
     },
@@ -1052,16 +1088,19 @@ export function braintrustAISDKTelemetry(): any {
           : {};
         const operationKey = operationKeyFromEvent(errorEvent, "finish");
         const state = operationKey ? operations.get(operationKey) : undefined;
+        const error = errorEvent.error ?? event;
         if (!operationKey || !state) {
+          // Prompt validation can fail before streamText emits onStart.
+          currentCloudflareThinkRun()?.finishTelemetry(undefined, {}, error);
           return;
         }
-        const error = errorEvent.error ?? event;
 
         closeOpenChildSpans(operationKey, error);
         if (state.ownsSpan) {
           logError(state.span, error);
           state.span.end();
         }
+        state.thinkRun?.finishTelemetry(undefined, {}, error);
         deleteOperation(operationKey);
       });
     },
