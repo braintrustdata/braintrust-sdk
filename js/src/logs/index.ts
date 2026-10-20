@@ -8,6 +8,7 @@ import type { ApplicationLogLevel } from "./templates";
 function display(value: unknown): string {
   if (value instanceof Error) return value.stack ?? value.message;
   if (typeof value === "string") return value;
+  if (typeof value === "bigint") return String(value);
   return JSON.stringify(value) ?? String(value);
 }
 
@@ -36,7 +37,12 @@ function forwardConsoleCall(
   args: unknown[],
 ): void {
   if (logger) {
-    const body = formatConsole(args);
+    // Browser fallback serialization can invoke toJSON. Reuse each argument's
+    // text for the body and metadata so those hooks run only once per argument.
+    const formattedArgs = iso.formatLogMessage
+      ? undefined
+      : args.map((value) => formatConsole([value]));
+    const body = formattedArgs ? formattedArgs.join(" ") : formatConsole(args);
     const metadata: Record<string, unknown> = { "logger.name": "console" };
     if (typeof args[0] === "string" && args.length > 1) {
       metadata["braintrust.template"] = args[0];
@@ -45,7 +51,7 @@ function forwardConsoleCall(
           value === null ||
           ["string", "number", "boolean"].includes(typeof value)
             ? value
-            : formatConsole([value]);
+            : (formattedArgs?.[index + 1] ?? formatConsole([value]));
       });
     }
     const level: ApplicationLogLevel = method === "log" ? "info" : method;

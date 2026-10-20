@@ -577,20 +577,37 @@ describe("wrapConsole", () => {
     expect(rows[3].output).toBe("[Unformattable console message]");
   });
 
-  test("preserves console arguments as text when there is no native formatter", async () => {
+  test("fallback formatting serializes parameters once and preserves BigInt arguments", async () => {
     const { logger, background } = setup(true);
     const target = fakeConsole();
     wrapConsole(target, { logger });
+    let serializations = 0;
+    const toJSON = vi.fn(() => ({ serialization: ++serializations }));
     const format = iso.formatLogMessage;
     iso.formatLogMessage = undefined;
     try {
       target.info("Payment %s %d %%", "pay_123", 2, { attempt: 1 });
+      target.info("value %s", { toJSON });
+      target.info("count", 1n);
+      target.info(2n);
     } finally {
       iso.formatLogMessage = format;
     }
-    expect((await drain(background))[0].output).toBe(
-      'Payment %s %d %% pay_123 2 {"attempt":1}',
-    );
+    const rows = await drain(background);
+    expect.soft(toJSON).toHaveBeenCalledTimes(1);
+    expect
+      .soft(rows.map((row) => row.output))
+      .toEqual([
+        'Payment %s %d %% pay_123 2 {"attempt":1}',
+        'value %s {"serialization":1}',
+        "count 1",
+        "2",
+      ]);
+    expect.soft(rows[1].metadata).toMatchObject({
+      "braintrust.template": "value %s",
+      "braintrust.template.parameter.0": '{"serialization":1}',
+    });
+    expect(rows[2].metadata?.["braintrust.template.parameter.0"]).toBe("1");
   });
 
   test("SDK output uses saved console methods across awaits, rewrapping, and cleanup", async () => {
