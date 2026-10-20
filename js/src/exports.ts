@@ -129,7 +129,7 @@ export {
 
 export { registerSandbox } from "./sandbox";
 
-export { exportAISDKBatchTrace, resumeAISDKBatchTrace } from "./ai-sdk-batch";
+export { startAISDKBatchTrace, completeAISDKBatchTrace } from "./ai-sdk-batch";
 
 export {
   completeOpenAIBatchTrace,

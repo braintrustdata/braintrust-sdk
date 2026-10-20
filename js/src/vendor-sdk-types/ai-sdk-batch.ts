@@ -1,4 +1,4 @@
-import type { AISDKCallParams, AISDKResult, AISDKTools } from "./ai-sdk";
+import type { AISDKCallParams, AISDKResult } from "./ai-sdk";
 
 /** The public experimental batch API in ai >=7.0.108 <8. */
 export interface AISDKBatchReference {
@@ -33,27 +33,6 @@ export type AISDKBatchRequest = AISDKCallParams & {
   model: string;
 };
 
-export interface AISDKStartBatchOptions {
-  requests: ReadonlyArray<AISDKBatchRequest>;
-  provider?: unknown;
-  providerOptions?: unknown;
-  webhookUrl?: string;
-  headers?: Record<string, string | undefined>;
-  abortSignal?: AbortSignal;
-  timeout?: number | { totalMs?: number };
-}
-
-export interface AISDKBatchOperationOptions {
-  batch: AISDKBatchReference;
-  provider?: unknown;
-  providerOptions?: unknown;
-  tools?: AISDKTools;
-  headers?: Record<string, string | undefined>;
-  abortSignal?: AbortSignal;
-  timeout?: number | { totalMs?: number };
-  maxRetries?: number;
-}
-
 export type AISDKBatchItem = AISDKResult & {
   readonly id: string;
   readonly type: "text" | "image";
@@ -61,17 +40,22 @@ export type AISDKBatchItem = AISDKResult & {
   readonly error?: AISDKBatchError;
 };
 
-export interface AISDKBatchAPI {
-  experimental_startBatch(
-    options: AISDKStartBatchOptions,
-  ): Promise<AISDKBatchReference & AISDKBatchStatus>;
-  experimental_getBatchStatus(
-    options: AISDKBatchOperationOptions,
-  ): Promise<AISDKBatchStatus>;
-  experimental_getBatchResults(
-    options: AISDKBatchOperationOptions,
-  ): ReadableStream<AISDKBatchItem> & AsyncIterable<AISDKBatchItem>;
-  experimental_cancelBatch(
-    options: AISDKBatchOperationOptions,
-  ): Promise<unknown>;
+export interface StartAISDKBatchTraceArgs {
+  batch: AISDKBatchReference & Partial<AISDKBatchStatus>;
+  requests: ReadonlyArray<AISDKBatchRequest>;
+  /** Unix timestamp in seconds, captured by the caller before submission. */
+  startTime?: number;
+}
+
+export interface CompleteAISDKBatchTraceArgs {
+  batch: AISDKBatchReference;
+  requests: ReadonlyArray<AISDKBatchRequest>;
+  status: AISDKBatchStatus;
+  /** Already collected records. Lazy provider streams are not accepted. */
+  results: ReadonlyArray<AISDKBatchItem>;
+  /** Trusted application state returned by startAISDKBatchTrace. */
+  context?: string;
+  /** Unix timestamp in seconds from a verified terminal webhook, if available. */
+  endTime?: number;
+  denyOutputPaths?: string[];
 }

@@ -21,7 +21,7 @@ const timeoutMs = recording ? 22 * 60 * 1000 : 120_000;
 
 describe.sequential("AI SDK batch instrumentation", () => {
   for (const variantKey of ["ai-sdk-v7", "ai-sdk-v7-latest"]) {
-    for (const mode of ["wrapped", "auto-hook"]) {
+    for (const mode of ["manual", "manual-with-auto"]) {
       test(
         `${variantKey} ${mode} across processes`,
         { timeout: timeoutMs },
@@ -41,7 +41,9 @@ describe.sequential("AI SDK batch instrumentation", () => {
               scenarioDir,
               timeoutMs,
               nodeArgs:
-                mode === "auto-hook" ? ["--import", "braintrust/hook.mjs"] : [],
+                mode === "manual-with-auto"
+                  ? ["--import", "braintrust/hook.mjs"]
+                  : [],
               runContext: {
                 variantKey,
                 originalScenarioDir,

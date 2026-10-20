@@ -94,7 +94,7 @@ function expectGlobalHookTransform(output: string): void {
 
 describe("Orchestrion Transformation Tests", () => {
   it.each(["7.0.108", "7.0.138"])(
-    "invokes batch hooks through AI SDK export aliases in %s",
+    "leaves batch lifecycle export aliases uninstrumented in %s",
     async (version) => {
       const matcher = new InstrumentationMatcher(aiSDKConfigs);
       const transformer = matcher.getTransformer(
@@ -104,11 +104,13 @@ describe("Orchestrion Transformation Tests", () => {
       )!;
       const transformed = transformer.transform(
         `
+        async function generateImage(options) { return options; }
         async function startBatch(options) { return options; }
         async function getBatchStatus(options) { return options; }
         function getBatchResults(options) { return options.stream; }
         async function cancelBatch(options) { return options; }
         export {
+          generateImage,
           startBatch as experimental_startBatch,
           getBatchStatus as experimental_getBatchStatus,
           getBatchResults as experimental_getBatchResults,
@@ -139,6 +141,14 @@ describe("Orchestrion Transformation Tests", () => {
           },
         ),
       );
+      remove.push(
+        newGlobalInvocationHook("orchestrion:ai:generateImage").intercept(
+          (target, receiver, args) => {
+            events.push("generateImage");
+            return Reflect.apply(target, receiver, args);
+          },
+        ),
+      );
       try {
         const options = { stream: new ReadableStream() };
         for (const operation of operations) {
@@ -147,7 +157,9 @@ describe("Orchestrion Transformation Tests", () => {
             expect(result).toBe(options.stream);
           else expect(await result).toBe(options);
         }
-        expect(events).toEqual(operations);
+        expect(events).toEqual([]);
+        expect(await loaded.exports.generateImage(options)).toBe(options);
+        expect(events).toEqual(["generateImage"]);
       } finally {
         remove.forEach((unsubscribe) => unsubscribe());
       }

@@ -64,11 +64,11 @@ interface StreamPatchOptions<TChunk = unknown, TFinal = unknown> {
   aroundNext?: <T>(callback: () => PromiseLike<T>) => PromiseLike<T> | T;
 }
 
-interface StreamObserverOptions<TChunk> {
+interface ByteStreamObserverOptions {
   aroundRead?: <T>(callback: () => PromiseLike<T>) => PromiseLike<T> | T;
   debugLabel: string;
   onCancel: (error?: unknown) => void;
-  onChunk: (chunk: TChunk) => void;
+  onChunk: (chunk: Uint8Array) => void;
   onComplete: () => void;
   onStart?: () => void;
 }
@@ -447,10 +447,10 @@ export function patchStreamIfNeeded<TChunk = unknown, TFinal = unknown>(
   }
 }
 
-/** Observe reads in place without draining or teeing a one-shot stream. */
-export function observeStream<TChunk = Uint8Array>(
+/** Observe reads in place without draining or teeing a one-shot byte stream. */
+export function observeByteStream(
   value: unknown,
-  options: StreamObserverOptions<TChunk>,
+  options: ByteStreamObserverOptions,
 ): void {
   let ended = false;
   let started = false;
@@ -463,7 +463,7 @@ export function observeStream<TChunk = Uint8Array>(
       debugLogger.error(`Error starting ${options.debugLabel} observer`, error);
     }
   };
-  const safeObserve = (chunk: TChunk) => {
+  const safeObserve = (chunk: Uint8Array) => {
     if (ended) return;
     try {
       options.onChunk(chunk);
@@ -518,7 +518,7 @@ export function observeStream<TChunk = Uint8Array>(
       ) {
         if (event === "data" && args[0] instanceof Uint8Array) {
           start();
-          safeObserve(args[0] as TChunk);
+          safeObserve(args[0]);
         }
         if (event === "error") end(false, args[0]);
         return Reflect.apply(emit, this, [event, ...args]);
@@ -526,33 +526,7 @@ export function observeStream<TChunk = Uint8Array>(
     return;
   }
   if ("getReader" in value && typeof value.getReader === "function") {
-    const webStream = value as unknown as ReadableStream<TChunk>;
-    const tee = webStream.tee;
-    webStream.tee = function () {
-      const branches = tee.call(this);
-      let observed = 0;
-      let cancelled = 0;
-      // Native tee bypasses patched read methods. Observe both branches but
-      // report each source position only once, even if one consumer runs ahead.
-      for (const branch of branches) {
-        let position = 0;
-        observeStream<TChunk>(branch, {
-          ...options,
-          onStart: start,
-          onChunk(chunk) {
-            if (position++ >= observed) {
-              observed = position;
-              safeObserve(chunk);
-            }
-          },
-          onComplete: () => end(true),
-          onCancel(error) {
-            if (++cancelled === 2 || error !== undefined) end(false, error);
-          },
-        });
-      }
-      return branches;
-    };
+    const webStream = value as unknown as ReadableStream<Uint8Array>;
     const pipeTo = webStream.pipeTo;
     const pipeThrough = webStream.pipeThrough;
     // Native piping bypasses getReader()/iteration. Add the observation only
@@ -573,7 +547,7 @@ export function observeStream<TChunk = Uint8Array>(
         writerReleased = true;
         writer.releaseLock();
       };
-      const observedDestination = new WritableStream<TChunk>({
+      const observedDestination = new WritableStream<Uint8Array>({
         write(chunk) {
           safeObserve(chunk);
           return writer.write(chunk);
@@ -612,7 +586,7 @@ export function observeStream<TChunk = Uint8Array>(
       }
     };
     webStream.pipeThrough = function <T>(
-      transform: ReadableWritablePair<T, TChunk>,
+      transform: ReadableWritablePair<T, Uint8Array>,
       streamOptions?: StreamPipeOptions,
     ): ReadableStream<T> {
       if (this.locked || transform.writable.locked || transform.readable.locked)
@@ -636,15 +610,15 @@ export function observeStream<TChunk = Uint8Array>(
       const reader = Reflect.apply(getReader, this, args);
       const read = reader.read as (
         ...args: unknown[]
-      ) => Promise<ReadableStreamReadResult<TChunk>>;
+      ) => Promise<ReadableStreamReadResult<Uint8Array>>;
       reader.read = function (...readArgs: unknown[]) {
         start();
         const readValue = () => Reflect.apply(read, this, readArgs);
         return Promise.resolve(
           options.aroundRead ? options.aroundRead(readValue) : readValue(),
         ).then(
-          (result: ReadableStreamReadResult<TChunk>) => {
-            if (!result.done) safeObserve(result.value);
+          (result: ReadableStreamReadResult<Uint8Array>) => {
+            if (result.value) safeObserve(result.value);
             if (result.done) end(true);
             return result;
           },
@@ -683,7 +657,7 @@ export function observeStream<TChunk = Uint8Array>(
     const values = value.values;
     const iterate = function (this: unknown, ...args: unknown[]) {
       const iterator = Reflect.apply(values, this, args);
-      patchStreamIfNeeded<TChunk>(iterator, {
+      patchStreamIfNeeded<Uint8Array>(iterator, {
         shouldCollect(chunk) {
           safeObserve(chunk);
           return false;
@@ -705,7 +679,7 @@ export function observeStream<TChunk = Uint8Array>(
       value: iterate,
     });
   } else if (isAsyncIterable(value)) {
-    patchStreamIfNeeded<TChunk>(value, {
+    patchStreamIfNeeded<Uint8Array>(value, {
       shouldCollect: (chunk) => {
         safeObserve(chunk);
         return false;
@@ -721,9 +695,6 @@ export function observeStream<TChunk = Uint8Array>(
   } else if (!("getReader" in value) || typeof value.getReader !== "function")
     end(false);
 }
-
-/** Byte-stream specialization retained for existing HTTP body observers. */
-export const observeByteStream = observeStream<Uint8Array>;
 
 function runNextWithWrapper<T, TChunk, TFinal>(
   options: StreamPatchOptions<TChunk, TFinal>,

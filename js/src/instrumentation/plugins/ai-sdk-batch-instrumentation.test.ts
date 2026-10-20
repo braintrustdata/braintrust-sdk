@@ -8,8 +8,8 @@ import {
   vi,
 } from "vitest";
 import {
-  exportAISDKBatchTrace,
-  resumeAISDKBatchTrace,
+  startAISDKBatchTrace,
+  completeAISDKBatchTrace,
 } from "../../ai-sdk-batch";
 import {
   _exportsForTestingOnly,
@@ -19,33 +19,27 @@ import {
 } from "../../logger";
 import { configureNode } from "../../node/config";
 import type {
-  AISDKBatchAPI,
   AISDKBatchItem,
-  AISDKBatchStatus,
-  AISDKStartBatchOptions,
+  AISDKBatchRequest,
+  CompleteAISDKBatchTraceArgs,
 } from "../../vendor-sdk-types/ai-sdk-batch";
 import { wrapAISDK } from "../../wrappers/ai-sdk";
-import { aiSDKBatchChannels } from "./ai-sdk-batch-interceptors";
 import { AISDKPlugin } from "./ai-sdk-plugin";
 import { registry } from "../registry";
 
-configureNode();
+import { SpanComponentsV4 } from "../../../util/span_identifier_v4";
 
-const params: AISDKStartBatchOptions = {
-  requests: [
-    { id: "one", type: "text", model: "test/model", prompt: "Hello" },
-    {
-      id: "two",
-      type: "text",
-      model: "test/model",
-      messages: [{ role: "user", content: "World" }],
-    },
-  ],
-  headers: { authorization: "transport-secret" },
-  webhookUrl: "https://example.test/hook?token=webhook-secret",
-  providerOptions: { gateway: { byok: "provider-secret" } },
-};
-const items: AISDKBatchItem[] = [
+configureNode();
+const requests: AISDKBatchRequest[] = [
+  { id: "one", type: "text", model: "test/model", prompt: "Hello" },
+  {
+    id: "two",
+    type: "text",
+    model: "test/model",
+    messages: [{ role: "user", content: "World" }],
+  },
+];
+const results: AISDKBatchItem[] = [
   {
     id: "two",
     type: "text",
@@ -74,54 +68,12 @@ type TestRow = {
 };
 let sequence = 0;
 
-function client(results = items) {
-  const batch = {
-    version: 2 as const,
-    id: `batch-${sequence++}`,
-    provider: "gateway",
-    status: "pending" as const,
-  };
-  let lastStream: ReturnType<AISDKBatchAPI["experimental_getBatchResults"]>;
-  const status: AISDKBatchStatus = {
-    status: "completed",
-    requestCounts: { total: 2, completed: 1, failed: 1, pending: 0 },
-  };
-  const sdk: AISDKBatchAPI = {
-    experimental_startBatch: vi.fn(async () => ({
-      ...batch,
-      providerMetadata: {
-        gateway: { asyncJob: { webhookSigningSecret: "signing-secret" } },
-      },
-    })),
-    experimental_getBatchStatus: vi.fn(async () => status),
-    experimental_cancelBatch: vi.fn(async () => ({
-      providerMetadata: { secret: "cancel-secret" },
-    })),
-    experimental_getBatchResults: vi.fn(() => {
-      lastStream = new ReadableStream<AISDKBatchItem>({
-        start(controller) {
-          results.forEach((item) => controller.enqueue(item));
-          controller.close();
-        },
-      }) as ReturnType<AISDKBatchAPI["experimental_getBatchResults"]>;
-      return lastStream;
-    }),
-  };
-  return {
-    sdk,
-    batch,
-    status,
-    stream: () => lastStream,
-    wrapped: wrapAISDK(sdk),
-  };
-}
-
-describe("AI SDK batch instrumentation", () => {
+describe("manual AI SDK batch capture", () => {
   let background: ReturnType<
     typeof _exportsForTestingOnly.useTestBackgroundLogger
   >;
   let plugin: AISDKPlugin;
-
+  let batch: { version: 2; id: string; provider: string };
   beforeAll(async () => {
     await _exportsForTestingOnly.simulateLoginForTests();
   });
@@ -134,6 +86,7 @@ describe("AI SDK batch instrumentation", () => {
     registry.disable();
     plugin = new AISDKPlugin();
     plugin.enable();
+    batch = { version: 2, id: `batch-${sequence++}`, provider: "gateway" };
   });
   afterEach(() => {
     plugin.disable();
@@ -141,26 +94,51 @@ describe("AI SDK batch instrumentation", () => {
     _exportsForTestingOnly.clearTestBackgroundLogger();
   });
 
-  it("traces unordered results under the submitting parent without retaining secrets", async () => {
-    const { sdk, wrapped } = client();
+  it("leaves ordinary batch lifecycle calls untouched even with the plugin and wrapAISDK enabled", async () => {
+    const stream = new ReadableStream({
+      start(controller) {
+        controller.close();
+      },
+    });
+    const sdk = {
+      experimental_startBatch: vi.fn(async () => batch),
+      experimental_getBatchStatus: vi.fn(async () => ({ status: "completed" })),
+      experimental_getBatchResults: vi.fn(() => stream),
+      experimental_cancelBatch: vi.fn(async () => undefined),
+    };
+    const wrapped = wrapAISDK(sdk);
+    for (const key of Object.keys(sdk) as Array<keyof typeof sdk>)
+      expect(wrapped[key]).toBe(sdk[key]);
+    expect(await wrapped.experimental_startBatch()).toBe(batch);
+    await wrapped.experimental_getBatchStatus();
+    expect(wrapped.experimental_getBatchResults()).toBe(stream);
+    await wrapped.experimental_cancelBatch();
+    expect(await background.drain()).toEqual([]);
+  });
+
+  it("captures inputs and unordered outcomes under the submitting parent without leaking secrets", async () => {
     const parent = startSpan({ name: "submitter" });
-    const batch = await withCurrent(parent, () =>
-      wrapped.experimental_startBatch(params),
+    const submission = {
+      ...batch,
+      status: "pending" as const,
+      providerMetadata: {
+        gateway: { asyncJob: { webhookSigningSecret: "signing-secret" } },
+      },
+    };
+    const context = await withCurrent(parent, () =>
+      startAISDKBatchTrace({ batch: submission, requests }),
     );
-    expect(sdk.experimental_startBatch).toHaveBeenCalledExactlyOnceWith(params);
-    expect(batch).toHaveProperty(
-      "providerMetadata.gateway.asyncJob.webhookSigningSecret",
-      "signing-secret",
-    );
-    const context = await exportAISDKBatchTrace(batch);
     expect(context).toBeTypeOf("string");
-    expect(context).not.toContain("Hello");
-    expect(context).not.toContain("World");
-    await wrapped.experimental_getBatchStatus({ batch });
-    const received = [];
-    for await (const item of wrapped.experimental_getBatchResults({ batch }))
-      received.push(item);
-    expect(received).toEqual(items);
+    await completeAISDKBatchTrace({
+      batch,
+      requests,
+      context,
+      results,
+      status: {
+        status: "completed",
+        requestCounts: { total: 2, completed: 1, failed: 1, pending: 0 },
+      },
+    });
     parent.end();
     const rows = (await background.drain()) as TestRow[];
     const task = rows.find((row) => row.span_attributes?.name === "ai.batch")!;
@@ -199,108 +177,85 @@ describe("AI SDK batch instrumentation", () => {
     expect(
       children.find((row) => row.metadata.request_id === "one")?.error,
     ).toContain("Request rejected");
-    for (const secret of [
-      "transport-secret",
-      "webhook-secret",
-      "provider-secret",
-      "signing-secret",
-    ]) {
-      expect(JSON.stringify(rows)).not.toContain(secret);
+    expect(JSON.stringify(rows)).not.toContain("signing-secret");
+    for (const secret of ["Hello", "World", "signing-secret"])
       expect(context).not.toContain(secret);
-    }
-    expect(await exportAISDKBatchTrace(batch)).toBeUndefined();
   });
 
-  it.each(["iterator", "reader", "pipe", "transform", "tee"] as const)(
-    "preserves stream identity and records results through %s",
-    async (mode) => {
-      const { wrapped, stream } = client();
-      const batch = await wrapped.experimental_startBatch(params);
-      const result = wrapped.experimental_getBatchResults({ batch });
-      expect(result).toBe(stream());
-      const received: AISDKBatchItem[] = [];
-      if (mode === "reader") {
-        const reader = result.getReader();
-        for (;;) {
-          const item = await reader.read();
-          if (item.done) break;
-          received.push(item.value);
-        }
-        reader.releaseLock();
-      } else if (mode === "pipe") {
-        await result.pipeTo(
-          new WritableStream({
-            write(item) {
-              received.push(item);
-            },
-          }),
-        );
-      } else if (mode === "transform") {
-        const transformed = result.pipeThrough(
-          new TransformStream<AISDKBatchItem, AISDKBatchItem>(),
-        );
-        await transformed.pipeTo(
-          new WritableStream({
-            write(item) {
-              received.push(item);
-            },
-          }),
-        );
-      } else if (mode === "tee") {
-        const [left, right] = result.tee();
-        await Promise.all([
-          left.pipeTo(
-            new WritableStream({
-              write(item) {
-                received.push(item);
-              },
-            }),
-          ),
-          right.pipeTo(new WritableStream()),
-        ]);
-      } else {
-        for await (const item of result) received.push(item);
-      }
-      expect(received).toEqual(items);
-      const rows = (await background.drain()) as TestRow[];
-      expect(
-        rows.filter((row) => row.span_attributes?.name === "ai.batch.request"),
-      ).toHaveLength(2);
-      expect(rows.every((row) => row.metrics.end !== undefined)).toBe(true);
-    },
-  );
-
-  it("restores stable rows from serialized context after process-local tracking is lost", async () => {
-    const { wrapped } = client();
-    const batch = await wrapped.experimental_startBatch(params);
-    const context = (await exportAISDKBatchTrace(batch))!;
+  it("resumes in a different parent without process-local tracking and merges repeated completion", async () => {
+    const context = await startAISDKBatchTrace({ batch, requests });
     const initial = (await background.drain()) as TestRow[];
-    // Simulate another SDK process without its in-memory spans.
-    Reflect.get(
-      globalThis,
-      Symbol.for("braintrust.ai-sdk.batch-traces.v1"),
-    ).clear();
-    await resumeAISDKBatchTrace(context);
-    await resumeAISDKBatchTrace(context);
-    await wrapped.experimental_getBatchStatus({ batch });
-    for await (const _item of wrapped.experimental_getBatchResults({ batch })) {
-      /* consume */
-    }
-    const completed = (await background.drain()) as TestRow[];
-    expect(completed.map((row) => row.id).sort()).toEqual(
+    plugin.disable();
+    plugin = new AISDKPlugin();
+    plugin.enable();
+    const worker = startSpan({ name: "worker" });
+    const args = {
+      batch,
+      requests: [...requests].reverse(),
+      context,
+      results,
+      status: { status: "completed" as const },
+    };
+    await withCurrent(worker, () => completeAISDKBatchTrace(args));
+    await withCurrent(worker, () => completeAISDKBatchTrace(args));
+    const ended = ((await background.drain()) as TestRow[]).filter(
+      (row) => row.id !== worker.id,
+    );
+    expect(ended.map((row) => row.id).sort()).toEqual(
       initial.map((row) => row.id).sort(),
     );
-    expect(completed.map((row) => row.root_span_id)).toEqual(
-      initial.map((row) => row.root_span_id),
-    );
-    expect(completed.every((row) => row.metrics.end !== undefined)).toBe(true);
+    for (const row of ended) {
+      expect(row.root_span_id).toBe(
+        initial.find((original) => original.id === row.id)!.root_span_id,
+      );
+      expect(row.metrics.end).toBeDefined();
+    }
+    worker.end();
   });
 
-  it("keeps unconsumed requests pending and allows fetching results again", async () => {
-    const { wrapped } = client();
-    const batch = await wrapped.experimental_startBatch(params);
-    for await (const _item of wrapped.experimental_getBatchResults({ batch }))
-      break;
+  it("does not persist propagated event payloads in trace context", async () => {
+    const parent = startSpan({
+      name: "submitter",
+      propagatedEvent: { metadata: { secret: "private-payload" } },
+    });
+    const context = await withCurrent(parent, () =>
+      startAISDKBatchTrace({ batch, requests }),
+    );
+    expect(
+      SpanComponentsV4.fromStr(JSON.parse(context!).parent).data
+        .propagated_event,
+    ).toBeUndefined();
+    parent.end();
+  });
+
+  it("keeps context independent of batch size", async () => {
+    const first = await startAISDKBatchTrace({ batch, requests });
+    await background.drain();
+    const many = Array.from({ length: 100 }, (_, i) => ({
+      ...requests[0],
+      id: String(i),
+    }));
+    const second = await startAISDKBatchTrace({ batch, requests: many });
+    expect(JSON.parse(first!).inputDigest).toHaveLength(64);
+    expect(JSON.parse(second!).inputDigest).toHaveLength(64);
+    expect(Object.keys(JSON.parse(second!)).sort()).toEqual([
+      "batch",
+      "inputDigest",
+      "parent",
+      "startTime",
+      "version",
+    ]);
+  });
+
+  it("leaves incomplete results retryable and finishes when all records are supplied", async () => {
+    const context = await startAISDKBatchTrace({ batch, requests });
+    await completeAISDKBatchTrace({
+      batch,
+      requests,
+      context,
+      results: [results[0]],
+      status: { status: "completed" },
+    });
     const partial = (await background.drain()) as TestRow[];
     expect(
       partial.find((row) => row.span_attributes?.name === "ai.batch")?.metrics
@@ -309,141 +264,201 @@ describe("AI SDK batch instrumentation", () => {
     expect(partial.filter((row) => row.metrics.end !== undefined)).toHaveLength(
       1,
     );
-    for await (const _item of wrapped.experimental_getBatchResults({ batch })) {
-      /* consume */
-    }
-    const completed = (await background.drain()) as TestRow[];
-    expect(
-      completed.filter((row) => row.metrics.end !== undefined),
-    ).toHaveLength(2);
-  });
-
-  it("records cancellation requested without ending spans, then closes a failed batch", async () => {
-    const { wrapped, status } = client([]);
-    const batch = await wrapped.experimental_startBatch(params);
-    await wrapped.experimental_cancelBatch({ batch });
-    const pending = (await background.drain()) as TestRow[];
-    expect(
-      pending.find((row) => row.span_attributes?.name === "ai.batch")?.metadata
-        .cancellation_requested,
-    ).toBe(true);
-    expect(pending.every((row) => row.metrics.end === undefined)).toBe(true);
-    Object.assign(status, {
-      status: "failed",
-      error: { message: "Cancelled" },
+    await completeAISDKBatchTrace({
+      batch,
+      requests,
+      context,
+      results,
+      status: { status: "completed" },
     });
-    await wrapped.experimental_getBatchStatus({ batch });
-    for await (const _item of wrapped.experimental_getBatchResults({ batch })) {
-      /* consume */
-    }
-    const ended = (await background.drain()) as TestRow[];
-    expect(ended).toHaveLength(3);
     expect(
-      ended.every((row) => row.error && row.metrics.end !== undefined),
+      ((await background.drain()) as TestRow[]).every(
+        (row) => row.metrics.end !== undefined,
+      ),
     ).toBe(true);
   });
 
-  it("does not complete a batch with missing or unknown results", async () => {
-    const { wrapped } = client([items[0], { ...items[1], id: "unknown" }]);
-    const batch = await wrapped.experimental_startBatch(params);
-    for await (const _item of wrapped.experimental_getBatchResults({ batch })) {
-      /* consume */
-    }
-    const rows = (await background.drain()) as TestRow[];
-    expect(
-      rows.find((row) => row.span_attributes?.name === "ai.batch")?.metrics.end,
-    ).toBeUndefined();
-    expect(await exportAISDKBatchTrace(batch)).toBeTypeOf("string");
-  });
-
-  it("propagates submission and stream errors without retrying or ending pending requests", async () => {
-    const { sdk, wrapped } = client();
-    const failure = new Error("Provider unavailable");
-    vi.mocked(sdk.experimental_startBatch).mockRejectedValueOnce(failure);
-    await expect(wrapped.experimental_startBatch(params)).rejects.toBe(failure);
-    expect(sdk.experimental_startBatch).toHaveBeenCalledTimes(1);
-    expect((await background.drain())[0]).toMatchObject({
-      error: expect.stringContaining("Provider unavailable"),
-      metrics: { end: expect.any(Number) },
+  it("leaves nonterminal outcomes pending even if results are supplied", async () => {
+    const context = await startAISDKBatchTrace({ batch, requests });
+    await completeAISDKBatchTrace({
+      batch,
+      requests,
+      context,
+      results,
+      status: { status: "pending" },
     });
-    const batch = await wrapped.experimental_startBatch(params);
-    sdk.experimental_getBatchResults = () =>
-      new ReadableStream({
-        pull(controller) {
-          controller.error(failure);
-        },
-      }) as ReturnType<AISDKBatchAPI["experimental_getBatchResults"]>;
-    const result = wrapped.experimental_getBatchResults({ batch });
-    await expect(result.getReader().read()).rejects.toBe(failure);
+    expect(
+      ((await background.drain()) as TestRow[]).every(
+        (row) => row.metrics.end === undefined,
+      ),
+    ).toBe(true);
+  });
+
+  it("closes unresolved children on terminal failure and preserves partial successes", async () => {
+    const context = await startAISDKBatchTrace({
+      batch,
+      requests,
+      startTime: 100,
+    });
+    await completeAISDKBatchTrace({
+      batch,
+      requests,
+      context,
+      results: [results[0]],
+      status: {
+        status: "failed",
+        rawStatus: "cancelled",
+        error: { message: "Cancelled" },
+      },
+      endTime: 90,
+    });
     const rows = (await background.drain()) as TestRow[];
-    expect(rows.every((row) => row.metrics.end === undefined)).toBe(true);
+    expect(rows).toHaveLength(3);
+    expect(rows.every((row) => row.metrics.end === 100)).toBe(true);
+    expect(rows.filter((row) => row.error)).toHaveLength(2);
   });
 
-  it("deduplicates a manual wrapper around an auto-instrumented function", async () => {
-    const { sdk } = client();
-    const original = sdk.experimental_startBatch;
-    sdk.experimental_startBatch = (options) =>
-      aiSDKBatchChannels.startBatch.invoke(original, sdk, [options], {});
-    await wrapAISDK(sdk).experimental_startBatch(params);
-    expect(original).toHaveBeenCalledTimes(1);
-    expect(await background.drain()).toHaveLength(3);
+  it.each(["unknown", "duplicate"])(
+    "does not close a completed batch with %s result IDs",
+    async (kind) => {
+      const context = await startAISDKBatchTrace({ batch, requests });
+      await completeAISDKBatchTrace({
+        batch,
+        requests,
+        context,
+        status: { status: "completed" },
+        results:
+          kind === "duplicate"
+            ? [...results, results[0]]
+            : [results[0], { ...results[1], id: "unknown" }],
+      });
+      const rows = (await background.drain()) as TestRow[];
+      expect(
+        rows.find((row) => row.span_attributes?.name === "ai.batch")?.metrics
+          .end,
+      ).toBeUndefined();
+    },
+  );
+
+  it("supports collect-only capture with provider timestamps", async () => {
+    await completeAISDKBatchTrace({
+      batch,
+      requests,
+      results,
+      status: { status: "completed", createdAt: "2026-01-01T00:00:00Z" },
+      endTime: 1767225601,
+    });
+    const rows = (await background.drain()) as TestRow[];
+    expect(rows).toHaveLength(3);
+    expect(
+      rows.every(
+        (row) =>
+          row.metrics.start === 1767225600 && row.metrics.end === 1767225601,
+      ),
+    ).toBe(true);
+    expect(
+      rows
+        .filter((row) => row.span_attributes?.name === "ai.batch.request")
+        .every((row) => "input" in row),
+    ).toBe(true);
   });
 
-  it("normalizes tools and messages while keeping request settings out of input", async () => {
-    const result: AISDKBatchItem = {
-      id: "one",
-      type: "text",
-      status: "succeeded",
-      finishReason: "tool-calls",
-      content: [
-        {
-          type: "tool-call",
-          toolCallId: "call-1",
-          toolName: "weather",
-          input: { city: "Paris" },
-        },
-      ],
-      response: { modelId: "resolved-model" },
-      usage: { inputTokens: 6, outputTokens: 4, totalTokens: 10 },
-    };
-    const { wrapped } = client([result]);
+  it("rejects invalid or mismatched context without producing spans", async () => {
+    const context = (await startAISDKBatchTrace({ batch, requests }))!;
+    await background.drain();
+    for (const invalid of [
+      "invalid",
+      JSON.stringify({ version: 99 }),
+      JSON.stringify({ ...JSON.parse(context), parent: "invalid" }),
+    ]) {
+      await completeAISDKBatchTrace({
+        batch,
+        requests,
+        results,
+        context: invalid,
+        status: { status: "completed" },
+      });
+    }
+    await completeAISDKBatchTrace({
+      batch: { ...batch, id: "wrong" },
+      requests,
+      results,
+      context,
+      status: { status: "completed" },
+    });
+    await completeAISDKBatchTrace({
+      batch,
+      requests: [requests[0]],
+      results,
+      context,
+      status: { status: "completed" },
+    });
+    expect(await background.drain()).toEqual([]);
+  });
+
+  it("never consumes lazy provider results", async () => {
+    const iterator = vi.fn();
+    const lazy = { [Symbol.asyncIterator]: iterator };
+    await completeAISDKBatchTrace({
+      batch,
+      requests,
+      results: lazy as unknown as CompleteAISDKBatchTraceArgs["results"],
+      status: { status: "completed" },
+    });
+    expect(iterator).not.toHaveBeenCalled();
+    expect(await background.drain()).toEqual([]);
+  });
+
+  it("normalizes tool calls without executing tools", async () => {
     const execute = vi.fn();
-    const batch = await wrapped.experimental_startBatch({
-      requests: [
+    const toolRequests: AISDKBatchRequest[] = [
+      {
+        ...requests[0],
+        instructions: "Use the tool",
+        temperature: 0.1,
+        tools: {
+          weather: {
+            description: "Weather lookup",
+            inputSchema: { type: "object" },
+            execute,
+          },
+        },
+        toolChoice: { type: "tool", toolName: "weather" },
+      },
+    ];
+    await completeAISDKBatchTrace({
+      batch,
+      requests: toolRequests,
+      status: { status: "completed" },
+      results: [
         {
           id: "one",
           type: "text",
-          model: "test/model",
-          instructions: "Use the tool",
-          prompt: "Weather in Paris?",
-          temperature: 0.1,
-          maxOutputTokens: 20,
-          tools: {
-            weather: {
-              description: "Weather lookup",
-              inputSchema: { type: "object" },
-              execute,
+          status: "succeeded",
+          finishReason: "tool-calls",
+          content: [
+            {
+              type: "tool-call",
+              toolCallId: "call-1",
+              toolName: "weather",
+              input: { city: "Paris" },
             },
-          },
-          toolChoice: { type: "tool", toolName: "weather" },
+          ],
+          response: { modelId: "resolved-model" },
         },
       ],
     });
-    for await (const _item of wrapped.experimental_getBatchResults({ batch })) {
-      /* consume */
-    }
     const rows = (await background.drain()) as TestRow[];
     expect(
       rows.find((row) => row.span_attributes?.name === "ai.batch.request"),
     ).toMatchObject({
       input: [
         { role: "system", content: "Use the tool" },
-        { role: "user", content: "Weather in Paris?" },
+        { role: "user", content: "Hello" },
       ],
       metadata: {
         model: "resolved-model",
         temperature: 0.1,
-        max_tokens: 20,
         tools: [
           {
             type: "function",
@@ -477,20 +492,18 @@ describe("AI SDK batch instrumentation", () => {
     expect(execute).not.toHaveBeenCalled();
   });
 
-  it("preserves remote images and omits inline bytes unless attachment capture is enabled", async () => {
+  it("preserves remote images and omits inline bytes by default", async () => {
     vi.stubEnv("BRAINTRUST_CAPTURE_ATTACHMENTS", "false");
-    const { wrapped } = client();
-    await wrapped.experimental_startBatch({
+    await startAISDKBatchTrace({
+      batch,
       requests: [
         {
-          id: "one",
-          type: "text",
-          model: "test/model",
+          ...requests[0],
+          prompt: undefined,
           messages: [
             {
               role: "user",
               content: [
-                { type: "text", text: "Describe the picture" },
                 { type: "image", image: "https://example.test/picture.png" },
                 {
                   type: "image",
@@ -507,57 +520,27 @@ describe("AI SDK batch instrumentation", () => {
     expect(JSON.stringify(rows)).not.toContain("aW5saW5lLXNlY3JldA==");
   });
 
-  it("does not duplicate spans on retrieval after completion", async () => {
-    const { wrapped } = client();
-    const batch = await wrapped.experimental_startBatch(params);
-    for await (const _item of wrapped.experimental_getBatchResults({ batch })) {
-      /* consume */
-    }
-    await background.drain();
-    for await (const _item of wrapped.experimental_getBatchResults({ batch })) {
-      /* consume */
-    }
-    expect(await background.drain()).toHaveLength(0);
-  });
-
-  it("forwards an abort signal while leaving the batch retryable", async () => {
-    const { sdk, wrapped } = client();
-    const batch = await wrapped.experimental_startBatch(params);
-    const controller = new AbortController();
-    const reason = new Error("Aborted by application");
-    sdk.experimental_getBatchResults = (options) => {
-      expect(options.abortSignal).toBe(controller.signal);
-      return new ReadableStream<AISDKBatchItem>({
-        start(stream) {
-          options.abortSignal?.addEventListener("abort", () =>
-            stream.error(options.abortSignal?.reason),
-          );
-        },
-      }) as ReturnType<AISDKBatchAPI["experimental_getBatchResults"]>;
-    };
-    const stream = wrapped.experimental_getBatchResults({
-      batch,
-      abortSignal: controller.signal,
-    });
-    const read = stream.getReader().read();
-    controller.abort(reason);
-    await expect(read).rejects.toBe(reason);
-    expect(await exportAISDKBatchTrace(batch)).toBeTypeOf("string");
-    const rows = (await background.drain()) as TestRow[];
-    expect(rows.every((row) => row.metrics.end === undefined)).toBe(true);
-  });
-
-  it("passes through without instrumentation and ignores invalid contexts", async () => {
-    await resumeAISDKBatchTrace("invalid");
-    await resumeAISDKBatchTrace(
-      JSON.stringify({ version: 99, secret: "never log this" }),
-    );
-    expect(await background.drain()).toHaveLength(0);
+  it("skips unsupported inputs and disabled capture", async () => {
+    expect(
+      await startAISDKBatchTrace({
+        batch,
+        requests: [requests[0], requests[0]],
+      }),
+    ).toBeUndefined();
+    expect(
+      await startAISDKBatchTrace({
+        batch,
+        requests: [{ ...requests[0], type: "image" }],
+      }),
+    ).toBeUndefined();
     plugin.disable();
-    const { sdk, wrapped } = client();
-    const batch = await wrapped.experimental_startBatch(params);
-    expect(sdk.experimental_startBatch).toHaveBeenCalledTimes(1);
-    expect(await exportAISDKBatchTrace(batch)).toBeUndefined();
-    expect(await background.drain()).toHaveLength(0);
+    expect(await startAISDKBatchTrace({ batch, requests })).toBeUndefined();
+    await completeAISDKBatchTrace({
+      batch,
+      requests,
+      results,
+      status: { status: "completed" },
+    });
+    expect(await background.drain()).toEqual([]);
   });
 });

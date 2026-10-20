@@ -1,39 +1,49 @@
 import { aiSDKBatchChannels } from "./instrumentation/plugins/ai-sdk-batch-interceptors";
-import type { AISDKBatchReference } from "./vendor-sdk-types/ai-sdk-batch";
+import type {
+  CompleteAISDKBatchTraceArgs,
+  StartAISDKBatchTraceArgs,
+} from "./vendor-sdk-types/ai-sdk-batch";
 
 /**
- * Export an opaque Braintrust context immediately after an instrumented batch
- * submission. Persist it alongside the AI SDK batch reference, then restore it
- * with `resumeAISDKBatchTrace` in the worker that retrieves the results.
+ * Capture inputs after the caller has successfully submitted an AI SDK text batch.
+ * This does not submit the batch or call any provider API.
  *
- * The context contains trace routing and request IDs/models, not prompts or
- * credentials. Treat it as trusted application state. Returns undefined when
- * the batch is not tracked or AI SDK instrumentation is disabled.
+ * Persist the returned opaque context alongside the batch reference and original
+ * requests. Pass them to `completeAISDKBatchTrace` after collecting the results,
+ * including in another process. Flush the logger before handing off the work.
+ * The context contains routing and an input-identity digest, not prompts or keys.
+ * Treat it as trusted application state. Returns undefined if capture is disabled
+ * or the supplied data is unsupported.
  */
-export function exportAISDKBatchTrace(
-  batch: AISDKBatchReference,
+export function startAISDKBatchTrace(
+  args: StartAISDKBatchTraceArgs,
 ): Promise<string | undefined> {
-  return aiSDKBatchChannels.exportTrace.invoke(
+  return aiSDKBatchChannels.start.invoke(
     async () => undefined,
     undefined,
-    [batch],
+    [args],
     {},
   );
 }
 
 /**
- * Restore a persisted batch context before calling instrumented AI SDK status
- * or results functions in another process. This makes no provider requests.
- * Invalid contexts are ignored with an instrumentation diagnostic.
+ * Capture already collected AI SDK batch results and finish the original spans.
+ * This does not poll, fetch results, or consume provider streams. The caller must
+ * collect the stream into records first, including results of failed batches.
+ * Pending batches and completed batches with missing results remain pending.
+ * Retrying with the same context and results updates the same rows.
  *
- * Verify webhook signatures in application code before restoring trusted state
- * and fetching results. The webhook payload itself is not a trace context.
+ * Without context, captures inputs and results together under the current parent.
+ * Original request IDs/models must match the context when one is supplied.
+ * Verify webhook signatures in application code; a webhook is not trace context.
  */
-export function resumeAISDKBatchTrace(context: string): Promise<void> {
-  return aiSDKBatchChannels.resumeTrace.invoke(
+export function completeAISDKBatchTrace(
+  args: CompleteAISDKBatchTraceArgs,
+): Promise<void> {
+  return aiSDKBatchChannels.complete.invoke(
     async () => undefined,
     undefined,
-    [context],
+    [args],
     {},
   );
 }

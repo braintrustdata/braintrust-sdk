@@ -6,7 +6,6 @@ import {
   _internalStartSpanWithInitialMergeAndParentSpanIds,
   getSpanParentObject,
   NOOP_SPAN,
-  startSpan,
   withCurrent,
   type Span,
 } from "../../logger";
@@ -16,18 +15,13 @@ import {
 } from "../../span-origin";
 import { getCurrentUnixTimestamp } from "../../util";
 import type {
-  AISDKBatchAPI,
-  AISDKBatchItem,
   AISDKBatchReference,
   AISDKBatchStatus,
-  AISDKStartBatchOptions,
+  AISDKBatchRequest,
+  StartAISDKBatchTraceArgs,
+  CompleteAISDKBatchTraceArgs,
 } from "../../vendor-sdk-types/ai-sdk-batch";
-import {
-  isAutoInstrumentationSuppressed,
-  runWithAutoInstrumentationSuppressed,
-} from "../auto-instrumentation-suppression";
 import { runInstrumentation } from "../core/observe-result";
-import { observeStream } from "../core/stream-patcher";
 import { extractTokenMetrics } from "./ai-sdk-metrics";
 import { aiSDKBatchInput, aiSDKBatchOutput } from "./ai-sdk-batch-span-data";
 import {
@@ -41,30 +35,18 @@ type BatchContext = {
   batch: AISDKBatchReference;
   parent: string;
   startTime: number;
-  terminalTime?: number;
-  status: AISDKBatchStatus["status"];
-  requests: Array<{ id: string; model: string }>;
-  denyOutputPaths: string[];
+  inputDigest: string;
 };
-
 type BatchRequestIdentity = { rowId: string; spanId: string; model: string };
-
 type BatchTrace = {
   context: BatchContext;
+  status: AISDKBatchStatus["status"];
   rowId: string;
   spanId: string;
   rootSpanId: string;
   taskParent: string;
   children: Map<string, BatchRequestIdentity>;
-  completed: Set<string>;
 };
-
-// SDK copies share correlation state, but no live spans or provider payloads.
-const stateKey = Symbol.for("braintrust.ai-sdk.batch-traces.v1");
-const shared = globalThis as typeof globalThis & {
-  [stateKey]?: Map<string, BatchTrace>;
-};
-const traces = (shared[stateKey] ??= new Map<string, BatchTrace>());
 
 function batchSpan(trace: BatchTrace): Span {
   const parent = SpanComponentsV4.fromStr(trace.context.parent);
@@ -90,7 +72,7 @@ function batchSpan(trace: BatchTrace): Span {
             metadata: {
               batch_id: trace.context.batch.id,
               provider: trace.context.batch.provider,
-              status: trace.context.status,
+              status: trace.status,
             },
           },
         },
@@ -130,10 +112,104 @@ function requestSpan(
   );
 }
 
-async function createTrace(context: BatchContext): Promise<BatchTrace> {
+/** Context is constant-size; the caller supplies the original input identities. */
+async function batchContext(
+  { batch, requests, startTime }: StartAISDKBatchTraceArgs,
+  serialized?: string,
+): Promise<BatchContext | undefined> {
+  if (
+    batch.version !== 2 ||
+    typeof batch.id !== "string" ||
+    !batch.id ||
+    typeof batch.provider !== "string" ||
+    !batch.provider ||
+    !Array.isArray(requests) ||
+    requests.length === 0 ||
+    requests.some(
+      (request) =>
+        request.type !== "text" ||
+        typeof request.id !== "string" ||
+        !request.id ||
+        typeof request.model !== "string" ||
+        !request.model,
+    ) ||
+    new Set(requests.map((request) => request.id)).size !== requests.length
+  ) {
+    debugLogger.debug("Unsupported AI SDK batch inputs");
+    return;
+  }
+  const inputDigest = digestHex(
+    await deterministicDigest(
+      "ai:batch:inputs",
+      ...requests.map(({ id, model }) => JSON.stringify([id, model])).sort(),
+    ),
+    32,
+  );
+  if (serialized !== undefined) {
+    try {
+      const value: unknown = JSON.parse(serialized);
+      if (
+        !isObject(value) ||
+        value.version !== 1 ||
+        !isObject(value.batch) ||
+        value.batch.version !== batch.version ||
+        value.batch.id !== batch.id ||
+        value.batch.provider !== batch.provider ||
+        value.inputDigest !== inputDigest ||
+        typeof value.parent !== "string" ||
+        typeof value.startTime !== "number" ||
+        !Number.isFinite(value.startTime) ||
+        value.startTime < 0
+      ) {
+        throw new Error("Invalid batch context");
+      }
+      const parent = SpanComponentsV4.fromStr(value.parent);
+      return {
+        version: 1,
+        batch: { version: 2, id: batch.id, provider: batch.provider },
+        parent: new SpanComponentsV4({
+          ...parent.data,
+          propagated_event: undefined,
+        }).toStr(),
+        startTime: value.startTime,
+        inputDigest,
+      };
+    } catch {
+      // Never include untrusted serialized context in diagnostics.
+      debugLogger.debug(
+        "Invalid AI SDK batch trace context or mismatched inputs",
+      );
+      return;
+    }
+  }
+  const parent = getSpanParentObject();
+  const routing = SpanComponentsV4.fromStr(
+    "toStr" in parent ? parent.toStr() : await parent.export(),
+  );
+  const createdAt = batch.createdAt ? Date.parse(batch.createdAt) / 1000 : NaN;
+  return {
+    version: 1,
+    batch: { version: 2, id: batch.id, provider: batch.provider },
+    parent: new SpanComponentsV4({
+      ...routing.data,
+      propagated_event: undefined,
+    }).toStr(),
+    startTime:
+      startTime !== undefined && Number.isFinite(startTime) && startTime >= 0
+        ? startTime
+        : Number.isFinite(createdAt) && createdAt >= 0
+          ? createdAt
+          : getCurrentUnixTimestamp(),
+    inputDigest,
+  };
+}
+
+async function createTrace(
+  context: BatchContext,
+  requests: ReadonlyArray<AISDKBatchRequest>,
+  status: AISDKBatchStatus["status"],
+): Promise<BatchTrace> {
   const key = JSON.stringify([context.batch.provider, context.batch.id]);
-  const existing = traces.get(key);
-  if (existing) return existing;
   const [row, span, root] = await Promise.all([
     deterministicDigest("ai:batch:row", key),
     deterministicDigest("ai:batch:span", key),
@@ -141,15 +217,15 @@ async function createTrace(context: BatchContext): Promise<BatchTrace> {
   ]);
   const trace: BatchTrace = {
     context,
+    status,
     rowId: digestUuid(row),
     spanId: digestHex(span, 8),
     rootSpanId: digestHex(root, 16),
     taskParent: "",
     children: new Map(),
-    completed: new Set(),
   };
-  // Bound hashing/span construction regardless of the number of requests.
-  for (const { id, model } of context.requests) {
+  // Keep only identities, with bounded hashing and span construction.
+  for (const { id, model } of requests) {
     const digest = await deterministicDigest("ai:batch:request", key, id);
     trace.children.set(id, {
       rowId: digestUuid(digest),
@@ -157,281 +233,148 @@ async function createTrace(context: BatchContext): Promise<BatchTrace> {
       model,
     });
   }
-  const concurrent = traces.get(key);
-  if (concurrent) return concurrent;
   trace.taskParent = await batchSpan(trace).export();
-  traces.set(key, trace);
   return trace;
 }
 
-export async function traceAISDKStartBatch(
-  call: () => ReturnType<AISDKBatchAPI["experimental_startBatch"]>,
-  params: AISDKStartBatchOptions,
-  denyOutputPaths: string[],
-): ReturnType<AISDKBatchAPI["experimental_startBatch"]> {
-  if (isAutoInstrumentationSuppressed()) return call();
-  const parent = getSpanParentObject();
-  const startTime = getCurrentUnixTimestamp();
-  let result: Awaited<ReturnType<AISDKBatchAPI["experimental_startBatch"]>>;
-  try {
-    result = await runWithAutoInstrumentationSuppressed(call);
-  } catch (error) {
-    runInstrumentation(() => {
-      const span = startSpan(
-        withSpanInstrumentationName(
-          {
-            name: "ai.batch",
-            type: SpanTypeAttribute.TASK,
-            startTime,
-          },
-          INSTRUMENTATION_NAMES.AI_SDK,
-        ),
-      );
-      span.log({
-        error: error instanceof Error ? error : new Error(String(error)),
-      });
-      span.end();
-    });
-    throw error;
-  }
-  await runInstrumentation(async () => {
-    // Gateway currently supports only text batches. Leave other modalities alone.
-    if (params.requests.some((request) => request.type !== "text")) return;
-    const trace = await createTrace({
-      version: 1,
-      batch: { version: 2, id: result.id, provider: result.provider },
-      parent: "toStr" in parent ? parent.toStr() : await parent.export(),
-      startTime:
-        result.createdAt && Number.isFinite(Date.parse(result.createdAt))
-          ? Date.parse(result.createdAt) / 1000
-          : startTime,
-      status: result.status,
-      requests: params.requests.map(({ id, model }) => ({ id, model })),
-      denyOutputPaths,
-    });
-    for (const request of params.requests) {
+export async function captureAISDKBatchStart(
+  args: StartAISDKBatchTraceArgs,
+): Promise<string | undefined> {
+  return runInstrumentation(async () => {
+    const context = await batchContext(args);
+    if (!context) return;
+    const trace = await createTrace(
+      context,
+      args.requests,
+      args.batch.status ?? "pending",
+    );
+    for (const request of args.requests) {
       const data = await aiSDKBatchInput(request);
       requestSpan(trace, request.id, trace.children.get(request.id)!).log(data);
     }
-    updateStatus(trace, result);
-  })?.catch(() => {});
-  return result;
+    return JSON.stringify(context);
+  })?.catch(() => undefined);
 }
 
-function updateStatus(trace: BatchTrace, status: AISDKBatchStatus): void {
-  trace.context.status = status.status;
-  if (status.status !== "pending") {
-    trace.context.terminalTime ??= getCurrentUnixTimestamp();
-  }
-  batchSpan(trace).log({
-    metadata: {
-      status: status.status,
-      raw_status: status.rawStatus,
-      ...(status.requestCounts
-        ? {
-            request_counts: {
-              total: status.requestCounts.total,
-              pending: status.requestCounts.pending,
-              completed: status.requestCounts.completed,
-              failed: status.requestCounts.failed,
-            },
-          }
-        : {}),
-    },
-    ...(status.error ? { error: new Error(status.error.message) } : {}),
-  });
-}
-
-export async function traceAISDKBatchStatus(
-  call: () => ReturnType<AISDKBatchAPI["experimental_getBatchStatus"]>,
-  batch: AISDKBatchReference,
-): ReturnType<AISDKBatchAPI["experimental_getBatchStatus"]> {
-  if (isAutoInstrumentationSuppressed()) return call();
-  const result = await runWithAutoInstrumentationSuppressed(call);
-  runInstrumentation(() => {
-    const trace = traces.get(JSON.stringify([batch.provider, batch.id]));
-    if (trace) updateStatus(trace, result);
-  });
-  return result;
-}
-
-export async function traceAISDKCancelBatch(
-  call: () => ReturnType<AISDKBatchAPI["experimental_cancelBatch"]>,
-  batch: AISDKBatchReference,
-): ReturnType<AISDKBatchAPI["experimental_cancelBatch"]> {
-  if (isAutoInstrumentationSuppressed()) return call();
-  const result = await runWithAutoInstrumentationSuppressed(call);
-  runInstrumentation(() => {
-    const trace = traces.get(JSON.stringify([batch.provider, batch.id]));
-    if (trace)
-      batchSpan(trace).log({ metadata: { cancellation_requested: true } });
-  });
-  return result;
-}
-
-export function traceAISDKBatchResults(
-  call: () => ReturnType<AISDKBatchAPI["experimental_getBatchResults"]>,
-  batch: AISDKBatchReference,
-  denyOutputPaths?: string[],
-): ReturnType<AISDKBatchAPI["experimental_getBatchResults"]> {
-  if (isAutoInstrumentationSuppressed()) return call();
-  const result = runWithAutoInstrumentationSuppressed(call);
-  runInstrumentation(() => {
-    const key = JSON.stringify([batch.provider, batch.id]);
-    const trace = traces.get(key);
-    if (!trace) return;
-    let invalid = false;
-    const seen = new Set<string>();
-    observeStream<AISDKBatchItem>(result, {
-      debugLabel: "AI SDK batch results",
-      onChunk(item) {
-        const identity = trace.children.get(item.id);
-        if (!identity || item.type !== "text" || seen.has(item.id)) {
-          invalid = true;
-          debugLogger.debug(
-            "AI SDK batch result has an unknown or duplicate request ID",
-          );
-          return;
-        }
-        seen.add(item.id);
-        if (trace.completed.has(item.id)) return;
-        const child = requestSpan(trace, item.id, identity);
-        if (item.status === "succeeded") {
-          child.log({
-            output: aiSDKBatchOutput(
-              item,
-              denyOutputPaths ?? trace.context.denyOutputPaths,
-            ),
-            metrics: extractTokenMetrics({
-              usage: item.usage,
-              providerMetadata: item.providerMetadata,
-            }),
-            metadata: {
-              status: item.status,
-              ...(typeof item.response?.modelId === "string"
-                ? { model: item.response.modelId }
-                : {}),
-            },
-          });
-        } else if (["failed", "cancelled", "expired"].includes(item.status)) {
-          child.log({
-            error: new Error(
-              item.error?.message ?? `AI SDK batch request ${item.status}`,
-            ),
-            metadata: { status: item.status },
-          });
-        } else {
-          invalid = true;
-          return;
-        }
-        child.end({
-          endTime: Math.max(
-            trace.context.startTime,
-            trace.context.terminalTime ?? getCurrentUnixTimestamp(),
-          ),
-        });
-        trace.completed.add(item.id);
-      },
-      onComplete() {
-        if (invalid) return;
-        const endTime = Math.max(
-          trace.context.startTime,
-          trace.context.terminalTime ?? getCurrentUnixTimestamp(),
-        );
-        if (trace.context.status === "failed") {
-          batchSpan(trace).log({ error: new Error("AI SDK batch failed") });
-          for (const [id, identity] of trace.children) {
-            if (trace.completed.has(id)) continue;
-            const child = requestSpan(trace, id, identity);
-            child.log({
-              error: new Error(
-                "AI SDK batch failed before returning this request",
-              ),
-            });
-            child.end({ endTime });
-            trace.completed.add(id);
-          }
-        }
-        if (trace.completed.size !== trace.children.size) return;
-        if (trace.context.status === "pending")
-          trace.context.status = "completed";
-        batchSpan(trace).end({ endTime });
-        traces.delete(key);
-      },
-      onCancel(error) {
-        if (error !== undefined)
-          batchSpan(trace).log({
-            error: error instanceof Error ? error : new Error(String(error)),
-          });
-      },
-    });
-  });
-  return result;
-}
-
-export async function exportAISDKBatchContext(
-  batch: AISDKBatchReference,
-): Promise<string | undefined> {
-  return runInstrumentation(() => {
-    const context = traces.get(
-      JSON.stringify([batch.provider, batch.id]),
-    )?.context;
-    return context ? JSON.stringify(context) : undefined;
-  });
-}
-
-export async function resumeAISDKBatchContext(
-  serialized: string,
+export async function captureAISDKBatchCompletion(
+  args: CompleteAISDKBatchTraceArgs,
+  denyOutputPaths: string[],
 ): Promise<void> {
-  try {
-    const value: unknown = JSON.parse(serialized);
+  await runInstrumentation(async () => {
+    // A live AI SDK results stream performs provider requests when iterated.
+    // Accept only records the caller has already collected, never lazy sources.
     if (
-      !isObject(value) ||
-      value.version !== 1 ||
-      !isObject(value.batch) ||
-      value.batch.version !== 2 ||
-      typeof value.batch.id !== "string" ||
-      typeof value.batch.provider !== "string" ||
-      typeof value.parent !== "string" ||
-      typeof value.startTime !== "number" ||
-      !Number.isFinite(value.startTime) ||
-      (value.terminalTime !== undefined &&
-        (typeof value.terminalTime !== "number" ||
-          !Number.isFinite(value.terminalTime))) ||
-      !["pending", "completed", "failed"].includes(String(value.status)) ||
-      !Array.isArray(value.requests) ||
-      value.requests.length === 0 ||
-      !value.requests.every(
-        (request) =>
-          isObject(request) &&
-          typeof request.id === "string" &&
-          typeof request.model === "string",
-      ) ||
-      !Array.isArray(value.denyOutputPaths) ||
-      !value.denyOutputPaths.every((path) => typeof path === "string")
-    )
-      throw new Error("Invalid AI SDK batch trace context");
-    const requests = value.requests.map(
-      (request: { id: string; model: string }) => ({
-        id: request.id,
-        model: request.model,
-      }),
+      !Array.isArray(args.results) ||
+      !["pending", "completed", "failed"].includes(args.status.status)
+    ) {
+      debugLogger.debug(
+        "AI SDK batch capture requires collected records and a valid status",
+      );
+      return;
+    }
+    const context = await batchContext(
+      {
+        batch: { ...args.batch, createdAt: args.status.createdAt },
+        requests: args.requests,
+      },
+      args.context,
     );
-    if (new Set(requests.map(({ id }) => id)).size !== requests.length)
-      throw new Error("Duplicate batch request IDs");
-    SpanComponentsV4.fromStr(value.parent);
-    await createTrace({
-      version: 1,
-      batch: { version: 2, id: value.batch.id, provider: value.batch.provider },
-      parent: value.parent,
-      startTime: value.startTime,
-      terminalTime: value.terminalTime as number | undefined,
-      status: value.status as AISDKBatchStatus["status"],
-      requests,
-      denyOutputPaths: value.denyOutputPaths,
+    if (!context) return;
+    const trace = await createTrace(context, args.requests, args.status.status);
+    if (args.context === undefined) {
+      for (const request of args.requests) {
+        const data = await aiSDKBatchInput(request);
+        requestSpan(trace, request.id, trace.children.get(request.id)!).log(
+          data,
+        );
+      }
+    }
+    const task = batchSpan(trace);
+    task.log({
+      metadata: {
+        raw_status: args.status.rawStatus,
+        ...(args.status.requestCounts
+          ? {
+              request_counts: {
+                total: args.status.requestCounts.total,
+                pending: args.status.requestCounts.pending,
+                completed: args.status.requestCounts.completed,
+                failed: args.status.requestCounts.failed,
+              },
+            }
+          : {}),
+      },
     });
-  } catch {
-    // Do not print untrusted serialized data, which may contain secrets.
-    debugLogger.debug("Could not resume AI SDK batch trace context");
-  }
+    const endTime = Math.max(
+      context.startTime,
+      args.endTime !== undefined && Number.isFinite(args.endTime)
+        ? args.endTime
+        : getCurrentUnixTimestamp(),
+    );
+    const seen = new Set<string>();
+    let invalid = false;
+    for (const item of args.results) {
+      const identity = trace.children.get(item.id);
+      if (
+        !identity ||
+        item.type !== "text" ||
+        seen.has(item.id) ||
+        !["succeeded", "failed", "cancelled", "expired"].includes(item.status)
+      ) {
+        invalid = true;
+        debugLogger.debug(
+          "AI SDK batch result has an invalid, unknown or duplicate request ID/status",
+        );
+        continue;
+      }
+      seen.add(item.id);
+      const child = requestSpan(trace, item.id, identity);
+      if (item.status === "succeeded") {
+        child.log({
+          output: aiSDKBatchOutput(
+            item,
+            args.denyOutputPaths ?? denyOutputPaths,
+          ),
+          metrics: extractTokenMetrics({
+            usage: item.usage,
+            providerMetadata: item.providerMetadata,
+          }),
+          metadata: {
+            status: item.status,
+            ...(typeof item.response?.modelId === "string"
+              ? { model: item.response.modelId }
+              : {}),
+          },
+        });
+      } else {
+        child.log({
+          error: new Error(
+            item.error?.message ?? `AI SDK batch request ${item.status}`,
+          ),
+          metadata: { status: item.status },
+        });
+      }
+      if (args.status.status !== "pending") child.end({ endTime });
+    }
+    if (invalid || args.status.status === "pending") return;
+    if (args.status.status === "failed") {
+      const error = new Error(
+        args.status.error?.message ??
+          `AI SDK batch ${args.status.rawStatus ?? "failed"}`,
+      );
+      task.log({ error });
+      for (const [id, identity] of trace.children) {
+        if (seen.has(id)) continue;
+        const child = requestSpan(trace, id, identity);
+        child.log({ error });
+        child.end({ endTime });
+      }
+    } else if (seen.size !== trace.children.size) {
+      debugLogger.debug(
+        "AI SDK batch results are incomplete; leaving the trace pending",
+      );
+      return;
+    }
+    task.end({ endTime });
+  })?.catch(() => {});
 }

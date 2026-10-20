@@ -2,14 +2,15 @@ import assert from "node:assert/strict";
 import { readFile, writeFile } from "node:fs/promises";
 import { setTimeout } from "node:timers/promises";
 import {
-  exportAISDKBatchTrace,
+  startAISDKBatchTrace,
   initLogger,
-  resumeAISDKBatchTrace,
+  completeAISDKBatchTrace,
   wrapAISDK,
 } from "braintrust";
 
 const ai = await import(process.env.AI_SDK_PACKAGE_NAME);
-const sdk = process.env.AI_SDK_BATCH_MODE === "wrapped" ? wrapAISDK(ai) : ai;
+const sdk =
+  process.env.AI_SDK_BATCH_MODE === "manual-with-auto" ? wrapAISDK(ai) : ai;
 const provider = ai.createGateway({
   apiKey:
     process.env.AI_GATEWAY_API_KEY ??
@@ -27,18 +28,21 @@ const phase = process.env.AI_SDK_BATCH_PHASE;
 if (phase === "submit") {
   await logger.traced(
     async () => {
-      const batch = await sdk.experimental_startBatch({
-        provider,
-        requests: ["one", "two"].map((id) => ({
-          id,
-          type: "text",
-          model: "google/gemini-2.5-flash",
-          prompt: `Reply with only the word ${id}.`,
-          maxOutputTokens: 16,
-          temperature: 0,
-        })),
+      const requests = ["one", "two"].map((id) => ({
+        id,
+        type: "text",
+        model: "google/gemini-2.5-flash",
+        prompt: `Reply with only the word ${id}.`,
+        maxOutputTokens: 16,
+        temperature: 0,
+      }));
+      const startTime = Date.now() / 1000;
+      const batch = await sdk.experimental_startBatch({ provider, requests });
+      const context = await startAISDKBatchTrace({
+        batch,
+        requests,
+        startTime,
       });
-      const context = await exportAISDKBatchTrace(batch);
       assert.equal(typeof context, "string");
       // Persist the provider reference, not its secret-bearing start response.
       await writeFile(
@@ -50,6 +54,7 @@ if (phase === "submit") {
             provider: batch.provider,
           },
           context,
+          requests,
           producerPid: process.pid,
         }),
         { mode: 0o600 },
@@ -68,11 +73,10 @@ if (phase === "submit") {
     },
   );
 } else {
-  const { batch, context, producerPid } = JSON.parse(
+  const { batch, context, requests, producerPid } = JSON.parse(
     await readFile(handoffPath, "utf8"),
   );
   assert.notEqual(producerPid, process.pid);
-  await resumeAISDKBatchTrace(context);
   let status;
   const deadline = Date.now() + 20 * 60 * 1000;
   do {
@@ -94,14 +98,11 @@ if (phase === "submit") {
     assert.equal(item.status, "succeeded");
     assert.equal(item.type, "text");
     assert.ok(item.text.length > 0);
-    results.push(item.id);
+    results.push(item);
   }
-  assert.deepEqual(results.sort(), ["one", "two"]);
-  for await (const _item of sdk.experimental_getBatchResults({
-    provider,
-    batch,
-  })) {
-    /* consume */
-  }
+  assert.deepEqual(results.map((item) => item.id).sort(), ["one", "two"]);
+  await completeAISDKBatchTrace({ batch, requests, context, status, results });
+  // Repeating manual capture updates the same rows without provider requests.
+  await completeAISDKBatchTrace({ batch, requests, context, status, results });
 }
 await logger.flush();
