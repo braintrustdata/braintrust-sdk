@@ -1,7 +1,9 @@
 import { beforeEach, afterEach, expect, test, vi } from "vitest";
-import * as extension from "../../../audio/index";
+import * as extension from "../../audio/index";
+import iso from "../../isomorph";
 import { resolveAudioOptions } from "./audio-options";
 beforeEach(() => {
+  vi.spyOn(iso, "getEnv").mockImplementation((name) => process.env[name]);
   for (const key of [
     "BRAINTRUST_CAPTURE_ATTACHMENTS",
     "BRAINTRUST_CAPTURE_USER_AUDIO_ATTACHMENTS",

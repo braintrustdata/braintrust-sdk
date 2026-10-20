@@ -1,91 +1,93 @@
 import { expect, test, vi } from "vitest";
 import { createAudioRecording } from "./index";
 
-test.each(["wav"] as const)(
-  "public recording API exports %s only after upload succeeds",
-  async (audioFormat) => {
-    const log = vi.fn();
-    const flush = vi.fn(async () => {});
-    let complete!: () => void;
-    let started!: () => void;
-    const uploading = new Promise<void>((resolve) => {
-      started = resolve;
-    });
-    const uploaded = new Promise<void>((resolve) => {
-      complete = resolve;
-    });
-    const createAttachment = vi.fn(
-      (options: {
-        data: Uint8Array;
-        filename: string;
-        contentType: string;
-      }) => ({
-        reference: {
-          key: "uploaded",
-          filename: options.filename,
-          content_type: options.contentType,
-        },
-        upload: async () => {
-          started();
-          await uploaded;
-          return { upload_status: "done" };
-        },
-      }),
-    );
-    const recording = createAudioRecording({
-      // Explicit undefined must behave like an omitted optional setting.
-      options: {
-        segmentDurationSeconds: undefined,
-        maxDurationSeconds: undefined,
-        maxBufferBytes: undefined,
-        flushFraction: undefined,
+test("public recording API exports PCM only after upload succeeds", async () => {
+  const log = vi.fn();
+  const flush = vi.fn(async () => {});
+  let complete!: () => void;
+  let started!: () => void;
+  const uploading = new Promise<void>((resolve) => {
+    started = resolve;
+  });
+  const uploaded = new Promise<void>((resolve) => {
+    complete = resolve;
+  });
+  const createAttachment = vi.fn(
+    (options: { data: Uint8Array; filename: string; contentType: string }) => ({
+      reference: {
+        key: "uploaded",
+        filename: options.filename,
+        content_type: options.contentType,
       },
-      span: { spanId: "call", log },
-      flush,
-      createAttachment,
-      snapshot: () => ({
-        origin: 1234,
-        basis: "test",
+      upload: async () => {
+        started();
+        await uploaded;
+        return { upload_status: "done" };
+      },
+    }),
+  );
+  const recording = createAudioRecording({
+    // Explicit undefined must behave like an omitted optional setting.
+    options: {
+      segmentDurationSeconds: undefined,
+      maxDurationSeconds: undefined,
+      maxBufferBytes: undefined,
+      flushFraction: undefined,
+    },
+    span: { spanId: "call", log },
+    flush,
+    createAttachment,
+    snapshot: () => ({
+      origin: 1234,
+      basis: "test",
 
-        source: (channel_index) => ({ channel_index }),
-      }),
+      source: (channel_index) => ({ channel_index }),
+    }),
+  });
+  recording.record({
+    pcm: new Int16Array(480).fill(1000),
+    at: 0,
+    rate: 24000,
+    channels: 1,
+    channel: 0,
+  });
+  const finishing = recording.finish();
+  try {
+    await uploading;
+    recording.publishRecordings();
+    expect(
+      log.mock.calls
+        .flatMap(([row]) => row.metadata?.["audio.recordings"] ?? [])
+        .every((r) => r.state === "pending"),
+    ).toBe(true);
+    expect(log.mock.calls.some(([row]) => row.input?.audio)).toBe(false);
+    const file = createAttachment.mock.calls[0][0];
+    expect(file).toMatchObject({
+      filename: "call-0000.pcm",
+      contentType: "audio/pcm",
     });
-    recording.record({
-      pcm: new Int16Array(480).fill(1000),
-      at: 0,
-      rate: 24000,
-      channels: 1,
-      channel: 0,
+    // 20ms of headerless stereo frames, with the source on the left channel.
+    expect(file.data.byteLength).toBe(480 * 4);
+    expect(Buffer.from(file.data).readInt16LE(0)).toBe(1000);
+    expect(Buffer.from(file.data).readInt16LE(2)).toBe(0);
+    complete();
+    await finishing;
+    expect(
+      log.mock.calls
+        .flatMap(([row]) => row.metadata?.["audio.recordings"] ?? [])
+        .at(-1),
+    ).toMatchObject({
+      state: "ready",
+      mime_type: "audio/pcm",
+      sample_rate_hz: 24000,
+      channel_count: 2,
     });
-    const finishing = recording.finish();
-    try {
-      await uploading;
-      recording.publishRecordings();
-      expect(
-        log.mock.calls
-          .flatMap(([row]) => row.metadata?.["audio.recordings"] ?? [])
-          .every((r) => r.state === "pending"),
-      ).toBe(true);
-      expect(log.mock.calls.some(([row]) => row.input?.audio)).toBe(false);
-      const file = createAttachment.mock.calls[0][0];
-      expect(Buffer.from(file.data.subarray(0, 4)).toString()).toBe(
-        audioFormat === "wav" ? "RIFF" : "OggS",
-      );
-      expect(file.contentType).toBe(`audio/${audioFormat}`);
-      complete();
-      await finishing;
-      expect(
-        log.mock.calls
-          .flatMap(([row]) => row.metadata?.["audio.recordings"] ?? [])
-          .at(-1),
-      ).toMatchObject({ state: "ready", mime_type: `audio/${audioFormat}` });
-      expect(flush).toHaveBeenCalled();
-    } finally {
-      complete();
-      await finishing;
-    }
-  },
-);
+    expect(flush).toHaveBeenCalled();
+  } finally {
+    complete();
+    await finishing;
+  }
+});
 
 test("staged audio is copied, can be discarded, and is bounded independently per recording", async () => {
   const source = new Int16Array(12 * 1024 * 1024);

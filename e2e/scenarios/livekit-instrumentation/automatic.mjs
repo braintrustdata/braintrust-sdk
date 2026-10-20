@@ -22,7 +22,7 @@ if (mode !== "defaults")
               ...(mode === "env"
                 ? {}
                 : {
-                    captureAudio: mode === "wav",
+                    captureAudio: mode === "audio",
                   }),
             },
     },
@@ -109,7 +109,7 @@ try {
     agent: new voice.Agent({ instructions: "Fictional order assistant" }),
     record: false,
   });
-  if (!["wav", "env"].includes(mode))
+  if (!["audio", "env"].includes(mode))
     assert.equal(
       output.captureFrame,
       original,

@@ -1,46 +1,74 @@
 import { expect, test } from "vitest";
-import { encodeCall, pcmChunks } from "./pcm";
+import { encodePcm } from "./pcm";
+import type { Packet } from "./segment";
 
-test("bounded rendering preserves resampling phase across chunks and pads the final timeline", () => {
+function frames(bytes: Uint8Array) {
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  return Array.from({ length: bytes.byteLength / 4 }, (_, i) => [
+    view.getInt16(i * 4, true),
+    view.getInt16(i * 4 + 2, true),
+  ]);
+}
+
+test("renders headerless 24kHz stereo PCM for the requested duration", () => {
+  const result = encodePcm(
+    [
+      {
+        pcm: new Int16Array(240).fill(1),
+        rate: 24000,
+        channels: 1,
+        channel: 0,
+        at: 0,
+      },
+    ],
+    20,
+  );
+  expect(result).toMatchObject({
+    mimeType: "audio/pcm",
+    sampleRate: 24000,
+    durationMs: 20,
+  });
+  expect(result.bytes.byteLength).toBe(480 * 4);
+  expect(frames(result.bytes).slice(238, 242)).toEqual([
+    [1, 0],
+    [1, 0],
+    [0, 0],
+    [0, 0],
+  ]);
+});
+
+test("resampling interpolates linearly from each packet's offset and pads the timeline", () => {
   const source = Int16Array.from(
     { length: 12000 },
     (_, i) => (i % 97) * 100 - 4000,
   );
-  for (const rate of [24000, 48000]) {
-    const frames = Array.from(
-      pcmChunks(
-        [{ pcm: source, rate: 44100, channels: 1, channel: 1, at: 7.3 }],
-        400,
-        rate,
-      ),
-      (block) => block.slice(),
-    );
-    expect(Math.max(...frames.map((f) => f.length))).toBeLessThanOrEqual(
-      (rate / 10) * 2,
-    );
-    const actual = Int16Array.from(frames.flatMap((f) => [...f]));
-    expect(actual.length).toBe(rate * 0.4 * 2);
-    const start = Math.round((7.3 * rate) / 1000),
-      length = Math.round((source.length / 44100) * rate);
-    for (let i = 0; i < actual.length / 2; i++) {
-      const position = ((i - start) * 44100) / rate,
-        lo = Math.floor(position),
-        alpha = position - lo;
-      const expected =
-        i < start || i >= start + length
-          ? 0
-          : Math.round(
-              source[Math.min(lo, source.length - 1)] * (1 - alpha) +
-                source[Math.min(lo + 1, source.length - 1)] * alpha,
-            );
-      expect(actual[i * 2]).toBe(0);
-      expect(actual[i * 2 + 1]).toBe(expected);
-    }
+  const actual = frames(
+    encodePcm(
+      [{ pcm: source, rate: 44100, channels: 1, channel: 1, at: 7.3 }],
+      400,
+    ).bytes,
+  );
+  expect(actual).toHaveLength(9600);
+  const start = Math.round((7.3 * 24000) / 1000),
+    length = Math.round((source.length / 44100) * 24000);
+  for (const [i, [left, right]] of actual.entries()) {
+    const position = ((i - start) * 44100) / 24000,
+      lo = Math.floor(position),
+      alpha = position - lo;
+    const expected =
+      i < start || i >= start + length
+        ? 0
+        : Math.round(
+            source[Math.min(lo, source.length - 1)] * (1 - alpha) +
+              source[Math.min(lo + 1, source.length - 1)] * alpha,
+          );
+    expect(left).toBe(0);
+    expect(right).toBe(expected);
   }
 });
 
-test("rendering preserves packet overwrite order, channel separation, silence and WAV samples", () => {
-  const packets = [
+test("rendering preserves packet overwrite order, channel separation and silence", () => {
+  const packets: Packet[] = [
     {
       pcm: new Int16Array(4800).fill(123),
       rate: 24000,
@@ -63,22 +91,16 @@ test("rendering preserves packet overwrite order, channel separation, silence an
       at: 0,
     },
   ];
-  const pcm = Int16Array.from(
-    Array.from(pcmChunks(packets, 300), (block) => [...block]).flat(),
-  );
-  const wav = encodeCall(packets, 300),
-    view = new DataView(wav.bytes.buffer);
-  for (let i = 0; i < pcm.length / 2; i++) {
-    expect(pcm[i * 2]).toBe(i < 4800 ? 789 : i < 6000 ? 123 : 0);
-    expect(pcm[i * 2 + 1]).toBe(i < 4800 ? 456 : 0);
-    expect(view.getInt16(44 + i * 4, true)).toBe(pcm[i * 2]);
-    expect(view.getInt16(46 + i * 4, true)).toBe(pcm[i * 2 + 1]);
+  for (const [i, [left, right]] of frames(
+    encodePcm(packets, 300).bytes,
+  ).entries()) {
+    expect(left).toBe(i < 4800 ? 789 : i < 6000 ? 123 : 0);
+    expect(right).toBe(i < 4800 ? 456 : 0);
   }
 });
 
-// Exercise both upsampling and downsampling through the rendered WAV output.
-test("mixed source rates retain channel values and duration", () => {
-  const result = encodeCall([
+test("mixed source rates retain channel values and infer duration", () => {
+  const result = encodePcm([
     {
       pcm: new Int16Array(160).fill(1000),
       rate: 8000,
@@ -95,13 +117,43 @@ test("mixed source rates retain channel values and duration", () => {
     },
   ]);
   expect(result.durationMs).toBe(20);
-  const view = new DataView(
-    result.bytes.buffer,
-    result.bytes.byteOffset,
-    result.bytes.byteLength,
+  expect(new Set(frames(result.bytes).map(String))).toEqual(
+    new Set(["1000,-1000"]),
   );
-  for (let offset = 44; offset < result.bytes.byteLength; offset += 4) {
-    expect(view.getInt16(offset, true)).toBe(1000);
-    expect(view.getInt16(offset + 2, true)).toBe(-1000);
-  }
 });
+
+test("stereo sources are averaged onto their channel", () => {
+  const result = encodePcm([
+    {
+      pcm: Int16Array.of(100, 300, 1000, -1000),
+      rate: 24000,
+      channels: 2,
+      channel: 1,
+      at: 0,
+    },
+  ]);
+  expect(frames(result.bytes)).toEqual([
+    [0, 200],
+    [0, 0],
+  ]);
+});
+
+test.each([
+  [[], undefined, "invalid_duration"],
+  [[], 1800001, "invalid_duration"],
+  [
+    [{ pcm: new Int16Array(1), rate: 24000, channels: 1, channel: 2, at: 0 }],
+    20,
+    "invalid_packet",
+  ],
+  [
+    [{ pcm: new Int16Array(1), rate: 4000, channels: 1, channel: 0, at: 0 }],
+    20,
+    "invalid_packet",
+  ],
+] as [Packet[], number | undefined, string][])(
+  "rejects unsupported input (%#)",
+  (packets, durationMs, reason) => {
+    expect(() => encodePcm(packets, durationMs)).toThrow(reason);
+  },
+);

@@ -1,6 +1,6 @@
 import type { AudioRecordingModule, RecordingOptions } from "./audio";
 import type { LiveKitOptions } from "./options";
-import { resolveAudioOptions } from "./node/audio-options";
+import { resolveAudioOptions } from "./audio-options";
 /* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/consistent-type-assertions */
 import type {
   AgentSession,
@@ -75,7 +75,7 @@ export class LiveKitSpanProcessor {
   constructor(
     private options: LiveKitOptions & {
       logger: Logger<any>;
-      recording?: RecordingOptions & { encoder?: { module: string } };
+      recording?: RecordingOptions;
     },
   ) {
     this.captureContent = options.captureContent ?? false;
@@ -483,7 +483,6 @@ export class LiveKitSpanProcessor {
     if (!row) return;
     const voice = this.audio.createVoiceRecording({
       options: this.options.recording,
-      encoder: this.options.recording?.encoder,
       span: row.span,
       flush: () => this.options.logger.flush(),
       createAttachment: (options) => new Attachment(options),

@@ -4,10 +4,8 @@ import { EventEmitter } from "node:events";
 import { configureNode } from "../../node/config";
 configureNode();
 import { LiveKitSpanProcessor } from "./processor";
-import * as audioOptions from "./node/audio-options";
+import * as audioOptions from "./audio-options";
 import * as audioExtension from "../../audio/index";
-import * as audioWorker from "../../audio/worker";
-import { encodeCall } from "../../audio/pcm";
 import { Attachment } from "../../logger";
 import { channel, defineInterceptor } from "../core/interceptor-definitions";
 import { traceAsyncCall } from "../core/tracing";
@@ -279,14 +277,6 @@ test("tool-only responses retain tool requests on the model without inventing sp
 
 test("upload failure corrects recording descriptors and selections even when logger flush resolves", async () => {
   // Exporter-level tests cover rejection/status propagation; this checks wiring.
-  // Exercise real encoding/export without requiring a built worker in core tests.
-  const encoder = vi
-    .spyOn(audioWorker, "createEncoder")
-    .mockReturnValue(async (packets, durationMs) => ({
-      ...encodeCall(packets, durationMs),
-      mimeType: "audio/wav",
-      sampleRate: 24000,
-    }));
   const resolve = audioOptions.resolveAudioOptions;
   const load = vi
     .spyOn(audioOptions, "resolveAudioOptions")
@@ -345,7 +335,6 @@ test("upload failure corrects recording descriptors and selections even when log
   } finally {
     upload.mockRestore();
     load.mockRestore();
-    encoder.mockRestore();
   }
 });
 

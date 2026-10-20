@@ -1,29 +1,16 @@
 /* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/consistent-type-assertions */
 import { EventEmitter } from "node:events";
-import { afterEach, beforeEach, expect, test, vi } from "vitest";
+import { afterEach, expect, test, vi } from "vitest";
 import {
   createAudioRecording,
   timeline,
   type RecordingOptions,
 } from "../../audio/index";
-import * as audioWorker from "../../audio/worker";
-import { encodeCall } from "../../audio/pcm";
 import { mergeSelections } from "../../audio/selections";
 import { instrumentInput, instrumentOutput, release } from "./capture";
 import type { Capture } from "./runtime";
 type AudioFile = { bytes: Uint8Array; durationMs: number };
 const captures: Capture[] = [];
-beforeEach(() => {
-  // Core-only test jobs do not build the optional audio worker. Keep real WAV
-  // encoding here; worker execution is covered by audio tests and LiveKit E2E.
-  vi.spyOn(audioWorker, "createEncoder").mockReturnValue(
-    async (packets, durationMs) => ({
-      ...encodeCall(packets, durationMs),
-      mimeType: "audio/wav",
-      sampleRate: 24000,
-    }),
-  );
-});
 function capture(
   options: RecordingOptions = {},
 ): Capture & { files: AudioFile[] } {
@@ -54,7 +41,7 @@ function capture(
       createAttachment: ({ data }) => ({
         reference: {},
         upload: async () => {
-          files.push({ bytes: data, durationMs: (data.length - 44) / 96 });
+          files.push({ bytes: data, durationMs: data.length / 96 });
           return { upload_status: "done" };
         },
       }),
@@ -158,12 +145,12 @@ test("interruption includes only sink progress ranges, excluding queued tail and
     c.events.get("turn")![0].attributes.synchronizedTranscript,
   ).toBeUndefined();
   await c.recording.finish();
-  const wav = c.files[0];
-  expect(wav.durationMs).toBe(80);
-  const view = new DataView(wav.bytes.buffer);
-  expect(view.getUint16(22, true)).toBe(2);
-  expect(view.getInt16(44 + 240 * 4 + 2, true)).toBe(1234);
-  expect(view.getInt16(44 + 960 * 4 + 2, true)).toBe(0);
+  const file = c.files[0];
+  expect(file.durationMs).toBe(80);
+  expect(file.bytes.length).toBe(1920 * 4);
+  const view = new DataView(file.bytes.buffer);
+  expect(view.getInt16(240 * 4 + 2, true)).toBe(1234);
+  expect(view.getInt16(960 * 4 + 2, true)).toBe(0);
 });
 test("synchronous completion during an in-flight capture is settled after acceptance", async () => {
   const c = capture(),
@@ -234,9 +221,9 @@ test("buffered input frames retain all samples instead of overwriting equal arri
   await reader.read();
   reader.releaseLock();
   await c.recording.finish();
-  const wav = c.files[0],
-    view = new DataView(wav.bytes.buffer);
-  const last = wav.bytes.length - 4;
+  const file = c.files[0],
+    view = new DataView(file.bytes.buffer);
+  const last = file.bytes.length - 4;
   expect(view.getInt16(last, true)).toBe(2000);
   expect(view.getInt16(last - 480 * 4, true)).toBe(1000);
 });
@@ -300,10 +287,10 @@ test("continuous input uses sample time despite late delivery and preserves actu
     }
     reader.releaseLock();
     await c.recording.finish();
-    const wav = new DataView(c.files[0].bytes.buffer);
-    expect((c.files[0].bytes.length - 44) / 4).toBe(1440);
+    const view = new DataView(c.files[0].bytes.buffer);
+    expect(c.files[0].bytes.length / 4).toBe(1440);
     for (let i = 0; i < 1440; i++)
-      expect(wav.getInt16(44 + i * 4, true)).toBe(
+      expect(view.getInt16(i * 4, true)).toBe(
         i < 480 ? 1234 : i < 960 ? 0 : 2345,
       );
   } finally {

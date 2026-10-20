@@ -228,16 +228,7 @@ describe("CLI import restrictions", () => {
         if (
           /\bimport\s*\(/.test(line) &&
           !/^import\s+/.test(line.trim()) &&
-          !relativePath.includes(
-            "instrumentation/plugins/anthropic-plugin.ts",
-          ) &&
-          // The audio worker loads an optional codec selected at runtime. A static
-          // import would make that codec a required SDK dependency. Keep this
-          // exception limited to the worker's codec import, on all platforms.
-          !(
-            relativePath.replaceAll(path.sep, "/") ===
-              "audio/audio-worker.ts" && /\bimport\(encoderModule\)/.test(line)
-          )
+          !relativePath.includes("instrumentation/plugins/anthropic-plugin.ts")
         ) {
           violations.push(
             `${relativePath}:${index + 1} - Found dynamic import() statement: "${line.trim()}"`,

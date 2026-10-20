@@ -1,4 +1,4 @@
-/** Owns PCM reservations across staging, recorder admission and worker transfer. */
+/** Owns PCM reservations across staging, recorder admission and export. */
 export class PcmBuffers {
   private leases = new Map<
     ArrayBufferLike,

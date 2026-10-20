@@ -1,6 +1,6 @@
 # Recording utilities for SDK integrations
 
-Internal Node utilities shared by voice integrations. Audio recording buffers timestamped PCM, rotates bounded segments, produces WAV files in a worker, and uploads attachments. Voice recording adds associations between speech spans and audio files.
+Internal utilities shared by voice integrations. Audio recording buffers timestamped PCM, rotates bounded segments, renders each segment as raw PCM, and uploads attachments. Voice recording adds associations between speech spans and audio files.
 
 ```ts
 import { Attachment } from "../logger";
@@ -41,3 +41,5 @@ await voice.finish();
 | `options.flushFraction`          | `0.5`      |
 
 Segment duration is a rotation target, not the total recording limit. Recording starts only when the integration explicitly enables capture.
+
+Each segment is uploaded as an `audio/pcm` attachment: headerless, interleaved stereo, signed 16-bit little-endian samples at 24kHz. Channel 0 is left and channel 1 is right; sources at other rates are resampled. The segment's `audio.recordings` descriptor carries `sample_rate_hz` and `channel_count`.

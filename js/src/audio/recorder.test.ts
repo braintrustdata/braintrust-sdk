@@ -3,15 +3,7 @@ import { expect, test } from "vitest";
 import { Recorder, type RecordingOptions } from "./recorder";
 import { SegmentExporter, type Encoder } from "./exporter";
 import type { EncodedAudio } from "./segment";
-import { encodeCall } from "./pcm";
-const encode = async (
-  packets: Parameters<typeof encodeCall>[0],
-  durationMs: number,
-) => ({
-  ...encodeCall(packets, durationMs),
-  mimeType: "audio/wav",
-  sampleRate: 24000,
-});
+import { encodePcm as encode } from "./pcm";
 // Exercise the recorder with real segment execution and in-memory remote storage.
 function recording(
   options: RecordingOptions,
@@ -70,7 +62,7 @@ test("exports progressively with bounded source memory across a ten minute timel
   for (const [i, f] of files.entries()) {
     expect(f.start).toBe(i * 30000);
     const view = new DataView(f.bytes.buffer);
-    expect(view.getInt16(44, true)).toBe(1000);
+    expect(view.getInt16(0, true)).toBe(1000);
     expect(view.getInt16(f.bytes.length - 2, true)).toBe(-2000);
   }
 });
@@ -92,7 +84,7 @@ test("splits a packet crossing the cut without losing its tail", async () => {
   r.advance(1000);
   await r.drain();
   await r.finish();
-  expect(files.map((f) => (f.length - 44) / 4)).toEqual([24000, 24000, 24000]);
+  expect(files.map((f) => f.length / 4)).toEqual([24000, 24000, 24000]);
   expect(r.retainedBytes).toBe(0);
 });
 test("rotated files reconstruct both source channels sample-for-sample including a partial final file", async () => {
@@ -132,7 +124,7 @@ test("rotated files reconstruct both source channels sample-for-sample including
     await recorder.drain();
   }
   await recorder.finish();
-  expect(files.map((file) => (file.length - 44) / 4)).toEqual([
+  expect(files.map((file) => file.length / 4)).toEqual([
     24000, 24000, 24000, 1777,
   ]);
   const expected = Buffer.alloc(length * 4);
@@ -140,9 +132,7 @@ test("rotated files reconstruct both source channels sample-for-sample including
     expected.writeInt16LE(input[i], i * 4);
     expected.writeInt16LE(output[i], i * 4 + 2);
   }
-  expect(
-    Buffer.concat(files.map((file) => file.subarray(44))).equals(expected),
-  ).toBe(true);
+  expect(Buffer.concat(files).equals(expected)).toBe(true);
 });
 
 test("hard duration limit preserves the prefix and reports truncation", async () => {

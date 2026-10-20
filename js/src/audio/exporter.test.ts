@@ -93,7 +93,7 @@ function fixture() {
             bytes: new Uint8Array(bytes),
             durationMs: 20,
             sampleRate: 24000,
-            mimeType: "audio/wav",
+            mimeType: "audio/pcm",
           };
         },
         (options) => new TestAttachment(options),
@@ -157,8 +157,8 @@ test.each([16, 17 * 1024 * 1024])(
       )![0].input.audio[segment.id];
       expect(reference).toMatchObject({
         key: expect.any(String),
-        filename: "call-0.wav",
-        content_type: "audio/wav",
+        filename: "call-0.pcm",
+        content_type: "audio/pcm",
       });
       expect(reference).not.toBeInstanceOf(TestAttachment);
       const rows = f.span.log.mock.calls.length;
@@ -261,7 +261,7 @@ test.each([false, true])(
           bytes: new Uint8Array(16),
           durationMs: 20,
           sampleRate: 24000,
-          mimeType: "audio/wav",
+          mimeType: "audio/pcm",
         };
       },
       () => ({ reference: "uploaded", upload }),

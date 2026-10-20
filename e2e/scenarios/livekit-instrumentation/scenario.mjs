@@ -1,7 +1,12 @@
 import assert from "node:assert/strict";
-import { initLogger, configureInstrumentation, setFetch } from "braintrust";
+import {
+  initLogger,
+  configureInstrumentation,
+  LiveKitSpanProcessor,
+  setFetch,
+  wrapLiveKitSession,
+} from "braintrust";
 import { getTestRunId, scopedName } from "../../helpers/provider-runtime.mjs";
-import { LiveKitSpanProcessor, wrapLiveKitSession } from "braintrust/livekit";
 import { NodeTracerProvider } from "@opentelemetry/sdk-trace-node";
 import { AudioFrame, dispose } from "@livekit/rtc-node";
 const automatic = process.env.LIVEKIT_AUTOMATIC === "1";

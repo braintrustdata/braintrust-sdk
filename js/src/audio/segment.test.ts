@@ -4,7 +4,7 @@ import { AudioSegment } from "./segment";
 const encoded = {
   durationMs: 20,
   sampleRate: 24000,
-  mimeType: "audio/wav",
+  mimeType: "audio/pcm",
 };
 function segment() {
   return new AudioSegment("call-0000", 40, 60, [

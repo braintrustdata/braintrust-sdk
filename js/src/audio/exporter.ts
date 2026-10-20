@@ -3,7 +3,7 @@ import { AudioSegment, type Packet, type EncodedAudio } from "./segment";
 export type Encoder = (
   packets: Packet[],
   durationMs: number,
-) => Promise<EncodedAudio>;
+) => EncodedAudio | Promise<EncodedAudio>;
 export type CreateAttachment = (options: {
   data: Uint8Array;
   filename: string;
@@ -36,7 +36,7 @@ export class SegmentExporter {
       });
       return;
     } finally {
-      // Release source memory only after the worker has finished with it.
+      // Encoded bytes are independent of the source; release it either way.
       for (const packet of packets) {
         release(packet.pcm);
       }
@@ -46,7 +46,7 @@ export class SegmentExporter {
     try {
       const attachment = this.createAttachment({
         data: data.bytes,
-        filename: `${segment.id}.${data.mimeType === "audio/ogg" ? "ogg" : "wav"}`,
+        filename: `${segment.id}.pcm`,
         contentType: data.mimeType,
       });
       const result = await attachment.upload();

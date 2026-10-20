@@ -420,7 +420,7 @@ for (const variant of ["livekit-v1", "livekit-v1-latest"]) {
 
 for (const variant of ["livekit-v1", "livekit-v1-latest"]) {
   test.sequential.each([0, 137])(
-    `${variant} progressive WAV order recording (%i ms start delay)`,
+    `${variant} progressive order recording (%i ms start delay)`,
     async (startDelayMs) => {
       await withScenarioHarness(async (harness) => {
         const result = await harness.runNodeScenarioDir({
@@ -477,7 +477,7 @@ for (const variant of ["livekit-v1", "livekit-v1-latest"]) {
           expect(recording).toMatchObject({
             id: `call-${String(index).padStart(4, "0")}`,
             state: "ready",
-            mime_type: "audio/wav",
+            mime_type: "audio/pcm",
             recording_group_id: "call",
             attachment: {
               span_id: root.span.id,
@@ -496,8 +496,8 @@ for (const variant of ["livekit-v1", "livekit-v1-latest"]) {
           }
           const attachment = attachments[recording.id];
           expect(attachment).toMatchObject({
-            filename: `${recording.id}.wav`,
-            content_type: "audio/wav",
+            filename: `${recording.id}.pcm`,
+            content_type: "audio/pcm",
           });
           expect(
             requests.some(
@@ -573,7 +573,7 @@ for (const variant of ["livekit-v1", "livekit-v1-latest"]) {
 for (const variant of ["livekit-v1", "livekit-v1-latest"]) {
   for (const mode of [
     "off",
-    "wav",
+    "audio",
     "unsampled",
     "redacted",
     "integration-off",
@@ -621,7 +621,7 @@ for (const variant of ["livekit-v1", "livekit-v1-latest"]) {
           const metadata = root.row.metadata as
             | Record<string, unknown>
             | undefined;
-          if (mode === "wav" || mode === "env") {
+          if (mode === "audio" || mode === "env") {
             // Verify wire ordering, not just the final merged trace.
             const requests = harness.requestsAfter(0);
             const uploaded = requests.findIndex(
@@ -648,7 +648,7 @@ for (const variant of ["livekit-v1", "livekit-v1-latest"]) {
             expect(metadata?.["audio.recordings"]).toMatchObject([
               {
                 state: "ready",
-                mime_type: mode === "wav" ? "audio/wav" : "audio/wav",
+                mime_type: "audio/pcm",
               },
             ]);
           } else expect(metadata?.["audio.recordings"]).toBeUndefined();
@@ -721,7 +721,7 @@ for (const variant of ["livekit-v1", "livekit-v1-latest"]) {
           findLatestSpan(events, "livekit.agent_session")?.row,
         ).toMatchObject({
           metadata: {
-            "audio.recordings": [{ state: "ready", mime_type: "audio/wav" }],
+            "audio.recordings": [{ state: "ready", mime_type: "audio/pcm" }],
           },
         });
         expect(

@@ -572,8 +572,8 @@
       "input": {
         "audio": {
           "call-0000": {
-            "content_type": "audio/wav",
-            "filename": "call-0000.wav",
+            "content_type": "audio/pcm",
+            "filename": "call-0000.pcm",
             "key": "<uuid:1>",
             "type": "braintrust_attachment"
           }
@@ -589,7 +589,7 @@
             "channel_count": 2,
             "duration_ms": 0,
             "id": "<span:1>",
-            "mime_type": "audio/wav",
+            "mime_type": "audio/pcm",
             "recording_group_id": "call",
             "sample_rate_hz": 24000,
             "sources": [

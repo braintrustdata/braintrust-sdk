@@ -1,13 +1,14 @@
-import type { AudioRecordingModule } from "../audio";
-import * as audio from "../../../audio";
-import type { LiveKitOptions } from "../options";
+import type { AudioRecordingModule } from "./audio";
+import * as audio from "../../audio";
+import iso from "../../isomorph";
+import type { LiveKitOptions } from "./options";
 
 export function resolveAudioOptions(
   options: LiveKitOptions,
   loadRecording: () => AudioRecordingModule = () => audio,
 ) {
   const flag = (name: string) => {
-    const value = process.env[name];
+    const value = iso.getEnv(name);
     return (
       value !== undefined && ["1", "true"].includes(value.trim().toLowerCase())
     );

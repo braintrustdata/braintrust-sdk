@@ -60,7 +60,7 @@ export class Recorder {
       return;
     }
   }
-  /** Discard staged audio; admitted audio belongs to the recorder/worker. */
+  /** Discard staged audio; admitted audio belongs to the recorder until export. */
   release(pcm: Int16Array) {
     this.buffers.discard(pcm);
   }
@@ -247,7 +247,7 @@ export class Recorder {
     this.closed = true;
     this.pump();
     await this.drain();
-    // Unsubmitted copies (e.g. cancelled output) have no worker owner now.
+    // Unsubmitted copies (e.g. cancelled output) have no export owner now.
     this.buffers.close();
     this.packets = [];
   }

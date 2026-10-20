@@ -5,12 +5,11 @@ import {
   type RecordingContext,
 } from "./publisher";
 import { SegmentExporter, type CreateAttachment } from "./exporter";
-import { createEncoder } from "./worker";
+import { encodePcm } from "./pcm";
 import type { Packet, Segment } from "./segment";
 
 export interface AudioRecordingConfig {
   options?: RecordingOptions;
-  encoder?: { module: string };
   span: RecordingSpan;
   flush: () => Promise<void>;
   snapshot: () => Omit<RecordingContext, "closed">;
@@ -28,10 +27,7 @@ class Recording {
   constructor(config: AudioRecordingConfig) {
     this.recorder = new Recorder(
       config.options ?? {},
-      new SegmentExporter(
-        createEncoder(config.encoder),
-        config.createAttachment,
-      ),
+      new SegmentExporter(encodePcm, config.createAttachment),
       (segment) => this.publisher.publish(segment),
       () => this.publisher.publishRecordings(),
     );
