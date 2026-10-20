@@ -215,7 +215,7 @@ describe("OpenRouter Plugin", () => {
       ]);
 
       expect(
-        (result.output[0].message.tool_calls as any[]).map((toolCall) => [
+        (result.output[0].message?.tool_calls as any[]).map((toolCall) => [
           toolCall.id,
           toolCall.function.name,
           toolCall.function.arguments,
@@ -225,6 +225,45 @@ describe("OpenRouter Plugin", () => {
         ["call_2", "weather", '{"tz":"CET"}'],
       ]);
     });
+
+    it.each([undefined, null])(
+      "merges interleaved tool calls by ID when index is %s",
+      (index) => {
+        const chunks = [
+          {
+            id: "call_1",
+            type: "function",
+            function: { name: "get_weather", arguments: '{"city":' },
+          },
+          {
+            id: "call_2",
+            type: "function",
+            function: { name: "get_time", arguments: '{"tz":' },
+          },
+          { id: "call_1", function: { arguments: '"Paris"}' } },
+          { id: "call_2", function: { arguments: '"CET"}' } },
+        ].map((toolCall) => ({
+          choices: [
+            { index: 0, delta: { tool_calls: [{ ...toolCall, index }] } },
+          ],
+        }));
+        // @ts-expect-error Providers may emit null indexes despite the SDK type.
+        const result = aggregateOpenRouterChatChunks(chunks);
+
+        expect(result.output[0].message?.tool_calls).toMatchObject([
+          {
+            id: "call_1",
+            type: "function",
+            function: { name: "get_weather", arguments: '{"city":"Paris"}' },
+          },
+          {
+            id: "call_2",
+            type: "function",
+            function: { name: "get_time", arguments: '{"tz":"CET"}' },
+          },
+        ]);
+      },
+    );
 
     it("should return an empty assistant message for empty chunks", () => {
       expect(aggregateOpenRouterChatChunks([])).toEqual({

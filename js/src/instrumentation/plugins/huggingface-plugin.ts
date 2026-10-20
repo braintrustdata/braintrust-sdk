@@ -572,12 +572,19 @@ function mergeChatToolCallDeltas(
   }
 }
 
-// Some providers omit `index`: a new id starts the next call, a delta without
-// an id continues the latest one.
+// Some providers omit `index`: match existing ids before starting a new call.
+// A delta without an id continues the latest one.
 function resolveMissingToolCallIndex(
   toolCallsByIndex: Map<number, Record<string, unknown>>,
   toolDelta: Record<string, unknown>,
 ): number {
+  if (typeof toolDelta.id === "string") {
+    for (const [index, toolCall] of toolCallsByIndex) {
+      if (toolCall.id === toolDelta.id) {
+        return index;
+      }
+    }
+  }
   if (toolCallsByIndex.size === 0) {
     return 0;
   }

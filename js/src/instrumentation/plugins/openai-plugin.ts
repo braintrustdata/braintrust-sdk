@@ -641,14 +641,21 @@ function toChatChoice(choice: AggregatedChatChoice): OpenAIChatChoice {
 }
 
 // Some OpenAI-compatible providers omit `index` on streamed tool call deltas.
-// A delta with a new id starts the next call; a delta without an id continues
-// the latest one.
+// Match existing ids before starting a new call; a delta without an id
+// continues the latest one.
 function resolveToolCallIndex(
   toolCallsByIndex: AggregatedChatChoice["toolCallsByIndex"],
   toolDelta: { index?: number | null; id?: string },
 ): number {
   if (typeof toolDelta.index === "number") {
     return toolDelta.index;
+  }
+  if (toolDelta.id) {
+    for (const [index, toolCall] of toolCallsByIndex) {
+      if (toolCall.id === toolDelta.id) {
+        return index;
+      }
+    }
   }
   if (toolCallsByIndex.size === 0) {
     return 0;
