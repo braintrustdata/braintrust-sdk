@@ -944,7 +944,19 @@ export function aggregateOpenRouterChatChunks(
         continue;
       }
 
-      const toolIndex = toolDelta.index ?? 0;
+      // Some providers omit `index`: a new id starts the next call, a delta
+      // without an id continues the latest one.
+      const lastToolIndex = (toolCalls?.length ?? 0) - 1;
+      const toolIndex =
+        toolDelta.index ??
+        (lastToolIndex >= 0 &&
+        !(
+          toolDelta.id &&
+          toolCalls?.[lastToolIndex]?.id &&
+          toolCalls[lastToolIndex].id !== toolDelta.id
+        )
+          ? lastToolIndex
+          : lastToolIndex + 1);
       const existingToolCall = toolCalls?.[toolIndex];
 
       if (

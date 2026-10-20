@@ -560,7 +560,7 @@ function mergeChatToolCallDeltas(
     const toolIndex =
       typeof toolDelta.index === "number" && toolDelta.index >= 0
         ? toolDelta.index
-        : 0;
+        : resolveMissingToolCallIndex(toolCallsByIndex, toolDelta);
     const existing = toolCallsByIndex.get(toolIndex);
 
     if (!existing) {
@@ -570,6 +570,24 @@ function mergeChatToolCallDeltas(
 
     mergeChatToolCall(existing, toolDelta);
   }
+}
+
+// Some providers omit `index`: a new id starts the next call, a delta without
+// an id continues the latest one.
+function resolveMissingToolCallIndex(
+  toolCallsByIndex: Map<number, Record<string, unknown>>,
+  toolDelta: Record<string, unknown>,
+): number {
+  if (toolCallsByIndex.size === 0) {
+    return 0;
+  }
+  const lastIndex = Math.max(...toolCallsByIndex.keys());
+  const lastId = toolCallsByIndex.get(lastIndex)?.id;
+  return typeof toolDelta.id === "string" &&
+    typeof lastId === "string" &&
+    lastId !== toolDelta.id
+    ? lastIndex + 1
+    : lastIndex;
 }
 
 function createChatToolCall(

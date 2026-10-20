@@ -196,6 +196,36 @@ describe("OpenRouter Plugin", () => {
       });
     });
 
+    it("should keep tool calls apart when the provider omits index", () => {
+      const chunk = (toolCall: Record<string, unknown>) => ({
+        choices: [{ delta: { tool_calls: [toolCall] } }],
+      });
+      const result = aggregateOpenRouterChatChunks([
+        chunk({
+          id: "call_1",
+          type: "function",
+          function: { name: "lookup", arguments: '{"city":' },
+        }),
+        chunk({ function: { arguments: '"Vienna"}' } }),
+        chunk({
+          id: "call_2",
+          type: "function",
+          function: { name: "weather", arguments: '{"tz":"CET"}' },
+        }),
+      ]);
+
+      expect(
+        (result.output[0].message.tool_calls as any[]).map((toolCall) => [
+          toolCall.id,
+          toolCall.function.name,
+          toolCall.function.arguments,
+        ]),
+      ).toEqual([
+        ["call_1", "lookup", '{"city":"Vienna"}'],
+        ["call_2", "weather", '{"tz":"CET"}'],
+      ]);
+    });
+
     it("should return an empty assistant message for empty chunks", () => {
       expect(aggregateOpenRouterChatChunks([])).toEqual({
         output: [
