@@ -166,6 +166,7 @@ export const AI_SDK_SCENARIO_SPECS = [
     openaiModuleName: "ai-sdk-openai-v7",
     packageName: "ai-sdk-v7",
     snapshotName: "ai-sdk-v7",
+    codeModeModuleName: "code-mode-v1",
     supportsEvaluate: true,
     supportsEvaluateStringModel: false,
     anthropicModuleName: "ai-sdk-anthropic-v7",
@@ -196,6 +197,7 @@ export const AI_SDK_SCENARIO_SPECS = [
     openaiModuleName: "ai-sdk-openai-v7-latest",
     packageName: "ai-sdk-v7-latest",
     snapshotName: "ai-sdk-v7-latest",
+    codeModeModuleName: "code-mode-v1-latest",
     supportsEvaluate: true,
     anthropicModuleName: "ai-sdk-anthropic-v7-latest",
     supportsAgentToolLoop: true,
@@ -1133,6 +1135,15 @@ async function runAISDKInstrumentationScenario(
           instrumentedWorkflow: options.workflow,
           openaiModel,
         });
+      }
+      if (process.env.AI_SDK_CODE_MODE_PACKAGE_NAME) {
+        const { runAISDKCodeMode } = await import("./scenario.code-mode.mjs");
+        for (const mode of options.codeModeModes) {
+          await runAISDKCodeMode(
+            mode,
+            process.env.AI_SDK_CODE_MODE_PACKAGE_NAME,
+          );
+        }
       }
     },
     flushCount,
