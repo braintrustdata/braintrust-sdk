@@ -328,22 +328,36 @@ describe("Cloudflare Think instrumentation", () => {
     expect(spans[0].metrics.end).toEqual(expect.any(Number));
   });
 
-  it.each([true, false])(
-    "traces v7 dispatchers once with standalone AI SDK tracing enabled=%s",
-    async (aisdk) => {
+  it.each([
+    { aisdk: true, explicit: false },
+    { aisdk: false, explicit: false },
+    { aisdk: true, explicit: true },
+    { aisdk: false, explicit: true },
+  ])(
+    "traces v7 dispatchers once with aisdk=$aisdk and explicit=$explicit",
+    async ({ aisdk, explicit }) => {
       registry.disable();
       registry.configure({ integrations: { aisdk } });
       registry.enable();
       try {
+        const explicitTelemetry = explicit
+          ? braintrustAISDKTelemetry()
+          : undefined;
         let dispatcher: any;
         class Think {
           async _runInferenceLoop() {
             return aiSDKChannels.streamTextV7.invoke(
               () => {
                 dispatcher = aiSDKChannels.v7CreateTelemetryDispatcher.invoke(
-                  () => ({}),
+                  () => ({ ...explicitTelemetry }),
                   undefined,
-                  [{}],
+                  [
+                    {
+                      telemetry: explicitTelemetry
+                        ? { integrations: [explicitTelemetry] }
+                        : undefined,
+                    },
+                  ],
                   {},
                 );
                 dispatcher.onStart({

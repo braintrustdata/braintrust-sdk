@@ -67,13 +67,17 @@
         "ai-sdk-cohere-v7-latest": {
           "package": "@ai-sdk/cohere",
           "range": "4"
+        },
+        "code-mode-v1-latest": {
+          "package": "@ai-sdk/code-mode",
+          "range": "1"
         }
       }
     }
   },
   "dependencies": {
     "zod": "3.25.76",
-    "ai": "7.0.8",
+    "ai": "7.0.143",
     "ai-sdk-v3": "npm:ai@3.4.33",
     "ai-sdk-v3-latest": "npm:ai@3.4.33",
     "ai-sdk-openai-v3": "npm:@ai-sdk/openai@0.0.62",
@@ -106,7 +110,9 @@
     "ai-sdk-anthropic-v7-latest": "npm:@ai-sdk/anthropic@4.0.36",
     "ai-sdk-cohere-v7": "npm:@ai-sdk/cohere@4.0.0",
     "ai-sdk-cohere-v7-latest": "npm:@ai-sdk/cohere@4.0.25",
-    "ai-sdk-workflow-v1": "npm:@ai-sdk/workflow@1.0.8"
+    "ai-sdk-workflow-v1": "npm:@ai-sdk/workflow@1.0.8",
+    "code-mode-v1": "npm:@ai-sdk/code-mode@1.0.100",
+    "code-mode-v1-latest": "npm:@ai-sdk/code-mode@1.0.100"
   },
   "pnpm": {
     "overrides": {

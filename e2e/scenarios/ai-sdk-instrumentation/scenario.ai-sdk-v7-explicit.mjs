@@ -36,6 +36,7 @@ runMain(async () => {
 
   await runAutoAISDKInstrumentation({
     agentClassExport: "ToolLoopAgent",
+    codeModeModes: ["wrapped"],
     ai,
     anthropic,
     createAnthropic,

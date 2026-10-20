@@ -51,11 +51,17 @@ describeVariants("variants", () => {
       defineAISDKInstrumentationAssertions({
         agentSpanName: scenario.agentSpanName,
         name: scenario.wrapperTestName ?? "wrapped instrumentation",
+        codeModeModes: scenario.codeModeModuleName ? ["wrapped"] : [],
         runScenario: async ({ runScenarioDir }) => {
           await runScenarioDir({
             entry: scenario.wrapperEntry,
             env: {
               AI_SDK_PACKAGE_NAME: scenario.packageName,
+              ...(scenario.codeModeModuleName
+                ? {
+                    AI_SDK_CODE_MODE_PACKAGE_NAME: scenario.codeModeModuleName,
+                  }
+                : {}),
               BRAINTRUST_CAPTURE_ATTACHMENTS: "true",
               AI_SDK_OPENAI_PACKAGE_NAME: scenario.openaiModuleName,
               AI_SDK_SUPPORTS_EVALUATE_STRING_MODEL: String(
@@ -113,11 +119,19 @@ describeVariants("variants", () => {
       defineAISDKInstrumentationAssertions({
         agentSpanName: scenario.agentSpanName,
         name: "auto-hook instrumentation",
+        codeModeModes: scenario.codeModeModuleName
+          ? ["auto-hook", "combined"]
+          : [],
         runScenario: async ({ runNodeScenarioDir }) => {
           await runNodeScenarioDir({
             entry: scenario.autoEntry,
             env: {
               AI_SDK_PACKAGE_NAME: scenario.packageName,
+              ...(scenario.codeModeModuleName
+                ? {
+                    AI_SDK_CODE_MODE_PACKAGE_NAME: scenario.codeModeModuleName,
+                  }
+                : {}),
               BRAINTRUST_CAPTURE_ATTACHMENTS: "true",
               AI_SDK_OPENAI_PACKAGE_NAME: scenario.openaiModuleName,
               AI_SDK_SUPPORTS_EVALUATE_STRING_MODEL: String(

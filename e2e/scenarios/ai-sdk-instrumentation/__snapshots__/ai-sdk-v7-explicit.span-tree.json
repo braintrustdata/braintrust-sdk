@@ -10080,6 +10080,380 @@
             "operation": "workflow-agent-stream-prompt",
             "testRunId": "<run:1>"
           }
+        },
+        {
+          "name": "ai-sdk-code-mode-wrapped-sequential-operation",
+          "children": [
+            {
+              "name": "codeMode",
+              "type": "tool",
+              "children": [
+                {
+                  "name": "host",
+                  "type": "function",
+                  "children": [],
+                  "input": {
+                    "value": 2
+                  },
+                  "output": {
+                    "value": 4
+                  },
+                  "metadata": {
+                    "toolCallId": "<toolCallId:1>"
+                  }
+                },
+                {
+                  "name": "host",
+                  "type": "function",
+                  "children": [],
+                  "input": {
+                    "value": 4
+                  },
+                  "output": {
+                    "value": 8
+                  },
+                  "metadata": {
+                    "toolCallId": "<toolCallId:1>"
+                  }
+                }
+              ],
+              "input": {
+                "js": "const a = await tools.host({value: 2}); return await tools.host(a);"
+              },
+              "output": {
+                "value": 8
+              },
+              "metadata": {
+                "toolCallId": "<toolCallId:1>"
+              }
+            }
+          ],
+          "metadata": {
+            "operation": "code-mode-wrapped-sequential",
+            "testRunId": "<run:1>"
+          }
+        },
+        {
+          "name": "ai-sdk-code-mode-wrapped-parallel-operation",
+          "children": [
+            {
+              "name": "codeMode",
+              "type": "tool",
+              "children": [
+                {
+                  "name": "parallel",
+                  "type": "function",
+                  "children": [],
+                  "input": {
+                    "value": 1
+                  },
+                  "output": {
+                    "value": 1
+                  },
+                  "metadata": {
+                    "toolCallId": "<toolCallId:1>"
+                  }
+                },
+                {
+                  "name": "parallel",
+                  "type": "function",
+                  "children": [],
+                  "input": {
+                    "value": 2
+                  },
+                  "output": {
+                    "value": 2
+                  },
+                  "metadata": {
+                    "toolCallId": "<toolCallId:1>"
+                  }
+                }
+              ],
+              "input": {
+                "js": "return await Promise.all([tools.parallel({value: 1}), tools.parallel({value: 2})]);"
+              },
+              "output": [
+                {
+                  "value": 1
+                },
+                {
+                  "value": 2
+                }
+              ],
+              "metadata": {
+                "toolCallId": "<toolCallId:1>"
+              }
+            }
+          ],
+          "metadata": {
+            "operation": "code-mode-wrapped-parallel",
+            "testRunId": "<run:1>"
+          }
+        },
+        {
+          "name": "ai-sdk-code-mode-wrapped-nested-operation",
+          "children": [
+            {
+              "name": "codeMode",
+              "type": "tool",
+              "children": [
+                {
+                  "name": "nested",
+                  "type": "function",
+                  "children": [
+                    {
+                      "name": "host",
+                      "type": "function",
+                      "children": [],
+                      "input": {
+                        "value": 3
+                      },
+                      "output": {
+                        "value": 6
+                      },
+                      "metadata": {
+                        "toolCallId": "<toolCallId:1>"
+                      }
+                    }
+                  ],
+                  "input": {
+                    "value": 3
+                  },
+                  "output": {
+                    "value": 6
+                  },
+                  "metadata": {
+                    "toolCallId": "<toolCallId:1>"
+                  }
+                }
+              ],
+              "input": {
+                "js": "return await tools.nested({value: 3});"
+              },
+              "output": {
+                "value": 6
+              },
+              "metadata": {
+                "toolCallId": "<toolCallId:1>"
+              }
+            }
+          ],
+          "metadata": {
+            "operation": "code-mode-wrapped-nested",
+            "testRunId": "<run:1>"
+          }
+        },
+        {
+          "name": "ai-sdk-code-mode-wrapped-host-error-operation",
+          "children": [
+            {
+              "name": "codeMode",
+              "type": "tool",
+              "children": [
+                {
+                  "name": "fail",
+                  "type": "function",
+                  "children": [],
+                  "input": {
+                    "value": 1
+                  },
+                  "metadata": {
+                    "toolCallId": "<toolCallId:1>"
+                  },
+                  "error": "host failure"
+                }
+              ],
+              "input": {
+                "js": "return await tools.fail({value: 1});"
+              },
+              "metadata": {
+                "toolCallId": "<toolCallId:1>"
+              },
+              "error": "Host tool failed."
+            }
+          ],
+          "metadata": {
+            "operation": "code-mode-wrapped-host-error",
+            "testRunId": "<run:1>"
+          }
+        },
+        {
+          "name": "ai-sdk-code-mode-wrapped-code-error-operation",
+          "children": [
+            {
+              "name": "codeMode",
+              "type": "tool",
+              "children": [],
+              "input": {
+                "js": "throw new Error(\"code failure\");"
+              },
+              "metadata": {
+                "toolCallId": "<toolCallId:1>"
+              },
+              "error": "code failure"
+            }
+          ],
+          "metadata": {
+            "operation": "code-mode-wrapped-code-error",
+            "testRunId": "<run:1>"
+          }
+        },
+        {
+          "name": "ai-sdk-code-mode-wrapped-caught-error-operation",
+          "children": [
+            {
+              "name": "codeMode",
+              "type": "tool",
+              "children": [
+                {
+                  "name": "fail",
+                  "type": "function",
+                  "children": [],
+                  "input": {
+                    "value": 1
+                  },
+                  "metadata": {
+                    "toolCallId": "<toolCallId:1>"
+                  },
+                  "error": "host failure"
+                }
+              ],
+              "input": {
+                "js": "try { await tools.fail({value: 1}); } catch { return \"recovered\"; }"
+              },
+              "output": "recovered",
+              "metadata": {
+                "toolCallId": "<toolCallId:1>"
+              }
+            }
+          ],
+          "metadata": {
+            "operation": "code-mode-wrapped-caught-error",
+            "testRunId": "<run:1>"
+          }
+        },
+        {
+          "name": "ai-sdk-code-mode-wrapped-stream-output-operation",
+          "children": [
+            {
+              "name": "codeMode",
+              "type": "tool",
+              "children": [
+                {
+                  "name": "stream",
+                  "type": "function",
+                  "children": [],
+                  "input": {
+                    "value": 9
+                  },
+                  "output": {
+                    "value": 9
+                  },
+                  "metadata": {
+                    "toolCallId": "<toolCallId:1>"
+                  }
+                }
+              ],
+              "input": {
+                "js": "return await tools.stream({value: 9});"
+              },
+              "output": {
+                "value": 9
+              },
+              "metadata": {
+                "toolCallId": "<toolCallId:1>"
+              }
+            }
+          ],
+          "metadata": {
+            "operation": "code-mode-wrapped-stream-output",
+            "testRunId": "<run:1>"
+          }
+        },
+        {
+          "name": "ai-sdk-code-mode-wrapped-concurrent-operation",
+          "children": [
+            {
+              "name": "codeMode",
+              "type": "tool",
+              "children": [
+                {
+                  "name": "host",
+                  "type": "function",
+                  "children": [],
+                  "input": {
+                    "value": 4
+                  },
+                  "output": {
+                    "value": 8
+                  },
+                  "metadata": {
+                    "toolCallId": "<toolCallId:1>"
+                  }
+                }
+              ],
+              "input": {
+                "js": "return await tools.host({value: 4});"
+              },
+              "output": {
+                "value": 8
+              },
+              "metadata": {
+                "toolCallId": "<toolCallId:1>"
+              }
+            },
+            {
+              "name": "codeMode",
+              "type": "tool",
+              "children": [
+                {
+                  "name": "host",
+                  "type": "function",
+                  "children": [],
+                  "input": {
+                    "value": 5
+                  },
+                  "output": {
+                    "value": 10
+                  },
+                  "metadata": {
+                    "toolCallId": "<toolCallId:1>"
+                  }
+                }
+              ],
+              "input": {
+                "js": "return await tools.host({value: 5});"
+              },
+              "output": {
+                "value": 10
+              },
+              "metadata": {
+                "toolCallId": "<toolCallId:1>"
+              }
+            }
+          ],
+          "metadata": {
+            "operation": "code-mode-wrapped-concurrent",
+            "testRunId": "<run:1>"
+          }
+        },
+        {
+          "name": "ai-sdk-code-mode-wrapped-direct-operation",
+          "children": [
+            {
+              "name": "codeMode",
+              "type": "tool",
+              "children": [],
+              "input": {
+                "js": "return 42;"
+              },
+              "output": 42
+            }
+          ],
+          "metadata": {
+            "operation": "code-mode-wrapped-direct",
+            "testRunId": "<run:1>"
+          }
         }
       ],
       "metadata": {
