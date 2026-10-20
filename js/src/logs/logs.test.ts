@@ -508,7 +508,7 @@ describe("wrapConsole", () => {
     ]);
   });
 
-  test("custom inspectors run only in the native console, not during message or metadata capture", async () => {
+  test("object formatting hooks run only in the native console, not during capture", async () => {
     const { logger, background } = setup(true);
     const output: string[] = [];
     const stdout = new Writable({
@@ -523,19 +523,35 @@ describe("wrapConsole", () => {
     const customInspect = vi.fn(() => `custom-${++inspections}`);
     const value = { id: 42, [inspect.custom]: customInspect };
     const calls = [[value], ["value %o", value], ["value %s", value]];
+    let stringCalls = 0;
+    let numberCalls = 0;
+    let jsonCalls = 0;
+    const toString = vi.fn(() => `string-${++stringCalls}`);
+    const valueOf = vi.fn(() => ++numberCalls);
+    const toJSON = vi.fn(() => ({ serialization: ++jsonCalls }));
     try {
       for (const [index, args] of calls.entries()) {
         target.info(...args);
         expect(customInspect).toHaveBeenCalledTimes(index + 1);
       }
+      target.info("%s", { id: 42, toString });
+      target.info("%d", { id: 42, valueOf });
+      target.info("%j", { id: 42, toJSON });
+      expect.soft(toString).toHaveBeenCalledTimes(1);
+      expect.soft(valueOf).toHaveBeenCalledTimes(1);
+      expect.soft(toJSON).toHaveBeenCalledTimes(1);
       expect(output).toEqual([
         "custom-1\n",
         "value custom-2\n",
         "value custom-3\n",
+        "string-1\n",
+        "1\n",
+        '{"serialization":1}\n',
       ]);
       const rows = await drain(background);
-      expect(rows).toHaveLength(3);
-      for (const row of rows) expect(row.output).toContain("id: 42");
+      expect(rows).toHaveLength(6);
+      for (const row of rows.slice(0, 4))
+        expect(row.output).toContain("id: 42");
       for (const row of rows.slice(1)) {
         expect(row.metadata?.["braintrust.template.parameter.0"]).toContain(
           "id: 42",
@@ -547,7 +563,7 @@ describe("wrapConsole", () => {
     }
   });
 
-  test("preserves console formatting, parameters, errors, and unformattable arguments", async () => {
+  test("preserves primitive formatting, parameters, errors, and circular objects without calling toJSON", async () => {
     const { logger, background } = setup(true);
     const target = fakeConsole();
     wrapConsole(target, { logger });
@@ -556,11 +572,10 @@ describe("wrapConsole", () => {
     const circular: Record<string, unknown> = {};
     circular.self = circular;
     target.info("value %o", circular);
-    target.info("value %j", {
-      toJSON() {
-        throw new Error("bad serializer");
-      },
+    const toJSON = vi.fn(() => {
+      throw new Error("bad serializer");
     });
+    target.info("value %j", { id: 42, toJSON });
     const rows = await drain(background);
     expect(rows).toHaveLength(4);
     expect(rows[0]).toMatchObject({
@@ -574,7 +589,8 @@ describe("wrapConsole", () => {
     });
     expect(rows[1].output).toContain("Error: payment failed");
     expect(rows[2].output).toContain("Circular");
-    expect(rows[3].output).toBe("[Unformattable console message]");
+    expect(toJSON).not.toHaveBeenCalled();
+    expect(rows[3].output).toContain("id: 42");
   });
 
   test("fallback formatting serializes parameters once and preserves BigInt arguments", async () => {
