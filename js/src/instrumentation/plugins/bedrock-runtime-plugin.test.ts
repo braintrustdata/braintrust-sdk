@@ -637,9 +637,14 @@ describe("aggregateInvokeModelResponseStreamChunks", () => {
         })),
       ),
     ).toEqual({
-      output: {
-        text: "Hello world",
-      },
+      output: [
+        {
+          index: 0,
+          message: { role: "assistant", content: "Hello world" },
+          finish_reason: "stop",
+          logprobs: null,
+        },
+      ],
       metrics: {
         completion_tokens: 125,
         prompt_tokens: 126,
@@ -647,6 +652,104 @@ describe("aggregateInvokeModelResponseStreamChunks", () => {
       },
     });
   });
+
+  it.each([undefined, "Checking the weather."])(
+    "preserves OpenAI tool calls alongside content %j",
+    (content) => {
+      const events = [
+        {
+          choices: [
+            {
+              index: 0,
+              delta: {
+                role: "assistant",
+                content,
+                reasoning_content: "Look up the weather.",
+              },
+            },
+          ],
+        },
+        {
+          choices: [
+            {
+              index: 0,
+              delta: {
+                tool_calls: [
+                  {
+                    index: 0,
+                    id: "call_weather",
+                    type: "function",
+                    function: {
+                      name: "get_weather",
+                      arguments: '{"city":',
+                    },
+                  },
+                ],
+              },
+            },
+          ],
+        },
+        {
+          choices: [
+            {
+              index: 0,
+              delta: {
+                tool_calls: [
+                  {
+                    index: 0,
+                    function: { arguments: '"Berlin"}' },
+                  },
+                ],
+              },
+            },
+          ],
+        },
+        {
+          choices: [{ index: 0, delta: {}, finish_reason: "tool_calls" }],
+          "amazon-bedrock-invocationMetrics": {
+            inputTokenCount: 12,
+            outputTokenCount: 20,
+          },
+        },
+      ];
+
+      expect(
+        aggregateInvokeModelResponseStreamChunks(
+          events.map((event) => ({
+            chunk: { bytes: new TextEncoder().encode(JSON.stringify(event)) },
+          })),
+        ),
+      ).toEqual({
+        output: [
+          {
+            index: 0,
+            message: {
+              role: "assistant",
+              content,
+              reasoning_content: "Look up the weather.",
+              tool_calls: [
+                {
+                  id: "call_weather",
+                  type: "function",
+                  function: {
+                    name: "get_weather",
+                    arguments: '{"city":"Berlin"}',
+                  },
+                },
+              ],
+            },
+            finish_reason: "tool_calls",
+            logprobs: null,
+          },
+        ],
+        metrics: {
+          prompt_tokens: 12,
+          completion_tokens: 20,
+          tokens: 32,
+        },
+      });
+    },
+  );
 
   it("prefers Nova metadata usage over its zeroed invocation metrics in InvokeModel response stream chunks", () => {
     // Nova reports inputTokenCount/outputTokenCount as 0 in

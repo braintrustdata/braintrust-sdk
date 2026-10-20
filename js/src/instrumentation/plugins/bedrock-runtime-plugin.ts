@@ -2,6 +2,7 @@ import type { ReturnOf } from "../core/interceptor-definitions";
 import type { StartOf } from "../core/tracing-types";
 import { SpanTypeAttribute, isObject } from "../../../util/index";
 import type { Span } from "../../logger";
+import type { OpenAIChatCompletionChunk } from "../../vendor-sdk-types/openai";
 import { INSTRUMENTATION_NAMES } from "../../span-origin";
 import { getCurrentUnixTimestamp } from "../../util";
 import { BasePlugin } from "../core";
@@ -27,6 +28,7 @@ import {
   getBedrockRuntimeCommandName,
   getBedrockRuntimeOperation,
 } from "./bedrock-runtime-common";
+import { aggregateChatCompletionChunks } from "./openai-plugin";
 
 export class BedrockRuntimePlugin extends BasePlugin {
   protected onEnable(): void {
@@ -530,6 +532,9 @@ export function aggregateInvokeModelResponseStreamChunks(
     .map((chunk) => parseJsonBody(chunk.chunk?.bytes))
     .filter((chunk) => chunk !== undefined);
   const jsonLikeChunks = parsedChunks.filter(isObject);
+  const chatCompletionChunks = jsonLikeChunks.filter((chunk) =>
+    Array.isArray(chunk.choices),
+  ) as OpenAIChatCompletionChunk[];
   const text = parsedChunks.map(extractTextFromJsonLike).join("");
   const lastMetadataChunk = jsonLikeChunks
     .slice()
@@ -556,17 +561,19 @@ export function aggregateInvokeModelResponseStreamChunks(
 
   return {
     output:
-      text.length > 0
-        ? { text }
-        : {
-            chunk_count: chunks.length,
-            chunks: sanitizeBedrockValue(
-              (jsonLikeChunks.length > 0 ? jsonLikeChunks : chunks).slice(
-                0,
-                20,
+      chatCompletionChunks.length > 0
+        ? aggregateChatCompletionChunks(chatCompletionChunks).output
+        : text.length > 0
+          ? { text }
+          : {
+              chunk_count: chunks.length,
+              chunks: sanitizeBedrockValue(
+                (jsonLikeChunks.length > 0 ? jsonLikeChunks : chunks).slice(
+                  0,
+                  20,
+                ),
               ),
-            ),
-          },
+            },
     metrics: parseBedrockRuntimeMetrics(
       usage ??
         (isObject(metadata) ? metadata.usage : undefined) ??
@@ -834,14 +841,5 @@ function extractTextFromJsonLike(value: unknown): string {
   if (Array.isArray(value.outputs)) {
     return value.outputs.map(extractTextFromJsonLike).join("");
   }
-  // OpenAI-compatible chunks (gpt-oss and other OpenAI models):
-  // choices[].delta.content
-  if (Array.isArray(value.choices)) {
-    return value.choices.map(extractTextFromJsonLike).join("");
-  }
-  if (typeof value.content === "string") {
-    return value.content;
-  }
-
   return "";
 }
