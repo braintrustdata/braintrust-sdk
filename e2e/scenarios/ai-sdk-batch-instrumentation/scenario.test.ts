@@ -26,94 +26,97 @@ describe.sequential("AI SDK batch instrumentation", () => {
         `${variantKey} ${mode} across processes`,
         { timeout: timeoutMs },
         async () => {
-          await withScenarioHarness(async (harness) => {
-            const handoffPath = join(
-              scenarioDir,
-              `batch-${harness.testRunId}.json`,
-            );
-            const env = {
-              AI_SDK_PACKAGE_NAME: variantKey,
-              AI_SDK_BATCH_MODE: mode,
-              AI_SDK_BATCH_HANDOFF_PATH: handoffPath,
-            };
-            const options = {
-              entry: "scenario.mjs",
-              scenarioDir,
-              timeoutMs,
-              nodeArgs:
-                mode === "manual-with-auto"
-                  ? ["--import", "braintrust/hook.mjs"]
-                  : [],
-              runContext: {
-                variantKey,
-                originalScenarioDir,
-              },
-            };
-            try {
-              await harness.runNodeScenarioDir({
-                ...options,
-                runContext: {
-                  ...options.runContext,
-                  cassette: { variantKey: `${variantKey}-${mode}-submit` },
-                },
-                env: { ...env, AI_SDK_BATCH_PHASE: "submit" },
-              });
-              const { context } = JSON.parse(
-                await readFile(handoffPath, "utf8"),
-              ) as { context: string };
-              expect(context).not.toContain("Reply with only");
-              expect(context).not.toContain("webhookSigningSecret");
-              const pending = findAllSpans(harness.events(), "ai.batch");
-              expect(pending).toHaveLength(1);
-              expect(pending[0].metrics?.end).toBeUndefined();
-              const initialIds = findAllSpans(
-                harness.events(),
-                "ai.batch.request",
-              )
-                .map((event) => event.span.id)
-                .sort();
-              expect(initialIds).toHaveLength(2);
-              await harness.runNodeScenarioDir({
-                ...options,
-                runContext: {
-                  ...options.runContext,
-                  cassette: { variantKey: `${variantKey}-${mode}-complete` },
-                },
-                env: { ...env, AI_SDK_BATCH_PHASE: "complete" },
-              });
-              const events = harness.events();
-              const task = findAllSpans(events, "ai.batch");
-              const children = findAllSpans(events, "ai.batch.request");
-              expect(task).toHaveLength(1);
-              expect(children.map((event) => event.span.id).sort()).toEqual(
-                initialIds,
+          await withScenarioHarness(
+            async (harness) => {
+              const handoffPath = join(
+                scenarioDir,
+                `batch-${harness.testRunId}.json`,
               );
-              expect(task[0].metrics?.end).toEqual(expect.any(Number));
-              for (const child of children) {
-                expect(child.span.parentIds).toEqual([task[0].span.id]);
-                expect(child.input).toBeDefined();
-                expect(child.output).toBeDefined();
-                expect(child.metrics?.tokens).toBeGreaterThan(0);
-                expect(child.metrics?.end).toEqual(expect.any(Number));
-              }
-              await matchSpanTreeSnapshot(
-                events.map((event) => ({
-                  event,
-                  fields: {
-                    ...spanTreeFields(event),
-                    context: event.row.context,
+              const env = {
+                AI_SDK_PACKAGE_NAME: variantKey,
+                AI_SDK_BATCH_MODE: mode,
+                AI_SDK_BATCH_HANDOFF_PATH: handoffPath,
+              };
+              const options = {
+                entry: "scenario.mjs",
+                scenarioDir,
+                timeoutMs,
+                nodeArgs:
+                  mode === "manual-with-auto"
+                    ? ["--import", "braintrust/hook.mjs"]
+                    : [],
+                runContext: {
+                  variantKey,
+                  originalScenarioDir,
+                },
+              };
+              try {
+                await harness.runNodeScenarioDir({
+                  ...options,
+                  runContext: {
+                    ...options.runContext,
+                    cassette: { variantKey: `${variantKey}-${mode}-submit` },
                   },
-                })),
-                resolveFileSnapshotPath(
-                  import.meta.url,
-                  `${variantKey}-${mode}.span-tree.json`,
-                ),
-                { normalize: { additionalProviderIdKeys: ["batch_id"] } },
-              );
-            } finally {
-              await rm(handoffPath, { force: true });
-            }
-          });
+                  env: { ...env, AI_SDK_BATCH_PHASE: "submit" },
+                });
+                const { context } = JSON.parse(
+                  await readFile(handoffPath, "utf8"),
+                ) as { context: string };
+                expect(context).not.toContain("Reply with only");
+                expect(context).not.toContain("webhookSigningSecret");
+                const pending = findAllSpans(harness.events(), "ai.batch");
+                expect(pending).toHaveLength(1);
+                expect(pending[0].metrics?.end).toBeUndefined();
+                const initialIds = findAllSpans(
+                  harness.events(),
+                  "ai.batch.request",
+                )
+                  .map((event) => event.span.id)
+                  .sort();
+                expect(initialIds).toHaveLength(2);
+                await harness.runNodeScenarioDir({
+                  ...options,
+                  runContext: {
+                    ...options.runContext,
+                    cassette: { variantKey: `${variantKey}-${mode}-complete` },
+                  },
+                  env: { ...env, AI_SDK_BATCH_PHASE: "complete" },
+                });
+                const events = harness.events();
+                const task = findAllSpans(events, "ai.batch");
+                const children = findAllSpans(events, "ai.batch.request");
+                expect(task).toHaveLength(1);
+                expect(children.map((event) => event.span.id).sort()).toEqual(
+                  initialIds,
+                );
+                expect(task[0].metrics?.end).toEqual(expect.any(Number));
+                for (const child of children) {
+                  expect(child.span.parentIds).toEqual([task[0].span.id]);
+                  expect(child.input).toBeDefined();
+                  expect(child.output).toBeDefined();
+                  expect(child.metrics?.tokens).toBeGreaterThan(0);
+                  expect(child.metrics?.end).toEqual(expect.any(Number));
+                }
+                await matchSpanTreeSnapshot(
+                  events.map((event) => ({
+                    event,
+                    fields: {
+                      ...spanTreeFields(event),
+                      context: event.row.context,
+                    },
+                  })),
+                  resolveFileSnapshotPath(
+                    import.meta.url,
+                    `${variantKey}-${mode}.span-tree.json`,
+                  ),
+                  { normalize: { additionalProviderIdKeys: ["batch_id"] } },
+                );
+              } finally {
+                await rm(handoffPath, { force: true });
+              }
+            },
+            { isolateProductionLogIds: true },
+          );
         },
       );
     }

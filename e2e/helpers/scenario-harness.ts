@@ -723,7 +723,10 @@ interface ScenarioHarness {
 
 export async function withScenarioHarness(
   body: (harness: ScenarioHarness) => Promise<void>,
-  optionsForHarness: { forwardToProduction?: boolean } = {},
+  optionsForHarness: {
+    forwardToProduction?: boolean;
+    isolateProductionLogIds?: boolean;
+  } = {},
 ): Promise<void> {
   const { getProdForwarding } = await import("./prod-forwarding");
   const prodForwarding =
@@ -734,6 +737,7 @@ export async function withScenarioHarness(
   const server = await startMockBraintrustServer({
     prodForwarding,
     testRunId,
+    isolateProductionLogIds: optionsForHarness.isolateProductionLogIds,
   });
   const testEnv = getTestServerEnv(
     testRunId,

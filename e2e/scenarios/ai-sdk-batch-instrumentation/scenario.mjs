@@ -34,6 +34,7 @@ if (phase === "submit") {
         model: "google/gemini-2.5-flash",
         prompt: `Reply with only the word ${id}.`,
         maxOutputTokens: 16,
+        reasoning: "none",
         temperature: 0,
       }));
       const startTime = Date.now() / 1000;
