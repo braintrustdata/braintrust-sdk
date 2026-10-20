@@ -14,21 +14,7 @@
     "zod": "4.3.6",
     "cloudflare-think-v0-13": "npm:@cloudflare/think@0.13.0",
     "cloudflare-think-v0-13-latest": "npm:@cloudflare/think@0.13.0",
-    "cloudflare-think-v0-14": "npm:@cloudflare/think@0.14.0",
-    "cloudflare-think-v0-14-latest": "npm:@cloudflare/think@0.14.0",
-    "cloudflare-think-v0-15": "npm:@cloudflare/think@0.15.0",
-    "cloudflare-think-v0-15-latest": "npm:@cloudflare/think@0.15.1",
-    "cloudflare-think-v0-16": "npm:@cloudflare/think@0.16.0",
-    "cloudflare-think-v0-16-latest": "npm:@cloudflare/think@0.16.0",
-    "cloudflare-think-v0-17": "npm:@cloudflare/think@0.17.0",
-    "cloudflare-think-v0-17-latest": "npm:@cloudflare/think@0.17.0",
-    "cloudflare-think-v0-18": "npm:@cloudflare/think@0.18.0",
-    "cloudflare-think-v0-18-latest": "npm:@cloudflare/think@0.18.0",
-    "cloudflare-think-v0-19": "npm:@cloudflare/think@0.19.0",
-    "cloudflare-think-v0-19-latest": "npm:@cloudflare/think@0.19.0",
-    "agents-v0-17": "npm:agents@0.17.4",
-    "agents-v0-18": "npm:agents@0.18.0",
-    "agents-v0-22": "npm:agents@0.22.0"
+    "agents-v0-17": "npm:agents@0.17.4"
   },
   "pnpm": {
     "overrides": {
