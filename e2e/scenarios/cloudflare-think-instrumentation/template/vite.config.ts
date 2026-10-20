@@ -21,6 +21,10 @@ export default defineConfig({
   resolve: {
     alias: {
       "@cloudflare/think": thinkPackageName,
+      ...(process.env.CLOUDFLARE_AGENTS_PACKAGE_NAME !== "agents" &&
+      process.env.CLOUDFLARE_AGENTS_PACKAGE_NAME
+        ? { agents: process.env.CLOUDFLARE_AGENTS_PACKAGE_NAME }
+        : {}),
       ...(manual
         ? {
             ai: new URL("./src/wrapped-ai.ts", import.meta.url).pathname,

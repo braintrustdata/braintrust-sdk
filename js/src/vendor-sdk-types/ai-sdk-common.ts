@@ -215,6 +215,8 @@ export interface AISDKRerankParams {
 }
 
 export interface AISDKCallParams {
+  telemetry?: { isEnabled?: boolean };
+  experimental_telemetry?: { isEnabled?: boolean };
   model?: AISDKModel;
   instructions?: unknown;
   prompt?: string | AISDKMessage[] | Record<string, unknown>;

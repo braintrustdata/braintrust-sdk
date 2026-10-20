@@ -27,7 +27,8 @@
     "lint": "turbo run lint",
     "fix:formatting": "prettier --write .",
     "fix:lint": "turbo run fix:lint",
-    "yalc:publish": "turbo run yalc:publish"
+    "yalc:publish": "turbo run yalc:publish",
+    "test:e2e:cassettes": "turbo run test:e2e -- --check-cassettes"
   },
   "engines": {
     "pnpm": ">=10.27.0",

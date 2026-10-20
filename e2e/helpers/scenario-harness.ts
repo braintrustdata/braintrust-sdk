@@ -81,6 +81,7 @@ export interface ScenarioRunContext {
 }
 
 interface ScenarioRunContextRecord {
+  cassetteVariantKey: string | null;
   forwardToProduction?: boolean;
   logRootSpanIds: string[];
   experimentNames: string[];
@@ -790,15 +791,9 @@ export async function withScenarioHarness(
   };
 
   const runWithCassetteServer = async (
-    options: {
-      entry?: string;
-      env?: Record<string, string>;
-      runContext?: ScenarioRunContext;
-      scenarioDir: string;
-    },
+    wiring: CassetteWiring | null,
     run: (cassetteEnv: Record<string, string>) => Promise<ScenarioResult>,
   ): Promise<ScenarioResult> => {
-    const wiring = cassetteWiringFor(options);
     if (!wiring) {
       return await run({});
     }
@@ -853,39 +848,44 @@ export async function withScenarioHarness(
     },
     runner: ScenarioRunner,
     defaultEntry: string,
-    run: () => Promise<ScenarioResult>,
+    run: (wiring: CassetteWiring | null) => Promise<ScenarioResult>,
   ): Promise<ScenarioResult> => {
-    const result = await run();
-    await recordScenarioRunContext({
-      forwardToProduction: prodForwarding !== null,
-      logRootSpanIds: [
-        ...new Set(
-          [
-            ...server.events
-              .filter((event) => !event.experimentId)
-              .map((event) => event.span.rootId),
-            ...server.requests
-              .filter((request) => request.path === "/otel/v1/traces")
-              .flatMap((request) => extractOtelSpans(request.jsonBody))
-              .map((span) => span.traceId),
-          ].filter((id): id is string => typeof id === "string"),
+    const wiring = runner === "deno" ? null : cassetteWiringFor(options);
+    try {
+      return await run(wiring);
+    } finally {
+      // Expected failures can still consume a cassette. Keep that usage too.
+      await recordScenarioRunContext({
+        cassetteVariantKey: wiring?.variantKey ?? null,
+        forwardToProduction: prodForwarding !== null,
+        logRootSpanIds: [
+          ...new Set(
+            [
+              ...server.events
+                .filter((event) => !event.experimentId)
+                .map((event) => event.span.rootId),
+              ...server.requests
+                .filter((request) => request.path === "/otel/v1/traces")
+                .flatMap((request) => extractOtelSpans(request.jsonBody))
+                .map((span) => span.traceId),
+            ].filter((id): id is string => typeof id === "string"),
+          ),
+        ],
+        experimentNames: server.experiments
+          .filter((experiment) =>
+            server.events.some((event) => event.experimentId === experiment.id),
+          )
+          .map((experiment) => experiment.name),
+        entry: options.entry ?? defaultEntry,
+        runner,
+        scenarioDirName: path.basename(
+          options.runContext?.originalScenarioDir ?? options.scenarioDir,
         ),
-      ],
-      experimentNames: server.experiments
-        .filter((experiment) =>
-          server.events.some((event) => event.experimentId === experiment.id),
-        )
-        .map((experiment) => experiment.name),
-      entry: options.entry ?? defaultEntry,
-      runner,
-      scenarioDirName: path.basename(
-        options.runContext?.originalScenarioDir ?? options.scenarioDir,
-      ),
-      testRunId,
-      timestamp: new Date().toISOString(),
-      variantKey: options.runContext?.variantKey,
-    });
-    return result;
+        testRunId,
+        timestamp: new Date().toISOString(),
+        variantKey: options.runContext?.variantKey,
+      });
+    }
   };
 
   try {
@@ -908,8 +908,8 @@ export async function withScenarioHarness(
           }),
         ),
       runNodeScenarioDir: (options) =>
-        runWithContext(options, "node", "scenario.mjs", async () =>
-          runWithCassetteServer(options, (cassetteEnv) =>
+        runWithContext(options, "node", "scenario.mjs", async (wiring) =>
+          runWithCassetteServer(wiring, (cassetteEnv) =>
             runNodeScenarioDir({
               ...options,
               env: {
@@ -921,8 +921,8 @@ export async function withScenarioHarness(
           ),
         ),
       runScenarioDir: (options) =>
-        runWithContext(options, "tsx", "scenario.ts", async () =>
-          runWithCassetteServer(options, (cassetteEnv) =>
+        runWithContext(options, "tsx", "scenario.ts", async (wiring) =>
+          runWithCassetteServer(wiring, (cassetteEnv) =>
             runScenarioDir({
               ...options,
               env: {

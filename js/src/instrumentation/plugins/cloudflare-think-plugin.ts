@@ -19,11 +19,13 @@ import type { ChannelMessage } from "../core/tracing-types";
 // tool, output, and usage data that the outer Think call does not expose.
 import type { AISDKResult } from "../../vendor-sdk-types/ai-sdk";
 import type { CloudflareThinkMessage } from "../../vendor-sdk-types/cloudflare-think";
+import { braintrustAISDKTelemetry } from "../../wrappers/ai-sdk/telemetry";
 import { aiSDKChannels } from "./ai-sdk-interceptors";
 import {
   DEFAULT_DENY_OUTPUT_PATHS,
   finalizeAISDKChildTracing,
   patchAISDKStreamingResult,
+  patchAISDKV7TelemetryDispatcher,
   prepareAISDKAgentCallInput,
 } from "./ai-sdk-plugin";
 import { cloudflareThinkChannels } from "./cloudflare-think-interceptors";
@@ -35,6 +37,7 @@ import {
 type ThinkRunState = {
   aiEvent?: Record<string, unknown>;
   aiResultPatched: boolean;
+  telemetryClaimed: boolean;
   fallbackInput?: unknown;
   finalized: boolean;
   inputLogged: boolean;
@@ -52,9 +55,38 @@ export class CloudflareThinkPlugin extends BasePlugin {
   private readonly statesBySpanId = new Map<string, ThinkRunState>();
 
   protected onEnable(): void {
+    const telemetry = braintrustAISDKTelemetry();
     this.subscribeToThinkRuns();
     this.subscribeToAISDKStreamTextSync();
     this.subscribeToAISDKStreamTextAsync();
+    this.unsubscribers.push(
+      aiSDKChannels.v7CreateTelemetryDispatcher.intercept(
+        (target, receiver, args) => {
+          const dispatcher = Reflect.apply(target, receiver, args);
+          if (this.currentState() && args[0]?.telemetry?.isEnabled !== false) {
+            // Think must also work when the standalone AI SDK integration is
+            // disabled. Dispatcher patching is shared and idempotent.
+            runInstrumentation(() =>
+              patchAISDKV7TelemetryDispatcher(
+                dispatcher,
+                telemetry,
+                args[0]?.telemetry,
+              ),
+            );
+          }
+          return dispatcher;
+        },
+      ),
+      aiSDKChannels.streamTextV7.intercept((target, receiver, args) => {
+        const state = this.currentState();
+        const result = Reflect.apply(target, receiver, args);
+        const telemetry = args[0]?.telemetry ?? args[0]?.experimental_telemetry;
+        if (state && telemetry?.isEnabled !== false) {
+          state.aiResultPatched = true;
+        }
+        return result;
+      }),
+    );
   }
 
   protected onDisable(): void {
@@ -94,6 +126,7 @@ export class CloudflareThinkPlugin extends BasePlugin {
       );
       const runState: ThinkRunState = {
         aiResultPatched: false,
+        telemetryClaimed: false,
         fallbackInput: extractFallbackInput(event.self?.messages),
         finalized: false,
         inputLogged: false,
@@ -114,7 +147,39 @@ export class CloudflareThinkPlugin extends BasePlugin {
       if (span.spanId) {
         this.statesBySpanId.set(span.spanId, runState);
       }
-      registerCloudflareThinkSpan(span);
+      registerCloudflareThinkSpan({
+        span,
+        startTelemetry: (input, metadata) => {
+          // Only the outer inference stream owns this task. A stream started
+          // inside a tool must retain its own AI SDK operation span.
+          if (runState.finalized || runState.telemetryClaimed) {
+            return false;
+          }
+          runState.telemetryClaimed = true;
+          runState.aiResultPatched = true;
+          runState.inputLogged = true;
+          span.log({
+            ...(input !== undefined
+              ? { input: extractThinkTaskInput(input) }
+              : {}),
+            metadata: {
+              ...metadata,
+              braintrust: {
+                integration_name: "cloudflare-think",
+                sdk_language: "typescript",
+              },
+            },
+          });
+          return true;
+        },
+        finishTelemetry: (output, metrics, error) => {
+          if (runState.finalized) {
+            return;
+          }
+          span.log({ metrics });
+          this.finishState(runState, error, output);
+        },
+      });
       return runState;
     };
 

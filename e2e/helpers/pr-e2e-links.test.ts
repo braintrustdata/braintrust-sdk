@@ -25,6 +25,19 @@ it("links published runs while preserving legacy records and excluding local-onl
           label: name,
           metadataScenario: name,
         })),
+        {
+          scenarioDirName: "grouped",
+          label: "Grouped",
+          metadataScenario: "grouped",
+          variants: [
+            {
+              variantKey: "v1",
+              label: "v1",
+              variantKeys: ["v1-manual", "v1-auto"],
+            },
+            { variantKey: "v2", label: "v2" },
+          ],
+        },
       ]),
     );
     await writeFile(
@@ -54,6 +67,14 @@ it("links published runs while preserving legacy records and excluding local-onl
           logRootSpanIds: [],
           experimentNames: [],
         },
+        ...["manual", "auto"].map((mode) => ({
+          scenarioDirName: "grouped",
+          variantKey: `v1-${mode}`,
+          testRunId: `e2e-${mode}`,
+          forwardToProduction: true,
+          logRootSpanIds: [`trace-${mode}`],
+          experimentNames: [],
+        })),
       ]
         .map((record) =>
           JSON.stringify({ scenarioDirName: "scenario", ...record }),
@@ -82,7 +103,7 @@ it("links published runs while preserving legacy records and excluding local-onl
     expect(stdout).toContain("e2e-legacy");
     expect(stdout).not.toContain("e2e-local-only");
     const logsLinks = [...stdout.matchAll(/\[Open logs\]\(([^)]+)\)/g)];
-    expect(logsLinks).toHaveLength(2);
+    expect(logsLinks).toHaveLength(3);
     const search = JSON.parse(
       new URL(logsLinks[1][1]).searchParams.get("search")!,
     );
@@ -92,6 +113,18 @@ it("links published runs while preserving legacy records and excluding local-onl
     expect(stdout).toContain("/experiments/eval%2Fwith%20spaces");
     expect(stdout).toContain("| empty | N/A | Observed (no captured traces) |");
     expect(stdout).not.toContain("e2e-eval");
+    const groupedSearch = JSON.parse(
+      new URL(logsLinks[2][1]).searchParams.get("search")!,
+    );
+    expect(decodeURIComponent(groupedSearch.filter[0].text)).toBe(
+      '(root_span_id IN ("trace-manual", "trace-auto"))',
+    );
+    expect(stdout).toContain("| Grouped (v1) |");
+    expect(stdout).toContain("| Observed (2 runs) |");
+    expect(stdout).toContain(
+      "| Grouped (v2) | N/A | Not observed in this run |",
+    );
+    expect(stdout).not.toContain("unconfigured variant");
   } finally {
     await rm(dir, { recursive: true, force: true });
   }

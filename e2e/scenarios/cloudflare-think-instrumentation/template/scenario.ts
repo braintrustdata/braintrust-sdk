@@ -2,6 +2,7 @@ import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
 import { once } from "node:events";
 import { writeFile } from "node:fs/promises";
 import { createRequire } from "node:module";
+import { createServer, type AddressInfo } from "node:net";
 import path from "node:path";
 
 const require = createRequire(import.meta.url);
@@ -9,7 +10,15 @@ const viteBin = path.join(
   path.dirname(require.resolve("vite/package.json")),
   "bin/vite.js",
 );
-const port = 9400 + Math.floor(Math.random() * 400);
+const portReservation = createServer();
+await new Promise<void>((resolve, reject) => {
+  portReservation.once("error", reject);
+  portReservation.listen(0, "127.0.0.1", resolve);
+});
+const port = (portReservation.address() as AddressInfo).port;
+await new Promise<void>((resolve, reject) =>
+  portReservation.close((error) => (error ? reject(error) : resolve())),
+);
 const origin = `http://127.0.0.1:${port}`;
 await writeFile(
   ".dev.vars",
