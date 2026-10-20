@@ -22,16 +22,12 @@ type ScenarioRunner = (harness: {
 export function defineCloudflareThinkAssertions(options: {
   name: string;
   runScenario: ScenarioRunner;
-  snapshotName: string;
+  snapshotName?: string;
   testFileUrl: string;
   timeoutMs: number;
   usesV7Telemetry: boolean;
 }): void {
   const timeoutMs = effectiveScenarioTimeoutMs(options.timeoutMs);
-  const snapshotPath = resolveFileSnapshotPath(
-    options.testFileUrl,
-    `${options.snapshotName}.span-tree.json`,
-  );
 
   describe(options.name, () => {
     let events: CapturedLogEvent[] = [];
@@ -133,6 +129,13 @@ export function defineCloudflareThinkAssertions(options: {
       },
     );
 
+    if (!options.snapshotName) {
+      return;
+    }
+    const snapshotPath = resolveFileSnapshotPath(
+      options.testFileUrl,
+      `${options.snapshotName}.span-tree.json`,
+    );
     test("matches the span tree snapshot", { timeout: timeoutMs }, async () => {
       expect(setupError).toBeUndefined();
       const names = new Set(["Think.runTurn", "doStream", "lookup_weather"]);

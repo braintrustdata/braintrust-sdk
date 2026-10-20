@@ -52,6 +52,7 @@ for (const aiMajor of [6, 7]) {
                 ? "agents-v0-22"
                 : "agents",
         dependencyName,
+        snapshot: minor === 13 || minor === 20,
         label: `0.${minor} ${lane} / AI SDK ${aiMajor}`,
         scenarioDir,
         variantKey: `${dependencyName}-ai${aiMajor}`,
@@ -89,7 +90,9 @@ describeVariants("Cloudflare Think variants", () => {
               timeoutMs: TIMEOUT_MS,
             });
           },
-          snapshotName: `${variant.variantKey}-${mode}`,
+          snapshotName: variant.snapshot
+            ? `${variant.variantKey}-${mode}`
+            : undefined,
           testFileUrl: import.meta.url,
           timeoutMs: TIMEOUT_MS,
         });
