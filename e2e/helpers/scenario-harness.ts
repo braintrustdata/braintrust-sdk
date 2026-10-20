@@ -297,6 +297,7 @@ function getBedrockRegion(): string {
 
 function getCassetteServerRoutes(): CassetteServerRoute[] {
   return [
+    { prefix: "/ai-gateway", upstreamOrigin: "https://ai-gateway.vercel.sh" },
     { prefix: "/anthropic", upstreamOrigin: "https://api.anthropic.com" },
     {
       prefix: "/anthropic-bedrock",
@@ -347,6 +348,7 @@ function getCassetteEnv(wiring: ActiveCassetteWiring): Record<string, string> {
     BRAINTRUST_E2E_CASSETTE_MODE: wiring.mode,
     BRAINTRUST_E2E_CASSETTE_SERVER_URL: serverUrl,
     BRAINTRUST_E2E_CASSETTE_VARIANT: wiring.variantKey,
+    BRAINTRUST_E2E_AI_GATEWAY_BASE_URL: `${serverUrl}/ai-gateway/v4/ai`,
     BRAINTRUST_E2E_MODEL_BASE_URL: `${serverUrl}/openai/v1`,
     ANTHROPIC_BASE_URL: `${serverUrl}/anthropic`,
     ANTHROPIC_BEDROCK_BASE_URL: `${serverUrl}/anthropic-bedrock`,
@@ -721,7 +723,10 @@ interface ScenarioHarness {
 
 export async function withScenarioHarness(
   body: (harness: ScenarioHarness) => Promise<void>,
-  optionsForHarness: { forwardToProduction?: boolean } = {},
+  optionsForHarness: {
+    forwardToProduction?: boolean;
+    isolateProductionLogIds?: boolean;
+  } = {},
 ): Promise<void> {
   const { getProdForwarding } = await import("./prod-forwarding");
   const prodForwarding =
@@ -732,6 +737,7 @@ export async function withScenarioHarness(
   const server = await startMockBraintrustServer({
     prodForwarding,
     testRunId,
+    isolateProductionLogIds: optionsForHarness.isolateProductionLogIds,
   });
   const testEnv = getTestServerEnv(
     testRunId,

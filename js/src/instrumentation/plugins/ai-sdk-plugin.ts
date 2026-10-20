@@ -1,6 +1,11 @@
 import { traceAISDKCodeMode } from "./ai-sdk-code-mode";
 import { currentAISDKToolSpan, traceAISDKTool } from "./ai-sdk-tool-tracing";
 import { prepareDecisionAttachments } from "../../decision-attachments";
+import { aiSDKBatchChannels } from "./ai-sdk-batch-interceptors";
+import {
+  captureAISDKBatchStart,
+  captureAISDKBatchCompletion,
+} from "./ai-sdk-batch-instrumentation";
 import type { ReturnOf } from "../core/interceptor-definitions";
 import { debugLogger } from "../../debug-logger";
 import { BasePlugin, toLoggedError } from "../core";
@@ -221,6 +226,17 @@ export class AISDKPlugin extends BasePlugin {
   private subscribeToAISDK(): void {
     const denyOutputPaths =
       this.config.denyOutputPaths || DEFAULT_DENY_OUTPUT_PATHS;
+
+    this.unsubscribers.push(
+      aiSDKBatchChannels.start.intercept(async (target, receiver, args) => {
+        await Reflect.apply(target, receiver, args);
+        return captureAISDKBatchStart(args[0]);
+      }),
+      aiSDKBatchChannels.complete.intercept(async (target, receiver, args) => {
+        await Reflect.apply(target, receiver, args);
+        await captureAISDKBatchCompletion(args[0], denyOutputPaths);
+      }),
+    );
 
     this.unsubscribers.push(
       codeModeChannels.run.intercept((target, receiver, [input]) =>

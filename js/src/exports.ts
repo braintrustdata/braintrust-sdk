@@ -131,6 +131,8 @@ export {
 
 export { registerSandbox } from "./sandbox";
 
+export { startAISDKBatchTrace, completeAISDKBatchTrace } from "./ai-sdk-batch";
+
 export {
   completeOpenAIBatchTrace,
   openaiBatchesRetrieveTraced,
