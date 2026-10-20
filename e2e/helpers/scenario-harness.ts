@@ -81,6 +81,7 @@ export interface ScenarioRunContext {
 }
 
 interface ScenarioRunContextRecord {
+  cassetteVariantKey?: string;
   forwardToProduction?: boolean;
   logRootSpanIds: string[];
   experimentNames: string[];
@@ -859,6 +860,7 @@ export async function withScenarioHarness(
   ): Promise<ScenarioResult> => {
     const result = await run();
     await recordScenarioRunContext({
+      cassetteVariantKey: cassetteWiringFor(options)?.variantKey,
       forwardToProduction: prodForwarding !== null,
       logRootSpanIds: [
         ...new Set(

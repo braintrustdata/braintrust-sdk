@@ -47,12 +47,15 @@ describe.sequential("AI SDK batch instrumentation", () => {
               runContext: {
                 variantKey,
                 originalScenarioDir,
-                cassette: { variantKey: `${variantKey}-${mode}` },
               },
             };
             try {
               await harness.runNodeScenarioDir({
                 ...options,
+                runContext: {
+                  ...options.runContext,
+                  cassette: { variantKey: `${variantKey}-${mode}-submit` },
+                },
                 env: { ...env, AI_SDK_BATCH_PHASE: "submit" },
               });
               const { context } = JSON.parse(
@@ -72,6 +75,10 @@ describe.sequential("AI SDK batch instrumentation", () => {
               expect(initialIds).toHaveLength(2);
               await harness.runNodeScenarioDir({
                 ...options,
+                runContext: {
+                  ...options.runContext,
+                  cassette: { variantKey: `${variantKey}-${mode}-complete` },
+                },
                 env: { ...env, AI_SDK_BATCH_PHASE: "complete" },
               });
               const events = harness.events();

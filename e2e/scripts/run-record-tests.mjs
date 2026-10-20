@@ -126,17 +126,18 @@ async function cleanupStaleCassettes(scenarioNames, records) {
   const { createJsonFileStore } = await import("@braintrust/seinfeld");
   const variantsByScenario = new Map();
   for (const record of records) {
+    const cassetteVariantKey = record.cassetteVariantKey ?? record.variantKey;
     if (
       typeof record.scenarioDirName !== "string" ||
-      typeof record.variantKey !== "string" ||
-      !record.variantKey.trim()
+      typeof cassetteVariantKey !== "string" ||
+      !cassetteVariantKey.trim()
     ) {
       continue;
     }
 
     const variants =
       variantsByScenario.get(record.scenarioDirName) ?? new Set();
-    variants.add(record.variantKey);
+    variants.add(cassetteVariantKey);
     variantsByScenario.set(record.scenarioDirName, variants);
   }
 
