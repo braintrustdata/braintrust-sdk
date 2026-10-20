@@ -640,6 +640,26 @@ function toChatChoice(choice: AggregatedChatChoice): OpenAIChatChoice {
   };
 }
 
+// Some OpenAI-compatible providers omit `index` on streamed tool call deltas.
+// A delta with a new id starts the next call; a delta without an id continues
+// the latest one.
+function resolveToolCallIndex(
+  toolCallsByIndex: AggregatedChatChoice["toolCallsByIndex"],
+  toolDelta: { index?: number | null; id?: string },
+): number {
+  if (typeof toolDelta.index === "number") {
+    return toolDelta.index;
+  }
+  if (toolCallsByIndex.size === 0) {
+    return 0;
+  }
+  const lastIndex = Math.max(...toolCallsByIndex.keys());
+  const lastId = toolCallsByIndex.get(lastIndex)?.id;
+  return toolDelta.id && lastId && lastId !== toolDelta.id
+    ? lastIndex + 1
+    : lastIndex;
+}
+
 /**
  * Aggregate chat completion chunks into a single response.
  * Combines role (first), content, reasoning_content and audio transcripts (concatenated),
@@ -740,15 +760,18 @@ export function aggregateChatCompletionChunks(
 
       if (delta.tool_calls) {
         for (const toolDelta of delta.tool_calls) {
-          let aggregatedToolCall = aggregatedChoice.toolCallsByIndex.get(
-            toolDelta.index,
+          const toolIndex = resolveToolCallIndex(
+            aggregatedChoice.toolCallsByIndex,
+            toolDelta,
           );
+          let aggregatedToolCall =
+            aggregatedChoice.toolCallsByIndex.get(toolIndex);
           if (!aggregatedToolCall) {
             aggregatedToolCall = {
               function: { arguments: "" },
             };
             aggregatedChoice.toolCallsByIndex.set(
-              toolDelta.index,
+              toolIndex,
               aggregatedToolCall,
             );
           }
