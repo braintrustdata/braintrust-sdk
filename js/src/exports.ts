@@ -44,6 +44,8 @@ export type {
   WithTransactionId,
 } from "./logger";
 
+export { wrapConsole } from "./logs";
+
 export type {
   SandboxConfig,
   RegisterSandboxOptions,

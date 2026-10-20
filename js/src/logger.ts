@@ -1,6 +1,13 @@
 /// <reference lib="dom" />
 
 import { DecisionAttachmentProcessor } from "./decision-attachments";
+import {
+  formatLogTemplate,
+  renderLogBody,
+  type ApplicationLogLevel,
+  type ApplicationLogOptions,
+  type ApplicationLogTemplate,
+} from "./logs/templates";
 
 import { v4 as uuidv4 } from "uuid";
 
@@ -2900,6 +2907,7 @@ export class Logger<IsAsyncFlush extends boolean> implements Exportable {
   private lastStartTime: number;
   private lazyId: LazyValue<string>;
   private calledStartSpan: boolean;
+  private baselineTraceId?: string;
 
   // For type identification.
   public kind = "logger" as const;
@@ -2981,6 +2989,125 @@ export class Logger<IsAsyncFlush extends boolean> implements Exportable {
         return ret;
       })() as Ret;
     }
+  }
+
+  /**
+   * Capture an application log as one complete row, correlated with the active
+   * Braintrust or OpenTelemetry span. Without an active span, logs from this
+   * logger share a baseline trace ID.
+   */
+  private emitLog(
+    body: unknown,
+    level: ApplicationLogLevel,
+    options?: ApplicationLogOptions,
+  ): PromiseUnless<IsAsyncFlush, string> {
+    const rendered = renderLogBody(body, options);
+    const timestamp = getCurrentUnixTimestamp();
+    const current = this.state.contextManager.getParentSpanIds();
+    // Supply all fields in the initial write. Calling span.end() here would
+    // enqueue an unnecessary second write for this instantaneous event.
+    const span = new SpanImpl({
+      state: this.state,
+      parentObjectType: this.parentObjectType(),
+      parentObjectId: this.lazyId,
+      parentComputeObjectMetadataArgs: this.computeMetadataArgs,
+      parentSpanIds: {
+        // Late OpenTelemetry setup can replace the ID generator. Resolve the
+        // baseline only when a standalone log first needs it.
+        rootSpanId:
+          current?.rootSpanId ??
+          (this.baselineTraceId ??= this.state.idGenerator.getTraceId()),
+        parentSpanIds: [],
+      },
+      spanId: current?.spanParents[0],
+      name: "Log",
+      spanAttributes: { name: null, type: "log", log_level: level },
+      startTime: timestamp,
+      event: {
+        output: rendered.body,
+        metadata: rendered.metadata,
+        metrics: { end: timestamp },
+      },
+    });
+    type Ret = PromiseUnless<IsAsyncFlush, string>;
+    if (this.asyncFlush === true) return span.id as Ret;
+    return this.flush().then(() => span.id) as Ret;
+  }
+
+  /**
+   * Preserve a native JavaScript template literal and its interpolation values.
+   * Format values with JavaScript expressions, such as `${amount.toFixed(2)}`.
+   * Pass the result to any application-log severity method.
+   *
+   * @example
+   * logger.info(logger.fmt`User ${userId} paid ${amount.toFixed(2)}`, {
+   *   metadata: { source: "checkout" },
+   * });
+   */
+  public fmt(
+    strings: TemplateStringsArray,
+    ...values: unknown[]
+  ): ApplicationLogTemplate {
+    return formatLogTemplate(strings, values);
+  }
+
+  /** Capture a trace-level application log. Does not start a trace. */
+  public trace(
+    body: unknown,
+    options?: ApplicationLogOptions,
+  ): PromiseUnless<IsAsyncFlush, string> {
+    return this.emitLog(body, "trace", options);
+  }
+
+  /** Capture a debug-level application log. Supports {@link Logger.fmt} templates. */
+  public debug(
+    body: unknown,
+    options?: ApplicationLogOptions,
+  ): PromiseUnless<IsAsyncFlush, string> {
+    return this.emitLog(body, "debug", options);
+  }
+
+  /**
+   * Capture an info-level application log. Bodies may be any JSON-serializable value.
+   * Logs share the active span's IDs, or a baseline trace ID for this logger.
+   * Use {@link Logger.fmt} to preserve a native JavaScript template and its values
+   * in `braintrust.template` metadata fields.
+   * Returns the row ID, or a promise resolving after flush when asyncFlush is false.
+   *
+   * @example
+   * logger.info(logger.fmt`User ${userId} paid ${amount.toFixed(2)}`, {
+   *   metadata: { source: "checkout" },
+   * });
+   */
+  public info(
+    body: unknown,
+    options?: ApplicationLogOptions,
+  ): PromiseUnless<IsAsyncFlush, string> {
+    return this.emitLog(body, "info", options);
+  }
+
+  /** Capture a warn-level application log. Supports {@link Logger.fmt} templates. */
+  public warn(
+    body: unknown,
+    options?: ApplicationLogOptions,
+  ): PromiseUnless<IsAsyncFlush, string> {
+    return this.emitLog(body, "warn", options);
+  }
+
+  /** Capture an error-level application log. Supports {@link Logger.fmt} templates. */
+  public error(
+    body: unknown,
+    options?: ApplicationLogOptions,
+  ): PromiseUnless<IsAsyncFlush, string> {
+    return this.emitLog(body, "error", options);
+  }
+
+  /** Capture a fatal-level application log. Supports {@link Logger.fmt} templates. */
+  public fatal(
+    body: unknown,
+    options?: ApplicationLogOptions,
+  ): PromiseUnless<IsAsyncFlush, string> {
+    return this.emitLog(body, "fatal", options);
   }
 
   /**
