@@ -221,7 +221,7 @@
     "typedoc": "^0.25.13",
     "typedoc-plugin-markdown": "^3.17.1",
     "typescript": "5.4.4",
-    "vite": "^8.1.5",
+    "vite": "^8.1.6",
     "vite-tsconfig-paths": "^4.3.2",
     "vitest": "4.1.11",
     "webpack": "^5.106.2",
