@@ -1,4 +1,9 @@
 import { debugLogger } from "../../debug-logger";
+import {
+  AI_SDK_TOOL_CALL_ID,
+  AI_SDK_TOOL_CAPTURE,
+  type AISDKToolSpan,
+} from "../../instrumentation/plugins/ai-sdk-tool-tracing";
 import { isAutoInstrumentationSuppressed } from "../../instrumentation/auto-instrumentation-suppression";
 import {
   SpanTypeAttribute,
@@ -41,7 +46,10 @@ import type {
   AISDKV7Telemetry,
   AISDKV7TelemetryOptions,
 } from "../../vendor-sdk-types/ai-sdk-v7-telemetry";
-import { BRAINTRUST_AI_SDK_V7_OPERATION_KEY as AI_SDK_V7_OPERATION_KEY } from "../../vendor-sdk-types/ai-sdk-v7-telemetry";
+import {
+  BRAINTRUST_AI_SDK_V7_TELEMETRY,
+  BRAINTRUST_AI_SDK_V7_OPERATION_KEY as AI_SDK_V7_OPERATION_KEY,
+} from "../../vendor-sdk-types/ai-sdk-v7-telemetry";
 import { currentWorkflowAgentWrapperSpan } from "./workflow-agent-context";
 import {
   currentHarnessTurnParent,
@@ -537,6 +545,7 @@ export function braintrustAISDKTelemetry(): any {
   };
 
   return {
+    [BRAINTRUST_AI_SDK_V7_TELEMETRY]: true,
     experimental_onEvaluateStart: onDecisionStart,
     experimental_onEvaluateEnd: onEnd,
     experimental_onDecideStart: onDecisionStart,
@@ -962,6 +971,11 @@ export function braintrustAISDKTelemetry(): any {
           },
           state?.harnessTurnParent,
         );
+        (span as AISDKToolSpan)[AI_SDK_TOOL_CALL_ID] = toolCallId;
+        (span as AISDKToolSpan)[AI_SDK_TOOL_CAPTURE] = {
+          recordInputs: shouldRecordInputs(event),
+          recordOutputs: shouldRecordOutputs(event),
+        };
         toolSpans.set(toolCallId, { operationKey, span });
       });
     },
@@ -1070,7 +1084,7 @@ export function braintrustAISDKTelemetry(): any {
       const state = toolSpans.get(toolCallId);
       return state ? withCurrent(state.span, () => execute()) : execute();
     },
-  } satisfies AISDKV7Telemetry;
+  } satisfies AISDKV7Telemetry & { [BRAINTRUST_AI_SDK_V7_TELEMETRY]: true };
 }
 
 function shouldRecordInputs(event: AISDKV7TelemetryOptions): boolean {

@@ -17,6 +17,15 @@ export interface AISDKV7TelemetryOptions {
   functionId?: string;
 }
 
+export const BRAINTRUST_AI_SDK_V7_TELEMETRY = Symbol.for(
+  "braintrust.ai-sdk.v7.telemetry",
+);
+
+/** The registry read by AI SDK's getGlobalTelemetryIntegrations(). */
+export interface AISDKV7TelemetryGlobal {
+  AI_SDK_TELEMETRY_INTEGRATIONS?: unknown[];
+}
+
 export const BRAINTRUST_AI_SDK_V7_OPERATION_KEY = Symbol.for(
   "braintrust.ai-sdk.v7.telemetry-operation-key",
 );

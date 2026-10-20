@@ -1,3 +1,5 @@
+import { traceAISDKCodeMode } from "./ai-sdk-code-mode";
+import { currentAISDKToolSpan, traceAISDKTool } from "./ai-sdk-tool-tracing";
 import { prepareDecisionAttachments } from "../../decision-attachments";
 import { aiSDKBatchChannels } from "./ai-sdk-batch-interceptors";
 import {
@@ -62,9 +64,13 @@ import type {
 } from "../../vendor-sdk-types/ai-sdk";
 import type {
   AISDKV7Telemetry,
+  AISDKV7TelemetryGlobal,
   AISDKV7TelemetryOptions,
 } from "../../vendor-sdk-types/ai-sdk-v7-telemetry";
-import { BRAINTRUST_AI_SDK_V7_OPERATION_KEY as AI_SDK_V7_OPERATION_KEY } from "../../vendor-sdk-types/ai-sdk-v7-telemetry";
+import {
+  BRAINTRUST_AI_SDK_V7_TELEMETRY,
+  BRAINTRUST_AI_SDK_V7_OPERATION_KEY as AI_SDK_V7_OPERATION_KEY,
+} from "../../vendor-sdk-types/ai-sdk-v7-telemetry";
 import {
   captureHarnessCreateSessionParent,
   endHarnessTurn,
@@ -96,6 +102,7 @@ import type { ChannelMessage } from "../core/tracing-types";
 import {
   BRAINTRUST_WRAPPED_AI_SDK_MODEL,
   aiSDKChannels,
+  codeModeChannels,
   harnessAgentChannels,
 } from "./ai-sdk-interceptors";
 import { extractTokenMetrics } from "./ai-sdk-metrics";
@@ -267,6 +274,12 @@ export class AISDKPlugin extends BasePlugin {
     );
 
     this.unsubscribers.push(
+      codeModeChannels.run.intercept((target, receiver, [input]) =>
+        traceAISDKCodeMode(
+          (params) => Reflect.apply(target, receiver, [params]),
+          input,
+        ),
+      ),
       interceptAISDKV7TelemetryDispatcher(),
       interceptAISDKEvaluate(denyOutputPaths),
       interceptAISDKModelGenerate(denyOutputPaths),
@@ -1314,7 +1327,19 @@ function interceptAISDKV7TelemetryDispatcher(): () => void {
     (target, thisArg, args) => {
       const dispatcher = Reflect.apply(target, thisArg, args);
       const telemetryOptions = args[0]?.telemetry;
-      if (telemetryOptions?.isEnabled !== false) {
+      // Per-call integrations replace the global registry in AI SDK. Let an
+      // explicitly registered Braintrust integration own the whole lifecycle.
+      const integrations =
+        telemetryOptions?.integrations ??
+        (globalThis as AISDKV7TelemetryGlobal).AI_SDK_TELEMETRY_INTEGRATIONS;
+      const hasBraintrust = (
+        Array.isArray(integrations) ? integrations : [integrations]
+      ).some(
+        (integration) =>
+          isObject(integration) &&
+          Reflect.get(integration, BRAINTRUST_AI_SDK_V7_TELEMETRY) === true,
+      );
+      if (telemetryOptions?.isEnabled !== false && !hasBraintrust) {
         try {
           patchAISDKV7TelemetryDispatcher(
             dispatcher,
@@ -3261,69 +3286,23 @@ function prepareAISDKChildTracing(
     };
     toolRecord[AUTO_PATCHED_TOOL] = state;
     tool.execute = function executePatched(...args: unknown[]) {
-      const activeEntry = activeAISDKChildPatchEntry(state.entries);
-      const result = Reflect.apply(originalExecute, this, args);
-      if (!activeEntry) {
-        return result;
-      }
-
       const executionOptions = args[1];
-      const toolCallId = isObject(executionOptions)
-        ? executionOptions.toolCallId
-        : undefined;
-      const toolInput = {
-        input: serializeToolExecutionInput(args),
-        ...(typeof toolCallId === "string" ? { metadata: { toolCallId } } : {}),
-      };
-
-      if (isAsyncGenerator(result)) {
-        return (async function* () {
-          const span = activeEntry.parentSpan.startSpan(
-            withSpanInstrumentationName(
-              {
-                name: activeEntry.name,
-                spanAttributes: {
-                  type: SpanTypeAttribute.TOOL,
-                },
-              },
-              INSTRUMENTATION_NAMES.AI_SDK,
-            ),
-          );
-          span.log(toolInput);
-
-          try {
-            let lastValue: unknown;
-            for await (const value of result) {
-              lastValue = value;
-              yield value;
-            }
-            span.log({ output: lastValue });
-          } catch (error) {
-            span.log({ error: toLoggedError(error) });
-            throw error;
-          } finally {
-            span.end();
-          }
-        })();
+      const toolCallId =
+        isObject(executionOptions) &&
+        typeof executionOptions.toolCallId === "string"
+          ? executionOptions.toolCallId
+          : undefined;
+      if (currentAISDKToolSpan(toolCallId)) {
+        return Reflect.apply(originalExecute, this, args);
       }
-
-      return activeEntry.parentSpan.traced(
-        async (span) => {
-          span.log(toolInput);
-          const awaitedResult = await result;
-          span.log({ output: awaitedResult });
-          return awaitedResult;
-        },
-        withSpanInstrumentationName(
-          {
-            name: activeEntry.name,
-            spanAttributes: {
-              type: SpanTypeAttribute.TOOL,
-            },
-          },
-          INSTRUMENTATION_NAMES.AI_SDK,
-        ),
-      );
+      const activeEntry = activeAISDKChildPatchEntry(state.entries);
+      if (!activeEntry) return Reflect.apply(originalExecute, this, args);
+      return traceAISDKTool(() => Reflect.apply(originalExecute, this, args), {
+        name: activeEntry.name,
+        input: serializeToolExecutionInput(args),
+        toolCallId,
+        parent: activeEntry.parentSpan,
+      });
     };
 
     cleanup.push(() => {
@@ -4210,17 +4189,6 @@ function extractTextDelta(chunk: AISDKModelStreamChunk): string {
   if (typeof chunk.text === "string") return chunk.text;
   if (typeof chunk.content === "string") return chunk.content;
   return "";
-}
-
-function isAsyncGenerator(value: unknown): value is AsyncGenerator {
-  return (
-    value != null &&
-    typeof value === "object" &&
-    typeof (value as AsyncGenerator)[Symbol.asyncIterator] === "function" &&
-    typeof (value as AsyncGenerator).next === "function" &&
-    typeof (value as AsyncGenerator).return === "function" &&
-    typeof (value as AsyncGenerator).throw === "function"
-  );
 }
 
 /**
