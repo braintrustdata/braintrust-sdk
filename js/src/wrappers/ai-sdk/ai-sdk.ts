@@ -1,6 +1,8 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 import { SpanTypeAttribute } from "../../../util";
+import { aiSDKBatchChannels } from "../../instrumentation/plugins/ai-sdk-batch-interceptors";
+import type { AISDKBatchAPI } from "../../vendor-sdk-types/ai-sdk-batch";
 import {
   aiSDKChannels,
   BRAINTRUST_WRAPPED_AI_SDK_MODEL,
@@ -137,6 +139,76 @@ export function wrapAISDK<T>(aiSDK: T, options: WrapAISDKOptions = {}): T {
     get(target, prop, receiver) {
       const original = Reflect.get(target, prop, receiver);
       switch (prop) {
+        case "experimental_startBatch": {
+          const batchSDK = aiSDK as unknown as AISDKBatchAPI;
+          return typeof original === "function"
+            ? function (
+                this: unknown,
+                params: Parameters<AISDKBatchAPI["experimental_startBatch"]>[0],
+              ) {
+                return aiSDKBatchChannels.startBatch.invoke(
+                  batchSDK.experimental_startBatch,
+                  this,
+                  [params],
+                  options,
+                );
+              }
+            : original;
+        }
+        case "experimental_getBatchStatus": {
+          const batchSDK = aiSDK as unknown as AISDKBatchAPI;
+          return typeof original === "function"
+            ? function (
+                this: unknown,
+                params: Parameters<
+                  AISDKBatchAPI["experimental_getBatchStatus"]
+                >[0],
+              ) {
+                return aiSDKBatchChannels.getBatchStatus.invoke(
+                  batchSDK.experimental_getBatchStatus,
+                  this,
+                  [params],
+                  {},
+                );
+              }
+            : original;
+        }
+        case "experimental_getBatchResults": {
+          const batchSDK = aiSDK as unknown as AISDKBatchAPI;
+          return typeof original === "function"
+            ? function (
+                this: unknown,
+                params: Parameters<
+                  AISDKBatchAPI["experimental_getBatchResults"]
+                >[0],
+              ) {
+                return aiSDKBatchChannels.getBatchResults.invoke(
+                  batchSDK.experimental_getBatchResults,
+                  this,
+                  [params],
+                  options,
+                );
+              }
+            : original;
+        }
+        case "experimental_cancelBatch": {
+          const batchSDK = aiSDK as unknown as AISDKBatchAPI;
+          return typeof original === "function"
+            ? function (
+                this: unknown,
+                params: Parameters<
+                  AISDKBatchAPI["experimental_cancelBatch"]
+                >[0],
+              ) {
+                return aiSDKBatchChannels.cancelBatch.invoke(
+                  batchSDK.experimental_cancelBatch,
+                  this,
+                  [params],
+                  {},
+                );
+              }
+            : original;
+        }
         case "experimental_decide":
         case "experimental_evaluate": {
           const evaluate = typedAISDK[prop];

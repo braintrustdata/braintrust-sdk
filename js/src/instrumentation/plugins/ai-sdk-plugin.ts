@@ -1,4 +1,13 @@
 import { prepareDecisionAttachments } from "../../decision-attachments";
+import { aiSDKBatchChannels } from "./ai-sdk-batch-interceptors";
+import {
+  exportAISDKBatchContext,
+  resumeAISDKBatchContext,
+  traceAISDKBatchResults,
+  traceAISDKBatchStatus,
+  traceAISDKCancelBatch,
+  traceAISDKStartBatch,
+} from "./ai-sdk-batch-instrumentation";
 import type { ReturnOf } from "../core/interceptor-definitions";
 import { debugLogger } from "../../debug-logger";
 import { BasePlugin, toLoggedError } from "../core";
@@ -213,6 +222,49 @@ export class AISDKPlugin extends BasePlugin {
   private subscribeToAISDK(): void {
     const denyOutputPaths =
       this.config.denyOutputPaths || DEFAULT_DENY_OUTPUT_PATHS;
+
+    this.unsubscribers.push(
+      aiSDKBatchChannels.startBatch.intercept(
+        (target, receiver, args, additional) =>
+          traceAISDKStartBatch(
+            () => Reflect.apply(target, receiver, args),
+            args[0],
+            additional.denyOutputPaths ?? denyOutputPaths,
+          ),
+      ),
+      aiSDKBatchChannels.getBatchStatus.intercept((target, receiver, args) =>
+        traceAISDKBatchStatus(
+          () => Reflect.apply(target, receiver, args),
+          args[0].batch,
+        ),
+      ),
+      aiSDKBatchChannels.getBatchResults.intercept(
+        (target, receiver, args, additional) =>
+          traceAISDKBatchResults(
+            () => Reflect.apply(target, receiver, args),
+            args[0].batch,
+            additional.denyOutputPaths,
+          ),
+      ),
+      aiSDKBatchChannels.cancelBatch.intercept((target, receiver, args) =>
+        traceAISDKCancelBatch(
+          () => Reflect.apply(target, receiver, args),
+          args[0].batch,
+        ),
+      ),
+      aiSDKBatchChannels.exportTrace.intercept(
+        async (target, receiver, args) => {
+          await Reflect.apply(target, receiver, args);
+          return exportAISDKBatchContext(args[0]);
+        },
+      ),
+      aiSDKBatchChannels.resumeTrace.intercept(
+        async (target, receiver, args) => {
+          await Reflect.apply(target, receiver, args);
+          await resumeAISDKBatchContext(args[0]);
+        },
+      ),
+    );
 
     this.unsubscribers.push(
       interceptAISDKV7TelemetryDispatcher(),

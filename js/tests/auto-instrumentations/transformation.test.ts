@@ -25,6 +25,7 @@ import {
   newGlobalInvocationHook,
 } from "../../src/global-instrumentation-hooks";
 import { bundleFixture, fixturesDir } from "./test-bundle";
+import { aiSDKConfigs } from "../../src/auto-instrumentations/configs/ai-sdk";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const outputDir = path.join(__dirname, "output-transformation");
@@ -92,6 +93,67 @@ function expectGlobalHookTransform(output: string): void {
 }
 
 describe("Orchestrion Transformation Tests", () => {
+  it.each(["7.0.108", "7.0.138"])(
+    "invokes batch hooks through AI SDK export aliases in %s",
+    async (version) => {
+      const matcher = new InstrumentationMatcher(aiSDKConfigs);
+      const transformer = matcher.getTransformer(
+        "ai",
+        version,
+        "dist/index.js",
+      )!;
+      const transformed = transformer.transform(
+        `
+        async function startBatch(options) { return options; }
+        async function getBatchStatus(options) { return options; }
+        function getBatchResults(options) { return options.stream; }
+        async function cancelBatch(options) { return options; }
+        export {
+          startBatch as experimental_startBatch,
+          getBatchStatus as experimental_getBatchStatus,
+          getBatchResults as experimental_getBatchResults,
+          cancelBatch as experimental_cancelBatch,
+        };
+      `,
+        "esm",
+      );
+      const compiled = esbuild.transformSync(transformed.code, {
+        format: "cjs",
+      });
+      const loaded = {
+        exports: {} as Record<string, (options: object) => unknown>,
+      };
+      Function("module", "exports", compiled.code)(loaded, loaded.exports);
+      const operations = [
+        "startBatch",
+        "getBatchStatus",
+        "getBatchResults",
+        "cancelBatch",
+      ];
+      const events: string[] = [];
+      const remove = operations.map((operation) =>
+        newGlobalInvocationHook(`orchestrion:ai:${operation}`).intercept(
+          (target, receiver, args) => {
+            events.push(operation);
+            return Reflect.apply(target, receiver, args);
+          },
+        ),
+      );
+      try {
+        const options = { stream: new ReadableStream() };
+        for (const operation of operations) {
+          const result = loaded.exports[`experimental_${operation}`](options);
+          if (operation === "getBatchResults")
+            expect(result).toBe(options.stream);
+          else expect(await result).toBe(options);
+        }
+        expect(events).toEqual(operations);
+      } finally {
+        remove.forEach((unsubscribe) => unsubscribe());
+      }
+    },
+  );
+
   beforeAll(() => {
     // Create output directory
     if (!fs.existsSync(outputDir)) {

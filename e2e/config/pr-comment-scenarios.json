@@ -1,5 +1,20 @@
 [
   {
+    "scenarioDirName": "ai-sdk-batch-instrumentation",
+    "label": "AI SDK Batch Instrumentation",
+    "metadataScenario": "ai-sdk-batch-instrumentation",
+    "variants": [
+      {
+        "variantKey": "ai-sdk-v7",
+        "label": "v7 pinned"
+      },
+      {
+        "variantKey": "ai-sdk-v7-latest",
+        "label": "v7 latest"
+      }
+    ]
+  },
+  {
     "scenarioDirName": "trace-primitives-basic",
     "label": "Trace primitives and project caching",
     "metadataScenario": "trace-primitives-basic"

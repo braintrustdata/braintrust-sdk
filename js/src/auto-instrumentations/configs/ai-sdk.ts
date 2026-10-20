@@ -1,4 +1,5 @@
 import type { InstrumentationConfig } from "../orchestrion-js";
+import { aiSDKBatchChannels } from "../../instrumentation/plugins/ai-sdk-batch-interceptors";
 import {
   aiSDKChannels,
   harnessAgentChannels,
@@ -16,6 +17,20 @@ import {
  * "orchestrion:ai-sdk:generateText"
  */
 export const aiSDKConfigs: InstrumentationConfig[] = [
+  ...(
+    ["startBatch", "getBatchStatus", "getBatchResults", "cancelBatch"] as const
+  ).map((operation) => ({
+    channelName: aiSDKBatchChannels[operation].channelName,
+    module: {
+      name: "ai",
+      versionRange: ">=7.0.108 <8.0.0",
+      filePath: "dist/index.js",
+    },
+    functionQuery: {
+      functionName: `experimental_${operation}`,
+      isExportAlias: true,
+    },
+  })),
   // Older evaluation releases have no telemetry callbacks. Newer versions use
   // the telemetry dispatcher below, including the renamed decision API.
   {
