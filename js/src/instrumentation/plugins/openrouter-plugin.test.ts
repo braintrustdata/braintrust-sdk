@@ -196,6 +196,75 @@ describe("OpenRouter Plugin", () => {
       });
     });
 
+    it("should keep tool calls apart when the provider omits index", () => {
+      const chunk = (toolCall: Record<string, unknown>) => ({
+        choices: [{ delta: { tool_calls: [toolCall] } }],
+      });
+      const result = aggregateOpenRouterChatChunks([
+        chunk({
+          id: "call_1",
+          type: "function",
+          function: { name: "lookup", arguments: '{"city":' },
+        }),
+        chunk({ function: { arguments: '"Vienna"}' } }),
+        chunk({
+          id: "call_2",
+          type: "function",
+          function: { name: "weather", arguments: '{"tz":"CET"}' },
+        }),
+      ]);
+
+      expect(
+        (result.output[0].message?.tool_calls as any[]).map((toolCall) => [
+          toolCall.id,
+          toolCall.function.name,
+          toolCall.function.arguments,
+        ]),
+      ).toEqual([
+        ["call_1", "lookup", '{"city":"Vienna"}'],
+        ["call_2", "weather", '{"tz":"CET"}'],
+      ]);
+    });
+
+    it.each([undefined, null])(
+      "merges interleaved tool calls by ID when index is %s",
+      (index) => {
+        const chunks = [
+          {
+            id: "call_1",
+            type: "function",
+            function: { name: "get_weather", arguments: '{"city":' },
+          },
+          {
+            id: "call_2",
+            type: "function",
+            function: { name: "get_time", arguments: '{"tz":' },
+          },
+          { id: "call_1", function: { arguments: '"Paris"}' } },
+          { id: "call_2", function: { arguments: '"CET"}' } },
+        ].map((toolCall) => ({
+          choices: [
+            { index: 0, delta: { tool_calls: [{ ...toolCall, index }] } },
+          ],
+        }));
+        // @ts-expect-error Providers may emit null indexes despite the SDK type.
+        const result = aggregateOpenRouterChatChunks(chunks);
+
+        expect(result.output[0].message?.tool_calls).toMatchObject([
+          {
+            id: "call_1",
+            type: "function",
+            function: { name: "get_weather", arguments: '{"city":"Paris"}' },
+          },
+          {
+            id: "call_2",
+            type: "function",
+            function: { name: "get_time", arguments: '{"tz":"CET"}' },
+          },
+        ]);
+      },
+    );
+
     it("should return an empty assistant message for empty chunks", () => {
       expect(aggregateOpenRouterChatChunks([])).toEqual({
         output: [
