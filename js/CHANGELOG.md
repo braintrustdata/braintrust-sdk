@@ -1,5 +1,21 @@
 # braintrust
 
+## 3.39.0
+
+### Minor Changes
+
+- feat(ai-sdk): Add batch tracing (https://github.com/braintrustdata/braintrust-sdk-javascript/pull/2642)
+- feat(logs): add application logging and console capture Record application messages with `logger.trace()`, `debug()`, `info()`, `warn()`, `error()`, and `fatal()`. Preserve native JavaScript message templates with `logger.fmt` and capture future console calls with `wrapConsole()`, which returns a cleanup function. Logs share the active span's context and upload as a single complete event. (https://github.com/braintrustdata/braintrust-sdk-javascript/pull/2639)
+- feat(cloudflare-think): Support versions 0.13 through 0.20 (https://github.com/braintrustdata/braintrust-sdk-javascript/pull/2640)
+- feat: Add instrumentation for LiveKit cascade mode Thanks @delner! (https://github.com/braintrustdata/braintrust-sdk-javascript/pull/2633)
+- feat(ai-sdk): Trace code mode (https://github.com/braintrustdata/braintrust-sdk-javascript/pull/2637)
+
+### Patch Changes
+
+- fix(bedrock): Log text and token usage for streamed InvokeModel calls to OpenAI models such as gpt-oss Thanks @pcbeingused333! (https://github.com/braintrustdata/braintrust-sdk-javascript/pull/2632)
+- fix(pi-coding-agent,flue): Count cache reads and writes in prompt_tokens Pi and Flue report `usage.input` without cached tokens, so LLM and prompt spans logged a `prompt_tokens` smaller than `prompt_cached_tokens` on cache-heavy calls. `prompt_tokens` now includes `prompt_cached_tokens` and `prompt_cache_creation_tokens`, as the token metric convention requires. Thanks @theanecdote! (https://github.com/braintrustdata/braintrust-sdk-javascript/pull/2646)
+- fix(openai,openrouter,huggingface): keep streamed tool calls apart when the provider omits `index` Thanks @pcbeingused333! (https://github.com/braintrustdata/braintrust-sdk-javascript/pull/2641)
+
 ## 3.38.0
 
 ### Minor Changes
