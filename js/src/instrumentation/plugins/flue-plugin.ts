@@ -1496,7 +1496,16 @@ function metricsFromUsage(usage: unknown): Record<string, number> {
   const totalCost = isObjectLike(cost) ? Reflect.get(cost, "total") : undefined;
 
   return {
-    ...(typeof input === "number" ? { prompt_tokens: input } : {}),
+    // Flue reports pi-ai usage: cache reads and writes outside `input`, which
+    // Braintrust's `prompt_tokens` includes.
+    ...(typeof input === "number"
+      ? {
+          prompt_tokens:
+            input +
+            (typeof cacheRead === "number" ? cacheRead : 0) +
+            (typeof cacheWrite === "number" ? cacheWrite : 0),
+        }
+      : {}),
     ...(typeof output === "number" ? { completion_tokens: output } : {}),
     ...(typeof cacheRead === "number"
       ? { prompt_cached_tokens: cacheRead }
