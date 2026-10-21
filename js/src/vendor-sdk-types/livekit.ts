@@ -119,8 +119,14 @@ export interface Agent {
   llmNode(...args: unknown[]): unknown;
   ttsNode(...args: unknown[]): unknown;
 }
+export interface FunctionTool {
+  description?: string;
+  parameters?: unknown;
+}
 export interface PipelineOptions {
   span: LiveKitSpan;
+  toolCtx?: { functionTools: Record<string, FunctionTool> };
+  modelSettings?: { toolChoice?: unknown };
 }
 export interface LiveKitModule {
   voice: { AgentSession: new (...args: unknown[]) => AgentSession };

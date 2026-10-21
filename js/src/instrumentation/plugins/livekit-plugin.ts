@@ -7,8 +7,10 @@ import type {
   AudioOutput,
   ChatMessage,
   EndOfTurnInfo,
+  FunctionTool,
   LiveKitSpan,
   PlaybackFinishedEvent,
+  PipelineOptions,
   PlaybackProgressedEvent,
   SpanTime,
   SpeechEvent,
@@ -26,6 +28,7 @@ import {
   INSTRUMENTATION_NAMES,
 } from "../../span-origin";
 import { isObject } from "../../../util";
+import { zodToJsonSchema } from "../../zod/utils";
 import { debugLogger } from "../../debug-logger";
 import { isAutoCaptureAttachmentsEnabled } from "../../wrappers/attachment-utils";
 import { DEFAULT_STREAMING_ATTACHMENT_BUFFER_BYTES } from "../config";
@@ -46,7 +49,7 @@ const SAMPLE_RATE = 24000;
 const OTEL_SPAN_KEY = Symbol.for("OpenTelemetry Context Key SPAN");
 const FINAL_TRANSCRIPT = 2; // SpeechEventType.FINAL_TRANSCRIPT
 
-// Exported native spans. Every other span nested in a session folds into its parent.
+// Native spans with a Braintrust name. Other session spans export as `livekit.<name>`.
 const SPANS = new Map<string, { name: string; type: "task" | "llm" | "tool" }>([
   ["agent_session", { name: "session", type: "task" }],
   ["user_turn", { name: "user_turn", type: "task" }],
@@ -118,8 +121,10 @@ export class LiveKitPlugin extends BasePlugin {
         runInstrumentation(() =>
           tracing.output((self as AgentActivity).agentSession),
         );
-        return tracing.scope(args[0].span, () =>
-          Reflect.apply(target, self, args),
+        return tracing.scope(
+          args[0].span,
+          () => Reflect.apply(target, self, args),
+          runInstrumentation(() => requestMetadata(args[0])) ?? {},
         );
       }),
       livekitChannels.conversation.intercept((target, self, args) => {
@@ -222,6 +227,8 @@ class LiveKitTracing {
     native: LiveKitSpan;
     row?: Row;
     inference: { model?: Row };
+    /** Tool configuration of the enclosing pipeline reply, for its llm spans. */
+    request?: Record<string, unknown>;
   }>();
   readonly sessions = new Map<string, SessionState>();
   // Callbacks already handed to LiveKit can outlive interceptor unsubscription.
@@ -342,11 +349,17 @@ class LiveKitTracing {
         return;
       }
     }
-    const kind = SPANS.get(name);
+    const kind = SPANS.get(name) ?? {
+      name: `livekit.${name}`,
+      type: "task" as const,
+    };
     const start = spanTimeSeconds(options.startTime);
-    const owner = kind ? undefined : (parent!.owner ?? parent!);
+    // llm_request duplicates its model response lifecycle, so it folds into its parent.
+    // Its attempts (llm_request_run) still export to show retries and failures.
+    const owner =
+      name === "llm_request" ? (parent!.owner ?? parent!) : undefined;
     const args =
-      kind &&
+      !owner &&
       withSpanInstrumentationName(
         { name: kind.name, type: kind.type, startTime: start },
         INSTRUMENTATION_NAMES.LIVEKIT,
@@ -398,7 +411,10 @@ class LiveKitTracing {
     if (name === "user_speaking")
       for (const stt of state.transcripts.get(row.turn ?? "") ?? [])
         state.relationships.link(row.span, stt.span, "transcribed_by");
-    if (name === "llm_node" && scope) scope.inference.model = row;
+    if (name === "llm_node" && scope) {
+      scope.inference.model = row;
+      if (scope.request) row.span.log({ metadata: scope.request });
+    }
     if (
       (name === "tts_node" || name === "agent_speaking") &&
       scope?.inference.model
@@ -449,7 +465,11 @@ class LiveKitTracing {
     if (state?.closed) this.clearSession(row.session);
   }
 
-  scope<T>(native: LiveKitSpan | undefined, fn: () => T): T {
+  scope<T>(
+    native: LiveKitSpan | undefined,
+    fn: () => T,
+    request?: Record<string, unknown>,
+  ): T {
     if (!native) return fn();
     const found = this.rowOf(native);
     // Unobserved spans keep parenting local but inherit the enclosing session row.
@@ -458,8 +478,9 @@ class LiveKitTracing {
     const inference = found
       ? { model: found.name === "llm_node" ? found : undefined }
       : (outer?.inference ?? {});
-    return this.context.run({ native, row, inference }, () =>
-      found ? withCurrent(row!.span, fn) : fn(),
+    return this.context.run(
+      { native, row, inference, request: request ?? outer?.request },
+      () => (found ? withCurrent(row!.span, fn) : fn()),
     );
   }
 
@@ -613,9 +634,14 @@ class LiveKitTracing {
   private clearSession(id: string) {
     const state = this.sessions.get(id);
     // Native children (notably tools) can outlive session end. Retain ownership until
-    // every exported operation finishes, even after the recording has finalized.
-    // Folded spans don't hold the session: LiveKit leaves non-recording ones open.
-    if (!state || [...state.rows.values()].some((row) => !row.ended)) return;
+    // every mapped operation finishes, even after the recording has finalized.
+    // Other native spans don't hold the session: LiveKit can leave them open.
+    // Their rows still log and end on their own if LiveKit ends them later.
+    if (
+      !state ||
+      [...state.rows.values()].some((row) => !row.ended && SPANS.has(row.name))
+    )
+      return;
     state.speech.finish(state.root.span);
     this.sessions.delete(id);
   }
@@ -737,6 +763,39 @@ function content(name: string, attrs: Record<string, unknown>) {
       output: parse(attrs["contrib.livekit.pii.function_tool.output"]),
     };
   return {};
+}
+
+// Tools are long-lived, so convert each parameter schema once.
+const toolParameters = new WeakMap<FunctionTool, unknown>();
+
+/** The tools and tool choice LiveKit makes available to one pipeline reply. */
+function requestMetadata({ toolCtx, modelSettings }: PipelineOptions) {
+  const tools = Object.entries(toolCtx?.functionTools ?? {}).map(
+    ([name, tool]) => {
+      if (!toolParameters.has(tool))
+        toolParameters.set(
+          tool,
+          // LiveKit accepts zod object schemas or raw JSON schemas.
+          isObject(tool.parameters) && "_def" in tool.parameters
+            ? zodToJsonSchema(tool.parameters as any)
+            : tool.parameters,
+        );
+      const parameters = toolParameters.get(tool);
+      return {
+        type: "function",
+        function: {
+          name,
+          ...(tool.description ? { description: tool.description } : {}),
+          ...(parameters ? { parameters } : {}),
+        },
+      };
+    },
+  );
+  const toolChoice = modelSettings?.toolChoice;
+  return {
+    ...(tools.length ? { tools } : {}),
+    ...(toolChoice !== undefined ? { tool_choice: toolChoice } : {}),
+  };
 }
 
 function parse(value: unknown): unknown {
@@ -1784,4 +1843,9 @@ class Playback {
   }
 }
 
-export const _exportsForTestingOnly = { LiveKitTracing, Recording, Playback };
+export const _exportsForTestingOnly = {
+  LiveKitTracing,
+  Recording,
+  Playback,
+  requestMetadata,
+};
