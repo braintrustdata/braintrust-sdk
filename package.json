@@ -20,7 +20,6 @@
     "test:e2e:bump": "node e2e/scripts/run-e2e-bump-docker.mjs",
     "dotagents:install": "dotagents install",
     "dotagents:sync": "dotagents sync",
-    "changeset": "changeset",
     "playground": "turbo run playground --filter=\"braintrust\"",
     "playground:cli:push": "turbo run playground:cli:push --filter=\"braintrust\"",
     "playground:cli:eval": "turbo run playground:cli:eval --filter=\"braintrust\"",
@@ -28,7 +27,8 @@
     "lint": "turbo run lint",
     "fix:formatting": "prettier --write .",
     "fix:lint": "turbo run fix:lint",
-    "yalc:publish": "turbo run yalc:publish"
+    "yalc:publish": "turbo run yalc:publish",
+    "test:e2e:cassettes": "turbo run test:e2e -- --check-cassettes"
   },
   "engines": {
     "pnpm": ">=10.27.0",

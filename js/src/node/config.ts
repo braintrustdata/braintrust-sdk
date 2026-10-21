@@ -4,7 +4,7 @@ import * as fs from "node:fs/promises";
 import * as os from "node:os";
 import * as fsSync from "node:fs";
 import * as crypto from "node:crypto";
-import { promisify } from "node:util";
+import { formatWithOptions, inspect, promisify } from "node:util";
 import * as zlib from "node:zlib";
 import * as dotenv from "dotenv";
 
@@ -108,6 +108,21 @@ export function configureNode() {
     return undefined;
   };
   iso.getCallerLocation = getCallerLocation;
+  // Inspect object parameters before substitution: customInspect alone does not
+  // prevent %s/%d/%j from invoking toString/valueOf/toJSON. The first argument
+  // stays intact because Node only treats a leading string as a format string.
+  // Native console output still receives the original arguments and hooks.
+  iso.formatLogMessage = (...args) =>
+    formatWithOptions(
+      { customInspect: false },
+      ...args.map((value, index) =>
+        index > 0 &&
+        value !== null &&
+        (typeof value === "object" || typeof value === "function")
+          ? inspect(value, { customInspect: false })
+          : value,
+      ),
+    );
   iso.newAsyncLocalStorage = <T>() => new AsyncLocalStorage<T>();
   iso.processOn = (event: string, handler: (code: unknown) => void) => {
     process.on(event, handler);

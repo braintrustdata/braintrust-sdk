@@ -44,6 +44,8 @@ export type {
   WithTransactionId,
 } from "./logger";
 
+export { wrapConsole } from "./logs";
+
 export type {
   SandboxConfig,
   RegisterSandboxOptions,
@@ -128,6 +130,8 @@ export {
 } from "./logger";
 
 export { registerSandbox } from "./sandbox";
+
+export { startAISDKBatchTrace, completeAISDKBatchTrace } from "./ai-sdk-batch";
 
 export {
   completeOpenAIBatchTrace,

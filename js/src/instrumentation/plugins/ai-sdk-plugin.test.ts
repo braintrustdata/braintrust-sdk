@@ -27,7 +27,10 @@ vi.mock("../../wrappers/ai-sdk/telemetry", () => ({
   braintrustAISDKTelemetry: telemetryMocks.braintrustAISDKTelemetry,
 }));
 
-import { BRAINTRUST_AI_SDK_V7_OPERATION_KEY as AI_SDK_V7_OPERATION_KEY } from "../../vendor-sdk-types/ai-sdk-v7-telemetry";
+import {
+  BRAINTRUST_AI_SDK_V7_TELEMETRY,
+  BRAINTRUST_AI_SDK_V7_OPERATION_KEY as AI_SDK_V7_OPERATION_KEY,
+} from "../../vendor-sdk-types/ai-sdk-v7-telemetry";
 import { serializeAISDKToolsForLogging } from "../../wrappers/ai-sdk/tool-serialization";
 import {
   AISDKPlugin,
@@ -610,6 +613,35 @@ describe("AISDKPlugin", () => {
 
       rejectExisting!(rejection);
       await expect(returned).rejects.toBe(rejection);
+    });
+
+    it("defers to explicit telemetry, respecting per-call registry overrides", () => {
+      const explicit = { [BRAINTRUST_AI_SDK_V7_TELEMETRY]: true };
+      vi.stubGlobal("AI_SDK_TELEMETRY_INTEGRATIONS", [explicit]);
+      try {
+        plugin.enable();
+        const channel = mockChannels.get(
+          "orchestrion:ai:createTelemetryDispatcher",
+        );
+        for (const integrations of [undefined, explicit, [explicit]]) {
+          const dispatcher = { onStart: vi.fn() };
+          const original = dispatcher.onStart;
+          channel?.handlers[0]?.end({
+            arguments: [{ telemetry: { integrations } }],
+            result: dispatcher,
+          });
+          expect(dispatcher.onStart).toBe(original);
+        }
+        const dispatcher = { onStart: vi.fn() };
+        const original = dispatcher.onStart;
+        channel?.handlers[0]?.end({
+          arguments: [{ telemetry: { integrations: [] } }],
+          result: dispatcher,
+        });
+        expect(dispatcher.onStart).not.toBe(original);
+      } finally {
+        vi.unstubAllGlobals();
+      }
     });
 
     it("patches each dispatcher once and respects telemetry opt-out", () => {

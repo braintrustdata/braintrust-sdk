@@ -72,6 +72,39 @@ describe("wrapCloudflareThink", () => {
     expect(invoke).toHaveBeenCalledTimes(1);
   });
 
+  it("preserves the history leaf and argument count used by current Think", async () => {
+    class Think {
+      _runInferenceLoop(...args: [unknown, string?]) {
+        return Promise.resolve({ receiver: this, args });
+      }
+    }
+    const sdk = wrapCloudflareThink({ Think });
+    const instance = new sdk.Think();
+    const input = { body: "continue this branch" };
+    for (const args of [[input], [input, "history-leaf"]] as [
+      unknown,
+      string?,
+    ][]) {
+      await expect(instance._runInferenceLoop(...args)).resolves.toEqual({
+        receiver: instance,
+        args,
+      });
+    }
+  });
+
+  it("preserves promise identity and rejection", async () => {
+    const error = new Error("inference failed");
+    const result = Promise.reject(error);
+    class Think {
+      _runInferenceLoop() {
+        return result;
+      }
+    }
+    wrapCloudflareThink({ Think });
+    expect(new Think()._runInferenceLoop()).toBe(result);
+    await expect(result).rejects.toBe(error);
+  });
+
   it("preserves the original method descriptor", () => {
     class Think {}
     const original = vi.fn(async () => "ok");

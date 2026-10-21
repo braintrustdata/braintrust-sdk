@@ -1,5 +1,20 @@
 [
   {
+    "scenarioDirName": "ai-sdk-batch-instrumentation",
+    "label": "AI SDK Batch Instrumentation",
+    "metadataScenario": "ai-sdk-batch-instrumentation",
+    "variants": [
+      {
+        "variantKey": "ai-sdk-v7",
+        "label": "v7 pinned"
+      },
+      {
+        "variantKey": "ai-sdk-v7-latest",
+        "label": "v7 latest"
+      }
+    ]
+  },
+  {
     "scenarioDirName": "trace-primitives-basic",
     "label": "Trace primitives and project caching",
     "metadataScenario": "trace-primitives-basic"
@@ -155,12 +170,44 @@
     "metadataScenario": "cloudflare-think-instrumentation",
     "variants": [
       {
-        "variantKey": "cloudflare-think-v0",
-        "label": "v0.13 pinned"
+        "variantKey": "cloudflare-think-v0-13-ai6",
+        "label": "v0.13 pinned / AI SDK 6",
+        "variantKeys": [
+          "cloudflare-think-v0-13-ai6-manual",
+          "cloudflare-think-v0-13-ai6-auto"
+        ]
       },
       {
-        "variantKey": "cloudflare-think-v0-latest",
-        "label": "v0.13 latest"
+        "variantKey": "cloudflare-think-v0-13-latest-ai6",
+        "label": "v0.13 latest / AI SDK 6",
+        "variantKeys": [
+          "cloudflare-think-v0-13-latest-ai6-manual",
+          "cloudflare-think-v0-13-latest-ai6-auto"
+        ]
+      },
+      {
+        "variantKey": "cloudflare-think-v0-20-ai7",
+        "label": "v0.20 pinned / AI SDK 7",
+        "variantKeys": [
+          "cloudflare-think-v0-20-ai7-manual",
+          "cloudflare-think-v0-20-ai7-auto"
+        ]
+      },
+      {
+        "variantKey": "cloudflare-think-v0-20-latest-ai7",
+        "label": "v0.20 latest / AI SDK 7",
+        "variantKeys": [
+          "cloudflare-think-v0-20-latest-ai7-manual",
+          "cloudflare-think-v0-20-latest-ai7-auto"
+        ]
+      },
+      {
+        "variantKey": "cloudflare-think-v0-20-1-ai7",
+        "label": "v0.20.1 / AI SDK 7",
+        "variantKeys": [
+          "cloudflare-think-v0-20-1-ai7-manual",
+          "cloudflare-think-v0-20-1-ai7-auto"
+        ]
       }
     ]
   },
@@ -622,11 +669,11 @@
       },
       {
         "variantKey": "ai-sdk-v7",
-        "label": "v7 pinned (including evaluate)"
+        "label": "v7 pinned"
       },
       {
         "variantKey": "ai-sdk-v7-latest",
-        "label": "v7 latest (including decide)"
+        "label": "v7 latest"
       }
     ]
   },

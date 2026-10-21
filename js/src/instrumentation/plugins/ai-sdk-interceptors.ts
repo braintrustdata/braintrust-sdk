@@ -1,3 +1,4 @@
+import type { AISDKRunCodeModeInput } from "../../vendor-sdk-types/ai-sdk-code-mode";
 import { channel, defineInterceptor } from "../core/interceptor-definitions";
 
 import type {
@@ -94,6 +95,9 @@ export const aiSDKChannels = defineInterceptor("ai", {
     unknown
   >({
     channelName: "streamText.sync",
+  }),
+  streamTextV7: channel<[AISDKCallParams], AISDKResult, AISDKChannelContext>({
+    channelName: "streamText.v7",
   }),
   generateObject: channel<
     [AISDKCallParams],
@@ -235,5 +239,11 @@ export const harnessAgentChannels = defineInterceptor("@ai-sdk/harness", {
     unknown
   >({
     channelName: "HarnessAgent.continueStream",
+  }),
+});
+
+export const codeModeChannels = defineInterceptor("@ai-sdk/code-mode", {
+  run: channel<[AISDKRunCodeModeInput], Promise<unknown>>({
+    channelName: "runCodeMode",
   }),
 });
