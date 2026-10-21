@@ -94,6 +94,36 @@ it.each([
   ["async", load],
   ["sync", loadSync],
 ])(
+  "reads redirected CommonJS source when another loader omits it (%s)",
+  async (_name, loadHook) => {
+    writeFileSync(join(packageDir, "client.js"), source);
+    const redirectedPath = join(packageDir, "redirected.js");
+    writeFileSync(
+      redirectedPath,
+      "class Client { create(input) { return 'redirected'; } }",
+    );
+    const result = await loadHook(
+      pathToFileURL(join(packageDir, "client.js")).href,
+      {},
+      () => ({
+        format: "commonjs",
+        source: null,
+        responseURL: pathToFileURL(redirectedPath).href,
+      }),
+    );
+
+    expect(
+      new Function(
+        `${result.source}; return new Client().create('original');`,
+      )(),
+    ).toBe("redirected");
+  },
+);
+
+it.each([
+  ["async", load],
+  ["sync", loadSync],
+])(
   "leaves omitted CommonJS source alone for unrelated files (%s)",
   async (_name, loadHook) => {
     // This file does not exist: attempting to read it would fail.

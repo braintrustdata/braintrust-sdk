@@ -48,7 +48,7 @@ export function applyAutoInstrumentation(loaderUrl?: URL): void {
     typeof nodeModule.registerHooks === "function" &&
     supportsSyncHooks()
   ) {
-    // Sync hooks cover require() too, so CommonJS needs no _compile patching.
+    // Sync hooks cover CommonJS too, so it needs no _compile patching.
     // Installing both would transform CommonJS modules twice.
     initialize({ instrumentations: allConfigs });
     // eslint-disable-next-line n/no-unsupported-features/node-builtins

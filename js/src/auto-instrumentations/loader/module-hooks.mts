@@ -73,7 +73,7 @@ export function loadSync(url: string, context: any, nextLoad: Function) {
   // Sync hooks receive nullish CommonJS source when an async loader from
   // module.register() is also active.
   if (result.format === "commonjs") {
-    result.source ??= readFileSync(new URL(url));
+    result.source ??= readFileSync(new URL(result.responseURL ?? url));
   }
   return transformLoadedModule(url, result, instrumentation);
 }
