@@ -270,10 +270,11 @@ export function defineTypeSafeInstrumentationAssertions(options: {
       });
     }
 
-    test("matches the span tree snapshot", async () => {
+    test("matches the span tree snapshot", async ({ expect }) => {
       await matchSpanTreeSnapshot(
         spanTreeEvents(events, options.supportsImages),
         spanSnapshotPath,
+        { snapshotExpect: expect },
       );
     });
   });
