@@ -680,7 +680,7 @@ span_tree:
 │   │   │       │     "estimated_cost": 0.00015592,
 │   │   │       │     "prompt_cache_creation_tokens": 0,
 │   │   │       │     "prompt_cached_tokens": 1536,
-│   │   │       │     "prompt_tokens": 226,
+│   │   │       │     "prompt_tokens": 1762,
 │   │   │       │     "tokens": 1826
 │   │   │       │   }
 │   │   │       ├── tool:read [tool]
@@ -771,7 +771,7 @@ span_tree:
 │   │   │       │     "estimated_cost": 0.00021242000000000003,
 │   │   │       │     "prompt_cache_creation_tokens": 0,
 │   │   │       │     "prompt_cached_tokens": 1536,
-│   │   │       │     "prompt_tokens": 346,
+│   │   │       │     "prompt_tokens": 1882,
 │   │   │       │     "tokens": 1972
 │   │   │       │   }
 │   │   │       ├── tool:bash [tool]
@@ -860,7 +860,7 @@ span_tree:
 │   │   │       │     "estimated_cost": 0.0004814700000000001,
 │   │   │       │     "prompt_cache_creation_tokens": 0,
 │   │   │       │     "prompt_cached_tokens": 1536,
-│   │   │       │     "prompt_tokens": 1885,
+│   │   │       │     "prompt_tokens": 3421,
 │   │   │       │     "tokens": 3480
 │   │   │       │   }
 │   │   │       ├── tool:bash [tool]
@@ -945,7 +945,7 @@ span_tree:
 │   │   │             "estimated_cost": 0.00031035000000000004,
 │   │   │             "prompt_cache_creation_tokens": 0,
 │   │   │             "prompt_cached_tokens": 2560,
-│   │   │             "prompt_tokens": 1252,
+│   │   │             "prompt_tokens": 3812,
 │   │   │             "tokens": 3819
 │   │   │           }
 │   │   ├── tool:task [tool]
