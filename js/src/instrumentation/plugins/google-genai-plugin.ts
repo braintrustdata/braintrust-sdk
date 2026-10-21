@@ -2054,15 +2054,18 @@ function aggregateGenerateContentChunks(
   }
   parts.push(...otherParts);
 
-  if (parts.length > 0 && lastResponse?.candidates) {
+  if (lastResponse?.candidates) {
     const candidates: Record<string, unknown>[] = [];
     for (const candidate of lastResponse.candidates) {
-      const candidateDict: Record<string, unknown> = {
-        content: {
+      // A stream can end without content (for example a SAFETY block), but its
+      // finish reason and ratings still belong in the output.
+      const candidateDict: Record<string, unknown> = {};
+      if (parts.length > 0) {
+        candidateDict.content = {
           parts,
           role: "model",
-        },
-      };
+        };
+      }
 
       if (candidate.finishReason !== undefined) {
         candidateDict.finishReason = candidate.finishReason;
@@ -2077,9 +2080,13 @@ function aggregateGenerateContentChunks(
         candidateDict.safetyRatings = candidate.safetyRatings;
       }
 
-      candidates.push(candidateDict);
+      if (Object.keys(candidateDict).length > 0) {
+        candidates.push(candidateDict);
+      }
     }
-    aggregated.candidates = candidates;
+    if (candidates.length > 0) {
+      aggregated.candidates = candidates;
+    }
   }
 
   if (usageMetadata) {
