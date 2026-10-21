@@ -15,7 +15,7 @@ import {
   _exportsForTestingOnly as logging,
   initLogger,
 } from "../../logger";
-import type { SpanTime } from "../../vendor-sdk-types/livekit";
+import type { LiveKitSpan, SpanTime } from "../../vendor-sdk-types/livekit";
 import { DEFAULT_STREAMING_ATTACHMENT_BUFFER_BYTES } from "../config";
 import { channel, defineInterceptor } from "../core/interceptor-definitions";
 import { traceAsyncCall } from "../core/tracing";
@@ -56,7 +56,7 @@ afterEach(async () => {
 });
 
 type NativeSpan = ReturnType<typeof nativeSpan>;
-function nativeSpan() {
+function nativeSpan(): LiveKitSpan {
   return {
     spanContext: () => ({ spanId: "0000000000000000" }),
     isRecording: () => false,
@@ -73,7 +73,7 @@ function nativeSpan() {
       return this;
     },
     recordException() {},
-    end: vi.fn(),
+    end: vi.fn<(time?: SpanTime) => void>(),
   };
 }
 /** Starts a native span the way LiveKit's tracer reports it. */
