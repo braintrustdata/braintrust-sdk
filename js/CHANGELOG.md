@@ -1,5 +1,21 @@
 # braintrust
 
+## 3.39.0
+
+### Minor Changes
+
+- feat(ai-sdk): Add batch tracing (https://github.com/braintrustdata/braintrust-sdk-javascript/pull/2642)
+- feat(logs): add application logging and console capture (https://github.com/braintrustdata/braintrust-sdk-javascript/pull/2639)
+- feat(cloudflare-think): Support versions 0.13 through 0.20 (https://github.com/braintrustdata/braintrust-sdk-javascript/pull/2640)
+- feat: Add instrumentation for LiveKit cascade mode Thanks @delner! (https://github.com/braintrustdata/braintrust-sdk-javascript/pull/2633)
+- feat(ai-sdk): Trace code mode (https://github.com/braintrustdata/braintrust-sdk-javascript/pull/2637)
+
+### Patch Changes
+
+- fix(bedrock): Log text and usage for streamed InvokeModel calls to OpenAI models Thanks @pcbeingused333! (https://github.com/braintrustdata/braintrust-sdk-javascript/pull/2632)
+- fix(pi-coding-agent,flue): Count cache reads and writes in prompt_tokens Thanks @theanecdote! (https://github.com/braintrustdata/braintrust-sdk-javascript/pull/2646)
+- fix(openai,openrouter,huggingface): keep streamed tool calls apart when the provider omits index Thanks @pcbeingused333! (https://github.com/braintrustdata/braintrust-sdk-javascript/pull/2641)
+
 ## 3.38.0
 
 ### Minor Changes
