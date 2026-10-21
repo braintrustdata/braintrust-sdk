@@ -24,6 +24,7 @@ import { huggingFaceConfigs } from "./huggingface";
 import { huggingFaceTransformersConfigs } from "./huggingface-transformers";
 import { langchainConfigs } from "./langchain";
 import { langSmithConfigs } from "./langsmith";
+import { livekitConfigs } from "./livekit";
 import { mistralConfigs } from "./mistral";
 import { langGraphSDKConfigs } from "./langgraph-sdk";
 import { ollamaConfigs } from "./ollama";
@@ -123,6 +124,10 @@ const defaultInstrumentationConfigGroups: readonly InstrumentationConfigGroup[] 
     {
       integrations: ["strandsAgentSDK"],
       configs: strandsAgentSDKConfigs,
+    },
+    {
+      integrations: ["livekit"],
+      configs: livekitConfigs,
     },
     {
       integrations: ["flue"],

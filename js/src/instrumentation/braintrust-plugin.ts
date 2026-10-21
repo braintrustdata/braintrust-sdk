@@ -28,6 +28,7 @@ import { LangSmithPlugin } from "./plugins/langsmith-plugin";
 import { PiCodingAgentPlugin } from "./plugins/pi-coding-agent-plugin";
 import { StrandsAgentSDKPlugin } from "./plugins/strands-agent-sdk-plugin";
 import { ElevenLabsPlugin } from "./plugins/elevenlabs-plugin";
+import { LiveKitPlugin } from "./plugins/livekit-plugin";
 import { VoyageAIPlugin } from "./plugins/voyageai-plugin";
 import { TypeSafePlugin } from "./plugins/typesafe-plugin";
 import { CloudflareAIChatPlugin } from "./plugins/cloudflare-ai-chat-plugin";
@@ -36,6 +37,7 @@ import type { InstrumentationIntegrationsConfig } from "./config";
 
 export interface BraintrustPluginConfig {
   integrations?: InstrumentationIntegrationsConfig;
+  streamingAttachmentBufferBytes?: number;
 }
 
 /**
@@ -89,6 +91,7 @@ export class BraintrustPlugin extends BasePlugin {
   private piCodingAgentPlugin: PiCodingAgentPlugin | null = null;
   private strandsAgentSDKPlugin: StrandsAgentSDKPlugin | null = null;
   private elevenLabsPlugin: ElevenLabsPlugin | null = null;
+  private liveKitPlugin: LiveKitPlugin | null = null;
   private voyageAIPlugin: VoyageAIPlugin | null = null;
   private typeSafePlugin: TypeSafePlugin | null = null;
   private cloudflareAIChatPlugin: CloudflareAIChatPlugin | null = null;
@@ -206,6 +209,13 @@ export class BraintrustPlugin extends BasePlugin {
     if (integrations.elevenlabs !== false) {
       this.elevenLabsPlugin = new ElevenLabsPlugin();
       this.elevenLabsPlugin.enable();
+    }
+
+    if (integrations.livekit !== false) {
+      this.liveKitPlugin = new LiveKitPlugin(
+        this.config.streamingAttachmentBufferBytes,
+      );
+      this.liveKitPlugin.enable();
     }
 
     if (integrations.voyageai !== false) {
@@ -384,6 +394,11 @@ export class BraintrustPlugin extends BasePlugin {
     if (this.elevenLabsPlugin) {
       this.elevenLabsPlugin.disable();
       this.elevenLabsPlugin = null;
+    }
+
+    if (this.liveKitPlugin) {
+      this.liveKitPlugin.disable();
+      this.liveKitPlugin = null;
     }
 
     if (this.voyageAIPlugin) {

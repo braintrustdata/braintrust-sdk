@@ -46,10 +46,20 @@ function getSharedState(): Record<symbol, unknown> | undefined {
     : undefined;
 }
 
+// The standalone instrumentation entrypoint is bundled separately from the SDK.
+// Share startup settings just as we share the active registry and span customizers.
+const CONFIG_KEY = Symbol.for("braintrust.instrumentation.config");
+const sharedConfig: typeof globalThis & {
+  [CONFIG_KEY]?: InstrumentationConfig;
+} = globalThis;
+
 class PluginRegistry {
   private braintrustPlugin: BraintrustPlugin | null = null;
-  private config: InstrumentationConfig = {};
   private enabled = false;
+
+  private get config(): InstrumentationConfig {
+    return sharedConfig[CONFIG_KEY] ?? {};
+  }
 
   /**
    * Configure which integrations should be enabled.
@@ -63,10 +73,19 @@ class PluginRegistry {
       );
       return;
     }
+    if (
+      config.streamingAttachmentBufferBytes !== undefined &&
+      (!Number.isSafeInteger(config.streamingAttachmentBufferBytes) ||
+        config.streamingAttachmentBufferBytes <= 0)
+    ) {
+      throw new Error(
+        "streamingAttachmentBufferBytes must be a positive safe integer",
+      );
+    }
     if ("spanCustomizers" in config) {
       setSpanCustomizers(config.spanCustomizers);
     }
-    this.config = { ...this.config, ...config };
+    sharedConfig[CONFIG_KEY] = { ...this.config, ...config };
   }
 
   /**
@@ -93,6 +112,8 @@ class PluginRegistry {
     // Read config from environment variables
     const envConfig = this.readEnvConfig();
     const finalConfig = {
+      streamingAttachmentBufferBytes:
+        this.config.streamingAttachmentBufferBytes,
       integrations: {
         ...this.getDefaultConfig(),
         ...this.config.integrations,

@@ -54,6 +54,13 @@ Map the change before editing:
 - Automatic capture of inline multimodal bytes as Braintrust attachments must be opt-in.
   Guard attachment creation and binary observation with `BRAINTRUST_CAPTURE_ATTACHMENTS`, and enable them only when its value is `1` or `true`.
   Preserve useful text, metadata, metrics, and remote references when attachment capture is disabled, and omit inline bytes from logged payloads.
+- Segmentable streaming media must use the shared `configureInstrumentation({ streamingAttachmentBufferBytes })` setting instead of provider-specific chunk-size or time-based controls.
+  It defaults to 4 MiB per logical media stream and counts binary attachment payload bytes after decoding and format conversion, including any required padding or silence.
+  Flush near the threshold at valid media boundaries and flush remaining valid content when the recording ends.
+  Preserve ordering, format metadata, and timestamps needed to interpret the attachments.
+  Keep whole-file responses intact, even if they exceed the threshold; never arbitrarily split encoded images, audio, or video.
+  This is a flush threshold, not a total memory limit or attachment-capture opt-in.
+  Preserve application stream behavior and existing capture consent; keep any capture safety ceiling internal and distinct from the threshold.
 - Do not modify package READMEs during instrumentation work unless the user specifically requests it or the change corrects outdated information.
 - We want to limit our instrumentation to operations that are relevant for AI generations and operations (LLMs, embeddings, media generation, ...). Things like creating entities on platforms (CRUD for Workflows of Agent entities) is irrelevant to us.
 - When building instrumentation, we should always have a vendored type/interface for what we are wrapping. The type or interface should not be larger than what is relevant to the instrumentation. The type or interface should be used for typing invocation hooks and also should be used to assert the type on whatever is passed into wrappers as soon as the wrapper has verified that the passed in value is plausibly what should be wrapped.

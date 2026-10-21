@@ -19,6 +19,13 @@ vi.mock("../isomorph", () => ({
 }));
 
 import { configureInstrumentation, registry } from "./registry";
+import { LiveKitPlugin } from "./plugins/livekit-plugin";
+
+afterEach(() => {
+  delete (globalThis as Record<symbol, unknown>)[
+    Symbol.for("braintrust.instrumentation.config")
+  ];
+});
 
 const mockNewInvocationHook = newGlobalInvocationHook as ReturnType<
   typeof vi.fn
@@ -125,6 +132,75 @@ describe("Plugin Registry", () => {
       testRegistry.disable();
     }
   });
+
+  it("shares startup integration settings with a separately bundled registry", () => {
+    const bootstrap = new (registry.constructor as any)();
+    const sdk = new (registry.constructor as any)();
+    bootstrap.configure({ integrations: { openai: false, livekit: false } });
+    mockNewInvocationHook.mockClear();
+    try {
+      sdk.enable();
+      const names = mockNewInvocationHook.mock.calls.map(([name]) => name);
+      expect(names.some((name) => name.startsWith("orchestrion:openai:"))).toBe(
+        false,
+      );
+      expect(
+        names.some((name) => name.startsWith("orchestrion:@livekit/agents:")),
+      ).toBe(false);
+      expect(
+        names.some((name) => name.startsWith("orchestrion:@anthropic-ai/sdk:")),
+      ).toBe(true);
+    } finally {
+      sdk.disable();
+    }
+  });
+
+  it.each([undefined, 8192])(
+    "passes the %s-byte threshold from a separately bundled registry to LiveKit",
+    (streamingAttachmentBufferBytes) => {
+      const bootstrap = new (registry.constructor as any)();
+      const sdk = new (registry.constructor as any)();
+      const thresholds: number[] = [];
+      const enable = vi
+        .spyOn(LiveKitPlugin.prototype, "enable")
+        .mockImplementation(function (this: LiveKitPlugin) {
+          thresholds.push(Reflect.get(this, "streamingAttachmentBufferBytes"));
+        });
+      try {
+        bootstrap.configure({ streamingAttachmentBufferBytes });
+        // A later integration-only update must preserve the shared threshold.
+        sdk.configure({ integrations: { openai: false } });
+        sdk.enable();
+        expect(thresholds).toEqual([
+          streamingAttachmentBufferBytes ?? 4 * 1024 * 1024,
+        ]);
+      } finally {
+        sdk.disable();
+        enable.mockRestore();
+      }
+    },
+  );
+
+  it.each([0, 1.5])(
+    "rejects an invalid threshold (%s) without changing startup settings",
+    (streamingAttachmentBufferBytes) => {
+      const testRegistry = new (registry.constructor as any)();
+      testRegistry.configure({ streamingAttachmentBufferBytes: 1024 });
+      expect(() =>
+        testRegistry.configure({ streamingAttachmentBufferBytes }),
+      ).toThrow(
+        "streamingAttachmentBufferBytes must be a positive safe integer",
+      );
+      expect(
+        Reflect.get(
+          globalThis,
+          Symbol.for("braintrust.instrumentation.config"),
+        ),
+      ).toMatchObject({
+        streamingAttachmentBufferBytes: 1024,
+      });
+    },
+  );
 
   it("should allow configuration before enable", () => {
     const testRegistry = new (registry.constructor as any)();

@@ -62,9 +62,23 @@ export interface InstrumentationIntegrationsConfig {
   voyageai?: boolean;
   typesafe?: boolean;
   elevenlabs?: boolean;
+  livekit?: boolean;
 }
 
+export const DEFAULT_STREAMING_ATTACHMENT_BUFFER_BYTES = 4 * 1024 * 1024;
+
 export interface InstrumentationConfig {
+  /**
+   * Target attachment payload size in bytes for each segmentable media stream.
+   * Defaults to 4 MiB. Must be a positive safe integer.
+   * Instrumentations flush at valid media boundaries and on recording completion.
+   * Counts binary bytes after decoding and format conversion, excluding metadata.
+   * Whole-file responses remain intact and may exceed this threshold.
+   * This is not a total memory limit and does not enable attachment capture.
+   * Configure before initializing the SDK or enabling instrumentation.
+   */
+  streamingAttachmentBufferBytes?: number;
+
   /**
    * Configuration for individual SDK integrations.
    * Set to false to disable instrumentation for that SDK.
@@ -168,6 +182,8 @@ const envIntegrationAliases: Record<
   "@typesafe-ai/sdk": "typesafe",
   elevenlabs: "elevenlabs",
   "@elevenlabs/elevenlabs-js": "elevenlabs",
+  livekit: "livekit",
+  "@livekit/agents": "livekit",
 };
 
 export function getDefaultInstrumentationIntegrations(): Record<
@@ -211,6 +227,7 @@ export function getDefaultInstrumentationIntegrations(): Record<
     voyageai: true,
     typesafe: true,
     elevenlabs: true,
+    livekit: true,
     piCodingAgent: true,
     strandsAgentSDK: true,
     cloudflareAgents: true,
