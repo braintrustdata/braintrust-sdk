@@ -195,6 +195,9 @@ type Row = {
 };
 type SessionState = {
   root: Row;
+  /** Exported rows. Folded rows resolve through their owner. */
+  rows: Map<string, Row>;
+  rowLimitWarned: boolean;
   relationships: Relationships;
   speech: SpeechTracker;
   /** STT spans per user turn, for transcribed_by links. */
@@ -207,9 +210,9 @@ type SessionState = {
 
 // Native no-op spans all share one OTel ID. Keep our observation identity
 // separately without altering the application's span context or provider.
-const observedSpanIds = new WeakMap<object, string>();
+const observedRows = new WeakMap<object, Row>();
 const observedId = (span: LiveKitSpan | undefined) =>
-  span && observedSpanIds.get(span);
+  span && observedRows.get(span)?.id;
 
 class LiveKitTracing {
   // No-op OTel spans still need parent propagation across LiveKit's async work.
@@ -220,15 +223,18 @@ class LiveKitTracing {
     row?: Row;
     inference: { model?: Row };
   }>();
-  readonly rows = new Map<string, Row>();
-  private sessions = new Map<string, SessionState>();
+  readonly sessions = new Map<string, SessionState>();
   // Callbacks already handed to LiveKit can outlive interceptor unsubscription.
   private disabled = false;
 
   constructor(private streamingAttachmentBufferBytes: number) {}
 
   private rowOf(span: LiveKitSpan | undefined): Row | undefined {
-    return this.rows.get(observedId(span) ?? "");
+    const row = span && observedRows.get(span);
+    return row &&
+      this.sessions.get(row.session)?.rows.has((row.owner ?? row).id)
+      ? row
+      : undefined;
   }
   private sessionOf(session: AgentSession): SessionState | undefined {
     return this.sessions.get(this.rowOf(session.sessionSpan)?.id ?? "");
@@ -236,14 +242,21 @@ class LiveKitTracing {
 
   /** Observe LiveKit's span API without installing or changing an OTel provider. */
   observeSpan(span: LiveKitSpan, options: TraceOptions): void {
-    if (this.disabled || observedSpanIds.has(span)) return;
+    if (this.disabled || observedRows.has(span)) return;
     // LiveKit passes explicit OTel contexts for long-lived session/turn spans.
     const parent =
       (options.context?.getValue(OTEL_SPAN_KEY) as LiveKitSpan | undefined) ??
       this.context.getStore()?.native;
     const row = this.start(options, this.rowOf(parent));
     if (!row) return;
-    observedSpanIds.set(span, row.id);
+    observedRows.set(span, row);
+    // Only model requests inside an llm_node contribute to their exported owner.
+    // Leave other folded spans untouched, including their native recording state.
+    if (
+      row.owner &&
+      (row.name !== "llm_request" || row.owner.name !== "llm_node")
+    )
+      return;
     const finish = () => this.end(row);
     const {
       isRecording,
@@ -317,8 +330,18 @@ class LiveKitTracing {
 
   private start(options: TraceOptions, parent?: Row): Row | undefined {
     const name = options.name;
-    if (this.rows.size >= MAX_ROWS || (name !== "agent_session" && !parent))
-      return;
+    const parentState = parent && this.sessions.get(parent.session);
+    if (name !== "agent_session") {
+      if (!parentState) return;
+      if (parentState.rows.size >= MAX_ROWS) {
+        if (!parentState.rowLimitWarned)
+          debugLogger.warn(
+            "LiveKit session exceeded its span limit; later native spans are not traced.",
+          );
+        parentState.rowLimitWarned = true;
+        return;
+      }
+    }
     const kind = SPANS.get(name);
     const start = spanTimeSeconds(options.startTime);
     const owner = kind ? undefined : (parent!.owner ?? parent!);
@@ -348,24 +371,27 @@ class LiveKitTracing {
       events: [],
       status: { code: 0 },
     };
-    this.rows.set(id, row);
-    if (owner) return row;
     if (name === "agent_session") {
+      const rows = new Map<string, Row>();
       const relationships = new Relationships();
       this.sessions.set(id, {
         root: row,
+        rows,
+        rowLimitWarned: false,
         relationships,
         speech: new SpeechTracker(relationships),
         transcripts: new Map(),
         recording: isAutoCaptureAttachmentsEnabled()
           ? new Recording(row.span, this.streamingAttachmentBufferBytes, (id) =>
-              this.rows.get(id),
+              rows.get(id),
             )
           : undefined,
         closed: false,
       });
     }
+    if (owner) return row;
     const state = this.sessions.get(row.session)!;
+    state.rows.set(id, row);
     const scope = this.context.getStore();
     if (name === "user_speaking" || name === "agent_speaking")
       state.speech.add(row);
@@ -391,7 +417,7 @@ class LiveKitTracing {
       row.span.log({
         metadata: {
           ...(row.turn
-            ? { "turn.id": this.rows.get(row.turn)?.span.spanId }
+            ? { "turn.id": state.rows.get(row.turn)?.span.spanId }
             : {}),
           ...(row.replyTo ? { "turn.reply_to": row.replyTo } : {}),
         },
@@ -415,7 +441,7 @@ class LiveKitTracing {
           row.end! * 1000,
         );
       row.span.end({ endTime: row.end });
-    } else if (row.name === "llm_request") {
+    } else {
       // Native request spans duplicate the public inference lifecycle.
       row.span.log(modelFields(attrs));
     }
@@ -440,18 +466,9 @@ class LiveKitTracing {
   inference<T>(fn: () => T): T {
     // Only tracked sessions suppress duplicate provider spans. The suppressed
     // inference worker excludes the pipeline and user tools.
-    const scope = this.context.getStore();
-    if (!scope?.row) return fn();
-    const result = runWithAutoInstrumentationSuppressed(fn);
-    // LiveKit's inference factory returns [task, generationData]. The data ID
-    // is the committed message ID, not the provider's response ID.
-    const data: any = Array.isArray(result) ? result[1] : undefined;
-    const model = scope.inference.model;
-    if (model && typeof data?.id === "string")
-      this.sessions
-        .get(model.session)
-        ?.relationships.register(`generation:${data.id}`, model.span);
-    return result;
+    return this.context.getStore()?.row
+      ? runWithAutoInstrumentationSuppressed(fn)
+      : fn();
   }
 
   /** LiveKit records STT only as user turn attributes; give each final transcript a span. */
@@ -472,6 +489,7 @@ class LiveKitTracing {
     const transcripts =
       parent === turn ? (state.transcripts.get(turn.id) ?? []) : [];
     const end = event.createdAt ?? Date.now();
+    // Providers without word timing (such as OpenAI STT) report startTime 0.
     const aligned =
       alternative.startTime && recognition.inputStartedAt !== undefined
         ? recognition.inputStartedAt + alternative.startTime * 1000
@@ -503,7 +521,7 @@ class LiveKitTracing {
           ? { "contrib.livekit.provider_request_id": event.requestId }
           : {}),
         ...(parent.turn
-          ? { "turn.id": this.rows.get(parent.turn)?.span.spanId }
+          ? { "turn.id": state.rows.get(parent.turn)?.span.spanId }
           : {}),
       },
     });
@@ -511,7 +529,7 @@ class LiveKitTracing {
     if (parent !== turn || transcripts.length >= MAX_EVENTS) return;
     transcripts.push({ span, end });
     state.transcripts.set(turn.id, transcripts);
-    for (const row of this.rows.values())
+    for (const row of state.rows.values())
       if (row.name === "user_speaking" && row.turn === turn.id)
         state.relationships.link(row.span, span, "transcribed_by");
   }
@@ -532,7 +550,7 @@ class LiveKitTracing {
     const heard = this.rowOf(session.agentSpeakingSpan)?.playedText;
     const textContent =
       item.role === "assistant" && item.interrupted
-        ? heard !== undefined && item.textContent?.endsWith(heard)
+        ? heard && item.textContent?.endsWith(heard)
           ? item.textContent
           : heard
         : item.textContent;
@@ -595,15 +613,10 @@ class LiveKitTracing {
   private clearSession(id: string) {
     const state = this.sessions.get(id);
     // Native children (notably tools) can outlive session end. Retain ownership until
-    // every native operation finishes, even after the recording has finalized.
-    if (
-      !state ||
-      [...this.rows.values()].some((row) => row.session === id && !row.ended)
-    )
-      return;
+    // every exported operation finishes, even after the recording has finalized.
+    // Folded spans don't hold the session: LiveKit leaves non-recording ones open.
+    if (!state || [...state.rows.values()].some((row) => !row.ended)) return;
     state.speech.finish(state.root.span);
-    for (const [key, row] of this.rows)
-      if (row.session === id) this.rows.delete(key);
     this.sessions.delete(id);
   }
 
@@ -612,23 +625,22 @@ class LiveKitTracing {
     await Promise.all(
       [...this.sessions.keys()].map((id) => this.closeSession(id)),
     );
-    for (const row of this.rows.values()) {
-      if (row.ended) continue;
-      row.ended = true;
-      if (row.owner) continue;
-      row.span.log({
-        metadata: {
-          [row.turn === row.id
-            ? "turn.incomplete"
-            : "contrib.livekit.incomplete"]: true,
-          "contrib.livekit.termination": "processor_shutdown",
-        },
-      });
-      row.span.end();
-    }
-    for (const state of this.sessions.values())
+    for (const state of this.sessions.values()) {
+      for (const row of state.rows.values()) {
+        if (row.ended) continue;
+        row.ended = true;
+        row.span.log({
+          metadata: {
+            [row.turn === row.id
+              ? "turn.incomplete"
+              : "contrib.livekit.incomplete"]: true,
+            "contrib.livekit.termination": "processor_shutdown",
+          },
+        });
+        row.span.end();
+      }
       state.speech.finish(state.root.span);
-    this.rows.clear();
+    }
     this.sessions.clear();
   }
 }
@@ -645,12 +657,17 @@ function nativeFields(fields: Iterable<[string, unknown]>) {
     ]),
   );
 }
-function isContentKey(key: string): boolean {
-  return (
-    key.includes(".pii.") ||
-    /^gen_ai\.(input\.|output\.|system_instructions|tool\.(definitions|call\.(arguments|result)|description))/.test(
-      key,
-    )
+/** Drops content and duplicate vendor keys from native attributes. */
+function metadataFields(fields: Record<string, unknown>) {
+  return Object.fromEntries(
+    Object.entries(fields).filter(
+      ([key]) =>
+        !key.includes(".pii.") &&
+        !key.startsWith("langfuse.") &&
+        !/^gen_ai\.(input\.|output\.|system_instructions|tool\.(definitions|call\.(arguments|result)|description))/.test(
+          key,
+        ),
+    ),
   );
 }
 
@@ -663,17 +680,15 @@ function endEvent(
   const toolName = attrs["contrib.livekit.function_tool.name"];
   return {
     metadata: {
-      ...Object.fromEntries(
-        Object.entries(attrs).filter(
-          ([key]) => !isContentKey(key) && !key.startsWith("langfuse."),
-        ),
-      ),
+      ...metadataFields(attrs),
       ...(events.length
         ? {
             "contrib.livekit.events": events.map((event) => ({
               name: event.name,
               time_unix_ms: event.time * 1000,
-              attributes: nativeFields(Object.entries(event.attributes ?? {})),
+              attributes: metadataFields(
+                nativeFields(Object.entries(event.attributes ?? {})),
+              ),
             })),
           }
         : {}),
@@ -1006,12 +1021,6 @@ class SpeechTracker {
     this.pending.delete(item.id);
     this.owners.set(item.id, row);
     this.relationships.register(`speech:${item.id}`, row.span);
-    if (item.role === "assistant")
-      this.relationships.reference(
-        row.span,
-        `generation:${item.id}`,
-        "generated_by",
-      );
     const messages = (row.messages ??= new Map());
     messages.set(item.id, item.textContent);
     row.span.log({

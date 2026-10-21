@@ -1,3 +1,5 @@
+import { promises as fs } from "node:fs";
+import path from "node:path";
 import { expect, test } from "vitest";
 import { assertAudioTrace } from "./assertions";
 import {
@@ -22,7 +24,7 @@ function normalizer() {
   };
   function stable(value: unknown, key = ""): unknown {
     if (typeof value === "number" && VOLATILE_NUMBER.test(key)) return 0;
-    if (typeof value === "string" && key.endsWith("_metrics")) {
+    if (typeof value === "string" && /(_metrics|\.stt\.events)$/.test(key)) {
       try {
         return stable(JSON.parse(value));
       } catch {}
@@ -45,9 +47,36 @@ function normalizer() {
 }
 
 const originalScenarioDir = resolveScenarioDir(import.meta.url);
-const scenarioDir = await prepareScenarioDir({
-  scenarioDir: originalScenarioDir,
-});
+const variants = ["livekit-v1", "livekit-v1-latest"];
+// Plugins pin an exact @livekit/agents peer, so aliases in one install root would
+// share a single peer copy. Generate one install root per version instead.
+const scenarioDirs = Object.fromEntries(
+  await Promise.all(
+    variants.map(async (variant) => {
+      const sourceDir = path.resolve(
+        originalScenarioDir,
+        `../../.bt-tmp/generated-scenarios/livekit-instrumentation-${variant}`,
+      );
+      await fs.rm(sourceDir, { force: true, recursive: true });
+      await fs.cp(originalScenarioDir, sourceDir, {
+        recursive: true,
+        filter: (source) =>
+          ![
+            "node_modules",
+            "versions",
+            "__cassettes__",
+            "__snapshots__",
+          ].includes(path.basename(source)),
+      });
+      await fs.cp(
+        path.join(originalScenarioDir, "versions", variant),
+        sourceDir,
+        { recursive: true },
+      );
+      return [variant, await prepareScenarioDir({ scenarioDir: sourceDir })];
+    }),
+  ),
+);
 
 type RunOptions = {
   mode?: "auto" | "wrapped" | "wrapped-auto";
@@ -66,6 +95,7 @@ function scenarioOptions(
     recording = true,
   }: RunOptions,
 ) {
+  const scenarioDir = scenarioDirs[variant];
   return {
     scenarioDir,
     entry,
@@ -80,7 +110,6 @@ function scenarioOptions(
             "braintrust/hook.mjs",
           ],
     env: {
-      LIVEKIT_PACKAGE: variant,
       LIVEKIT_WRAP: mode === "auto" ? "0" : "1",
       BRAINTRUST_CAPTURE_ATTACHMENTS: recording ? "true" : "",
       BRAINTRUST_DISABLE_INSTRUMENTATION: "",
@@ -119,7 +148,7 @@ const spoken = (event: CapturedLogEvent | undefined, pattern: RegExp) =>
     ]),
   );
 
-for (const variant of ["livekit-v1", "livekit-v1-latest"]) {
+for (const variant of variants) {
   // Fixture playback through each setup path, including idempotent double wrapping.
   for (const mode of ["auto", "wrapped", "wrapped-auto"] as const)
     test.sequential(

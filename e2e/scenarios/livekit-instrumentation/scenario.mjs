@@ -6,7 +6,7 @@ import { z } from "zod";
 import { initLogger, setFetch, wrapLiveKit } from "braintrust";
 import { scopedName } from "../../helpers/provider-runtime.mjs";
 import { AudioFrame, dispose } from "@livekit/rtc-node";
-const livekit = await import(process.env.LIVEKIT_PACKAGE);
+const livekit = await import("@livekit/agents");
 const { voice, llm, telemetry, initializeLogger } =
   process.env.LIVEKIT_WRAP === "1" ? wrapLiveKit(livekit) : livekit;
 initializeLogger({ pretty: false, level: "silent" });

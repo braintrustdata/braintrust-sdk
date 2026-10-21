@@ -6,18 +6,17 @@
       "dependencies": {
         "livekit-v1-latest": {
           "package": "@livekit/agents",
-          "range": "~1.9.1"
+          "range": "~1.9.1",
+          "targetDependency": "@livekit/agents",
+          "targetManifest": "versions/livekit-v1-latest/package.json"
+        },
+        "livekit-openai-v1-latest": {
+          "package": "@livekit/agents-plugin-openai",
+          "range": "~1.9.1",
+          "targetDependency": "@livekit/agents-plugin-openai",
+          "targetManifest": "versions/livekit-v1-latest/package.json"
         }
       }
     }
-  },
-  "dependencies": {
-    "livekit-v1": "npm:@livekit/agents@1.9.1",
-    "livekit-v1-latest": "npm:@livekit/agents@1.9.1",
-    "@livekit/rtc-node": "1.1.0",
-    "@opentelemetry/sdk-trace-node": "2.0.1",
-    "@livekit/agents-plugin-openai": "1.9.1",
-    "zod": "3.25.76",
-    "ws": "8.18.3"
   }
 }

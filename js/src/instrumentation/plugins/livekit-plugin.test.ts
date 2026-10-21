@@ -140,11 +140,19 @@ describe("tracing", () => {
       ]),
     });
     // Native request spans fold into the model span, contributing usage.
-    start("llm_request", model, {
+    const request = start("llm_request", model, {
       "gen_ai.usage.input_tokens": 10,
       "gen_ai.usage.output_tokens": 3,
-    }).end([2, 0]);
+    });
+    // A retried attempt's failure does not fail the model response.
+    start("llm_request_run", request).recordException(new Error("retried"));
+    request.end([2, 0]);
     model.end([2, 0]);
+    // Requests owned by other features don't report usage on their exported ancestor.
+    start("llm_request", start("keyterm_detection", agent), {
+      "gen_ai.request.model": "keyterm-model",
+      "gen_ai.usage.input_tokens": 99,
+    }).end([2, 0]);
     const tool = start("function_tool", agent, {
       "lk.function_tool.name": "lookup_order",
       "lk.pii.function_tool.arguments": '{"id":1042}',
@@ -175,6 +183,8 @@ describe("tracing", () => {
       "turn.id": agentTurn.span_id,
       "turn.reply_to": userTurn.span_id,
     });
+    expect(agentTurn.metadata.model).toBeUndefined();
+    expect(agentTurn.metrics.prompt_tokens).toBeUndefined();
     const llm = one("llm_response");
     expect(llm).toMatchObject({
       span_parents: [agentTurn.span_id],
@@ -211,6 +221,7 @@ describe("tracing", () => {
         "turn.reply_to": userTurn.span_id,
       },
     });
+    expect(llm.error).toBeUndefined();
     expect(JSON.stringify(llm.metadata)).not.toContain("private");
     expect(one("lookup_order")).toMatchObject({
       span_attributes: { type: "tool" },
@@ -281,7 +292,6 @@ describe("tracing", () => {
             ],
           }),
         });
-        return [null, { id: "answer" }];
       });
       // Created after the continuation started in this scope, so it generated them.
       start("tts_node", turn).end();
@@ -358,12 +368,14 @@ describe("tracing", () => {
       expect(root.addEvent("with attributes", { count: 1 }, time)).toBe(root);
       expect(root.addEvent("with timestamp", time)).toBe(root);
       expect(root.setStatus({ code: 2, message: "failed" })).toBe(root);
-      // Internal native work folds into its exported parent.
+      // Internal native work folds into its exported parent and keeps its
+      // native recording state, since nothing it records is exported.
       const internal = nativeSpan();
       tracing.observeSpan(internal, {
         name: "session_start",
         context: { getValue: () => root },
       });
+      expect(internal.isRecording()).toBe(false);
       internal.end();
       root.end(time);
       root.end(time);
@@ -373,7 +385,7 @@ describe("tracing", () => {
       root.setAttribute("lk.test", "late");
       root.addEvent("late");
       root.recordException(new Error("late"));
-      expect(tracing.rows.size).toBe(0);
+      expect(tracing.sessions.size).toBe(0);
 
       const { all } = await rows();
       expect(all).toHaveLength(1);
@@ -398,6 +410,46 @@ describe("tracing", () => {
       expect(Object.getPrototypeOf(all[0].metadata)).toBe(Object.prototype);
     },
   );
+
+  test("event attributes omit content keys", async () => {
+    const root = start("agent_session");
+    root.addEvent("participant_linked", {
+      "lk.participant_kind": "sip",
+      "lk.pii.participant_identity": "+15550100",
+    });
+    root.end();
+    const { one } = await rows();
+    expect(one("session").metadata["contrib.livekit.events"]).toEqual([
+      expect.objectContaining({
+        name: "participant_linked",
+        attributes: { "contrib.livekit.participant_kind": "sip" },
+      }),
+    ]);
+  });
+
+  test("the span limit applies per session to exported spans", async () => {
+    const full = start("agent_session");
+    const other = start("agent_session");
+    // Folded spans, including ones LiveKit never ends, do not count toward the limit.
+    for (let i = 0; i < 10_000; i++) start("eou_wait", full);
+    for (let i = 2; i < 8192; i++) start("user_turn", full).end();
+    // The first turn takes the session's last slot; the second is not traced.
+    start("agent_turn", full).end();
+    start("agent_turn", full).end();
+    start("agent_turn", other).end();
+    full.end();
+    other.end();
+    const { named } = await rows();
+    expect(
+      named("agent_turn")
+        .map((r) => r.span_parents[0])
+        .sort(),
+    ).toEqual(
+      named("session")
+        .map((r) => r.span_id)
+        .sort(),
+    );
+  });
 
   test("leaves spans outside tracked sessions unchanged", async () => {
     const span = nativeSpan();
@@ -424,18 +476,20 @@ describe("tracing", () => {
     ]);
   });
 
-  test("late children keep session ownership until they end", async () => {
+  test("late exported children keep session ownership until they end", async () => {
     const root = start("agent_session");
     const turn = start("agent_turn", root);
     const tool = start("function_tool", turn, {
       "lk.function_tool.name": "late_tool",
     });
+    // LiveKit never ends non-recording internal spans such as eou_wait.
+    start("eou_wait", turn);
     turn.end([2, 0]);
     root.end([2, 0]);
-    expect(tracing.rows.size).toBe(3);
+    expect(tracing.sessions.size).toBe(1);
     tool.setAttribute("lk.pii.function_tool.output", '{"ok":true}');
     tool.end([3, 0]);
-    expect(tracing.rows.size).toBe(0);
+    expect(tracing.sessions.size).toBe(0);
     const { one } = await rows();
     expect(one("late_tool")).toMatchObject({
       span_parents: [one("agent_turn").span_id],
@@ -596,8 +650,8 @@ describe("speech", () => {
     return { sink, session };
   }
 
-  test.each([undefined, "Heard prefix"])(
-    "interrupted speech uses only synchronized playback text (%s)",
+  test.each([undefined, "", "Heard prefix"])(
+    "interrupted speech uses only synchronized playback text (%j)",
     async (synchronizedTranscript) => {
       const { sink, session } = speakingSession();
       sink.emit("playbackFinished", {
@@ -612,9 +666,9 @@ describe("speech", () => {
         interrupted: true,
       });
       expect((await rows()).one("agent_speech").output).toEqual(
-        synchronizedTranscript && [
-          { role: "assistant", content: synchronizedTranscript },
-        ],
+        synchronizedTranscript === undefined
+          ? undefined
+          : [{ role: "assistant", content: synchronizedTranscript }],
       );
     },
   );

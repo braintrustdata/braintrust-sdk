@@ -21,15 +21,13 @@ export class PcmAudio {
   constructor(options: {
     sampleRate: number;
     channels: number;
-    encoding?: "s16le";
     maxBufferBytes?: number;
   }) {
     if (
       !Number.isInteger(options.sampleRate) ||
       options.sampleRate <= 0 ||
       !Number.isInteger(options.channels) ||
-      options.channels <= 0 ||
-      (options.encoding !== undefined && options.encoding !== "s16le")
+      options.channels <= 0
     ) {
       throw new Error("unsupported_audio_format");
     }

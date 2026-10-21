@@ -20,7 +20,6 @@ test("positioned sources are downmixed and resampled onto separate channels with
   const audio = new PcmAudio({
     sampleRate: 24000,
     channels: 2,
-    encoding: "s16le",
   });
   audio.update(new Int16Array([100, 300, 300, 500]), {
     sampleRate: 12000,

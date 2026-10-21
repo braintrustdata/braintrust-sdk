@@ -216,12 +216,12 @@ span_tree:
     │   │     {
     │   │       "content": "{\"order_id\":\"1042\",\"status\":\"in_transit\",\"delivery\":\"Friday\"}",
     │   │       "role": "tool",
-    │   │       "tool_call_id": "call_BkfCAV8jhVgzswMe2B76auwE"
+    │   │       "tool_call_id": "call_HQLmJqXQjluw8pUu5jho6X49"
     │   │     }
     │   │   ]
     │   │   output: [
     │   │     {
-    │   │       "content": "Your order 1042 will be delivered on Friday.",
+    │   │       "content": "Your order 1042 is scheduled for delivery on Friday.",
     │   │       "role": "assistant"
     │   │     }
     │   │   ]
@@ -253,10 +253,10 @@ span_tree:
     │   │     "turn.id": "<span:1>"
     │   │   }
     │   │   metrics: {
-    │   │     "completion_tokens": 12,
+    │   │     "completion_tokens": 13,
     │   │     "prompt_tokens": 125,
     │   │     "time_to_first_token": 0,
-    │   │     "tokens": 137
+    │   │     "tokens": 138
     │   │   }
     │   ├── lookup_order [tool]
     │   │   input: {
@@ -272,7 +272,7 @@ span_tree:
     │   │     "contrib.livekit.function_tool.name": "lookup_order",
     │   │     "gen_ai.agent.name": "default_agent",
     │   │     "gen_ai.operation.name": "execute_tool",
-    │   │     "gen_ai.tool.call.id": "call_BkfCAV8jhVgzswMe2B76auwE",
+    │   │     "gen_ai.tool.call.id": "call_HQLmJqXQjluw8pUu5jho6X49",
     │   │     "gen_ai.tool.name": "lookup_order",
     │   │     "gen_ai.tool.type": "function",
     │   │     "links": [
@@ -317,7 +317,7 @@ span_tree:
     │   └── agent_speech [task]
     │       output: [
     │         {
-    │           "content": "Your order 1042 will be delivered on Friday.",
+    │           "content": "Your order 1042 is scheduled for delivery on Friday.",
     │           "role": "assistant"
     │         }
     │       ]

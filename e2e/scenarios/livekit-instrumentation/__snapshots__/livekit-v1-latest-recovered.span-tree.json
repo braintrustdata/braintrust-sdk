@@ -90,12 +90,12 @@
                 {
                   "content": "{\"order_id\":\"1042\",\"status\":\"in_transit\",\"delivery\":\"Friday\"}",
                   "role": "tool",
-                  "tool_call_id": "call_0RwgHcEEw5E8ZuTCXMToa8Xd"
+                  "tool_call_id": "call_GqsRFv0PbsPUIykmjf3gTiNJ"
                 }
               ],
               "output": [
                 {
-                  "content": "Your order 1042 will be delivered on Friday.",
+                  "content": "The order will be delivered on Friday.",
                   "role": "assistant"
                 }
               ],
@@ -127,10 +127,10 @@
                 "turn.id": "<span:1>"
               },
               "metrics": {
-                "completion_tokens": 12,
+                "completion_tokens": 9,
                 "prompt_tokens": 125,
                 "time_to_first_token": 0,
-                "tokens": 137
+                "tokens": 134
               }
             },
             {
@@ -150,7 +150,7 @@
                 "contrib.livekit.function_tool.name": "lookup_order",
                 "gen_ai.agent.name": "default_agent",
                 "gen_ai.operation.name": "execute_tool",
-                "gen_ai.tool.call.id": "call_0RwgHcEEw5E8ZuTCXMToa8Xd",
+                "gen_ai.tool.call.id": "call_GqsRFv0PbsPUIykmjf3gTiNJ",
                 "gen_ai.tool.name": "lookup_order",
                 "gen_ai.tool.type": "function",
                 "links": [
@@ -316,10 +316,10 @@
                 {
                   "content": "{\"order_id\":\"1042\",\"status\":\"in_transit\",\"delivery\":\"Friday\"}",
                   "role": "tool",
-                  "tool_call_id": "call_0RwgHcEEw5E8ZuTCXMToa8Xd"
+                  "tool_call_id": "call_GqsRFv0PbsPUIykmjf3gTiNJ"
                 },
                 {
-                  "content": "Your order 1042 will be delivered on Friday.",
+                  "content": "The order will be delivered on Friday.",
                   "role": "assistant"
                 },
                 {
@@ -329,7 +329,7 @@
               ],
               "output": [
                 {
-                  "content": "Your order 1042 will be delivered on Friday.",
+                  "content": "The delivery day is Friday.",
                   "role": "assistant"
                 }
               ],
@@ -371,10 +371,10 @@
                 "turn.id": "<span:1>"
               },
               "metrics": {
-                "completion_tokens": 12,
-                "prompt_tokens": 152,
+                "completion_tokens": 7,
+                "prompt_tokens": 149,
                 "time_to_first_token": 0,
-                "tokens": 164
+                "tokens": 156
               }
             },
             {
@@ -410,7 +410,7 @@
               "children": [],
               "output": [
                 {
-                  "content": "Your order 1042 will be delivered on Friday.",
+                  "content": "The delivery day is Friday.",
                   "role": "assistant"
                 }
               ],

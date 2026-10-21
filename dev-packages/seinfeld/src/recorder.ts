@@ -807,15 +807,25 @@ async function writeFetchResponse(
 
   const reader = response.body.getReader();
   try {
-    for (;;) {
+    while (!res.destroyed) {
       const { done, value } = await reader.read();
       if (done) break;
       if (!res.write(Buffer.from(value))) {
-        await new Promise<void>((resolve) => res.once("drain", resolve));
+        // A client that disconnects mid-stream never drains.
+        await new Promise<void>((resolve) => {
+          const resume = () => {
+            res.off("drain", resume);
+            res.off("close", resume);
+            resolve();
+          };
+          res.on("drain", resume);
+          res.on("close", resume);
+        });
       }
     }
   } finally {
     res.end();
-    reader.releaseLock();
+    if (res.destroyed) await reader.cancel();
+    else reader.releaseLock();
   }
 }

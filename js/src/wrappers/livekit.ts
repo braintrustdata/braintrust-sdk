@@ -1,4 +1,5 @@
 /* eslint-disable @typescript-eslint/consistent-type-assertions -- vendored LiveKit boundaries. */
+import { debugLogger } from "../debug-logger";
 import { livekitChannels } from "../instrumentation/plugins/livekit-interceptors";
 import type {
   AgentActivity,
@@ -70,19 +71,33 @@ function wrapSession(session: AgentSession): AgentSession {
   return session;
 }
 
-/** Wrap the @livekit/agents module before constructing sessions. */
+/**
+ * Trace a LiveKit Agents (1.9.x) module with Braintrust.
+ *
+ * Captures cascade voice sessions: user and agent turns, speech, STT, LLM
+ * responses, TTS and function tools. With attachment capture enabled, the call
+ * audio is recorded as PCM attachments. Wrap the module before constructing
+ * sessions; only sessions created through the wrapped module are traced.
+ *
+ * @example
+ * ```ts
+ * import * as agents from "@livekit/agents";
+ * const { voice } = wrapLiveKit(agents);
+ * const session = new voice.AgentSession({ stt, llm, tts });
+ * ```
+ */
 export function wrapLiveKit<T extends object>(module: T): T {
+  const livekit = module as unknown as Partial<LiveKitModule> | undefined;
   if (
-    !module ||
-    typeof module !== "object" ||
-    !("voice" in module) ||
-    !("telemetry" in module)
-  )
+    !livekit ||
+    typeof livekit !== "object" ||
+    typeof livekit.voice?.AgentSession !== "function" ||
+    !livekit.telemetry?.tracer
+  ) {
+    debugLogger.warn("Unsupported LiveKit module. Not wrapping.");
     return module;
-  const livekit = module as unknown as LiveKitModule;
-  const tracer = livekit.telemetry?.tracer;
-  if (typeof livekit.voice?.AgentSession !== "function" || !tracer)
-    return module;
+  }
+  const tracer = livekit.telemetry.tracer;
   wrapMethod(tracer, "startSpan", livekitChannels.startSpan);
   wrapMethod(tracer, "startActiveSpan", livekitChannels.startActiveSpan);
   wrapMethod(
