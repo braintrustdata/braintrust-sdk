@@ -1,10 +1,14 @@
 /**
- * ESM loader hook for auto-instrumentation.
- * This is used by Node.js --import to transform ES modules at load time.
+ * Module load hooks for auto-instrumentation.
+ * `load` runs in the module.register() loader thread and transforms imported
+ * ES and CommonJS modules.
+ * `loadSync` runs in-thread via module.registerHooks() and transforms both
+ * ES modules and CommonJS require() calls.
  */
 
 import { debugLogger } from "../../debug-logger.js";
 
+import { readFileSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { extname, sep } from "node:path";
@@ -51,9 +55,33 @@ export function initialize({
 
 export async function load(url: string, context: any, nextLoad: Function) {
   const result = await nextLoad(url, context);
+  const instrumentation = getModuleInstrumentation(url);
+  if (!instrumentation) return result;
+
+  // Node may omit CommonJS source; only read it for an instrumentation target.
+  if (result.format === "commonjs") {
+    result.source ??= await readFile(new URL(result.responseURL ?? url));
+  }
+  return transformLoadedModule(url, result, instrumentation);
+}
+
+export function loadSync(url: string, context: any, nextLoad: Function) {
+  const result = nextLoad(url, context);
+  const instrumentation = getModuleInstrumentation(url);
+  if (!instrumentation) return result;
+
+  // Sync hooks receive nullish CommonJS source when an async loader from
+  // module.register() is also active.
+  if (result.format === "commonjs") {
+    result.source ??= readFileSync(new URL(url));
+  }
+  return transformLoadedModule(url, result, instrumentation);
+}
+
+function getModuleInstrumentation(url: string) {
   const filePath = url.startsWith("file:") ? fileURLToPath(url) : url;
   const resolvedModule = moduleDetailsFromPath(filePath.split("/").join(sep));
-  if (!resolvedModule) return result;
+  if (!resolvedModule) return;
 
   const packageInfo = getPackageInfo(resolvedModule.basedir);
   const packageName = packageInfo?.name ?? resolvedModule.name;
@@ -63,14 +91,28 @@ export async function load(url: string, context: any, nextLoad: Function) {
     !specialCase && packageInfo?.version
       ? matcher.getTransformer(packageName, packageInfo.version, modulePath)
       : undefined;
-  if (!specialCase && !transformer) return result;
+  if (!specialCase && !transformer) return;
 
-  // Node may omit CommonJS source; only read it for an instrumentation target.
-  if (result.format === "commonjs") {
-    result.source ??= await readFile(new URL(result.responseURL ?? url));
-  }
+  return { packageName, modulePath, specialCase, transformer };
+}
+
+function transformLoadedModule(
+  url: string,
+  result: any,
+  {
+    packageName,
+    modulePath,
+    specialCase,
+    transformer,
+  }: NonNullable<ReturnType<typeof getModuleInstrumentation>>,
+) {
   if (!result.source) return result;
-  const source = result.source.toString("utf8");
+  // Async loaders transfer bytes across a worker boundary, losing Buffer's
+  // toString implementation. Decode any byte source explicitly.
+  const source =
+    typeof result.source === "string"
+      ? result.source
+      : new TextDecoder().decode(result.source);
 
   if (specialCase) {
     const patched = applySpecialCasePatch({
