@@ -1,23 +1,25 @@
+import "./configure.mjs";
 import assert from "node:assert/strict";
-import {
-  initLogger,
-  configureInstrumentation,
-  LiveKitSpanProcessor,
-  setFetch,
-  wrapLiveKitSession,
-} from "braintrust";
-import { getTestRunId, scopedName } from "../../helpers/provider-runtime.mjs";
-import { NodeTracerProvider } from "@opentelemetry/sdk-trace-node";
+import { readFile } from "node:fs/promises";
+import { setTimeout as sleep } from "node:timers/promises";
+import { z } from "zod";
+import { initLogger, setFetch, wrapLiveKit } from "braintrust";
+import { scopedName } from "../../helpers/provider-runtime.mjs";
 import { AudioFrame, dispose } from "@livekit/rtc-node";
-const automatic = process.env.LIVEKIT_AUTOMATIC === "1";
-if (automatic)
-  configureInstrumentation({
-    integrations: { livekit: { captureAudio: true, captureContent: true } },
-  });
-const { voice, llm, telemetry, initializeLogger } = await import(
-  process.env.LIVEKIT_PACKAGE
-);
+const livekit = await import(process.env.LIVEKIT_PACKAGE);
+const { voice, llm, telemetry, initializeLogger } =
+  process.env.LIVEKIT_WRAP === "1" ? wrapLiveKit(livekit) : livekit;
 initializeLogger({ pretty: false, level: "silent" });
+const recording = process.env.BRAINTRUST_CAPTURE_ATTACHMENTS === "true";
+let provider;
+if (process.env.LIVEKIT_OTEL === "unsampled") {
+  // An application provider that samples everything out must stay installed.
+  const { NodeTracerProvider, AlwaysOffSampler } =
+    await import("@opentelemetry/sdk-trace-node");
+  provider = new NodeTracerProvider({ sampler: new AlwaysOffSampler() });
+  provider.register();
+  telemetry.setTracerProvider(provider);
+}
 const completedUploads = [];
 if (process.env.LIVEKIT_SEGMENTS === "1") {
   setFetch(async (input, init) => {
@@ -39,45 +41,6 @@ if (process.env.LIVEKIT_SEGMENTS === "1") {
   });
 }
 const logger = initLogger({ projectName: scopedName("e2e-livekit") });
-class ScenarioProcessor extends LiveKitSpanProcessor {
-  onStart(span) {
-    super.onStart(span);
-    this.rows.get(span.spanContext().spanId)?.span.log({
-      metadata: {
-        scenario: "livekit-instrumentation",
-        testRunId: getTestRunId(),
-      },
-    });
-  }
-}
-const processor = automatic
-  ? undefined
-  : new ScenarioProcessor({
-      logger,
-      captureContent: true,
-      ...(process.env.LIVEKIT_SEGMENTS === "1"
-        ? {
-            recording: {
-              segmentDurationSeconds: 0.2,
-            },
-          }
-        : {}),
-      captureAgentAudio: process.env.LIVEKIT_AUDIO === "1",
-      captureUserAudio: process.env.LIVEKIT_STREAMING_STT === "1",
-    });
-const provider = automatic
-  ? undefined
-  : new NodeTracerProvider({ spanProcessors: [processor] });
-if (provider) {
-  // LiveKit registers its own PII processor before ours.
-  provider.registerSpanProcessor = (p) =>
-    provider._activeSpanProcessor._spanProcessors.unshift(p);
-  provider.register();
-  telemetry.setTracerProvider(provider, {
-    allowPii: true,
-    registerSpanProcessor: (p) => provider.registerSpanProcessor(p),
-  });
-}
 const providerMode = process.env.LIVEKIT_PROVIDER === "1";
 class Output extends voice.AudioOutput {
   samples = 0;
@@ -93,17 +56,12 @@ class Output extends voice.AudioOutput {
     if (!this.samples) {
       this.interrupted = false;
       if (process.env.LIVEKIT_PLAYBACK_START_DELAY_MS)
-        await new Promise((resolve) =>
-          setTimeout(
-            resolve,
-            Number(process.env.LIVEKIT_PLAYBACK_START_DELAY_MS),
-          ),
-        );
+        await sleep(Number(process.env.LIVEKIT_PLAYBACK_START_DELAY_MS));
       this.startedAt = Date.now();
       this.onPlaybackStarted(this.startedAt);
     }
     const duration = (frame.samplesPerChannel / frame.sampleRate) * 1000;
-    await new Promise((resolve) => setTimeout(resolve, duration));
+    await sleep(duration);
     this.samples += frame.samplesPerChannel;
     this.playedSamples += frame.samplesPerChannel;
     if (process.env.LIVEKIT_SEGMENTS === "1")
@@ -154,7 +112,6 @@ class Output extends voice.AudioOutput {
 }
 const options = {};
 const streamingStt = process.env.LIVEKIT_STREAMING_STT === "1";
-const audioInput = streamingStt;
 let ws;
 if (providerMode) {
   const { LLM, TTS } = await import("@livekit/agents-plugin-openai");
@@ -169,7 +126,7 @@ if (providerMode) {
     baseURL: process.env.OPENAI_BASE_URL,
   });
 }
-if (audioInput) {
+if (streamingStt) {
   const { websocketCassette } = await import("./websocket-cassette.mjs");
   ws = await websocketCassette(
     process.env.LIVEKIT_WS_PATH,
@@ -184,11 +141,8 @@ if (audioInput) {
   options.turnDetection = "manual";
 }
 const session = new voice.AgentSession(options);
-if (process.env.LIVEKIT_WRAP === "1") {
-  assert.equal(wrapLiveKitSession(wrapLiveKitSession(session)), session);
-}
 let inputController;
-if (audioInput) {
+if (streamingStt) {
   class Input extends voice.AudioInput {
     source = new ReadableStream({
       start(controller) {
@@ -225,8 +179,8 @@ try {
         ? {
             lookup_order: llm.tool({
               description: "Look up an order delivery status.",
-              parameters: (await import("zod")).z.object({
-                order_id: (await import("zod")).z.string(),
+              parameters: z.object({
+                order_id: z.string(),
               }),
               execute: async ({ order_id }) => ({
                 order_id,
@@ -239,8 +193,12 @@ try {
     }),
     record: false,
   });
-  if (process.env.LIVEKIT_AUDIO !== "1")
-    assert.equal(output.captureFrame, original);
+  if (!recording)
+    assert.equal(
+      output.captureFrame,
+      original,
+      "disabled recording must not wrap the sink",
+    );
   const audio = new ReadableStream({
     start(controller) {
       controller.enqueue(
@@ -250,13 +208,12 @@ try {
     },
   });
   if (providerMode) {
-    const feedCaller = async (fixture = "order", silenceBytes = 96000) => {
-      const { readFile } = await import("node:fs/promises");
+    if (streamingStt) {
+      // Mono 24 kHz s16le speech synthesized by OpenAI for a fictional caller
+      // ("Where is my order DEMO 1042?"), followed by two seconds of silence.
       const bytes = Buffer.concat([
-        await readFile(
-          new URL(`./fixtures/${fixture}-24khz.pcm`, import.meta.url),
-        ),
-        Buffer.alloc(silenceBytes),
+        await readFile(new URL("./fixtures/order-24khz.pcm", import.meta.url)),
+        Buffer.alloc(96000),
       ]);
       for (let at = 0; at < bytes.length; at += 960) {
         const pcm = new Int16Array(480);
@@ -264,21 +221,16 @@ try {
           pcm[i] = bytes.readInt16LE(at + i * 2);
         inputController.enqueue(new AudioFrame(pcm, 24000, 1, 480));
         // Pace microphone frames to preserve capture timing.
-        if (streamingStt)
-          await new Promise((resolve) => setTimeout(resolve, 20));
-        // Buffered fixture input preserves the sample clock without wall-clock jitter.
+        await sleep(20);
       }
-      if (streamingStt) {
-        const deadline = Date.now() + 15000;
-        while (!/order/i.test(callerTranscript)) {
-          if (Date.now() > deadline) throw new Error("No final STT transcript");
-          await new Promise((resolve) => setTimeout(resolve, 20));
-        }
-        session.commitUserTurn();
+      const transcriptDeadline = Date.now() + 15000;
+      while (!/order/i.test(callerTranscript)) {
+        if (Date.now() > transcriptDeadline)
+          throw new Error("No final STT transcript");
+        await sleep(20);
       }
-    };
-    if (audioInput) await feedCaller();
-    else
+      session.commitUserTurn();
+    } else
       await session
         .generateReply({ userInput: "Hi, could you check order 1042 for me?" })
         .waitForPlayout();
@@ -293,7 +245,7 @@ try {
       )
     ) {
       if (Date.now() > deadline) throw new Error("No committed order answer");
-      await new Promise((resolve) => setTimeout(resolve, 20));
+      await sleep(20);
     }
     await session.activity?.currentSpeech?.waitForPlayout();
     if (process.env.LIVEKIT_RECOVER === "1") {
@@ -314,12 +266,12 @@ try {
       }),
     );
   }
-  if (audioInput) await session.input.audio?.close();
+  if (streamingStt) await session.input.audio?.close();
   await session.close();
-  await provider?.forceFlush();
   await logger.flush();
+  if (provider) assert.equal(telemetry.tracer.getProvider(), provider);
 } finally {
-  if (audioInput) await session.input.audio?.close();
+  if (streamingStt) await session.input.audio?.close();
   await session.close();
   await provider?.shutdown();
   await dispose();

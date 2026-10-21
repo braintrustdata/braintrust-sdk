@@ -1,4 +1,3 @@
-import { configureLiveKit } from "../instrumentation/livekit/node/auto";
 import { AsyncLocalStorage } from "node:async_hooks";
 import * as path from "node:path";
 import * as fs from "node:fs/promises";
@@ -25,9 +24,6 @@ const BRAINTRUST_ENV_SEARCH_PARENT_LIMIT = 64;
 
 export function configureNode() {
   iso.buildType = "node";
-  // Register LiveKit's Node-only setup without exposing package loading to
-  // browser plugins. Recording resources are created only after opt-in.
-  configureLiveKit();
 
   iso.getRepoInfo = getRepoInfo;
   iso.getPastNAncestors = getPastNAncestors;

@@ -231,10 +231,7 @@ export { wrapGoogleADK } from "./wrappers/google-adk";
 export { wrapGenkit } from "./wrappers/genkit";
 export { wrapHuggingFace } from "./wrappers/huggingface";
 export { wrapHuggingFaceTransformers } from "./wrappers/huggingface-transformers";
-export {
-  LiveKitSpanProcessor,
-  wrapLiveKitSession,
-} from "./instrumentation/livekit/processor";
+export { wrapLiveKit } from "./wrappers/livekit";
 export { wrapOpenRouterAgent } from "./wrappers/openrouter-agent";
 export { wrapOpenRouter } from "./wrappers/openrouter";
 export { wrapMistral } from "./wrappers/mistral";

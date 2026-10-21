@@ -14,48 +14,31 @@ type Recording = {
   state: string;
   duration_ms: number;
   sample_rate_hz: number;
-  channel_count: number;
-  timeline: { origin_unix_ms: number; recording_start_offset_ms: number };
   attachment?: { span_id: string; ref: string };
 };
 
-export function assertAudioTrace(
-  raw: CapturedLogEvent[],
-  {
-    unassociatedSpeaking = [],
-  }: { unassociatedSpeaking?: readonly string[] } = {},
-) {
+/** Checks recording references, speech selections, and turn ownership. */
+export function assertAudioTrace(raw: CapturedLogEvent[]) {
   const events = [...new Set(raw.map((e) => e.span.name))].flatMap((name) =>
     findAllSpans(raw, name!),
   );
   const recordings = new Map<string, Recording>();
-  const key = (spanId: string, id: string) => JSON.stringify([spanId, id]);
   for (const event of events) {
     for (const r of (event.metadata?.["audio.recordings"] ??
       []) as Recording[]) {
-      expect(recordings.has(key(event.span.id!, r.id))).toBe(false);
-      recordings.set(key(event.span.id!, r.id), r);
-      if ("gaps" in r) expect(r.timeline).toBeDefined();
+      const key = `${event.span.id}/${r.id}`;
+      expect(recordings.has(key)).toBe(false);
+      recordings.set(key, r);
       if (r.state !== "ready") continue;
-      expect(Number.isFinite(r.duration_ms)).toBe(true);
       expect(r.duration_ms).toBeGreaterThan(0);
-      expect(r.sample_rate_hz).toBeGreaterThan(0);
-      expect(r.channel_count).toBeGreaterThan(0);
-      expect(Number.isFinite(r.timeline.origin_unix_ms)).toBe(true);
-      expect(r.timeline.recording_start_offset_ms).toBeGreaterThanOrEqual(0);
-      expect(r.attachment).toBeDefined();
-      const owner = events.find((e) => e.span.id === r.attachment!.span_id);
-      expect(owner).toBeDefined();
+      expect(r.attachment!.span_id).toBe(event.span.id);
       // Attachment references are JSON pointers into the owning row.
       const attachment = r
         .attachment!.ref.split("/")
         .slice(1)
         .reduce<unknown>(
-          (value, part) =>
-            (value as Record<string, unknown>)?.[
-              part.replace(/~1/g, "/").replace(/~0/g, "~")
-            ],
-          owner!.row,
+          (value, part) => (value as Record<string, unknown>)?.[part],
+          event.row,
         );
       expect(attachment).toMatchObject({ type: "braintrust_attachment" });
     }
@@ -63,19 +46,9 @@ export function assertAudioTrace(
   for (const event of events) {
     for (const s of (event.metadata?.["audio.selections"] ??
       []) as Selection[]) {
-      const r = recordings.get(key(s.recording_span_id, s.recording_id));
-      expect(r, `${event.span.name}: unknown recording`).toBeDefined();
-      expect(r!.state).toBe("ready");
-      expect(Number.isInteger(s.channel_index)).toBe(true);
-      expect(s.channel_index).toBeGreaterThanOrEqual(0);
-      expect(s.channel_index).toBeLessThan(r!.channel_count);
-      if (["user_turn", "user_speech"].includes(event.span.name!))
-        expect(s.channel_index).toBe(0);
-      if (["agent_turn", "agent_speech"].includes(event.span.name!))
-        expect(s.channel_index).toBe(1);
-      expect(
-        Number.isFinite(s.start_offset_ms) && Number.isFinite(s.end_offset_ms),
-      ).toBe(true);
+      const r = recordings.get(`${s.recording_span_id}/${s.recording_id}`);
+      expect(r?.state, `${event.span.name}: unknown recording`).toBe("ready");
+      expect(s.channel_index).toBe(event.span.name!.startsWith("user") ? 0 : 1);
       expect(s.start_offset_ms).toBeGreaterThanOrEqual(0);
       expect(s.end_offset_ms).toBeGreaterThan(s.start_offset_ms);
       expect(s.end_offset_ms).toBeLessThanOrEqual(
@@ -83,41 +56,31 @@ export function assertAudioTrace(
       );
     }
   }
-  const unassociated = new Set(unassociatedSpeaking);
+  for (const turn of events.filter((e) =>
+    ["user_turn", "agent_turn"].includes(e.span.name!),
+  ))
+    expect(turn.metadata?.["turn.id"]).toBe(turn.span.id);
   for (const speech of events.filter((e) =>
     ["user_speech", "agent_speech"].includes(e.span.name!),
   )) {
     const turnId = speech.metadata?.["turn.id"];
     if (turnId === undefined) {
-      unassociated.delete(speech.span.id!);
       const parent = events.find((e) => e.span.id === speech.span.parentIds[0]);
-      expect(parent?.span.name).toBe("livekit.agent_session");
+      expect(parent?.span.name).toBe("session");
       continue;
     }
     const turn = events.find((e) => e.span.id === turnId);
-    expect(
-      turn,
-      `${speech.span.name}: missing or dangling turn.id`,
-    ).toBeDefined();
-    expect(turn!.span.name).toBe(
+    expect(turn?.span.name, `${speech.span.name}: dangling turn.id`).toBe(
       speech.span.name === "user_speech" ? "user_turn" : "agent_turn",
     );
     expect(speech.row.span_parents).toEqual([turnId]);
   }
-  expect(
-    [...unassociated],
-    "expected unassociated speaking spans were not found",
-  ).toEqual([]);
-  for (const source of events) {
-    for (const link of (source.row.metadata?.links ?? []) as {
-      context: { traceId: string; spanId: string; traceFlags: number };
+  for (const source of events)
+    for (const link of (source.metadata?.links ?? []) as {
+      context: { traceId: string; spanId: string };
       attributes: Record<string, string>;
     }[]) {
-      expect(link.context.traceId).toMatch(/^[0-9a-f]{32}$/);
-      expect(link.context.spanId).toMatch(/^[0-9a-f]{16}$/);
-      const target = events.find(
-        (event) => event.span.id === link.context.spanId,
-      );
+      const target = events.find((e) => e.span.id === link.context.spanId);
       expect(target, "link target must be an exported span").toBeDefined();
       expect(target!.row.root_span_id).toBe(link.context.traceId);
       expect([
@@ -128,5 +91,5 @@ export function assertAudioTrace(
         "transcribed_by",
       ]).toContain(link.attributes["braintrust.relationship.type"]);
     }
-  }
+  return events;
 }

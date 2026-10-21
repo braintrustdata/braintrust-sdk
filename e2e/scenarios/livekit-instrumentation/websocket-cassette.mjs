@@ -4,21 +4,13 @@ import { readFile, writeFile, mkdir } from "node:fs/promises";
 import { setImmediate } from "node:timers/promises";
 import { dirname } from "node:path";
 import assert from "node:assert/strict";
-export async function websocketCassette(
-  path,
-  record,
-  { concurrentAudio = false, burst = false } = {},
-) {
+export async function websocketCassette(path, record) {
   const events = record ? [] : JSON.parse(await readFile(path, "utf8"));
   let index = 0,
     failure,
     socket,
     upstream;
-  let disconnected = false;
-  let connectionCount = 0;
   const ids = new Map();
-  const consumed = new Set();
-  const isAudio = (message) => message.type === "session.input_audio.append";
   const server = new WebSocketServer({ port: 0, host: "127.0.0.1" });
   await new Promise((resolve) => server.once("listening", resolve));
   function remap(value) {
@@ -60,21 +52,11 @@ export async function websocketCassette(
     pumping = true;
     try {
       while (index < events.length && socket.readyState === WebSocket.OPEN) {
-        if (events[index].direction === "send") {
-          if (!consumed.delete(index)) break;
-          index++;
-        } else if (
-          events[index].direction === "disconnect" ||
-          events[index].direction === "connect"
-        )
-          break;
-        else {
-          const message = remap(events[index++].message);
-          socket.send(JSON.stringify(message));
-          // Preserve protocol order without waiting on the instrumented code.
-          // Burst replay also exercises completion arriving before async setup.
-          if (!burst) await setImmediate();
-        }
+        if (events[index].direction === "send") break;
+        const message = remap(events[index++].message);
+        socket.send(JSON.stringify(message));
+        // Yield between recorded responses, preserving protocol ordering.
+        await setImmediate();
       }
     } catch (error) {
       failure = error;
@@ -84,24 +66,11 @@ export async function websocketCassette(
     }
   };
   server.on("connection", (client, request) => {
-    if (socket && !disconnected) {
+    if (socket) {
       failure ??= new Error("Unexpected realtime reconnect");
       client.close();
       return;
     }
-    if (connectionCount > 0) {
-      if (record) events.push({ direction: "connect" });
-      else {
-        assert.equal(
-          events[index]?.direction,
-          "connect",
-          "Expected recorded reconnect",
-        );
-        index++;
-      }
-    }
-    connectionCount++;
-    disconnected = false;
     socket = client;
     if (record) {
       const url = new URL(request.url, "wss://api.openai.com");
@@ -136,24 +105,13 @@ export async function websocketCassette(
       client.on("message", (data) => {
         try {
           const actual = JSON.parse(data.toString());
-          // A duplex microphone keeps sending while tools finish. Validate both
-          // ordered lanes in full without depending on their scheduler interleave.
-          const expected = concurrentAudio
-            ? events.findIndex(
-                (event, i) =>
-                  i >= index &&
-                  event.direction === "send" &&
-                  !consumed.has(i) &&
-                  isAudio(event.message) === isAudio(actual),
-              )
-            : index;
           assert.equal(
-            events[expected]?.direction,
+            events[index]?.direction,
             "send",
             `Unexpected outgoing message at ${index}`,
           );
-          match(actual, events[expected].message);
-          consumed.add(expected);
+          match(actual, events[index].message);
+          index++;
           pump();
         } catch (error) {
           console.error("WebSocket cassette mismatch at", index, error);
@@ -166,27 +124,6 @@ export async function websocketCassette(
   });
   return {
     baseURL: `http://127.0.0.1:${server.address().port}/v1`,
-    disconnect() {
-      assert(
-        socket?.readyState === WebSocket.OPEN,
-        "No active connection to disconnect",
-      );
-      if (record) events.push({ direction: "disconnect" });
-      else {
-        assert.equal(
-          events[index]?.direction,
-          "disconnect",
-          "Disconnect before recorded messages completed",
-        );
-        index++;
-      }
-      disconnected = true;
-      socket.terminate();
-      upstream?.terminate();
-    },
-    get connections() {
-      return connectionCount;
-    },
     async close() {
       socket?.terminate();
       upstream?.terminate();

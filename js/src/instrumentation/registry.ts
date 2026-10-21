@@ -44,34 +44,26 @@ function getSharedState(): Record<symbol, unknown> | undefined {
     : undefined;
 }
 
+// The standalone instrumentation entrypoint is bundled separately from the SDK.
+// Share startup settings just as we share the active registry and span customizers.
+const CONFIG_KEY = Symbol.for("braintrust.instrumentation.config");
+const sharedConfig: typeof globalThis & {
+  [CONFIG_KEY]?: InstrumentationConfig;
+} = globalThis;
+
 class PluginRegistry {
   private braintrustPlugin: BraintrustPlugin | null = null;
-  private config: InstrumentationConfig = {};
   private enabled = false;
+
+  private get config(): InstrumentationConfig {
+    return sharedConfig[CONFIG_KEY] ?? {};
+  }
 
   /**
    * Configure which integrations should be enabled.
-   * This must be called before any SDK imports to take effect. LiveKit-only
-   * options may also be configured before its first native span.
+   * This must be called before any SDK imports to take effect.
    */
   configure(config: InstrumentationConfig): void {
-    // Importing braintrust enables plugins before users can call this API.
-    // Forward LiveKit-only settings so its integration can accept configuration
-    // until first use; the LiveKit plugin owns that restriction. Other plugins
-    // retain their existing configuration lifecycle.
-    if (
-      this.enabled &&
-      Object.keys(config).every((k) => k === "integrations") &&
-      config.integrations &&
-      "livekit" in config.integrations &&
-      Object.keys(config.integrations).every((k) => k === "livekit")
-    ) {
-      const disabled = this.readEnvConfig().integrations?.livekit === false;
-      this.braintrustPlugin?.configureLiveKit(
-        disabled ? false : config.integrations.livekit,
-      );
-      return;
-    }
     if (this.enabled) {
       // eslint-disable-next-line no-restricted-properties -- preserving intentional console usage.
       console.warn(
@@ -80,10 +72,19 @@ class PluginRegistry {
       );
       return;
     }
+    if (
+      config.streamingAttachmentBufferBytes !== undefined &&
+      (!Number.isSafeInteger(config.streamingAttachmentBufferBytes) ||
+        config.streamingAttachmentBufferBytes <= 0)
+    ) {
+      throw new Error(
+        "streamingAttachmentBufferBytes must be a positive safe integer",
+      );
+    }
     if ("spanCustomizers" in config) {
       setSpanCustomizers(config.spanCustomizers);
     }
-    this.config = { ...this.config, ...config };
+    sharedConfig[CONFIG_KEY] = { ...this.config, ...config };
   }
 
   /**
@@ -110,6 +111,8 @@ class PluginRegistry {
     // Read config from environment variables
     const envConfig = this.readEnvConfig();
     const finalConfig = {
+      streamingAttachmentBufferBytes:
+        this.config.streamingAttachmentBufferBytes,
       integrations: {
         ...this.getDefaultConfig(),
         ...this.config.integrations,

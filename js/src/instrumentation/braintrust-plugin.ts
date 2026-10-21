@@ -1,4 +1,3 @@
-import { LiveKitPlugin } from "./plugins/livekit-plugin";
 import { BasePlugin } from "./core";
 import { OpenAIPlugin } from "./plugins/openai-plugin";
 import { OpenAICodexPlugin } from "./plugins/openai-codex-plugin";
@@ -29,6 +28,7 @@ import { LangSmithPlugin } from "./plugins/langsmith-plugin";
 import { PiCodingAgentPlugin } from "./plugins/pi-coding-agent-plugin";
 import { StrandsAgentSDKPlugin } from "./plugins/strands-agent-sdk-plugin";
 import { ElevenLabsPlugin } from "./plugins/elevenlabs-plugin";
+import { LiveKitPlugin } from "./plugins/livekit-plugin";
 import { VoyageAIPlugin } from "./plugins/voyageai-plugin";
 import { TypeSafePlugin } from "./plugins/typesafe-plugin";
 import { CloudflareAIChatPlugin } from "./plugins/cloudflare-ai-chat-plugin";
@@ -37,6 +37,7 @@ import type { InstrumentationIntegrationsConfig } from "./config";
 
 export interface BraintrustPluginConfig {
   integrations?: InstrumentationIntegrationsConfig;
+  streamingAttachmentBufferBytes?: number;
 }
 
 /**
@@ -84,13 +85,13 @@ export class BraintrustPlugin extends BasePlugin {
   private bedrockRuntimePlugin: BedrockRuntimePlugin | null = null;
   private genkitPlugin: GenkitPlugin | null = null;
   private gitHubCopilotPlugin: GitHubCopilotPlugin | null = null;
-  private livekitPlugin: LiveKitPlugin | null = null;
   private fluePlugin: FluePlugin | null = null;
   private langChainPlugin: LangChainPlugin | null = null;
   private langSmithPlugin: LangSmithPlugin | null = null;
   private piCodingAgentPlugin: PiCodingAgentPlugin | null = null;
   private strandsAgentSDKPlugin: StrandsAgentSDKPlugin | null = null;
   private elevenLabsPlugin: ElevenLabsPlugin | null = null;
+  private liveKitPlugin: LiveKitPlugin | null = null;
   private voyageAIPlugin: VoyageAIPlugin | null = null;
   private typeSafePlugin: TypeSafePlugin | null = null;
   private cloudflareAIChatPlugin: CloudflareAIChatPlugin | null = null;
@@ -101,27 +102,8 @@ export class BraintrustPlugin extends BasePlugin {
     this.config = config;
   }
 
-  configureLiveKit(value: InstrumentationIntegrationsConfig["livekit"]) {
-    this.livekitPlugin?.configure(typeof value === "object" ? value : {});
-    if (value === false) {
-      this.livekitPlugin?.disable();
-      this.livekitPlugin = null;
-    } else if (!this.livekitPlugin) {
-      this.livekitPlugin = new LiveKitPlugin(
-        typeof value === "object" ? value : {},
-      );
-      this.livekitPlugin.enable();
-    }
-  }
-
   protected onEnable(): void {
     const integrations = this.config.integrations ?? {};
-    if (integrations.livekit !== false) {
-      this.livekitPlugin = new LiveKitPlugin(
-        typeof integrations.livekit === "object" ? integrations.livekit : {},
-      );
-      this.livekitPlugin.enable();
-    }
 
     // Enable OpenAI integration (default: true)
     if (integrations.openai !== false) {
@@ -229,6 +211,13 @@ export class BraintrustPlugin extends BasePlugin {
       this.elevenLabsPlugin.enable();
     }
 
+    if (integrations.livekit !== false) {
+      this.liveKitPlugin = new LiveKitPlugin(
+        this.config.streamingAttachmentBufferBytes,
+      );
+      this.liveKitPlugin.enable();
+    }
+
     if (integrations.voyageai !== false) {
       this.voyageAIPlugin = new VoyageAIPlugin();
       this.voyageAIPlugin.enable();
@@ -308,8 +297,6 @@ export class BraintrustPlugin extends BasePlugin {
   }
 
   protected onDisable(): void {
-    this.livekitPlugin?.disable();
-    this.livekitPlugin = null;
     if (this.openaiPlugin) {
       this.openaiPlugin.disable();
       this.openaiPlugin = null;
@@ -407,6 +394,11 @@ export class BraintrustPlugin extends BasePlugin {
     if (this.elevenLabsPlugin) {
       this.elevenLabsPlugin.disable();
       this.elevenLabsPlugin = null;
+    }
+
+    if (this.liveKitPlugin) {
+      this.liveKitPlugin.disable();
+      this.liveKitPlugin = null;
     }
 
     if (this.voyageAIPlugin) {

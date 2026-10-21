@@ -1,4 +1,3 @@
-import { livekitConfigs } from "./livekit";
 import type { InstrumentationConfig } from "../orchestrion-js";
 import {
   isInstrumentationIntegrationDisabled,
@@ -24,6 +23,7 @@ import { groqConfigs } from "./groq";
 import { huggingFaceConfigs } from "./huggingface";
 import { huggingFaceTransformersConfigs } from "./huggingface-transformers";
 import { langchainConfigs } from "./langchain";
+import { livekitConfigs } from "./livekit";
 import { langSmithConfigs } from "./langsmith";
 import { mistralConfigs } from "./mistral";
 import { langGraphSDKConfigs } from "./langgraph-sdk";
