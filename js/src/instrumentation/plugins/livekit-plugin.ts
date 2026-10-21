@@ -46,7 +46,7 @@ const SAMPLE_RATE = 24000;
 const OTEL_SPAN_KEY = Symbol.for("OpenTelemetry Context Key SPAN");
 const FINAL_TRANSCRIPT = 2; // SpeechEventType.FINAL_TRANSCRIPT
 
-// Exported native spans. Every other span nested in a session folds into its parent.
+// Native spans with a Braintrust name. Other session spans export as `livekit.<name>`.
 const SPANS = new Map<string, { name: string; type: "task" | "llm" | "tool" }>([
   ["agent_session", { name: "session", type: "task" }],
   ["user_turn", { name: "user_turn", type: "task" }],
@@ -57,6 +57,8 @@ const SPANS = new Map<string, { name: string; type: "task" | "llm" | "tool" }>([
   ["tts_node", { name: "tts", type: "task" }],
   ["function_tool", { name: "function_tool", type: "tool" }],
 ]);
+// Native request spans duplicate the model and TTS lifecycle; they fold into their parent.
+const FOLDED = new Set(["llm_request", "llm_request_run", "tts_request_run"]);
 
 const METRICS = {
   prompt_tokens: "gen_ai.usage.input_tokens",
@@ -342,11 +344,14 @@ class LiveKitTracing {
         return;
       }
     }
-    const kind = SPANS.get(name);
+    const kind = SPANS.get(name) ?? {
+      name: `livekit.${name}`,
+      type: "task" as const,
+    };
     const start = spanTimeSeconds(options.startTime);
-    const owner = kind ? undefined : (parent!.owner ?? parent!);
+    const owner = FOLDED.has(name) ? (parent!.owner ?? parent!) : undefined;
     const args =
-      kind &&
+      !owner &&
       withSpanInstrumentationName(
         { name: kind.name, type: kind.type, startTime: start },
         INSTRUMENTATION_NAMES.LIVEKIT,
@@ -613,9 +618,14 @@ class LiveKitTracing {
   private clearSession(id: string) {
     const state = this.sessions.get(id);
     // Native children (notably tools) can outlive session end. Retain ownership until
-    // every exported operation finishes, even after the recording has finalized.
-    // Folded spans don't hold the session: LiveKit leaves non-recording ones open.
-    if (!state || [...state.rows.values()].some((row) => !row.ended)) return;
+    // every mapped operation finishes, even after the recording has finalized.
+    // Other native spans don't hold the session: LiveKit can leave them open.
+    // Their rows still log and end on their own if LiveKit ends them later.
+    if (
+      !state ||
+      [...state.rows.values()].some((row) => !row.ended && SPANS.has(row.name))
+    )
+      return;
     state.speech.finish(state.root.span);
     this.sessions.delete(id);
   }

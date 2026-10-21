@@ -166,6 +166,7 @@ describe("tracing", () => {
     const { all, one } = await rows();
     expect(all.map((r) => r.span_attributes.name).sort()).toEqual([
       "agent_turn",
+      "livekit.keyterm_detection",
       "llm_response",
       "lookup_order",
       "session",
@@ -185,6 +186,9 @@ describe("tracing", () => {
     });
     expect(agentTurn.metadata.model).toBeUndefined();
     expect(agentTurn.metrics.prompt_tokens).toBeUndefined();
+    expect(one("livekit.keyterm_detection").metrics.prompt_tokens).toBe(
+      undefined,
+    );
     const llm = one("llm_response");
     expect(llm).toMatchObject({
       span_parents: [agentTurn.span_id],
@@ -368,11 +372,11 @@ describe("tracing", () => {
       expect(root.addEvent("with attributes", { count: 1 }, time)).toBe(root);
       expect(root.addEvent("with timestamp", time)).toBe(root);
       expect(root.setStatus({ code: 2, message: "failed" })).toBe(root);
-      // Internal native work folds into its exported parent and keeps its
-      // native recording state, since nothing it records is exported.
+      // Folded request attempts keep their native recording state, since
+      // nothing they record is exported.
       const internal = nativeSpan();
       tracing.observeSpan(internal, {
-        name: "session_start",
+        name: "llm_request_run",
         context: { getValue: () => root },
       });
       expect(internal.isRecording()).toBe(false);
@@ -411,6 +415,58 @@ describe("tracing", () => {
     },
   );
 
+  test("exports native lifecycle spans under their native parents", async () => {
+    const root = start("agent_session");
+    const sessionStart = start("session_start", root);
+    const activity = start("start_agent_activity", sessionStart, {
+      "lk.agent_label": "default_agent",
+    });
+    start("setup_toolsets", activity).end();
+    start("on_enter", activity).end();
+    activity.end();
+    sessionStart.end();
+    const turn = start("user_turn", root);
+    const wait = start("eou_wait", turn);
+    start("eou_detection", wait, { "lk.eou.probability": 0.9 }).end();
+    wait.end();
+    turn.end();
+    const tts = start("tts_node", root);
+    const request = start("tts_request", tts);
+    start("tts_request_run", request).end();
+    request.end();
+    tts.end();
+    root.end();
+
+    const { all, one } = await rows();
+    const parent = (row: any) =>
+      all.find((r) => r.span_id === row.span_parents?.[0])?.span_attributes
+        .name;
+    expect(
+      Object.fromEntries(
+        all.map((row) => [row.span_attributes.name, parent(row) ?? null]),
+      ),
+    ).toEqual({
+      session: null,
+      "livekit.session_start": "session",
+      "livekit.start_agent_activity": "livekit.session_start",
+      "livekit.setup_toolsets": "livekit.start_agent_activity",
+      "livekit.on_enter": "livekit.start_agent_activity",
+      user_turn: "session",
+      "livekit.eou_wait": "user_turn",
+      "livekit.eou_detection": "livekit.eou_wait",
+      tts: "session",
+      "livekit.tts_request": "tts",
+    });
+    expect(one("livekit.start_agent_activity")).toMatchObject({
+      span_attributes: { type: "task" },
+      metadata: { "contrib.livekit.agent_label": "default_agent" },
+    });
+    expect(one("livekit.eou_detection").metadata).toMatchObject({
+      "contrib.livekit.eou.probability": 0.9,
+      "turn.id": one("user_turn").span_id,
+    });
+  });
+
   test("event attributes omit content keys", async () => {
     const root = start("agent_session");
     root.addEvent("participant_linked", {
@@ -431,7 +487,7 @@ describe("tracing", () => {
     const full = start("agent_session");
     const other = start("agent_session");
     // Folded spans, including ones LiveKit never ends, do not count toward the limit.
-    for (let i = 0; i < 10_000; i++) start("eou_wait", full);
+    for (let i = 0; i < 10_000; i++) start("llm_request_run", full);
     for (let i = 2; i < 8192; i++) start("user_turn", full).end();
     // The first turn takes the session's last slot; the second is not traced.
     start("agent_turn", full).end();
@@ -482,18 +538,24 @@ describe("tracing", () => {
     const tool = start("function_tool", turn, {
       "lk.function_tool.name": "late_tool",
     });
-    // LiveKit never ends non-recording internal spans such as eou_wait.
-    start("eou_wait", turn);
+    // LiveKit can leave internal spans such as eou_wait open. They don't hold
+    // the session, but still export if LiveKit ends them later.
+    const wait = start("eou_wait", turn);
     turn.end([2, 0]);
     root.end([2, 0]);
     expect(tracing.sessions.size).toBe(1);
     tool.setAttribute("lk.pii.function_tool.output", '{"ok":true}');
     tool.end([3, 0]);
     expect(tracing.sessions.size).toBe(0);
+    wait.end([4, 0]);
     const { one } = await rows();
     expect(one("late_tool")).toMatchObject({
       span_parents: [one("agent_turn").span_id],
       output: { ok: true },
+    });
+    expect(one("livekit.eou_wait")).toMatchObject({
+      span_parents: [one("agent_turn").span_id],
+      metrics: { end: 4 },
     });
   });
 
