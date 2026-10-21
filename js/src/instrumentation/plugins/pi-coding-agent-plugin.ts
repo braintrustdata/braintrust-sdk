@@ -1064,7 +1064,11 @@ function extractUsageMetrics(
     completion_tokens: usage.output,
     prompt_cache_creation_tokens: usage.cacheWrite,
     prompt_cached_tokens: usage.cacheRead,
-    prompt_tokens: usage.input,
+    // Pi reports cache reads and writes outside `input`; Braintrust's `prompt_tokens` includes them.
+    prompt_tokens:
+      typeof usage.input === "number"
+        ? usage.input + (usage.cacheRead ?? 0) + (usage.cacheWrite ?? 0)
+        : undefined,
     tokens: usage.totalTokens ?? usage.tokens,
   });
 }

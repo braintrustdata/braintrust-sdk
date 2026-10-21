@@ -218,6 +218,54 @@ describe("PiCodingAgentPlugin", () => {
     },
   );
 
+  it("counts cache reads and writes in prompt_tokens", async () => {
+    const interceptor = promptInterceptor(enablePlugin(plugins));
+    // Pi's `input` excludes cached tokens (its OpenAI client subtracts them from
+    // `input_tokens`; Anthropic reports them separately), so 5 + 20 + 4 + 3 = 32.
+    const message = {
+      ...makeAssistantMessage("done"),
+      usage: {
+        cacheRead: 20,
+        cacheWrite: 4,
+        input: 5,
+        output: 3,
+        totalTokens: 32,
+      },
+    };
+    const agent = makeAgent(vi.fn(async () => makeStream(message)));
+    const session = makeSession(agent);
+
+    await interceptor(
+      async function (this: typeof session) {
+        const stream = await this.agent.streamFn(anthropicModel(), {
+          messages: [{ role: "user", content: "hello" }],
+        });
+        await stream.result();
+      },
+      session,
+      ["hello", undefined],
+      {},
+    );
+
+    const expected = {
+      completion_tokens: 3,
+      prompt_cache_creation_tokens: 4,
+      prompt_cached_tokens: 20,
+      prompt_tokens: 29,
+      tokens: 32,
+    };
+    expect(
+      findSpan(spans, "anthropic.messages.create")?.log,
+    ).toHaveBeenCalledWith(
+      expect.objectContaining({ metrics: expect.objectContaining(expected) }),
+    );
+    const finalTaskLog = findSpan(
+      spans,
+      "AgentSession.prompt",
+    )?.log.mock.calls.at(-1)?.[0];
+    expect(finalTaskLog?.metrics).toMatchObject(expected);
+  });
+
   it("isolates overlapping prompts on the same agent without prompt matching", async () => {
     const interceptor = promptInterceptor(enablePlugin(plugins));
     const originalStreamFn = vi.fn(async () =>
