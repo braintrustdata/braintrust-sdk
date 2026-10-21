@@ -9,6 +9,7 @@ import {
   vi,
 } from "vitest";
 import { EventEmitter } from "node:events";
+import { z } from "zod/v3";
 import { configureNode } from "../../node/config";
 import {
   Attachment,
@@ -22,7 +23,7 @@ import { traceAsyncCall } from "../core/tracing";
 import { _exportsForTestingOnly } from "./livekit-plugin";
 
 configureNode();
-const { LiveKitTracing, Recording } = _exportsForTestingOnly;
+const { LiveKitTracing, Recording, requestMetadata } = _exportsForTestingOnly;
 
 let logger: ReturnType<typeof logging.useTestBackgroundLogger>;
 let tracing: InstanceType<typeof LiveKitTracing>;
@@ -144,8 +145,17 @@ describe("tracing", () => {
       "gen_ai.usage.input_tokens": 10,
       "gen_ai.usage.output_tokens": 3,
     });
-    // A retried attempt's failure does not fail the model response.
-    start("llm_request_run", request).recordException(new Error("retried"));
+    // Attempts export under the model span. A retried attempt's failure does
+    // not fail the model response.
+    const failed = start("llm_request_run", request, { "lk.retry_count": 0 });
+    failed.recordException(new Error("timed out"));
+    failed.end([1, 500_000_000]);
+    start(
+      "llm_request_run",
+      request,
+      { "lk.retry_count": 1 },
+      [1, 500_000_000],
+    ).end([2, 0]);
     request.end([2, 0]);
     model.end([2, 0]);
     // Requests owned by other features don't report usage on their exported ancestor.
@@ -163,10 +173,12 @@ describe("tracing", () => {
     });
     for (const span of [tool, tts, agent, user, root]) span.end([3, 0]);
 
-    const { all, one } = await rows();
+    const { all, named, one } = await rows();
     expect(all.map((r) => r.span_attributes.name).sort()).toEqual([
       "agent_turn",
       "livekit.keyterm_detection",
+      "livekit.llm_request_run",
+      "livekit.llm_request_run",
       "llm_response",
       "lookup_order",
       "session",
@@ -226,6 +238,22 @@ describe("tracing", () => {
       },
     });
     expect(llm.error).toBeUndefined();
+    const attempts = named("livekit.llm_request_run");
+    expect(attempts).toMatchObject([
+      {
+        span_parents: [llm.span_id],
+        span_attributes: { type: "task" },
+        error: expect.stringContaining("timed out"),
+        metadata: { "contrib.livekit.retry_count": 0 },
+        metrics: { start: 1, end: 1.5 },
+      },
+      {
+        span_parents: [llm.span_id],
+        metadata: { "contrib.livekit.retry_count": 1 },
+        metrics: { start: 1.5, end: 2 },
+      },
+    ]);
+    expect(attempts[1].error).toBeUndefined();
     expect(JSON.stringify(llm.metadata)).not.toContain("private");
     expect(one("lookup_order")).toMatchObject({
       span_attributes: { type: "tool" },
@@ -352,6 +380,71 @@ describe("tracing", () => {
     ]);
   });
 
+  test("llm spans record the tools available to their pipeline reply", async () => {
+    const root = start("agent_session");
+    const turn = start("agent_turn", root);
+    const lookup = {
+      description: "Look up an order",
+      parameters: z.object({ id: z.number() }),
+    };
+    const reply = (request: Parameters<typeof requestMetadata>[0]) =>
+      tracing.scope(
+        turn,
+        () => start("llm_node", turn).end(),
+        requestMetadata(request),
+      );
+    reply({
+      span: turn,
+      toolCtx: {
+        functionTools: {
+          lookup_order: lookup,
+          cancel_order: {
+            parameters: {
+              type: "object",
+              properties: { id: { type: "number" } },
+            },
+          },
+        },
+      },
+      modelSettings: { toolChoice: "required" },
+    });
+    // A later reply in the same turn can change its tools.
+    reply({ span: turn, toolCtx: { functionTools: {} } });
+    turn.end();
+    root.end();
+
+    const [first, second] = (await rows()).named("llm_response");
+    expect(first.metadata).toMatchObject({
+      tool_choice: "required",
+      tools: [
+        {
+          type: "function",
+          function: {
+            name: "lookup_order",
+            description: "Look up an order",
+            parameters: {
+              type: "object",
+              properties: { id: { type: "number" } },
+              required: ["id"],
+            },
+          },
+        },
+        {
+          type: "function",
+          function: {
+            name: "cancel_order",
+            parameters: {
+              type: "object",
+              properties: { id: { type: "number" } },
+            },
+          },
+        },
+      ],
+    });
+    expect(second.metadata.tools).toBeUndefined();
+    expect(second.metadata.tool_choice).toBeUndefined();
+  });
+
   test.each([
     ["high resolution", [2, 500_000_000] as [number, number]],
     ["milliseconds", 2500],
@@ -372,11 +465,11 @@ describe("tracing", () => {
       expect(root.addEvent("with attributes", { count: 1 }, time)).toBe(root);
       expect(root.addEvent("with timestamp", time)).toBe(root);
       expect(root.setStatus({ code: 2, message: "failed" })).toBe(root);
-      // Folded request attempts keep their native recording state, since
-      // nothing they record is exported.
+      // Folded requests outside a model response keep their native recording
+      // state, since nothing they record is exported.
       const internal = nativeSpan();
       tracing.observeSpan(internal, {
-        name: "llm_request_run",
+        name: "llm_request",
         context: { getValue: () => root },
       });
       expect(internal.isRecording()).toBe(false);
@@ -432,7 +525,7 @@ describe("tracing", () => {
     turn.end();
     const tts = start("tts_node", root);
     const request = start("tts_request", tts);
-    start("tts_request_run", request).end();
+    start("tts_request_run", request, { "lk.retry_count": 0 }).end();
     request.end();
     tts.end();
     root.end();
@@ -456,6 +549,7 @@ describe("tracing", () => {
       "livekit.eou_detection": "livekit.eou_wait",
       tts: "session",
       "livekit.tts_request": "tts",
+      "livekit.tts_request_run": "livekit.tts_request",
     });
     expect(one("livekit.start_agent_activity")).toMatchObject({
       span_attributes: { type: "task" },
@@ -487,7 +581,7 @@ describe("tracing", () => {
     const full = start("agent_session");
     const other = start("agent_session");
     // Folded spans, including ones LiveKit never ends, do not count toward the limit.
-    for (let i = 0; i < 10_000; i++) start("llm_request_run", full);
+    for (let i = 0; i < 10_000; i++) start("llm_request", full);
     for (let i = 2; i < 8192; i++) start("user_turn", full).end();
     // The first turn takes the session's last slot; the second is not traced.
     start("agent_turn", full).end();

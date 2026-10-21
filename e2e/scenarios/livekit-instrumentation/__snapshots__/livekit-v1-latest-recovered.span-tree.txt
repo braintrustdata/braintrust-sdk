@@ -238,6 +238,28 @@ span_tree:
     │   │     "provider": "<provider-host>",
     │   │     "scenario": "livekit-instrumentation",
     │   │     "testRunId": "<run:1>",
+    │   │     "tools": [
+    │   │       {
+    │   │         "function": {
+    │   │           "description": "Look up an order delivery status.",
+    │   │           "name": "lookup_order",
+    │   │           "parameters": {
+    │   │             "$schema": "http://json-schema.org/draft-07/schema#",
+    │   │             "additionalProperties": false,
+    │   │             "properties": {
+    │   │               "order_id": {
+    │   │                 "type": "string"
+    │   │               }
+    │   │             },
+    │   │             "required": [
+    │   │               "order_id"
+    │   │             ],
+    │   │             "type": "object"
+    │   │           }
+    │   │         },
+    │   │         "type": "function"
+    │   │       }
+    │   │     ],
     │   │     "turn.id": "<span:1>"
     │   │   }
     │   │   metrics: {
@@ -246,6 +268,16 @@ span_tree:
     │   │     "time_to_first_token": 0,
     │   │     "tokens": 100
     │   │   }
+    │   │   └── livekit.llm_request_run [task]
+    │   │       metadata: {
+    │   │         "contrib.livekit.provider_request_ids": [
+    │   │           "chatcmpl-EbQ0xc7sYTWrLzRJ4KUFkteoK7w4D"
+    │   │         ],
+    │   │         "contrib.livekit.retry_count": 0,
+    │   │         "scenario": "livekit-instrumentation",
+    │   │         "testRunId": "<run:1>",
+    │   │         "turn.id": "<span:1>"
+    │   │       }
     │   ├── llm_response [llm]
     │   │   input: [
     │   │     {
@@ -307,6 +339,29 @@ span_tree:
     │   │     "provider": "<provider-host>",
     │   │     "scenario": "livekit-instrumentation",
     │   │     "testRunId": "<run:1>",
+    │   │     "tool_choice": "auto",
+    │   │     "tools": [
+    │   │       {
+    │   │         "function": {
+    │   │           "description": "Look up an order delivery status.",
+    │   │           "name": "lookup_order",
+    │   │           "parameters": {
+    │   │             "$schema": "http://json-schema.org/draft-07/schema#",
+    │   │             "additionalProperties": false,
+    │   │             "properties": {
+    │   │               "order_id": {
+    │   │                 "type": "string"
+    │   │               }
+    │   │             },
+    │   │             "required": [
+    │   │               "order_id"
+    │   │             ],
+    │   │             "type": "object"
+    │   │           }
+    │   │         },
+    │   │         "type": "function"
+    │   │       }
+    │   │     ],
     │   │     "turn.id": "<span:1>"
     │   │   }
     │   │   metrics: {
@@ -315,6 +370,16 @@ span_tree:
     │   │     "time_to_first_token": 0,
     │   │     "tokens": 134
     │   │   }
+    │   │   └── livekit.llm_request_run [task]
+    │   │       metadata: {
+    │   │         "contrib.livekit.provider_request_ids": [
+    │   │           "chatcmpl-EbQ0yLqtcueOAAmcuy4tP0VGPTwHd"
+    │   │         ],
+    │   │         "contrib.livekit.retry_count": 0,
+    │   │         "scenario": "livekit-instrumentation",
+    │   │         "testRunId": "<run:1>",
+    │   │         "turn.id": "<span:1>"
+    │   │       }
     │   ├── lookup_order [tool]
     │   │   input: {
     │   │     "order_id": "1042"
@@ -379,32 +444,49 @@ span_tree:
     │   │         "testRunId": "<run:1>",
     │   │         "turn.id": "<span:1>"
     │   │       }
-    │   │       └── livekit.tts_request [task]
+    │   │       └── livekit.tts_request_run [task]
     │   │           metadata: {
-    │   │             "contrib.livekit.tts.label": "openai.TTS",
-    │   │             "contrib.livekit.tts.streaming": false,
-    │   │             "contrib.livekit.tts_metrics": {
-    │   │               "audioDurationMs": 0,
-    │   │               "cancelled": false,
-    │   │               "charactersCount": 38,
-    │   │               "durationMs": 0,
-    │   │               "inputTokens": 0,
-    │   │               "label": "openai.TTS",
-    │   │               "metadata": {
-    │   │                 "modelName": "gpt-4o-mini-tts",
-    │   │                 "modelProvider": "<provider-host>"
-    │   │               },
-    │   │               "outputTokens": 0,
-    │   │               "requestId": "<native:8>",
-    │   │               "streamed": false,
-    │   │               "timestamp": 0,
-    │   │               "ttfbMs": 0,
-    │   │               "type": "tts_metrics"
-    │   │             },
+    │   │             "contrib.livekit.provider_request_ids": [
+    │   │               "<native:8>"
+    │   │             ],
+    │   │             "contrib.livekit.retry_count": 0,
     │   │             "scenario": "livekit-instrumentation",
     │   │             "testRunId": "<run:1>",
     │   │             "turn.id": "<span:1>"
     │   │           }
+    │   │           └── livekit.tts_request [task]
+    │   │               metadata: {
+    │   │                 "contrib.livekit.tts.label": "openai.TTS",
+    │   │                 "contrib.livekit.tts.streaming": false,
+    │   │                 "contrib.livekit.tts_metrics": {
+    │   │                   "audioDurationMs": 0,
+    │   │                   "cancelled": false,
+    │   │                   "charactersCount": 38,
+    │   │                   "durationMs": 0,
+    │   │                   "inputTokens": 0,
+    │   │                   "label": "openai.TTS",
+    │   │                   "metadata": {
+    │   │                     "modelName": "gpt-4o-mini-tts",
+    │   │                     "modelProvider": "<provider-host>"
+    │   │                   },
+    │   │                   "outputTokens": 0,
+    │   │                   "requestId": "<native:8>",
+    │   │                   "streamed": false,
+    │   │                   "timestamp": 0,
+    │   │                   "ttfbMs": 0,
+    │   │                   "type": "tts_metrics"
+    │   │                 },
+    │   │                 "scenario": "livekit-instrumentation",
+    │   │                 "testRunId": "<run:1>",
+    │   │                 "turn.id": "<span:1>"
+    │   │               }
+    │   │               └── livekit.tts_request_run [task]
+    │   │                   metadata: {
+    │   │                     "contrib.livekit.retry_count": 0,
+    │   │                     "scenario": "livekit-instrumentation",
+    │   │                     "testRunId": "<run:1>",
+    │   │                     "turn.id": "<span:1>"
+    │   │                   }
     │   └── agent_speech [task]
     │       metadata: {
     │         "audio.selections": [
@@ -556,6 +638,28 @@ span_tree:
     │   │     "provider": "<provider-host>",
     │   │     "scenario": "livekit-instrumentation",
     │   │     "testRunId": "<run:1>",
+    │   │     "tools": [
+    │   │       {
+    │   │         "function": {
+    │   │           "description": "Look up an order delivery status.",
+    │   │           "name": "lookup_order",
+    │   │           "parameters": {
+    │   │             "$schema": "http://json-schema.org/draft-07/schema#",
+    │   │             "additionalProperties": false,
+    │   │             "properties": {
+    │   │               "order_id": {
+    │   │                 "type": "string"
+    │   │               }
+    │   │             },
+    │   │             "required": [
+    │   │               "order_id"
+    │   │             ],
+    │   │             "type": "object"
+    │   │           }
+    │   │         },
+    │   │         "type": "function"
+    │   │       }
+    │   │     ],
     │   │     "turn.id": "<span:1>"
     │   │   }
     │   │   metrics: {
@@ -564,6 +668,16 @@ span_tree:
     │   │     "time_to_first_token": 0,
     │   │     "tokens": 156
     │   │   }
+    │   │   └── livekit.llm_request_run [task]
+    │   │       metadata: {
+    │   │         "contrib.livekit.provider_request_ids": [
+    │   │           "chatcmpl-EbQ10mvLkagMajmCEIiopjC45CgOP"
+    │   │         ],
+    │   │         "contrib.livekit.retry_count": 0,
+    │   │         "scenario": "livekit-instrumentation",
+    │   │         "testRunId": "<run:1>",
+    │   │         "turn.id": "<span:1>"
+    │   │       }
     │   ├── tts [task]
     │   │   metadata: {
     │   │     "contrib.livekit.response.ttfb": 0,
@@ -595,32 +709,49 @@ span_tree:
     │   │         "testRunId": "<run:1>",
     │   │         "turn.id": "<span:1>"
     │   │       }
-    │   │       └── livekit.tts_request [task]
+    │   │       └── livekit.tts_request_run [task]
     │   │           metadata: {
-    │   │             "contrib.livekit.tts.label": "openai.TTS",
-    │   │             "contrib.livekit.tts.streaming": false,
-    │   │             "contrib.livekit.tts_metrics": {
-    │   │               "audioDurationMs": 0,
-    │   │               "cancelled": false,
-    │   │               "charactersCount": 27,
-    │   │               "durationMs": 0,
-    │   │               "inputTokens": 0,
-    │   │               "label": "openai.TTS",
-    │   │               "metadata": {
-    │   │                 "modelName": "gpt-4o-mini-tts",
-    │   │                 "modelProvider": "<provider-host>"
-    │   │               },
-    │   │               "outputTokens": 0,
-    │   │               "requestId": "<native:9>",
-    │   │               "streamed": false,
-    │   │               "timestamp": 0,
-    │   │               "ttfbMs": 0,
-    │   │               "type": "tts_metrics"
-    │   │             },
+    │   │             "contrib.livekit.provider_request_ids": [
+    │   │               "<native:9>"
+    │   │             ],
+    │   │             "contrib.livekit.retry_count": 0,
     │   │             "scenario": "livekit-instrumentation",
     │   │             "testRunId": "<run:1>",
     │   │             "turn.id": "<span:1>"
     │   │           }
+    │   │           └── livekit.tts_request [task]
+    │   │               metadata: {
+    │   │                 "contrib.livekit.tts.label": "openai.TTS",
+    │   │                 "contrib.livekit.tts.streaming": false,
+    │   │                 "contrib.livekit.tts_metrics": {
+    │   │                   "audioDurationMs": 0,
+    │   │                   "cancelled": false,
+    │   │                   "charactersCount": 27,
+    │   │                   "durationMs": 0,
+    │   │                   "inputTokens": 0,
+    │   │                   "label": "openai.TTS",
+    │   │                   "metadata": {
+    │   │                     "modelName": "gpt-4o-mini-tts",
+    │   │                     "modelProvider": "<provider-host>"
+    │   │                   },
+    │   │                   "outputTokens": 0,
+    │   │                   "requestId": "<native:9>",
+    │   │                   "streamed": false,
+    │   │                   "timestamp": 0,
+    │   │                   "ttfbMs": 0,
+    │   │                   "type": "tts_metrics"
+    │   │                 },
+    │   │                 "scenario": "livekit-instrumentation",
+    │   │                 "testRunId": "<run:1>",
+    │   │                 "turn.id": "<span:1>"
+    │   │               }
+    │   │               └── livekit.tts_request_run [task]
+    │   │                   metadata: {
+    │   │                     "contrib.livekit.retry_count": 0,
+    │   │                     "scenario": "livekit-instrumentation",
+    │   │                     "testRunId": "<run:1>",
+    │   │                     "turn.id": "<span:1>"
+    │   │                   }
     │   └── agent_speech [task]
     │       output: [
     │         {

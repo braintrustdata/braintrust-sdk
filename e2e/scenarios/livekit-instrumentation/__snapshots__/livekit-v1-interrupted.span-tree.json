@@ -57,7 +57,22 @@
             {
               "name": "llm_response",
               "type": "llm",
-              "children": [],
+              "children": [
+                {
+                  "name": "livekit.llm_request_run",
+                  "type": "task",
+                  "children": [],
+                  "metadata": {
+                    "contrib.livekit.provider_request_ids": [
+                      "chatcmpl-EW75QJZzDBZU62AHO9LqNFPyCFVzw"
+                    ],
+                    "contrib.livekit.retry_count": 0,
+                    "scenario": "livekit-instrumentation",
+                    "testRunId": "<run:1>",
+                    "turn.id": "<span:1>"
+                  }
+                }
+              ],
               "input": [
                 {
                   "content": "You help customers check orders. Always call lookup_order when an order number is supplied. Answer with one short sentence giving the delivery day.",
@@ -97,6 +112,28 @@
                 "provider": "<provider-host>",
                 "scenario": "livekit-instrumentation",
                 "testRunId": "<run:1>",
+                "tools": [
+                  {
+                    "function": {
+                      "description": "Look up an order delivery status.",
+                      "name": "lookup_order",
+                      "parameters": {
+                        "$schema": "http://json-schema.org/draft-07/schema#",
+                        "additionalProperties": false,
+                        "properties": {
+                          "order_id": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "order_id"
+                        ],
+                        "type": "object"
+                      }
+                    },
+                    "type": "function"
+                  }
+                ],
                 "turn.id": "<span:1>"
               },
               "metrics": {
@@ -109,7 +146,22 @@
             {
               "name": "llm_response",
               "type": "llm",
-              "children": [],
+              "children": [
+                {
+                  "name": "livekit.llm_request_run",
+                  "type": "task",
+                  "children": [],
+                  "metadata": {
+                    "contrib.livekit.provider_request_ids": [
+                      "chatcmpl-EW75RGTW8AKq9GNl3EXZ3aUluzncT"
+                    ],
+                    "contrib.livekit.retry_count": 0,
+                    "scenario": "livekit-instrumentation",
+                    "testRunId": "<run:1>",
+                    "turn.id": "<span:1>"
+                  }
+                }
+              ],
               "input": [
                 {
                   "content": "You help customers check orders. Always call lookup_order when an order number is supplied. Answer with one short sentence giving the delivery day.",
@@ -170,6 +222,29 @@
                 "provider": "<provider-host>",
                 "scenario": "livekit-instrumentation",
                 "testRunId": "<run:1>",
+                "tool_choice": "auto",
+                "tools": [
+                  {
+                    "function": {
+                      "description": "Look up an order delivery status.",
+                      "name": "lookup_order",
+                      "parameters": {
+                        "$schema": "http://json-schema.org/draft-07/schema#",
+                        "additionalProperties": false,
+                        "properties": {
+                          "order_id": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "order_id"
+                        ],
+                        "type": "object"
+                      }
+                    },
+                    "type": "function"
+                  }
+                ],
                 "turn.id": "<span:1>"
               },
               "metrics": {
@@ -225,30 +300,57 @@
                   "type": "task",
                   "children": [
                     {
-                      "name": "livekit.tts_request",
+                      "name": "livekit.tts_request_run",
                       "type": "task",
-                      "children": [],
-                      "metadata": {
-                        "contrib.livekit.tts.label": "openai.TTS",
-                        "contrib.livekit.tts.streaming": false,
-                        "contrib.livekit.tts_metrics": {
-                          "audioDurationMs": 0,
-                          "cancelled": false,
-                          "charactersCount": 39,
-                          "durationMs": 0,
-                          "inputTokens": 0,
-                          "label": "openai.TTS",
+                      "children": [
+                        {
+                          "name": "livekit.tts_request",
+                          "type": "task",
+                          "children": [
+                            {
+                              "name": "livekit.tts_request_run",
+                              "type": "task",
+                              "children": [],
+                              "metadata": {
+                                "contrib.livekit.retry_count": 0,
+                                "scenario": "livekit-instrumentation",
+                                "testRunId": "<run:1>",
+                                "turn.id": "<span:1>"
+                              }
+                            }
+                          ],
                           "metadata": {
-                            "modelName": "gpt-4o-mini-tts",
-                            "modelProvider": "<provider-host>"
-                          },
-                          "outputTokens": 0,
-                          "requestId": "<native:5>",
-                          "streamed": false,
-                          "timestamp": 0,
-                          "ttfbMs": 0,
-                          "type": "tts_metrics"
-                        },
+                            "contrib.livekit.tts.label": "openai.TTS",
+                            "contrib.livekit.tts.streaming": false,
+                            "contrib.livekit.tts_metrics": {
+                              "audioDurationMs": 0,
+                              "cancelled": false,
+                              "charactersCount": 39,
+                              "durationMs": 0,
+                              "inputTokens": 0,
+                              "label": "openai.TTS",
+                              "metadata": {
+                                "modelName": "gpt-4o-mini-tts",
+                                "modelProvider": "<provider-host>"
+                              },
+                              "outputTokens": 0,
+                              "requestId": "<native:5>",
+                              "streamed": false,
+                              "timestamp": 0,
+                              "ttfbMs": 0,
+                              "type": "tts_metrics"
+                            },
+                            "scenario": "livekit-instrumentation",
+                            "testRunId": "<run:1>",
+                            "turn.id": "<span:1>"
+                          }
+                        }
+                      ],
+                      "metadata": {
+                        "contrib.livekit.provider_request_ids": [
+                          "<native:5>"
+                        ],
+                        "contrib.livekit.retry_count": 0,
                         "scenario": "livekit-instrumentation",
                         "testRunId": "<run:1>",
                         "turn.id": "<span:1>"

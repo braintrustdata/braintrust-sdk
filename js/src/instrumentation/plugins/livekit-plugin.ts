@@ -7,8 +7,10 @@ import type {
   AudioOutput,
   ChatMessage,
   EndOfTurnInfo,
+  FunctionTool,
   LiveKitSpan,
   PlaybackFinishedEvent,
+  PipelineOptions,
   PlaybackProgressedEvent,
   SpanTime,
   SpeechEvent,
@@ -26,6 +28,7 @@ import {
   INSTRUMENTATION_NAMES,
 } from "../../span-origin";
 import { isObject } from "../../../util";
+import { zodToJsonSchema } from "../../zod/utils";
 import { debugLogger } from "../../debug-logger";
 import { isAutoCaptureAttachmentsEnabled } from "../../wrappers/attachment-utils";
 import { DEFAULT_STREAMING_ATTACHMENT_BUFFER_BYTES } from "../config";
@@ -57,8 +60,6 @@ const SPANS = new Map<string, { name: string; type: "task" | "llm" | "tool" }>([
   ["tts_node", { name: "tts", type: "task" }],
   ["function_tool", { name: "function_tool", type: "tool" }],
 ]);
-// Native request spans duplicate the model and TTS lifecycle; they fold into their parent.
-const FOLDED = new Set(["llm_request", "llm_request_run", "tts_request_run"]);
 
 const METRICS = {
   prompt_tokens: "gen_ai.usage.input_tokens",
@@ -120,8 +121,10 @@ export class LiveKitPlugin extends BasePlugin {
         runInstrumentation(() =>
           tracing.output((self as AgentActivity).agentSession),
         );
-        return tracing.scope(args[0].span, () =>
-          Reflect.apply(target, self, args),
+        return tracing.scope(
+          args[0].span,
+          () => Reflect.apply(target, self, args),
+          runInstrumentation(() => requestMetadata(args[0])) ?? {},
         );
       }),
       livekitChannels.conversation.intercept((target, self, args) => {
@@ -224,6 +227,8 @@ class LiveKitTracing {
     native: LiveKitSpan;
     row?: Row;
     inference: { model?: Row };
+    /** Tool configuration of the enclosing pipeline reply, for its llm spans. */
+    request?: Record<string, unknown>;
   }>();
   readonly sessions = new Map<string, SessionState>();
   // Callbacks already handed to LiveKit can outlive interceptor unsubscription.
@@ -349,7 +354,10 @@ class LiveKitTracing {
       type: "task" as const,
     };
     const start = spanTimeSeconds(options.startTime);
-    const owner = FOLDED.has(name) ? (parent!.owner ?? parent!) : undefined;
+    // llm_request duplicates its model response lifecycle, so it folds into its parent.
+    // Its attempts (llm_request_run) still export to show retries and failures.
+    const owner =
+      name === "llm_request" ? (parent!.owner ?? parent!) : undefined;
     const args =
       !owner &&
       withSpanInstrumentationName(
@@ -403,7 +411,10 @@ class LiveKitTracing {
     if (name === "user_speaking")
       for (const stt of state.transcripts.get(row.turn ?? "") ?? [])
         state.relationships.link(row.span, stt.span, "transcribed_by");
-    if (name === "llm_node" && scope) scope.inference.model = row;
+    if (name === "llm_node" && scope) {
+      scope.inference.model = row;
+      if (scope.request) row.span.log({ metadata: scope.request });
+    }
     if (
       (name === "tts_node" || name === "agent_speaking") &&
       scope?.inference.model
@@ -454,7 +465,11 @@ class LiveKitTracing {
     if (state?.closed) this.clearSession(row.session);
   }
 
-  scope<T>(native: LiveKitSpan | undefined, fn: () => T): T {
+  scope<T>(
+    native: LiveKitSpan | undefined,
+    fn: () => T,
+    request?: Record<string, unknown>,
+  ): T {
     if (!native) return fn();
     const found = this.rowOf(native);
     // Unobserved spans keep parenting local but inherit the enclosing session row.
@@ -463,8 +478,9 @@ class LiveKitTracing {
     const inference = found
       ? { model: found.name === "llm_node" ? found : undefined }
       : (outer?.inference ?? {});
-    return this.context.run({ native, row, inference }, () =>
-      found ? withCurrent(row!.span, fn) : fn(),
+    return this.context.run(
+      { native, row, inference, request: request ?? outer?.request },
+      () => (found ? withCurrent(row!.span, fn) : fn()),
     );
   }
 
@@ -747,6 +763,39 @@ function content(name: string, attrs: Record<string, unknown>) {
       output: parse(attrs["contrib.livekit.pii.function_tool.output"]),
     };
   return {};
+}
+
+// Tools are long-lived, so convert each parameter schema once.
+const toolParameters = new WeakMap<FunctionTool, unknown>();
+
+/** The tools and tool choice LiveKit makes available to one pipeline reply. */
+function requestMetadata({ toolCtx, modelSettings }: PipelineOptions) {
+  const tools = Object.entries(toolCtx?.functionTools ?? {}).map(
+    ([name, tool]) => {
+      if (!toolParameters.has(tool))
+        toolParameters.set(
+          tool,
+          // LiveKit accepts zod object schemas or raw JSON schemas.
+          isObject(tool.parameters) && "_def" in tool.parameters
+            ? zodToJsonSchema(tool.parameters as any)
+            : tool.parameters,
+        );
+      const parameters = toolParameters.get(tool);
+      return {
+        type: "function",
+        function: {
+          name,
+          ...(tool.description ? { description: tool.description } : {}),
+          ...(parameters ? { parameters } : {}),
+        },
+      };
+    },
+  );
+  const toolChoice = modelSettings?.toolChoice;
+  return {
+    ...(tools.length ? { tools } : {}),
+    ...(toolChoice !== undefined ? { tool_choice: toolChoice } : {}),
+  };
 }
 
 function parse(value: unknown): unknown {
@@ -1794,4 +1843,9 @@ class Playback {
   }
 }
 
-export const _exportsForTestingOnly = { LiveKitTracing, Recording, Playback };
+export const _exportsForTestingOnly = {
+  LiveKitTracing,
+  Recording,
+  Playback,
+  requestMetadata,
+};
