@@ -20,6 +20,21 @@
     "metadataScenario": "trace-primitives-basic"
   },
   {
+    "scenarioDirName": "ts-exec-loader",
+    "label": "TypeScript loader compatibility",
+    "metadataScenario": "ts-exec-loader",
+    "variants": [
+      {
+        "variantKey": "ts-exec-v1",
+        "label": "v1 pinned"
+      },
+      {
+        "variantKey": "ts-exec-v1-latest",
+        "label": "v1 latest"
+      }
+    ]
+  },
+  {
     "scenarioDirName": "deepseek-harness-instrumentation",
     "label": "DeepSeek Harness Instrumentation",
     "metadataScenario": "deepseek-harness-instrumentation",

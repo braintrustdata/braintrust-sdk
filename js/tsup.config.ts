@@ -178,7 +178,7 @@ export default defineConfig([
   {
     entry: [
       "src/auto-instrumentations/hook.mts",
-      "src/auto-instrumentations/loader/esm-hook.mts",
+      "src/auto-instrumentations/loader/module-hooks.mts",
     ],
     format: ["esm"],
     outDir: "dist/auto-instrumentations",

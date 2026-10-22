@@ -1,4 +1,14 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import {
+  afterAll,
+  afterEach,
+  beforeAll,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  vi,
+} from "vitest";
+import { build } from "esbuild";
 import * as fs from "node:fs/promises";
 import * as os from "node:os";
 import * as path from "node:path";
@@ -22,19 +32,72 @@ vi.mock("./functions/load-module", () => ({
 const googleGenAIChannel = "orchestrion:@google/genai:models.generateContent";
 const anthropicChannel = "orchestrion:@anthropic-ai/sdk:messages.create";
 const execFileAsync = promisify(execFile);
-const loadModulePath = fileURLToPath(
+const loadModuleSourcePath = fileURLToPath(
   new URL("./functions/load-module.ts", import.meta.url),
 );
-const globalHooksPath = fileURLToPath(
+const globalHooksSourcePath = fileURLToPath(
   new URL("../global-instrumentation-hooks.ts", import.meta.url),
 );
-const debugLoggerPath = fileURLToPath(
+const debugLoggerSourcePath = fileURLToPath(
   new URL("../debug-logger.ts", import.meta.url),
 );
 
 describe("eval auto-instrumentation", () => {
   let fixtureDir: string;
+  let runtimeDir: string;
+  let loadModulePath: string;
+  let globalHooksPath: string;
+  let debugLoggerPath: string;
   let handles: Record<string, FileHandle> = {};
+
+  beforeAll(async () => {
+    runtimeDir = await fs.mkdtemp(
+      path.join(os.tmpdir(), "braintrust-eval-runtime-"),
+    );
+    loadModulePath = path.join(runtimeDir, "load-module.cjs");
+    globalHooksPath = path.join(runtimeDir, "global-hooks.cjs");
+    debugLoggerPath = path.join(runtimeDir, "debug-logger.cjs");
+    // Exercise the bundled CLI without tsx's CommonJS extension hooks replacing
+    // Node's module loading. Include the real loader for the async fallback.
+    await build({
+      entryPoints: {
+        "load-module": loadModuleSourcePath,
+        "global-hooks": globalHooksSourcePath,
+        "debug-logger": debugLoggerSourcePath,
+      },
+      outdir: runtimeDir,
+      outExtension: { ".js": ".cjs" },
+      bundle: true,
+      platform: "node",
+      format: "cjs",
+      logLevel: "silent",
+    });
+    await build({
+      entryPoints: [
+        fileURLToPath(
+          new URL(
+            "../auto-instrumentations/loader/module-hooks.mts",
+            import.meta.url,
+          ),
+        ),
+      ],
+      outfile: path.join(
+        runtimeDir,
+        "auto-instrumentations/loader/module-hooks.mjs",
+      ),
+      bundle: true,
+      platform: "node",
+      format: "esm",
+      banner: {
+        js: 'import { createRequire } from "node:module"; const require = createRequire(import.meta.url);',
+      },
+      logLevel: "silent",
+    });
+  });
+
+  afterAll(async () => {
+    await fs.rm(runtimeDir, { recursive: true, force: true });
+  });
 
   beforeEach(async () => {
     fixtureDir = await fs.mkdtemp(
@@ -146,7 +209,10 @@ describe("eval auto-instrumentation", () => {
       export const value = marker;`,
     );
 
-    handles = await initializeHandles({ files: [sourceFile], mode: "bundle" });
+    handles = await initializeHandles({
+      files: [sourceFile],
+      mode: "bundle",
+    });
     await handles[sourceFile].bundle();
     const output = await fs.readFile(handles[sourceFile].bundleFile!, "utf8");
 
@@ -173,17 +239,19 @@ describe("eval auto-instrumentation", () => {
     expect(output).toMatch(/require\(["']some-native-package["']\)/);
   });
 
-  it.each([
-    ["instruments", undefined, ["called", "resolved"]],
-    ["respects opt-out for", "anthropic", []],
-  ])("%s external eval dependencies", async (_label, disabled, expected) => {
-    const runnerPath = path.join(fixtureDir, "external-eval-runner.cjs");
-    const evalFile = path.join(fixtureDir, "external.eval.ts");
-    await fs.writeFile(evalFile, "");
-    await fs.writeFile(
-      runnerPath,
-      `require("tsx/cjs");
-require("node:module").register = () => {};
+  for (const mode of ["default", "async fallback"]) {
+    it.each([
+      ["instruments", undefined, ["called", "resolved"]],
+      ["respects opt-out for", "anthropic", []],
+    ])(
+      `%s external eval dependencies (${mode})`,
+      async (_label, disabled, expected) => {
+        const runnerPath = path.join(fixtureDir, "external-eval-runner.cjs");
+        const evalFile = path.join(fixtureDir, "external.eval.ts");
+        await fs.writeFile(evalFile, "");
+        await fs.writeFile(
+          runnerPath,
+          `${mode === "async fallback" ? 'require("node:module").registerHooks = undefined;' : ""}
 const { loadModule } = require(${JSON.stringify(loadModulePath)});
 const { newGlobalInvocationHook } = require(${JSON.stringify(globalHooksPath)});
 const lifecycle = [];
@@ -202,55 +270,66 @@ Promise.resolve(globalThis.__externalEvalResult).then((result) => {
   remove();
   process.stdout.write(JSON.stringify({ lifecycle, result }));
 });`,
+        );
+
+        const env = { ...process.env };
+        if (disabled) {
+          env.BRAINTRUST_DISABLE_INSTRUMENTATION = disabled;
+        } else {
+          delete env.BRAINTRUST_DISABLE_INSTRUMENTATION;
+        }
+        const { stdout, stderr } = await execFileAsync(
+          process.execPath,
+          [runnerPath],
+          {
+            env: { ...env, BRAINTRUST_DEBUG_LOG_LEVEL: "warn" },
+          },
+        );
+
+        expect(stderr).not.toContain("Failed to enable auto-instrumentation");
+        expect(JSON.parse(stdout)).toEqual({
+          lifecycle: expected,
+          result: { text: "payload" },
+        });
+      },
     );
 
-    const env = { ...process.env };
-    if (disabled) {
-      env.BRAINTRUST_DISABLE_INSTRUMENTATION = disabled;
-    } else {
-      delete env.BRAINTRUST_DISABLE_INSTRUMENTATION;
-    }
-    const { stdout } = await execFileAsync(process.execPath, [runnerPath], {
-      env,
-    });
-
-    expect(JSON.parse(stdout)).toEqual({
-      lifecycle: expected,
-      result: { text: "payload" },
-    });
-  });
-
-  it("reports unexpected runtime instrumentation failures", async () => {
-    const runnerPath = path.join(
-      fixtureDir,
-      "failed-instrumentation-runner.cjs",
-    );
-    const evalFile = path.join(fixtureDir, "failed-instrumentation.eval.ts");
-    await fs.writeFile(evalFile, "");
-    await fs.writeFile(
-      runnerPath,
-      `require("tsx/cjs");
-require("node:module").register = () => { throw new Error("setup failed"); };
+    it(`reports unexpected runtime instrumentation failures (${mode})`, async () => {
+      const runnerPath = path.join(
+        fixtureDir,
+        "failed-instrumentation-runner.cjs",
+      );
+      const evalFile = path.join(fixtureDir, "failed-instrumentation.eval.ts");
+      await fs.writeFile(evalFile, "");
+      await fs.writeFile(
+        runnerPath,
+        `${mode === "async fallback" ? 'require("node:module").registerHooks = undefined;' : ""}
+const nodeModule = require("node:module");
+nodeModule.register = () => { throw new Error("setup failed"); };
+if (typeof nodeModule.registerHooks === "function") {
+  nodeModule.registerHooks = () => { throw new Error("setup failed"); };
+}
 require(${JSON.stringify(debugLoggerPath)}).setGlobalDebugLogLevel("warn");
 const { loadModule } = require(${JSON.stringify(loadModulePath)});
 loadModule({ inFile: ${JSON.stringify(evalFile)}, moduleText: "" });
 process.stdout.write("loaded");`,
-    );
+      );
 
-    const { stderr, stdout } = await execFileAsync(
-      process.execPath,
-      [runnerPath],
-      {
-        env: { ...process.env, BRAINTRUST_DEBUG_LOG_LEVEL: "warn" },
-      },
-    );
+      const { stderr, stdout } = await execFileAsync(
+        process.execPath,
+        [runnerPath],
+        {
+          env: { ...process.env, BRAINTRUST_DEBUG_LOG_LEVEL: "warn" },
+        },
+      );
 
-    expect(stdout).toBe("loaded");
-    expect(stderr).toContain(
-      "Failed to enable auto-instrumentation for external eval dependencies",
-    );
-    expect(stderr).toContain("setup failed");
-  });
+      expect(stdout).toBe("loaded");
+      expect(stderr).toContain(
+        "Failed to enable auto-instrumentation for external eval dependencies",
+      );
+      expect(stderr).toContain("setup failed");
+    });
+  }
 
   async function buildEval(fixtureDir: string, source: string) {
     const evalFile = path.join(fixtureDir, "instrumentation.eval.ts");
