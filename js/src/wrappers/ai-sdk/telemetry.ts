@@ -5,6 +5,7 @@ import {
   type AISDKToolSpan,
 } from "../../instrumentation/plugins/ai-sdk-tool-tracing";
 import { isAutoInstrumentationSuppressed } from "../../instrumentation/auto-instrumentation-suppression";
+import { observeResult } from "../../instrumentation/core/observe-result";
 import {
   SpanTypeAttribute,
   getCurrentUnixTimestamp,
@@ -15,6 +16,11 @@ import {
   INSTRUMENTATION_NAMES,
   withSpanInstrumentationName,
 } from "../../span-origin";
+import {
+  aiSDKModelOutputToolNames,
+  applyAISDKToolModelOutputs,
+  hasAISDKToolModelOutput,
+} from "./tool-model-output";
 import {
   createAISDKIntegrationMetadata,
   DEFAULT_DENY_OUTPUT_PATHS,
@@ -75,6 +81,7 @@ type OperationState = {
   providerTools: Map<string, { span: Span; ended: boolean }>;
   recordInputs?: boolean;
   recordOutputs?: boolean;
+  tools?: unknown;
 };
 
 type CallSpanState = {
@@ -511,7 +518,10 @@ export function braintrustAISDKTelemetry(): any {
       state.span.log({
         ...(shouldRecordOutputs(event)
           ? {
-              output: finishOutput(result, state.operationName),
+              output: applyAISDKToolModelOutputs(
+                finishOutput(result, state.operationName),
+                aiSDKModelOutputToolNames(state.tools),
+              ),
             }
           : {}),
         metrics,
@@ -630,6 +640,7 @@ export function braintrustAISDKTelemetry(): any {
           providerTools: new Map(),
           recordInputs: event.recordInputs,
           recordOutputs: event.recordOutputs,
+          tools: (event as { tools?: unknown }).tools,
         });
 
         if (!ownsSpan) {
@@ -1045,12 +1056,29 @@ export function braintrustAISDKTelemetry(): any {
             toolOutput && "output" in toolOutput
               ? toolOutput.output
               : (event as { output?: unknown }).output;
+          const metrics =
+            typeof event.durationMs === "number"
+              ? { duration_ms: event.durationMs }
+              : {};
+          const tool = toolFromTools(
+            operations.get(state.operationKey)?.tools,
+            event.toolCall.toolName,
+          );
+          toolSpans.delete(toolCallId);
+          if (shouldRecordOutputs(event) && hasAISDKToolModelOutput(tool)) {
+            // Log what the model saw instead of the raw execute result.
+            logToolModelOutput(state.span, metrics, () =>
+              tool.toModelOutput({
+                toolCallId,
+                input: event.toolCall.input,
+                output,
+              }),
+            );
+            return;
+          }
           state.span.log({
             ...(shouldRecordOutputs(event) ? { output } : {}),
-            metrics:
-              typeof event.durationMs === "number"
-                ? { duration_ms: event.durationMs }
-                : {},
+            metrics,
           });
         }
         state.span.end();
@@ -1124,6 +1152,35 @@ export function braintrustAISDKTelemetry(): any {
       return state ? withCurrent(state.span, () => execute()) : execute();
     },
   } satisfies AISDKV7Telemetry & { [BRAINTRUST_AI_SDK_V7_TELEMETRY]: true };
+}
+
+function toolFromTools(tools: unknown, toolName: unknown): unknown {
+  return isObject(tools) && typeof toolName === "string"
+    ? Object.getOwnPropertyDescriptor(tools, toolName)?.value
+    : undefined;
+}
+
+function logToolModelOutput(
+  span: Span,
+  metrics: { duration_ms?: number },
+  toModelOutput: () => unknown,
+): void {
+  const finish = (output?: { output: unknown }) => {
+    span.log({ ...output, metrics });
+    span.end();
+  };
+  let modelOutput: unknown;
+  try {
+    modelOutput = toModelOutput();
+  } catch {
+    finish();
+    return;
+  }
+  observeResult(
+    modelOutput,
+    (output) => finish({ output }),
+    () => finish(),
+  );
 }
 
 function shouldRecordInputs(event: AISDKV7TelemetryOptions): boolean {

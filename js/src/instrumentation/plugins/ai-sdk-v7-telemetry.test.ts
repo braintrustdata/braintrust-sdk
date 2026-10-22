@@ -746,6 +746,67 @@ describe("braintrustAISDKTelemetry", () => {
     expect(modelCall?.output).toMatchObject({ text: "OK" });
   });
 
+  it("logs toModelOutput results instead of raw tool outputs", async () => {
+    const telemetry = braintrustAISDKTelemetry();
+    const rawOutput = { rows: [{ email: "user@example.com" }] };
+    const modelOutput = { type: "text", value: "Rows hidden from the model" };
+    const toModelOutput = vi.fn(async () => modelOutput);
+    const toolResult = {
+      type: "tool-result",
+      toolCallId: "tool-1",
+      toolName: "runQuery",
+      input: {},
+      output: rawOutput,
+    };
+
+    telemetry.onStart?.({
+      callId: "call-model-output",
+      operationId: "ai.generateText",
+      tools: { runQuery: { execute: async () => rawOutput, toModelOutput } },
+    });
+    telemetry.onToolExecutionStart?.({
+      callId: "call-model-output",
+      toolCall: { toolCallId: "tool-1", toolName: "runQuery", input: {} },
+    });
+    await telemetry.onToolExecutionEnd?.({
+      callId: "call-model-output",
+      toolCall: { toolCallId: "tool-1", toolName: "runQuery", input: {} },
+      toolOutput: toolResult,
+    });
+    // tool-2 has no tool message, so its raw output must be dropped.
+    const unmatchedResult = { ...toolResult, toolCallId: "tool-2" };
+    telemetry.onEnd?.({
+      callId: "call-model-output",
+      operationId: "ai.generateText",
+      content: [toolResult, unmatchedResult],
+      response: {
+        messages: [
+          { role: "tool", content: [{ ...toolResult, output: modelOutput }] },
+        ],
+      },
+    });
+
+    const spans = (await backgroundLogger.drain()) as Array<
+      Record<string, any>
+    >;
+    const toolSpan = spans.find(
+      (span) => span.span_attributes?.name === "runQuery",
+    );
+    const operation = spans.find(
+      (span) => span.span_attributes?.name === "generateText",
+    );
+
+    expect(toModelOutput).toHaveBeenCalledWith({
+      toolCallId: "tool-1",
+      input: {},
+      output: rawOutput,
+    });
+    expect(toolSpan?.output).toEqual(modelOutput);
+    expect(operation?.output.content[0].output).toEqual(modelOutput);
+    expect(operation?.output.content[1]).not.toHaveProperty("output");
+    expect(JSON.stringify(spans)).not.toContain("user@example.com");
+  });
+
   it("normalizes WorkflowAgent stream operation names", async () => {
     const telemetry = braintrustAISDKTelemetry();
 
