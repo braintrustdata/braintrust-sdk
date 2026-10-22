@@ -9,10 +9,11 @@
  *
  * Many modern apps use a mix of ESM and CJS modules, so this single hook
  * handles both:
- * - ESM and CJS modules: Transformed via registerHooks()
- * - Node.js versions without safe registerHooks() support (see
- *   `supportsSyncHooks`): register() for ESM and Module._compile patching
- *   for CJS
+ * - ESM and CJS modules: Transformed via registerHooks(), or via register()
+ *   on Node.js versions without safe registerHooks() support (see
+ *   `supportsSyncHooks`)
+ * - CJS modules compiled by loaders that replace Module._extensions (such as
+ *   tsx): Transformed via patching Module._compile
  */
 
 import {
