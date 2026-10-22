@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { Worker } from "node:worker_threads";
 import * as fs from "node:fs";
+import { createRequire } from "node:module";
 import * as os from "node:os";
 import * as path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -75,19 +76,22 @@ describe("Unified Loader Hook Integration Tests", () => {
   });
 
   describe("Unified hook (--import) handles both ESM and CJS", () => {
-    for (const [mode, preloadFixture] of [
+    for (const [mode, preload] of [
       ["sync", undefined],
-      ["async fallback", "disable-sync-hooks.mjs"],
-      ["alongside another async loader", "register-async-loader.mjs"],
+      ["async fallback", path.join(fixturesDir, "disable-sync-hooks.mjs")],
+      [
+        "alongside another async loader",
+        path.join(fixturesDir, "register-async-loader.mjs"),
+      ],
+      // tsx compiles CommonJS through Module._extensions, bypassing sync hooks.
+      ["alongside tsx", createRequire(import.meta.url).resolve("tsx")],
     ] as const) {
       it.skipIf(mode === "sync" && !supportsSyncHooks())(
         `instruments mixed ESM, imported CJS, and createRequire calls exactly once (${mode})`,
         async () => {
           const result = await runWithWorker({
             execArgv: [
-              ...(preloadFixture
-                ? ["--import", path.join(fixturesDir, preloadFixture)]
-                : []),
+              ...(preload ? ["--import", preload] : []),
               "--import",
               listenerPath,
               "--import",

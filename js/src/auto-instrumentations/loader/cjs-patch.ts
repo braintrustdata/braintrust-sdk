@@ -15,7 +15,10 @@ import moduleDetailsFromPath from "module-details-from-path";
 import { getPackageInfo } from "./get-package-info.js";
 import { applySpecialCasePatch } from "./special-case-patches.js";
 
-export function patchCommonJS(instrumentations: InstrumentationConfig[]): void {
+export function patchCommonJS(
+  instrumentations: InstrumentationConfig[],
+  transformedSources?: Map<string, string>,
+): void {
   const matcher = new InstrumentationMatcher(instrumentations);
   const prototype = Module.prototype as Module & {
     _compile(
@@ -27,6 +30,10 @@ export function patchCommonJS(instrumentations: InstrumentationConfig[]): void {
   };
   const originalCompile = prototype._compile;
   prototype._compile = function (source, filename, ...options) {
+    if (transformedSources?.get(filename) === source) {
+      transformedSources.delete(filename);
+      return originalCompile.call(this, source, filename, ...options);
+    }
     const resolvedModule = moduleDetailsFromPath(filename.split("/").join(sep));
     if (resolvedModule) {
       const packageInfo = getPackageInfo(resolvedModule.basedir);

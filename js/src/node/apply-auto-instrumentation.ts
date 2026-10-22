@@ -5,6 +5,7 @@ import { patchCommonJS } from "../auto-instrumentations/loader/cjs-patch";
 import {
   initialize,
   loadSync,
+  syncTransformedSources,
 } from "../auto-instrumentations/loader/module-hooks.mjs";
 import { debugLogger } from "../debug-logger";
 import { GLOBAL_INSTRUMENTATION_HOOKS_PROTOCOL_VERSION } from "../global-instrumentation-hooks";
@@ -48,8 +49,6 @@ export function applyAutoInstrumentation(loaderUrl?: URL): void {
     typeof nodeModule.registerHooks === "function" &&
     supportsSyncHooks()
   ) {
-    // Sync hooks cover CommonJS too, so it needs no _compile patching.
-    // Installing both would transform CommonJS modules twice.
     initialize({ instrumentations: allConfigs });
     // eslint-disable-next-line n/no-unsupported-features/node-builtins
     nodeModule.registerHooks({ load: loadSync });
@@ -62,14 +61,17 @@ export function applyAutoInstrumentation(loaderUrl?: URL): void {
         ),
       { data: { instrumentations: allConfigs } },
     );
-    try {
-      patchCommonJS(allConfigs);
-    } catch (error) {
-      debugLogger.warn(
-        "Failed to enable CommonJS auto-instrumentation; ESM instrumentation remains active:",
-        error,
-      );
-    }
+  }
+  try {
+    // Sync hooks cover CommonJS loaded by Node itself, but loaders such as tsx
+    // replace Module._extensions and compile CommonJS without calling them.
+    // The patch skips sources loadSync already transformed.
+    patchCommonJS(allConfigs, syncTransformedSources);
+  } catch (error) {
+    debugLogger.warn(
+      "Failed to enable CommonJS auto-instrumentation; ESM instrumentation remains active:",
+      error,
+    );
   }
   state.applied = true;
   debugLogger.debug(

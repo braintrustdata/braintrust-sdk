@@ -3,7 +3,12 @@ import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
-import { initialize, load, loadSync } from "./module-hooks.mjs";
+import {
+  initialize,
+  load,
+  loadSync,
+  syncTransformedSources,
+} from "./module-hooks.mjs";
 import { OPENAI_API_PROMISE_PATCH } from "./openai-api-promise-patch";
 
 let dir: string;
@@ -64,13 +69,37 @@ it.each([
   expect(result.source).toContain("test:client:create");
 });
 
-it("instruments CommonJS directly with synchronous hooks", () => {
-  const url = pathToFileURL(join(packageDir, "client.js")).href;
-  const result = loadSync(url, {}, () => ({ format: "commonjs", source }));
+it.each([["commonjs"], [undefined]])(
+  "instruments CommonJS directly with synchronous hooks (format: %s)",
+  (format) => {
+    const filePath = join(packageDir, "client.js");
+    const result = loadSync(pathToFileURL(filePath).href, {}, () => ({
+      format,
+      source,
+    }));
 
-  expect(result.source).toContain("test:client:create");
-  expect(result.shortCircuit).toBe(true);
-});
+    expect(result.source).toContain("test:client:create");
+    expect(result.shortCircuit).toBe(true);
+    // Lets the Module._compile patch skip the already transformed file.
+    expect(syncTransformedSources.get(filePath)).toBe(result.source);
+  },
+);
+
+it.each([
+  ["async", load],
+  ["sync", loadSync],
+])(
+  "leaves import-in-the-middle wrapper modules alone (%s)",
+  async (_name, loadHook) => {
+    const url = `${pathToFileURL(join(packageDir, "client.js")).href}?iitm=true`;
+    // Use a transformable source so only the URL check can skip it.
+    const original = { format: "module", source };
+    const result = await loadHook(url, {}, () => original);
+
+    expect(result).toBe(original);
+    expect(result.shortCircuit).toBeUndefined();
+  },
+);
 
 it.each([
   ["async", load],

@@ -25,6 +25,13 @@ import {
 
 let matcher: InstrumentationMatcher;
 
+/**
+ * CommonJS sources produced by `loadSync`, keyed by filename. The
+ * Module._compile patch skips a file only when it receives exactly this source;
+ * loaders such as tsx may discard it and compile the original file instead.
+ */
+export const syncTransformedSources = new Map<string, string>();
+
 function getModuleType(url: string, format: string | undefined) {
   if (format === "module") {
     return "esm";
@@ -75,10 +82,19 @@ export function loadSync(url: string, context: any, nextLoad: Function) {
   if (result.format === "commonjs") {
     result.source ??= readFileSync(new URL(result.responseURL ?? url));
   }
-  return transformLoadedModule(url, result, instrumentation);
+  transformLoadedModule(url, result, instrumentation);
+  // CommonJS files without a package type field have no format yet.
+  if (result.format !== "module" && result.shortCircuit) {
+    syncTransformedSources.set(instrumentation.filePath, result.source);
+  }
+  return result;
 }
 
 function getModuleInstrumentation(url: string) {
+  // import-in-the-middle proxies a module through a generated wrapper at the
+  // same path with an `iitm` search param. Only the real module is a target.
+  if (url.includes("iitm") && new URL(url).searchParams.has("iitm")) return;
+
   const filePath = url.startsWith("file:") ? fileURLToPath(url) : url;
   const resolvedModule = moduleDetailsFromPath(filePath.split("/").join(sep));
   if (!resolvedModule) return;
@@ -93,7 +109,7 @@ function getModuleInstrumentation(url: string) {
       : undefined;
   if (!specialCase && !transformer) return;
 
-  return { packageName, modulePath, specialCase, transformer };
+  return { filePath, packageName, modulePath, specialCase, transformer };
 }
 
 function transformLoadedModule(
