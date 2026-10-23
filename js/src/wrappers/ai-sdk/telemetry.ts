@@ -9,6 +9,7 @@ import {
   SpanTypeAttribute,
   getCurrentUnixTimestamp,
   isObject,
+  isObjectOrArray,
 } from "../../util";
 import { logError, startSpan, withCurrent, type Span } from "../../logger";
 import {
@@ -1157,7 +1158,7 @@ export function braintrustAISDKTelemetry(): any {
 }
 
 function toolFromTools(tools: unknown, toolName: unknown): unknown {
-  return isObject(tools) && typeof toolName === "string"
+  return isObjectOrArray(tools) && typeof toolName === "string"
     ? Object.getOwnPropertyDescriptor(tools, toolName)?.value
     : undefined;
 }

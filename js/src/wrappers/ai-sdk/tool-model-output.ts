@@ -1,4 +1,4 @@
-import { isObject } from "../../util";
+import { isObject, isObjectOrArray } from "../../util";
 
 type AISDKToolWithModelOutput = {
   toModelOutput: (...args: unknown[]) => unknown;
@@ -13,9 +13,10 @@ export function hasAISDKToolModelOutput(
 export function aiSDKModelOutputToolNames(...toolSets: unknown[]): Set<string> {
   const names = new Set<string>();
   for (const tools of toolSets) {
-    if (!isObject(tools) || Array.isArray(tools)) {
+    if (!isObjectOrArray(tools)) {
       continue;
     }
+    // AI SDK names array tools by index, so their keys match tool results.
     for (const [name, tool] of Object.entries(tools)) {
       if (hasAISDKToolModelOutput(tool)) {
         names.add(name);
