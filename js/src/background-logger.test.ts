@@ -251,9 +251,9 @@ describe("delayed flushing", () => {
     expect(logRequestSizes).toEqual([3]);
   });
 
-  test("reaching the batch threshold flushes without waiting", async () => {
+  test("queueing a full batch flushes without waiting", async () => {
     const { state, logger, logRequestSizes } = createCountingState();
-    logger.flushBatchThreshold = 5;
+    logger.defaultBatchSize = 5;
 
     enqueueEvents(state, 0, 4);
     await vi.advanceTimersByTimeAsync(0);
@@ -288,24 +288,28 @@ describe("flush delay defaults", () => {
   const createLogger = () =>
     createState(vi.fn() as unknown as typeof fetch).httpLogger();
 
-  test("only long-lived Node processes delay by default", () => {
+  test("long-lived Node processes delay by default", () => {
     expect(createLogger().flushDelayMs).toBe(1000);
-
-    vi.stubEnv("AWS_EXECUTION_ENV", "AWS_Lambda_nodejs20.x");
-    expect(createLogger().flushDelayMs).toBe(0);
-
-    vi.stubEnv("VERCEL", "1");
-    expect(createLogger().flushDelayMs).toBe(0);
-
-    vi.stubEnv("BRAINTRUST_FLUSH_DELAY_MS", "250");
-    expect(createLogger().flushDelayMs).toBe(250);
   });
 
-  test("the batch threshold defaults to the batch size", () => {
-    vi.stubEnv("BRAINTRUST_DEFAULT_BATCH_SIZE", "40");
-    expect(createLogger().flushBatchThreshold).toBe(40);
-    vi.stubEnv("BRAINTRUST_FLUSH_BATCH_THRESHOLD", "7");
-    expect(createLogger().flushBatchThreshold).toBe(7);
+  test.each([
+    ["AWS_EXECUTION_ENV", "AWS_Lambda_nodejs20.x"],
+    ["AWS_LAMBDA_FUNCTION_NAME", "fn"],
+    ["VERCEL", "1"],
+    ["NETLIFY", "true"],
+    ["K_SERVICE", "service"],
+    ["FUNCTION_TARGET", "handler"],
+    ["GAE_ENV", "standard"],
+    ["FUNCTIONS_WORKER_RUNTIME", "node"],
+  ])("%s=%s flushes immediately by default", (name, value) => {
+    vi.stubEnv(name, value);
+    expect(createLogger().flushDelayMs).toBe(0);
+  });
+
+  test("BRAINTRUST_FLUSH_DELAY_MS overrides the serverless default", () => {
+    vi.stubEnv("VERCEL", "1");
+    vi.stubEnv("BRAINTRUST_FLUSH_DELAY_MS", "250");
+    expect(createLogger().flushDelayMs).toBe(250);
   });
 });
 

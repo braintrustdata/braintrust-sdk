@@ -212,7 +212,6 @@ import {
   detectSpanOriginEnvironment,
   getSpanInstrumentationName,
   INSTRUMENTATION_NAMES,
-  isServerlessEnvironment,
   mergeSpanOriginContext,
   type SpanOriginEnvironment,
 } from "./span-origin";
@@ -3447,10 +3446,25 @@ function getNumericEnv(name: string): number | undefined {
 
 // Like the OTel BatchSpanProcessor, wait briefly before flushing so rows
 // logged close together share a request and a span's start and end rows can
-// merge into one. Only long-lived Node processes delay by default: serverless
-// and scale-to-zero platforms may freeze or throttle the process before a
-// timer fires, and browser and edge runtimes have no exit flush.
+// merge into one. Rows still waiting on the delay are lost when the process
+// exits without `beforeExit` (signals, `process.exit()`).
+// Only long-lived Node processes delay by default: serverless and
+// scale-to-zero platforms may freeze or throttle the process before a timer
+// fires, and browser and edge runtimes have no exit flush.
 const DEFAULT_FLUSH_DELAY_MS = 1000;
+
+function isServerlessEnvironment(): boolean {
+  return (
+    !!iso.getEnv("VERCEL") ||
+    !!iso.getEnv("NETLIFY") ||
+    !!iso.getEnv("AWS_EXECUTION_ENV")?.startsWith("AWS_Lambda_") ||
+    !!iso.getEnv("AWS_LAMBDA_FUNCTION_NAME") ||
+    !!iso.getEnv("K_SERVICE") ||
+    !!iso.getEnv("FUNCTION_TARGET") ||
+    iso.getEnv("GAE_ENV") === "standard" ||
+    !!iso.getEnv("FUNCTIONS_WORKER_RUNTIME")
+  );
+}
 
 function defaultFlushDelayMs(): number {
   return iso.buildType === "node" && !isServerlessEnvironment()
@@ -3631,7 +3645,6 @@ class HTTPBackgroundLogger implements BackgroundLogger {
 
   public syncFlush: boolean = false;
   public flushDelayMs: number;
-  public flushBatchThreshold: number;
   private maxRequestSizeOverride: number | null = null;
   private _maxRequestSizePromise: Promise<{
     maxRequestSize: number;
@@ -3674,14 +3687,6 @@ class HTTPBackgroundLogger implements BackgroundLogger {
       flushDelayMsEnv !== undefined && flushDelayMsEnv >= 0
         ? flushDelayMsEnv
         : defaultFlushDelayMs();
-
-    const flushBatchThresholdEnv = getNumericEnv(
-      "BRAINTRUST_FLUSH_BATCH_THRESHOLD",
-    );
-    this.flushBatchThreshold =
-      flushBatchThresholdEnv !== undefined && flushBatchThresholdEnv >= 1
-        ? flushBatchThresholdEnv
-        : this.defaultBatchSize;
 
     const maxRequestSizeEnv = getNumericEnv("BRAINTRUST_MAX_REQUEST_SIZE");
     if (maxRequestSizeEnv !== undefined) {
@@ -4302,14 +4307,14 @@ class HTTPBackgroundLogger implements BackgroundLogger {
   }
 
   // Flush once the oldest pending row has waited `flushDelayMs`, or right away
-  // once `flushBatchThreshold` rows are queued. An active flush reschedules
-  // when it finishes, so only one is ever in flight.
+  // once a full batch of `defaultBatchSize` rows is queued. An active flush
+  // reschedules when it finishes, so only one is ever in flight.
   private scheduleFlush() {
     const queueLength = this.queue.length();
     if (queueLength === 0) {
       return;
     }
-    if (queueLength >= this.flushBatchThreshold) {
+    if (queueLength >= this.defaultBatchSize) {
       // No-op while a flush is in flight; it reschedules when it finishes.
       this.triggerActiveFlush();
       return;
@@ -4319,7 +4324,7 @@ class HTTPBackgroundLogger implements BackgroundLogger {
     }
 
     const now = Date.now();
-    const delay = (this.pendingSince ?? now) + this.flushDelayMs - now;
+    const delay = this.pendingSince! + this.flushDelayMs - now;
     if (delay <= 0) {
       this.triggerActiveFlush();
       return;
