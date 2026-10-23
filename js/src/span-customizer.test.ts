@@ -1280,58 +1280,73 @@ describe("onSpanExport", () => {
     expect(input.state).toHaveLength(2);
   });
 
-  test.each(["customizer", "masking", "upload failure"])(
-    "decision media survives export with %s and never uploads redacted media",
-    async (mode) => {
-      vi.stubEnv("BRAINTRUST_CAPTURE_ATTACHMENTS", "true");
-      const media =
-        "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAIAAAD8GO2jAAAAKElEQVR4nO3NsQ0AAAzCMP5/un0CNkuZ41wybXsHAAAAAAAAAAAAxR4yw/wuPL6QkAAAAABJRU5ErkJggg==";
-      const upload = vi
-        .spyOn(Attachment.prototype, "upload")
-        .mockRejectedValue(new Error("injected upload failure"));
-      const rows: SpanExportData[] = [];
-      const { state, logger } = initHttpLogger((batch) => {
-        rows.push(...batch);
-        return Response.json({});
-      });
-      const redact = (value: unknown) =>
-        JSON.parse(JSON.stringify(value).replaceAll(media, "[redacted]"));
-      if (mode === "customizer") {
-        configureInstrumentation({
-          spanCustomizers: [
-            {
-              onSpanExport(data) {
-                if (data.input) data.input = redact(data.input);
-                return data;
-              },
-            },
-          ],
+  for (const type of ["question", "extraction"] as const) {
+    test.each(["customizer", "masking", "upload failure"])(
+      `${type} media survives export with %s and never uploads redacted media`,
+      async (mode) => {
+        vi.stubEnv("BRAINTRUST_CAPTURE_ATTACHMENTS", "true");
+        const media =
+          "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAIAAAD8GO2jAAAAKElEQVR4nO3NsQ0AAAzCMP5/un0CNkuZ41wybXsHAAAAAAAAAAAAxR4yw/wuPL6QkAAAAABJRU5ErkJggg==";
+        const upload = vi
+          .spyOn(Attachment.prototype, "upload")
+          .mockRejectedValue(new Error("injected upload failure"));
+        const rows: SpanExportData[] = [];
+        const { state, logger } = initHttpLogger((batch) => {
+          rows.push(...batch);
+          return Response.json({});
         });
-      } else if (mode === "masking") {
-        state.setMaskingFunction(redact);
-      }
-      const input = {
-        state: [{ type: "file", data: media, mediaType: "image/png" }],
-        questions: [{ id: "q", type: "boolean", instructions: "Inspect" }],
-      };
-      const span = logger.startSpan({
-        name: "evaluate",
-        spanAttributes: { type: "question" },
-      });
-      span.log({
-        input,
-        output: { answers: [{ id: "q", type: "boolean", probability: 0.9 }] },
-      });
-      span.end();
-      await logger.flush();
-      expect(rows.find((row) => row.id === span.id)).toMatchObject({
-        input: mode === "upload failure" ? input : redact(input),
-        output: { answers: [{ id: "q", type: "boolean", probability: 0.9 }] },
-      });
-      expect(upload).toHaveBeenCalledTimes(mode === "upload failure" ? 1 : 0);
-      expect(input.state[0].data).toBe(media);
-    },
-  );
+        const redact = (value: unknown) =>
+          JSON.parse(JSON.stringify(value).replaceAll(media, "[redacted]"));
+        if (mode === "customizer") {
+          configureInstrumentation({
+            spanCustomizers: [
+              {
+                onSpanExport(data) {
+                  if (data.input) data.input = redact(data.input);
+                  return data;
+                },
+              },
+            ],
+          });
+        } else if (mode === "masking") {
+          state.setMaskingFunction(redact);
+        }
+        const input = {
+          state: [{ type: "file", data: media, mediaType: "image/png" }],
+          ...(type === "extraction"
+            ? { fields: [{ id: "q", type: "number" }], images: [media] }
+            : {
+                questions: [
+                  { id: "q", type: "boolean", instructions: "Inspect" },
+                ],
+              }),
+        };
+        const output = {
+          answers: [
+            type === "extraction"
+              ? { id: "q", type: "number", value: 0 }
+              : { id: "q", type: "boolean", probability: 0.9 },
+          ],
+        };
+        const span = logger.startSpan({
+          name: "evaluate",
+          spanAttributes: { type },
+        });
+        span.log({
+          input,
+          output,
+        });
+        span.end();
+        await logger.flush();
+        expect(rows.find((row) => row.id === span.id)).toMatchObject({
+          input: mode === "upload failure" ? input : redact(input),
+          output,
+        });
+        expect(upload).toHaveBeenCalledTimes(mode === "upload failure" ? 1 : 0);
+        expect(input.state[0].data).toBe(media);
+      },
+    );
+  }
 
   test.each(["done", "error", "throw"])(
     "automatic decision attachments export safely on %s",

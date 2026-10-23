@@ -177,35 +177,79 @@
           "children": [
             {
               "name": "workers_ai.run",
-              "type": "task",
+              "type": "extraction",
               "children": [],
               "input": {
-                "fields": {
-                  "contacts": {
+                "fields": [
+                  {
+                    "id": "<span:1>",
+                    "instructions": "Invoice number",
+                    "type": "text"
+                  },
+                  {
+                    "decimals": 2,
+                    "id": "<span:2>",
+                    "instructions": "Total including shipping",
+                    "type": "number"
+                  },
+                  {
+                    "id": "<span:3>",
+                    "instructions": "Purchase order number",
+                    "type": "text"
+                  },
+                  {
+                    "id": "<span:4>",
                     "instructions": "Contact names",
                     "items": "text",
                     "type": "list"
                   },
-                  "invoice": {
-                    "instructions": "Invoice number",
-                    "type": "text"
+                  {
+                    "id": "<span:5>",
+                    "instructions": "Due date",
+                    "type": "date"
                   },
-                  "missing": {
-                    "instructions": "Purchase order number",
-                    "type": "text"
+                  {
+                    "id": "<span:6>",
+                    "instructions": "Due time",
+                    "type": "time"
                   },
-                  "total": {
-                    "decimals": 2,
-                    "instructions": "Total including shipping",
-                    "type": "number"
+                  {
+                    "id": "<span:7>",
+                    "instructions": "Delivery duration",
+                    "type": "duration",
+                    "unit": "days"
+                  },
+                  {
+                    "id": "<span:8>",
+                    "instructions": "Estimate tomorrow's unit sales",
+                    "max": 10,
+                    "min": 0,
+                    "step": 1,
+                    "type": "estimate"
+                  },
+                  {
+                    "horizon": 2,
+                    "id": "<span:9>",
+                    "instructions": "Predict unit sales for the next two days",
+                    "interval": "day",
+                    "max": 10,
+                    "min": 0,
+                    "step": 1,
+                    "type": "forecast"
                   }
+                ],
+                "options": {
+                  "include_quantiles": true,
+                  "return_state_text": true
                 },
-                "state": "Invoice INV-42. Two chairs at $15 each, shipping $5. Contact: Ada."
+                "reference_date": "<timestamp>",
+                "state": "Invoice INV-42. Two chairs at $15 each, shipping $5. Contact: Ada. Due <timestamp> at 09:30. Delivery takes 2 days. Daily sales were 2, 3, 4 units."
               },
               "output": {
-                "answers": {
-                  "contacts": {
-                    "confidence": 1,
+                "answers": [
+                  {
+                    "confidence": 0.9746456378169805,
+                    "id": "<span:1>",
                     "spans": [
                       [
                         62,
@@ -217,10 +261,382 @@
                       "Ada"
                     ]
                   },
-                  "invoice": {
-                    "confidence": 0.9999847412109375,
+                  {
+                    "confidence": 1,
+                    "guess": 2,
+                    "id": "<span:2>",
+                    "p_null": 4.207739934258825e-8,
+                    "type": "duration",
+                    "unit": "days",
+                    "value": 2
+                  },
+                  {
+                    "confidence": 0.9999988079082982,
+                    "guess": "<timestamp>",
+                    "id": "<span:3>",
+                    "p_null": 0.000005254834377410589,
+                    "type": "date",
+                    "value": "<timestamp>"
+                  },
+                  {
+                    "id": "<span:4>",
+                    "mean": 3.1715380650441403,
+                    "median": 3,
+                    "p10": 1,
+                    "p90": 5,
+                    "p_above": 0.000003429101980145788,
+                    "p_below": 0.0000015725961475254735,
+                    "quantiles": [
+                      0,
+                      0,
+                      1,
+                      1,
+                      1,
+                      1,
+                      1,
+                      1,
+                      1,
+                      1,
+                      1,
+                      2,
+                      2,
+                      2,
+                      2,
+                      2,
+                      2,
+                      2,
+                      2,
+                      2,
+                      2,
+                      2,
+                      2,
+                      2,
+                      2,
+                      2,
+                      2,
+                      2,
+                      2,
+                      2,
+                      2,
+                      2,
+                      3,
+                      3,
+                      3,
+                      3,
+                      3,
+                      3,
+                      3,
+                      3,
+                      3,
+                      3,
+                      3,
+                      3,
+                      3,
+                      3,
+                      3,
+                      3,
+                      3,
+                      3,
+                      3,
+                      3,
+                      3,
+                      3,
+                      3,
+                      3,
+                      3,
+                      3,
+                      3,
+                      3,
+                      3,
+                      3,
+                      4,
+                      4,
+                      4,
+                      4,
+                      4,
+                      4,
+                      4,
+                      4,
+                      4,
+                      4,
+                      4,
+                      4,
+                      4,
+                      4,
+                      4,
+                      4,
+                      4,
+                      4,
+                      4,
+                      4,
+                      5,
+                      5,
+                      5,
+                      5,
+                      5,
+                      5,
+                      5,
+                      5,
+                      5,
+                      5,
+                      5,
+                      5,
+                      6,
+                      6,
+                      6,
+                      6,
+                      7
+                    ],
+                    "type": "estimate",
+                    "value": 3
+                  },
+                  {
+                    "id": "<span:5>",
+                    "median": [
+                      3,
+                      3
+                    ],
+                    "p10": [
+                      1,
+                      1
+                    ],
+                    "p90": [
+                      5,
+                      5
+                    ],
+                    "steps": [
+                      {
+                        "mean": 3.1856306111975297,
+                        "median": 3,
+                        "p10": 1,
+                        "p90": 5,
+                        "p_above": 0.000004348727543401765,
+                        "p_below": 0.000001960626150321332,
+                        "quantiles": [
+                          0,
+                          0,
+                          1,
+                          1,
+                          1,
+                          1,
+                          1,
+                          1,
+                          1,
+                          1,
+                          1,
+                          1,
+                          2,
+                          2,
+                          2,
+                          2,
+                          2,
+                          2,
+                          2,
+                          2,
+                          2,
+                          2,
+                          2,
+                          2,
+                          2,
+                          2,
+                          2,
+                          2,
+                          2,
+                          2,
+                          2,
+                          2,
+                          3,
+                          3,
+                          3,
+                          3,
+                          3,
+                          3,
+                          3,
+                          3,
+                          3,
+                          3,
+                          3,
+                          3,
+                          3,
+                          3,
+                          3,
+                          3,
+                          3,
+                          3,
+                          3,
+                          3,
+                          3,
+                          3,
+                          3,
+                          3,
+                          3,
+                          3,
+                          3,
+                          3,
+                          3,
+                          3,
+                          4,
+                          4,
+                          4,
+                          4,
+                          4,
+                          4,
+                          4,
+                          4,
+                          4,
+                          4,
+                          4,
+                          4,
+                          4,
+                          4,
+                          4,
+                          4,
+                          4,
+                          4,
+                          4,
+                          5,
+                          5,
+                          5,
+                          5,
+                          5,
+                          5,
+                          5,
+                          5,
+                          5,
+                          5,
+                          5,
+                          5,
+                          5,
+                          6,
+                          6,
+                          6,
+                          6,
+                          7
+                        ],
+                        "value": 3
+                      },
+                      {
+                        "mean": 3.1823231466094843,
+                        "median": 3,
+                        "p10": 1,
+                        "p90": 5,
+                        "p_above": 0.0000051951124078186695,
+                        "p_below": 0.0000024383275558648165,
+                        "quantiles": [
+                          0,
+                          0,
+                          0,
+                          1,
+                          1,
+                          1,
+                          1,
+                          1,
+                          1,
+                          1,
+                          1,
+                          1,
+                          1,
+                          1,
+                          2,
+                          2,
+                          2,
+                          2,
+                          2,
+                          2,
+                          2,
+                          2,
+                          2,
+                          2,
+                          2,
+                          2,
+                          2,
+                          2,
+                          2,
+                          2,
+                          2,
+                          2,
+                          2,
+                          2,
+                          3,
+                          3,
+                          3,
+                          3,
+                          3,
+                          3,
+                          3,
+                          3,
+                          3,
+                          3,
+                          3,
+                          3,
+                          3,
+                          3,
+                          3,
+                          3,
+                          3,
+                          3,
+                          3,
+                          3,
+                          3,
+                          3,
+                          3,
+                          3,
+                          3,
+                          3,
+                          3,
+                          4,
+                          4,
+                          4,
+                          4,
+                          4,
+                          4,
+                          4,
+                          4,
+                          4,
+                          4,
+                          4,
+                          4,
+                          4,
+                          4,
+                          4,
+                          4,
+                          4,
+                          4,
+                          5,
+                          5,
+                          5,
+                          5,
+                          5,
+                          5,
+                          5,
+                          5,
+                          5,
+                          5,
+                          5,
+                          5,
+                          5,
+                          6,
+                          6,
+                          6,
+                          6,
+                          6,
+                          7,
+                          7
+                        ],
+                        "value": 3
+                      }
+                    ],
+                    "type": "forecast",
+                    "value": [
+                      3,
+                      3
+                    ]
+                  },
+                  {
+                    "confidence": 0.999976396560669,
                     "guess": "INV-42",
-                    "p_null": 0.0036241672933101654,
+                    "id": "<span:6>",
+                    "p_null": 0.005073945503681898,
                     "span": [
                       8,
                       14
@@ -228,10 +644,11 @@
                     "type": "text",
                     "value": "INV-42"
                   },
-                  "missing": {
-                    "confidence": 0.6537490487098694,
+                  {
+                    "confidence": 0.7146895527839661,
                     "guess": "INV",
-                    "p_null": 0.9999967813491821,
+                    "id": "<span:7>",
+                    "p_null": 0.9999973773956299,
                     "span": [
                       8,
                       11
@@ -239,26 +656,86 @@
                     "type": "text",
                     "value": null
                   },
-                  "total": {
-                    "confidence": 0.998939978547779,
+                  {
+                    "confidence": 0.9999998807907247,
+                    "guess": "09:30:00",
+                    "id": "<span:8>",
+                    "p_null": 5.798205471307938e-9,
+                    "type": "time",
+                    "value": "09:30:00"
+                  },
+                  {
+                    "confidence": 0.964132576873507,
                     "guess": 35,
-                    "p_null": 0.0000019774972770392196,
+                    "id": "<span:9>",
+                    "p_null": 0.00004319363506510854,
                     "type": "number",
                     "value": 35
                   }
-                },
+                ],
+                "state_text": "Invoice INV-42. Two chairs at $15 each, shipping $5. Contact: Ada. Due <timestamp> at 09:30. Delivery takes 2 days. Daily sales were 2, 3, 4 units.",
                 "truncated": false
               },
               "metadata": {
                 "model": "clairic",
                 "operation": "extraction",
-                "passes": 3,
                 "provider": "cloudflare"
               },
               "metrics": {
                 "completion_tokens": 0,
-                "prompt_tokens": 442,
-                "tokens": 442
+                "prompt_tokens": 874,
+                "tokens": 874
+              }
+            }
+          ]
+        },
+        {
+          "name": "image-extraction",
+          "children": [
+            {
+              "name": "workers_ai.run",
+              "type": "extraction",
+              "children": [],
+              "input": {
+                "fields": [
+                  {
+                    "id": "<span:1>",
+                    "instructions": "The main visible color",
+                    "type": "text"
+                  }
+                ],
+                "images": [
+                  {
+                    "data": "<omitted>",
+                    "mediaType": "image/png",
+                    "type": "file"
+                  }
+                ],
+                "state": null
+              },
+              "output": {
+                "answers": [
+                  {
+                    "confidence": 0.6399609050794346,
+                    "guess": "Blue",
+                    "id": "<span:1>",
+                    "p_null": 0.0034732858184725046,
+                    "span": null,
+                    "type": "text",
+                    "value": "Blue"
+                  }
+                ],
+                "truncated": false
+              },
+              "metadata": {
+                "model": "clairic",
+                "operation": "extraction",
+                "provider": "cloudflare"
+              },
+              "metrics": {
+                "completion_tokens": 0,
+                "prompt_tokens": 1181,
+                "tokens": 1181
               }
             }
           ]
@@ -328,6 +805,26 @@
                 "provider": "cloudflare"
               },
               "error": "5006: AiError: Bad input: Error: required properties at '/' are 'model,state,questions' (<uuid:1>)"
+            }
+          ]
+        },
+        {
+          "name": "extraction-error",
+          "children": [
+            {
+              "name": "workers_ai.run",
+              "type": "extraction",
+              "children": [],
+              "input": {
+                "fields": [],
+                "state": "invalid request"
+              },
+              "metadata": {
+                "model": "@cf/cloudflare/clairic",
+                "operation": "extraction",
+                "provider": "cloudflare"
+              },
+              "error": "5006: AiError: Bad input: Error: required properties at '/' are 'model,fields' (<uuid:1>)"
             }
           ]
         },

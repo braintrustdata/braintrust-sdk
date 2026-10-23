@@ -19,7 +19,7 @@ import {
   registry,
 } from "../instrumentation/registry";
 import { runWithAutoInstrumentationSuppressed } from "../instrumentation/auto-instrumentation-suppression";
-import { DecisionAttachmentProcessor } from "../decision-attachments";
+import { TypedAttachmentProcessor } from "../typed-attachments";
 import { Attachment } from "../logger";
 import { wrapWorkersAI } from "./workers-ai";
 import type { LoggingEvent } from "../../util/index";
@@ -182,22 +182,249 @@ describe("Workers AI binding", () => {
     await ai.run("@cf/cloudflare/clairic", params);
     const [span] = await logger.drain();
     expect(span).toMatchObject({
-      input: params,
+      input: { ...params, fields: [{ id: "id", type: "text" }] },
       output: {
-        answers: response.answers,
+        answers: Object.entries(response.answers).map(([id, answer]) => ({
+          id,
+          ...answer,
+        })),
         truncated: true,
         state_text: "Invoice 42",
       },
-      span_attributes: { type: "task" },
+      span_attributes: { type: "extraction" },
       metadata: {
         provider: "cloudflare",
         model: "clairic",
         operation: "extraction",
-        passes: 3,
       },
       metrics: { prompt_tokens: 50, completion_tokens: 0, tokens: 50 },
     });
   });
+
+  it("allowlists extraction fields, options and typed results while preserving falsy values and order", async () => {
+    const fields = {
+      text: { type: "text", instructions: "é𐐀", private: "omit-field" },
+      number: { type: "number", integer: false, decimals: 0, unit: "USD" },
+      date: { type: "date" },
+      time: { type: "time" },
+      datetime: { type: "datetime" },
+      duration: { type: "duration", unit: "days" },
+      list: { type: "list", items: "date" },
+      estimate: {
+        type: "estimate",
+        min: "2026-10-01",
+        max: "2026-12-01",
+        step: "month",
+        scale: "linear",
+      },
+      forecast: {
+        type: "forecast",
+        min: 0,
+        max: 5,
+        horizon: 2,
+        interval: "day",
+        null_threshold: 0.5,
+      },
+    };
+    const answers = {
+      forecast: {
+        type: "forecast",
+        value: [0, 1.23456789],
+        mean: [0, 1.2],
+        median: [0, 1],
+        p10: [0, 0.2],
+        p90: [2, 3],
+        p_below: [0, null],
+        p_above: [0.1, 0.2],
+        quantiles: [
+          [0, 1],
+          [2, 3],
+        ],
+        steps: [
+          {
+            value: 0,
+            median: 0,
+            p_below: 0,
+            quantiles: { "0.1": 0 },
+            private: "omit-step",
+          },
+          { value: 1.23456789, p_above: null },
+        ],
+        private: "omit-answer",
+      },
+      text: {
+        type: "text",
+        value: null,
+        guess: "é𐐀",
+        span: [2, 8],
+        p_null: 0,
+        confidence: null,
+        steps: "omit-wrong-type",
+      },
+      number: {
+        type: "number",
+        value: 0,
+        guess: 0,
+        p_null: null,
+        confidence: 0,
+      },
+      date: { type: "date", value: "2026-10-23" },
+      time: { type: "time", value: "12:34:56.123456+02:00" },
+      datetime: { type: "datetime", value: "2026-10-23T12:34:56+02:00" },
+      duration: { type: "duration", value: 1.23456789, unit: "days" },
+      list: { type: "list", value: [], spans: [], confidence: 0 },
+      estimate: {
+        type: "estimate",
+        value: "2026-11-01",
+        median: "2026-11-01",
+        quantiles: { "0.9": "2026-12-01", "0.1": "2026-10-01" },
+      },
+    };
+    const response = {
+      model: "clairic",
+      answers,
+      state_text: "processed",
+      truncated: false,
+      usage: {
+        input_tokens: 12,
+        output_tokens: 0,
+        total_tokens: 15,
+        passes: 7,
+        state_tokens: 4,
+        schema_tokens: 8,
+      },
+    };
+    const params = {
+      state: { text: "original é𐐀" },
+      fields,
+      options: {
+        include_quantiles: false,
+        return_state_text: true,
+        secret: "omit-option",
+      },
+      private: "omit-request",
+    };
+    const run = vi.fn(async (..._args: unknown[]) => response);
+    const ai = wrapWorkersAI({ run });
+    expect(await ai.run("@cf/cloudflare/clairic", params)).toBe(response);
+    expect(run).toHaveBeenCalledExactlyOnceWith(
+      "@cf/cloudflare/clairic",
+      params,
+    );
+    const [span] = (await logger.drain()) as LoggingEvent[];
+    const { private: _fieldPrivate, ...textField } = fields.text;
+    const { private: _answerPrivate, steps, ...forecast } = answers.forecast;
+    const { private: _stepPrivate, ...firstStep } = steps[0];
+    const { steps: _wrongType, ...textAnswer } = answers.text;
+    expect(span.input).toEqual({
+      state: params.state,
+      fields: Object.entries({ ...fields, text: textField }).map(
+        ([id, field]) => ({ id, ...field }),
+      ),
+      options: { include_quantiles: false, return_state_text: true },
+    });
+    expect(span.output).toEqual({
+      answers: Object.entries({
+        ...answers,
+        forecast: { ...forecast, steps: [firstStep, steps[1]] },
+        text: textAnswer,
+      }).map(([id, answer]) => ({ id, ...answer })),
+      state_text: "processed",
+      truncated: false,
+    });
+    expect(span.metrics).toMatchObject({
+      prompt_tokens: 12,
+      completion_tokens: 0,
+      tokens: 15,
+    });
+    expect(span.metrics).not.toHaveProperty("passes");
+    expect(span.metrics).not.toHaveProperty("time_to_first_token");
+    expect(span).not.toHaveProperty("scores");
+    expect(span).not.toHaveProperty("classifications");
+    expect(JSON.stringify(span)).not.toContain("omit-");
+  });
+
+  it.each([undefined, { input_tokens: 4 }, { output_tokens: 0 }])(
+    "does not fabricate extraction usage (%j)",
+    async (usage) => {
+      const ai = wrapWorkersAI({
+        run: async (..._args: unknown[]) => ({ answers: {}, usage }),
+      });
+      await ai.run("@cf/cloudflare/clairic", {
+        fields: { value: { type: "number" } },
+      });
+      const [span] = (await logger.drain()) as LoggingEvent[];
+      expect(span.input).toEqual({
+        state: null,
+        fields: [{ id: "value", type: "number" }],
+      });
+      expect(span.metadata).toMatchObject({ model: "@cf/cloudflare/clairic" });
+      expect(span.metrics).not.toHaveProperty("tokens");
+      if (usage?.input_tokens === undefined)
+        expect(span.metrics).not.toHaveProperty("prompt_tokens");
+      if (usage?.output_tokens === undefined)
+        expect(span.metrics).not.toHaveProperty("completion_tokens");
+    },
+  );
+
+  it("retains unexpected JSON values in allowed extraction properties", async () => {
+    const response = {
+      answers: {
+        weird: {
+          type: "forecast",
+          value: null,
+          p10: { unexpected: true },
+          steps: "unexpected",
+        },
+      },
+    };
+    const ai = wrapWorkersAI({ run: async (..._args: unknown[]) => response });
+    expect(
+      await ai.run("@cf/cloudflare/clairic", {
+        fields: { weird: { type: "forecast", horizon: null } },
+      }),
+    ).toBe(response);
+    const [span] = await logger.drain();
+    expect(span).toMatchObject({
+      output: { answers: [{ id: "weird", ...response.answers.weird }] },
+    });
+  });
+
+  it.each([false, true])(
+    "defers extraction image conversion and preserves the complete input on upload failure (%s)",
+    async (fail) => {
+      vi.stubEnv("BRAINTRUST_CAPTURE_ATTACHMENTS", "true");
+      const upload = vi
+        .spyOn(Attachment.prototype, "upload")
+        .mockResolvedValueOnce({ upload_status: "done" });
+      if (fail) upload.mockRejectedValueOnce(new Error("upload failed"));
+      else upload.mockResolvedValue({ upload_status: "done" });
+      const ai = wrapWorkersAI({
+        run: async (..._args: unknown[]) => ({
+          answers: { color: { type: "text", value: null } },
+        }),
+      });
+      const params = {
+        fields: { color: { type: "text" } },
+        images: [
+          "data:image/png;base64,aGVsbG8=",
+          { content_type: "image/png", base64: "aGVsbG8=" },
+        ],
+      };
+      await ai.run("@cf/cloudflare/clairic", params);
+      const [span] = await logger.drain();
+      expect(upload).not.toHaveBeenCalled();
+      expect(span).toMatchObject({ input: { state: null } });
+      const converted = await new TypedAttachmentProcessor().process(span);
+      expect(upload).toHaveBeenCalledTimes(2);
+      if (fail) expect(converted).toBe(span);
+      else {
+        expect(JSON.stringify(converted)).not.toContain("aGVsbG8=");
+        expect(JSON.stringify(converted)).toContain("braintrust_attachment");
+      }
+      expect(params.images[0]).toBe("data:image/png;base64,aGVsbG8=");
+    },
+  );
 
   it.each([
     "@cf/cloudflare/clef",
@@ -332,7 +559,7 @@ describe("Workers AI binding", () => {
     });
     const [span] = await logger.drain();
     expect(upload).not.toHaveBeenCalled();
-    const processed = await new DecisionAttachmentProcessor().process(span);
+    const processed = await new TypedAttachmentProcessor().process(span);
     expect(upload).toHaveBeenCalledTimes(3);
     expect(JSON.stringify(processed)).not.toContain("aGVsbG8=");
     expect(JSON.stringify(processed)).toContain("braintrust_attachment");

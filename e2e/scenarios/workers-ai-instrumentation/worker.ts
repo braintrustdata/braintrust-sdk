@@ -108,7 +108,9 @@ export default {
             const value = await ai.run("@cf/cloudflare/clairic", {
               model: "clairic",
               state:
-                "Invoice INV-42. Two chairs at $15 each, shipping $5. Contact: Ada.",
+                "Invoice INV-42. Two chairs at $15 each, shipping $5. Contact: Ada. Due 2026-11-01 at 09:30. Delivery takes 2 days. Daily sales were 2, 3, 4 units.",
+              reference_date: "2026-10-23",
+              options: { include_quantiles: true, return_state_text: true },
               fields: {
                 invoice: { type: "text", instructions: "Invoice number" },
                 total: {
@@ -125,12 +127,47 @@ export default {
                   items: "text",
                   instructions: "Contact names",
                 },
+                due: { type: "date", instructions: "Due date" },
+                time: { type: "time", instructions: "Due time" },
+                delivery: {
+                  type: "duration",
+                  unit: "days",
+                  instructions: "Delivery duration",
+                },
+                estimate: {
+                  type: "estimate",
+                  min: 0,
+                  max: 10,
+                  step: 1,
+                  instructions: "Estimate tomorrow's unit sales",
+                },
+                forecast: {
+                  type: "forecast",
+                  min: 0,
+                  max: 10,
+                  step: 1,
+                  horizon: 2,
+                  interval: "day",
+                  instructions: "Predict unit sales for the next two days",
+                },
               },
             });
             if (!value.answers?.invoice || !value.usage)
               throw new Error("Missing Clairic result");
           },
           { name: "extraction" },
+        );
+        await traced(
+          async () => {
+            await ai.run("@cf/cloudflare/clairic", {
+              model: "clairic",
+              images: [{ content_type: "image/png", base64: env.TEST_IMAGE }],
+              fields: {
+                color: { type: "text", instructions: "The main visible color" },
+              },
+            });
+          },
+          { name: "image-extraction" },
         );
         await traced(
           async () => {
@@ -168,6 +205,23 @@ export default {
               );
           },
           { name: "provider-error" },
+        );
+        await traced(
+          async () => {
+            let rejected = false;
+            try {
+              await ai.run("@cf/cloudflare/clairic", {
+                model: "clairic",
+                state: "invalid request",
+                fields: {},
+              });
+            } catch {
+              rejected = true;
+            }
+            if (!rejected)
+              throw new Error("Expected the provider to reject empty fields");
+          },
+          { name: "extraction-error" },
         );
         await traced(
           async () => {

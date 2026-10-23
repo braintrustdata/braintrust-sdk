@@ -3,7 +3,7 @@
 export interface WorkersAIInput {
   state?: unknown;
   questions?: Record<string, Record<string, unknown>>;
-  fields?: Record<string, unknown>;
+  fields?: Record<string, Record<string, unknown>>;
   images?: WorkersAIMedia[];
   audio?: WorkersAIMedia[];
   videos?: WorkersAIMedia[];
@@ -22,6 +22,7 @@ export interface WorkersAIResult {
   usage?: {
     input_tokens?: number;
     output_tokens?: number;
+    total_tokens?: number;
     passes?: number;
   };
 }

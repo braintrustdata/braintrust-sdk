@@ -92,6 +92,7 @@ runMain(async () => {
       "BRAINTRUST_API_URL",
       "BRAINTRUST_E2E_RUN_ID",
       "BRAINTRUST_E2E_PROJECT_NAME",
+      "BRAINTRUST_CAPTURE_ATTACHMENTS",
       "WORKERS_AI_BINDING_ONLY",
     ];
     mf = new Miniflare({

@@ -2,9 +2,9 @@ import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { Attachment } from "./logger";
 import { configureNode } from "./node/config";
 import {
-  DecisionAttachmentProcessor,
-  prepareDecisionAttachments,
-} from "./decision-attachments";
+  TypedAttachmentProcessor,
+  prepareTypedAttachments,
+} from "./typed-attachments";
 import * as attachmentUtils from "./wrappers/attachment-utils";
 
 configureNode();
@@ -63,7 +63,7 @@ describe("decision attachment export", () => {
       },
     };
     const original = structuredClone(record);
-    const result = await new DecisionAttachmentProcessor().process(record);
+    const result = await new TypedAttachmentProcessor().process(record);
     const ref = {
       type: "braintrust_attachment",
       content_type: "image/png",
@@ -137,7 +137,7 @@ describe("decision attachment export", () => {
       { ...file, data: "data:;base64,AAAA" },
     ];
     const record = { input: { state, questions: [] } };
-    expect(await new DecisionAttachmentProcessor().process(record)).toEqual(
+    expect(await new TypedAttachmentProcessor().process(record)).toEqual(
       record,
     );
     expect(upload).not.toHaveBeenCalled();
@@ -147,7 +147,7 @@ describe("decision attachment export", () => {
         questions: [],
       },
     };
-    expect(await new DecisionAttachmentProcessor().process(malformed)).toBe(
+    expect(await new TypedAttachmentProcessor().process(malformed)).toBe(
       malformed,
     );
     expect(upload).not.toHaveBeenCalled();
@@ -168,7 +168,7 @@ describe("decision attachment export", () => {
           questions: [],
         },
       };
-      const result = await new DecisionAttachmentProcessor().process(record);
+      const result = await new TypedAttachmentProcessor().process(record);
       expect(result.input.state).toEqual([
         {
           ...file,
@@ -219,8 +219,8 @@ describe("decision attachment export", () => {
       };
       const before = JSON.stringify({ input, output });
       const logged = JSON.stringify({
-        input: prepareDecisionAttachments(input),
-        output: prepareDecisionAttachments(output),
+        input: prepareTypedAttachments(input),
+        output: prepareTypedAttachments(output),
       });
       expect(logged).not.toContain(png);
       expect(logged).toContain("<omitted>");
@@ -255,7 +255,7 @@ describe("decision attachment export", () => {
       }
       let result;
       try {
-        result = await new DecisionAttachmentProcessor().process(record);
+        result = await new TypedAttachmentProcessor().process(record);
       } finally {
         Array.prototype.push = push;
       }
@@ -281,7 +281,7 @@ describe("decision attachment export", () => {
         input: { state: [file, file], questions: [] },
         output: { answers: [{ id: "q", legend: { image } }] },
       };
-      const processor = new DecisionAttachmentProcessor();
+      const processor = new TypedAttachmentProcessor();
       expect(await processor.process(record)).toBe(record);
       expect(await processor.process(record)).toBe(record);
       expect(upload).toHaveBeenCalledTimes(2);
@@ -304,7 +304,7 @@ describe("decision attachment export", () => {
       ],
       questions: [{ id: "q", instructions: { image }, criteria: [image] }],
     };
-    const prepared = prepareDecisionAttachments(original);
+    const prepared = prepareTypedAttachments(original);
     expect(prepared).toEqual({
       state: [
         { ...file, data: "<omitted>" },
@@ -320,7 +320,7 @@ describe("decision attachment export", () => {
       ],
     });
     expect(
-      await new DecisionAttachmentProcessor().process({ input: prepared }),
+      await new TypedAttachmentProcessor().process({ input: prepared }),
     ).toEqual({ input: prepared });
     expect(upload).not.toHaveBeenCalled();
     expect(original.state[0]).toBe(file);
@@ -353,12 +353,12 @@ describe("decision attachment export", () => {
         ],
       },
     };
-    expect(await new DecisionAttachmentProcessor().process(record)).toEqual(
+    expect(await new TypedAttachmentProcessor().process(record)).toEqual(
       record,
     );
     vi.stubEnv("BRAINTRUST_CAPTURE_ATTACHMENTS", "false");
-    expect(prepareDecisionAttachments(record.input)).toEqual(record.input);
-    expect(prepareDecisionAttachments(record.output)).toEqual(record.output);
+    expect(prepareTypedAttachments(record.input)).toEqual(record.input);
+    expect(prepareTypedAttachments(record.output)).toEqual(record.output);
     expect(upload).not.toHaveBeenCalled();
   });
 
@@ -370,17 +370,17 @@ describe("decision attachment export", () => {
       },
     };
     const upload = vi.spyOn(Attachment.prototype, "upload");
-    expect(await new DecisionAttachmentProcessor().process(record)).toEqual(
+    expect(await new TypedAttachmentProcessor().process(record)).toEqual(
       record,
     );
     vi.stubEnv("BRAINTRUST_CAPTURE_ATTACHMENTS", "false");
-    expect(prepareDecisionAttachments(record.input)).toEqual(record.input);
+    expect(prepareTypedAttachments(record.input)).toEqual(record.input);
     expect(upload).not.toHaveBeenCalled();
   });
 
   test("snapshots only the byte view and preserves text-only payloads", () => {
     const bytes = new Uint8Array([9, 1, 2, 9]);
-    const prepared = prepareDecisionAttachments({
+    const prepared = prepareTypedAttachments({
       state: [{ ...file, data: bytes.subarray(1, 3) }],
       questions: [],
     });
@@ -395,6 +395,6 @@ describe("decision attachment export", () => {
         { id: "q", instructions: "a question", criteria: ["yes", "no"] },
       ],
     };
-    expect(prepareDecisionAttachments(text)).toEqual(text);
+    expect(prepareTypedAttachments(text)).toEqual(text);
   });
 });

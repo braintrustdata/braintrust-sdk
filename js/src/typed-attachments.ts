@@ -8,8 +8,8 @@ import {
   isAutoCaptureAttachmentsEnabled,
 } from "./wrappers/attachment-utils";
 
-/** Walk logged decision JSON without changing provider-owned containers. */
-function mapDecisionMedia(
+/** Walk logged decision/extraction JSON without changing provider-owned containers. */
+function mapTypedMedia(
   value: unknown,
   media: (data: unknown, mediaType?: string, filename?: string) => unknown,
   omitDeepValues = false,
@@ -37,7 +37,7 @@ function mapDecisionMedia(
   }
   if (Array.isArray(value)) {
     return value.map((part) =>
-      mapDecisionMedia(part, media, omitDeepValues, depth + 1),
+      mapTypedMedia(part, media, omitDeepValues, depth + 1),
     );
   }
   if (!isObject(value)) return value;
@@ -64,14 +64,14 @@ function mapDecisionMedia(
               typeof value.mediaType === "string" ? value.mediaType : undefined,
               typeof value.filename === "string" ? value.filename : undefined,
             )
-        : mapDecisionMedia(child, media, omitDeepValues, depth + 1),
+        : mapTypedMedia(child, media, omitDeepValues, depth + 1),
     ]),
   );
 }
 
 // IDs, question types, and selected choice keys are identifiers, not media.
-// Scan only the values supported by the typed decision envelope.
-function mapDecisionPayload(
+// Scan only the values supported by the typed decision/extraction envelopes.
+function mapTypedPayload(
   value: unknown,
   media: (data: unknown, mediaType?: string, filename?: string) => unknown,
   omitDeepValues = false,
@@ -80,7 +80,10 @@ function mapDecisionPayload(
   return {
     ...value,
     ...("state" in value
-      ? { state: mapDecisionMedia(value.state, media, omitDeepValues) }
+      ? { state: mapTypedMedia(value.state, media, omitDeepValues) }
+      : {}),
+    ...("images" in value
+      ? { images: mapTypedMedia(value.images, media, omitDeepValues) }
       : {}),
     ...(Array.isArray(value.questions)
       ? {
@@ -90,7 +93,7 @@ function mapDecisionPayload(
               ...question,
               ...("instructions" in question
                 ? {
-                    instructions: mapDecisionMedia(
+                    instructions: mapTypedMedia(
                       question.instructions,
                       media,
                       omitDeepValues,
@@ -99,7 +102,7 @@ function mapDecisionPayload(
                 : {}),
               ...("criteria" in question
                 ? {
-                    criteria: mapDecisionMedia(
+                    criteria: mapTypedMedia(
                       question.criteria,
                       media,
                       omitDeepValues,
@@ -116,11 +119,7 @@ function mapDecisionPayload(
             isObject(answer) && "legend" in answer
               ? {
                   ...answer,
-                  legend: mapDecisionMedia(
-                    answer.legend,
-                    media,
-                    omitDeepValues,
-                  ),
+                  legend: mapTypedMedia(answer.legend, media, omitDeepValues),
                 }
               : answer,
           ),
@@ -130,9 +129,9 @@ function mapDecisionPayload(
 }
 
 /** Apply capture privacy and snapshot binary inputs; conversion waits for export. */
-export function prepareDecisionAttachments(value: unknown): unknown {
+export function prepareTypedAttachments(value: unknown): unknown {
   const capture = isAutoCaptureAttachmentsEnabled();
-  return mapDecisionPayload(
+  return mapTypedPayload(
     value,
     (data) => {
       if (data instanceof URL) data = data.href;
@@ -153,8 +152,8 @@ export function prepareDecisionAttachments(value: unknown): unknown {
   );
 }
 
-/** Per-exporter automatic decision uploads, after customization and masking. */
-export class DecisionAttachmentProcessor {
+/** Per-exporter automatic decision/extraction uploads, after customization and masking. */
+export class TypedAttachmentProcessor {
   private uploadFailed = false;
 
   async process<T extends object>(record: T): Promise<T> {
@@ -163,7 +162,8 @@ export class DecisionAttachmentProcessor {
     const input =
       isObject(payload.input) &&
       "state" in payload.input &&
-      Array.isArray(payload.input.questions);
+      (Array.isArray(payload.input.questions) ||
+        Array.isArray(payload.input.fields));
     const output =
       isObject(payload.output) && Array.isArray(payload.output.answers);
     if (!input && !output) return record;
@@ -200,7 +200,7 @@ export class DecisionAttachmentProcessor {
         )
           return data;
         const blob = convertDataToBlob(data, mediaType);
-        if (!blob) throw new Error("Invalid decision media");
+        if (!blob) throw new Error("Invalid typed media");
         const attachment = new Attachment({
           data: blob,
           contentType: mediaType,
@@ -214,10 +214,8 @@ export class DecisionAttachmentProcessor {
       // local enqueue failure discards the entire rewrite, including output.
       converted = {
         ...record,
-        ...(input ? { input: mapDecisionPayload(payload.input, convert) } : {}),
-        ...(output
-          ? { output: mapDecisionPayload(payload.output, convert) }
-          : {}),
+        ...(input ? { input: mapTypedPayload(payload.input, convert) } : {}),
+        ...(output ? { output: mapTypedPayload(payload.output, convert) } : {}),
       };
     } catch {
       return record;
@@ -231,7 +229,7 @@ export class DecisionAttachmentProcessor {
         this.uploadFailed = true;
         // No exception details: upload failures may contain sensitive values.
         debugLogger.warn(
-          "Decision attachment uploads disabled after an upload failure; exporting inline media.",
+          "Typed attachment uploads disabled after an upload failure; exporting inline media.",
         );
         return record;
       }

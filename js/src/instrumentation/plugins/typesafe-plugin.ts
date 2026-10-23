@@ -1,6 +1,6 @@
 import { isObject } from "../../../util/index";
 import { uint8ArrayToBase64 } from "../../../util/bytes";
-import { prepareDecisionAttachments } from "../../decision-attachments";
+import { prepareTypedAttachments } from "../../typed-attachments";
 import { debugLogger } from "../../debug-logger";
 import { startSpan, withCurrent } from "../../logger";
 import type { Span } from "../../logger";
@@ -432,7 +432,7 @@ async function prepareTypeSafeInput(request: TypeSafeSystemOneRequest) {
     ),
   ]);
   return {
-    input: prepareDecisionAttachments({ state, questions }),
+    input: prepareTypedAttachments({ state, questions }),
     // Jev exposes no structured image selector. Repeated occurrences have
     // distinct paths; neither answer order nor instruction text selects one.
     imagePath: imagePaths.length === 1 ? imagePaths[0] : undefined,
