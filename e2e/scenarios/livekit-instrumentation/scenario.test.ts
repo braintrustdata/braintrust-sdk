@@ -303,6 +303,7 @@ for (const variant of variants) {
 
   // Rotation is anchored to session time, so a delayed playback start changes the
   // number of files. Assert complete, contiguous coverage instead of a snapshot.
+  // Segments also pass through audio middleware configured for the integration.
   test.sequential(
     `${variant} progressive order recording`,
     async () => {
@@ -313,6 +314,7 @@ for (const variant of variants) {
             env: {
               LIVEKIT_SEGMENTS: "1",
               LIVEKIT_PLAYBACK_START_DELAY_MS: "137",
+              LIVEKIT_AUDIO_MIDDLEWARE: "1",
             },
           }),
         );
@@ -344,6 +346,13 @@ for (const variant of variants) {
               1,
             );
         }
+        // Every uploaded segment passed through the configured middleware.
+        expect(
+          result.stdout
+            .split("\n")
+            .filter((line) => line.startsWith('{"audioMiddlewareSegment":'))
+            .map((line) => JSON.parse(line).audioMiddlewareSegment),
+        ).toEqual(recordings.map((_, index) => index));
         const { playedDurationMs, completedUploads } = JSON.parse(
           result.stdout
             .split("\n")

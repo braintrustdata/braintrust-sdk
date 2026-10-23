@@ -77,7 +77,9 @@ function wrapSession(session: AgentSession): AgentSession {
  * Captures cascade voice sessions: user and agent turns, speech, STT, LLM
  * responses, TTS and function tools. Call audio is recorded as PCM attachments
  * per direction: set BRAINTRUST_CAPTURE_USER_AUDIO_ATTACHMENTS for caller audio
- * and BRAINTRUST_CAPTURE_AGENT_AUDIO_ATTACHMENTS for agent audio. Wrap the module before constructing
+ * and BRAINTRUST_CAPTURE_AGENT_AUDIO_ATTACHMENTS for agent audio. Configure
+ * `integrations.livekit.audioMiddleware` to transform segments before upload.
+ * Wrap the module before constructing
  * sessions; only sessions created through the wrapped module are traced.
  *
  * @example
