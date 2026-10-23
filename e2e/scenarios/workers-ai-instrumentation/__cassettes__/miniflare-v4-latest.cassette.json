@@ -1,0 +1,508 @@
+{
+  "entries": [
+    {
+      "callIndex": 0,
+      "id": "394b924eef4f809d",
+      "matchKey": "POST api.cloudflare.com/client/v4/accounts/cassette-account/ai/run/@cf/cloudflare/clef-flash",
+      "recordedAt": "2026-10-23T11:18:42.725Z",
+      "request": {
+        "body": {
+          "kind": "json",
+          "value": {
+            "model": "clef-flash",
+            "questions": {
+              "impact": {
+                "criteria": ["None", "Some", "All"],
+                "instructions": "How many customers are affected?",
+                "type": "score"
+              },
+              "team": {
+                "criteria": {
+                  "billing": "Invoices",
+                  "engineering": "Errors and outages"
+                },
+                "instructions": "Which team should handle this?",
+                "type": "choice"
+              },
+              "urgent": {
+                "instructions": "Is this urgent?",
+                "type": "noul"
+              }
+            },
+            "state": "Checkout has failed for every customer for an hour."
+          }
+        },
+        "headers": {},
+        "method": "POST",
+        "url": "https://api.cloudflare.com/client/v4/accounts/cassette-account/ai/run/@cf/cloudflare/clef-flash"
+      },
+      "response": {
+        "body": {
+          "kind": "json",
+          "value": {
+            "errors": [],
+            "messages": [],
+            "result": {
+              "answers": {
+                "impact": {
+                  "confidence": 0.8187,
+                  "legend": {
+                    "0": "None",
+                    "1": "Some",
+                    "2": "All"
+                  },
+                  "probabilities": {
+                    "0": 0.0288,
+                    "1": 0.0347,
+                    "2": 0.9365
+                  },
+                  "score": 1.9077,
+                  "type": "score"
+                },
+                "team": {
+                  "choice": "engineering",
+                  "confidence": 0.9004,
+                  "probabilities": {
+                    "billing": 0.0255,
+                    "engineering": 0.9745
+                  },
+                  "type": "choice"
+                },
+                "urgent": {
+                  "noul": 0.9296,
+                  "type": "noul"
+                }
+              },
+              "model": "clef-flash",
+              "usage": {
+                "input_tokens": 298,
+                "output_tokens": 0
+              }
+            },
+            "success": true
+          }
+        },
+        "headers": {
+          "api-version": "2026-10-01.epoch",
+          "cache-control": "no-store",
+          "cf-ai-neurons": "1.03",
+          "cf-ai-req-id": "7caf7b92-5259-4122-9e1a-840209267d26",
+          "cf-auditlog-id": "01a1687c-0c24-747a-82f6-5fba316a487c",
+          "cf-ray": "a4f057b36eaec395-CDG",
+          "content-encoding": "gzip",
+          "content-type": "application/json",
+          "date": "Fri, 23 Oct 2026 11:18:42 GMT",
+          "server": "cloudflare",
+          "set-cookie": "[REDACTED]"
+        },
+        "status": 200
+      }
+    },
+    {
+      "callIndex": 1,
+      "id": "fcf2a127e5c0700a",
+      "matchKey": "POST api.cloudflare.com/client/v4/accounts/cassette-account/ai/run/@cf/cloudflare/clef-flash",
+      "recordedAt": "2026-10-23T11:18:42.732Z",
+      "request": {
+        "body": {
+          "kind": "json",
+          "value": {
+            "model": "clef-flash",
+            "questions": {
+              "impact": {
+                "criteria": ["None", "Some", "All"],
+                "instructions": "How many customers are affected?",
+                "type": "score"
+              },
+              "team": {
+                "criteria": {
+                  "billing": "Invoices",
+                  "engineering": "Errors and outages"
+                },
+                "instructions": "Which team should handle this?",
+                "type": "choice"
+              },
+              "urgent": {
+                "instructions": "Is this urgent?",
+                "type": "noul"
+              }
+            },
+            "state": "Checkout has failed for every customer for an hour."
+          }
+        },
+        "headers": {},
+        "method": "POST",
+        "url": "https://api.cloudflare.com/client/v4/accounts/cassette-account/ai/run/@cf/cloudflare/clef-flash"
+      },
+      "response": {
+        "body": {
+          "kind": "json",
+          "value": {
+            "errors": [],
+            "messages": [],
+            "result": {
+              "answers": {
+                "impact": {
+                  "confidence": 0.8187,
+                  "legend": {
+                    "0": "None",
+                    "1": "Some",
+                    "2": "All"
+                  },
+                  "probabilities": {
+                    "0": 0.0288,
+                    "1": 0.0347,
+                    "2": 0.9365
+                  },
+                  "score": 1.9077,
+                  "type": "score"
+                },
+                "team": {
+                  "choice": "engineering",
+                  "confidence": 0.9004,
+                  "probabilities": {
+                    "billing": 0.0255,
+                    "engineering": 0.9745
+                  },
+                  "type": "choice"
+                },
+                "urgent": {
+                  "noul": 0.9296,
+                  "type": "noul"
+                }
+              },
+              "model": "clef-flash",
+              "usage": {
+                "input_tokens": 298,
+                "output_tokens": 0
+              }
+            },
+            "success": true
+          }
+        },
+        "headers": {
+          "api-version": "2026-10-01.epoch",
+          "cache-control": "no-store",
+          "cf-ai-neurons": "1.03",
+          "cf-ai-req-id": "b11ec19e-6ae3-4162-983c-35a0e0955ebf",
+          "cf-auditlog-id": "01a1687c-0c25-7db2-ab83-6e244d2f8a98",
+          "cf-ray": "a4f057b36ea4c395-CDG",
+          "content-encoding": "gzip",
+          "content-type": "application/json",
+          "date": "Fri, 23 Oct 2026 11:18:42 GMT",
+          "server": "cloudflare",
+          "set-cookie": "[REDACTED]"
+        },
+        "status": 200
+      }
+    },
+    {
+      "callIndex": 0,
+      "id": "abe339b2b2960b59",
+      "matchKey": "POST api.cloudflare.com/client/v4/accounts/cassette-account/ai/run/@cf/cloudflare/clairic",
+      "recordedAt": "2026-10-23T11:18:42.979Z",
+      "request": {
+        "body": {
+          "kind": "json",
+          "value": {
+            "fields": {
+              "contacts": {
+                "instructions": "Contact names",
+                "items": "text",
+                "type": "list"
+              },
+              "invoice": {
+                "instructions": "Invoice number",
+                "type": "text"
+              },
+              "missing": {
+                "instructions": "Purchase order number",
+                "type": "text"
+              },
+              "total": {
+                "decimals": 2,
+                "instructions": "Total including shipping",
+                "type": "number"
+              }
+            },
+            "model": "clairic",
+            "state": "Invoice INV-42. Two chairs at $15 each, shipping $5. Contact: Ada."
+          }
+        },
+        "headers": {},
+        "method": "POST",
+        "url": "https://api.cloudflare.com/client/v4/accounts/cassette-account/ai/run/@cf/cloudflare/clairic"
+      },
+      "response": {
+        "body": {
+          "kind": "json",
+          "value": {
+            "errors": [],
+            "messages": [],
+            "result": {
+              "answers": {
+                "contacts": {
+                  "confidence": 1,
+                  "spans": [[62, 65]],
+                  "type": "list",
+                  "value": ["Ada"]
+                },
+                "invoice": {
+                  "confidence": 0.9999837875366211,
+                  "guess": "INV-42",
+                  "p_null": 0.003641880350187421,
+                  "span": [8, 14],
+                  "type": "text",
+                  "value": "INV-42"
+                },
+                "missing": {
+                  "confidence": 0.6537490487098694,
+                  "guess": "INV",
+                  "p_null": 0.9999967813491821,
+                  "span": [8, 11],
+                  "type": "text",
+                  "value": null
+                },
+                "total": {
+                  "confidence": 0.998939978547779,
+                  "guess": 35,
+                  "p_null": 0.0000019774972770392196,
+                  "type": "number",
+                  "value": 35
+                }
+              },
+              "model": "clairic",
+              "truncated": false,
+              "usage": {
+                "image_tokens": 0,
+                "input_tokens": 442,
+                "output_tokens": 0,
+                "passes": 3,
+                "schema_tokens": 376,
+                "state_tokens": 22
+              }
+            },
+            "success": true
+          }
+        },
+        "headers": {
+          "api-version": "2026-10-01.epoch",
+          "cache-control": "no-store",
+          "cf-ai-neurons": "4.02",
+          "cf-ai-req-id": "15762bf1-ff19-452c-ac64-abed003af1ec",
+          "cf-auditlog-id": "01a1687c-0d44-7645-b000-7105b68f1260",
+          "cf-ray": "a4f057b52c3ac395-CDG",
+          "content-encoding": "gzip",
+          "content-type": "application/json",
+          "date": "Fri, 23 Oct 2026 11:18:42 GMT",
+          "server": "cloudflare",
+          "set-cookie": "[REDACTED]"
+        },
+        "status": 200
+      }
+    },
+    {
+      "callIndex": 2,
+      "id": "c49e73df7684ad89",
+      "matchKey": "POST api.cloudflare.com/client/v4/accounts/cassette-account/ai/run/@cf/cloudflare/clef-flash",
+      "recordedAt": "2026-10-23T11:18:44.581Z",
+      "request": {
+        "body": {
+          "contentType": "application/json",
+          "kind": "binary",
+          "path": "miniflare-v4-latest.cassette.blobs/27ebcf2912f75893e26dbe84459093a6c582cbe9b95e2d8c9a869eca1aa77289.bin",
+          "sha256": "27ebcf2912f75893e26dbe84459093a6c582cbe9b95e2d8c9a869eca1aa77289"
+        },
+        "headers": {},
+        "method": "POST",
+        "url": "https://api.cloudflare.com/client/v4/accounts/cassette-account/ai/run/@cf/cloudflare/clef-flash"
+      },
+      "response": {
+        "body": {
+          "kind": "json",
+          "value": {
+            "errors": [],
+            "messages": [],
+            "result": {
+              "answers": {
+                "visible": {
+                  "noul": 0.9612,
+                  "type": "noul"
+                }
+              },
+              "model": "clef-flash",
+              "usage": {
+                "input_tokens": 1176,
+                "output_tokens": 0
+              }
+            },
+            "success": true
+          }
+        },
+        "headers": {
+          "api-version": "2026-10-01.epoch",
+          "cache-control": "no-store",
+          "cf-ai-neurons": "4.06",
+          "cf-ai-req-id": "46f2f5a9-ada9-4fc9-b7c6-2bcbfa9dba7a",
+          "cf-auditlog-id": "01a1687c-0e77-7c53-9229-5b0cfbb65007",
+          "cf-ray": "a4f057b6d9c8c395-CDG",
+          "content-encoding": "gzip",
+          "content-type": "application/json",
+          "date": "Fri, 23 Oct 2026 11:18:44 GMT",
+          "server": "cloudflare",
+          "set-cookie": "[REDACTED]"
+        },
+        "status": 200
+      }
+    },
+    {
+      "callIndex": 3,
+      "id": "241e403df4b98025",
+      "matchKey": "POST api.cloudflare.com/client/v4/accounts/cassette-account/ai/run/@cf/cloudflare/clef-flash",
+      "recordedAt": "2026-10-23T11:18:44.628Z",
+      "request": {
+        "body": {
+          "kind": "json",
+          "value": {
+            "model": "clef-flash",
+            "questions": {},
+            "state": "invalid request"
+          }
+        },
+        "headers": {},
+        "method": "POST",
+        "url": "https://api.cloudflare.com/client/v4/accounts/cassette-account/ai/run/@cf/cloudflare/clef-flash"
+      },
+      "response": {
+        "body": {
+          "kind": "json",
+          "value": {
+            "errors": [
+              {
+                "code": 5006,
+                "message": "AiError: Bad input: Error: required properties at '/' are 'model,state,questions' (83f37582-3c9a-47bc-bf9d-2d588a39d80d)"
+              }
+            ],
+            "messages": [],
+            "result": {},
+            "success": false
+          }
+        },
+        "headers": {
+          "api-version": "2026-10-01.epoch",
+          "cache-control": "no-store",
+          "cf-ai-req-id": "83f37582-3c9a-47bc-bf9d-2d588a39d80d",
+          "cf-auditlog-id": "01a1687c-147b-7ca7-93d9-f18dc53db99d",
+          "cf-ray": "a4f057c0bb0ac395-CDG",
+          "content-length": "201",
+          "content-type": "application/json",
+          "date": "Fri, 23 Oct 2026 11:18:44 GMT",
+          "server": "cloudflare",
+          "set-cookie": "[REDACTED]"
+        },
+        "status": 400
+      }
+    },
+    {
+      "callIndex": 4,
+      "id": "fc38f2b6db6d1a00",
+      "matchKey": "POST api.cloudflare.com/client/v4/accounts/cassette-account/ai/run/@cf/cloudflare/clef-flash",
+      "recordedAt": "2026-10-23T11:18:44.905Z",
+      "request": {
+        "body": {
+          "kind": "json",
+          "value": {
+            "model": "clef-flash",
+            "questions": {
+              "impact": {
+                "criteria": ["None", "Some", "All"],
+                "instructions": "How many customers are affected?",
+                "type": "score"
+              },
+              "team": {
+                "criteria": {
+                  "billing": "Invoices",
+                  "engineering": "Errors and outages"
+                },
+                "instructions": "Which team should handle this?",
+                "type": "choice"
+              },
+              "urgent": {
+                "instructions": "Is this urgent?",
+                "type": "noul"
+              }
+            },
+            "state": "Checkout has failed for every customer for an hour."
+          }
+        },
+        "headers": {},
+        "method": "POST",
+        "url": "https://api.cloudflare.com/client/v4/accounts/cassette-account/ai/run/@cf/cloudflare/clef-flash"
+      },
+      "response": {
+        "body": {
+          "kind": "json",
+          "value": {
+            "errors": [],
+            "messages": [],
+            "result": {
+              "answers": {
+                "impact": {
+                  "confidence": 0.8187,
+                  "legend": {
+                    "0": "None",
+                    "1": "Some",
+                    "2": "All"
+                  },
+                  "probabilities": {
+                    "0": 0.0288,
+                    "1": 0.0347,
+                    "2": 0.9365
+                  },
+                  "score": 1.9077,
+                  "type": "score"
+                },
+                "team": {
+                  "choice": "engineering",
+                  "confidence": 0.9004,
+                  "probabilities": {
+                    "billing": 0.0255,
+                    "engineering": 0.9745
+                  },
+                  "type": "choice"
+                },
+                "urgent": {
+                  "noul": 0.9296,
+                  "type": "noul"
+                }
+              },
+              "model": "clef-flash",
+              "usage": {
+                "input_tokens": 298,
+                "output_tokens": 0
+              }
+            },
+            "success": true
+          }
+        },
+        "headers": {
+          "api-version": "2026-10-01.epoch",
+          "cache-control": "no-store",
+          "cf-ai-neurons": "1.03",
+          "cf-ai-req-id": "ecd5daa9-6111-4f5d-872e-34c5eb2cde80",
+          "cf-auditlog-id": "01a1687c-14a9-7dcf-819b-f92101cc9a14",
+          "cf-ray": "a4f057c10bf3c395-CDG",
+          "content-encoding": "gzip",
+          "content-type": "application/json",
+          "date": "Fri, 23 Oct 2026 11:18:44 GMT",
+          "server": "cloudflare",
+          "set-cookie": "[REDACTED]"
+        },
+        "status": 200
+      }
+    }
+  ],
+  "meta": {
+    "createdAt": "2026-10-23T11:18:40.944Z"
+  }
+}

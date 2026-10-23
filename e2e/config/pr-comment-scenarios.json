@@ -998,5 +998,22 @@
         "label": "v1.9 latest"
       }
     ]
+  },
+  {
+    "scenarioDirName": "workers-ai-instrumentation",
+    "label": "Workers AI binding instrumentation",
+    "metadataScenario": "workers-ai-instrumentation",
+    "variants": [
+      {
+        "variantKey": "miniflare-v4",
+        "variantKeys": ["miniflare-v4", "miniflare-v4-binding"],
+        "label": "v4 pinned"
+      },
+      {
+        "variantKey": "miniflare-v4-latest",
+        "variantKeys": ["miniflare-v4-latest", "miniflare-v4-latest-binding"],
+        "label": "v4 latest"
+      }
+    ]
   }
 ]

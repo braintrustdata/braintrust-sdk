@@ -1,0 +1,345 @@
+{
+  "span_tree": [
+    {
+      "name": "workers-ai-root",
+      "type": "task",
+      "children": [
+        {
+          "name": "decision-a",
+          "children": [
+            {
+              "name": "workers_ai.run",
+              "type": "decision",
+              "children": [],
+              "input": {
+                "questions": [
+                  {
+                    "id": "<span:1>",
+                    "instructions": "Is this urgent?",
+                    "type": "noul"
+                  },
+                  {
+                    "criteria": {
+                      "billing": "Invoices",
+                      "engineering": "Errors and outages"
+                    },
+                    "id": "<span:2>",
+                    "instructions": "Which team should handle this?",
+                    "type": "choice"
+                  },
+                  {
+                    "criteria": [
+                      "None",
+                      "Some",
+                      "All"
+                    ],
+                    "id": "<span:3>",
+                    "instructions": "How many customers are affected?",
+                    "type": "score"
+                  }
+                ],
+                "state": "Checkout has failed for every customer for an hour."
+              },
+              "output": {
+                "answers": [
+                  {
+                    "confidence": 0.8187,
+                    "id": "<span:1>",
+                    "legend": {
+                      "0": "None",
+                      "1": "Some",
+                      "2": "All"
+                    },
+                    "probabilities": {
+                      "0": 0.0288,
+                      "1": 0.0347,
+                      "2": 0.9365
+                    },
+                    "score": 1.9077,
+                    "type": "score"
+                  },
+                  {
+                    "choice": "engineering",
+                    "confidence": 0.9004,
+                    "id": "<span:2>",
+                    "probabilities": {
+                      "billing": 0.0255,
+                      "engineering": 0.9745
+                    },
+                    "type": "choice"
+                  },
+                  {
+                    "id": "<span:3>",
+                    "noul": 0.9296,
+                    "type": "noul"
+                  }
+                ]
+              },
+              "metadata": {
+                "model": "clef-flash",
+                "operation": "decision",
+                "provider": "cloudflare"
+              },
+              "metrics": {
+                "completion_tokens": 0,
+                "prompt_tokens": 298,
+                "tokens": 298
+              }
+            }
+          ]
+        },
+        {
+          "name": "decision-b",
+          "children": [
+            {
+              "name": "workers_ai.run",
+              "type": "decision",
+              "children": [],
+              "input": {
+                "questions": [
+                  {
+                    "id": "<span:1>",
+                    "instructions": "Is this urgent?",
+                    "type": "noul"
+                  },
+                  {
+                    "criteria": {
+                      "billing": "Invoices",
+                      "engineering": "Errors and outages"
+                    },
+                    "id": "<span:2>",
+                    "instructions": "Which team should handle this?",
+                    "type": "choice"
+                  },
+                  {
+                    "criteria": [
+                      "None",
+                      "Some",
+                      "All"
+                    ],
+                    "id": "<span:3>",
+                    "instructions": "How many customers are affected?",
+                    "type": "score"
+                  }
+                ],
+                "state": "Checkout has failed for every customer for an hour."
+              },
+              "output": {
+                "answers": [
+                  {
+                    "confidence": 0.8187,
+                    "id": "<span:1>",
+                    "legend": {
+                      "0": "None",
+                      "1": "Some",
+                      "2": "All"
+                    },
+                    "probabilities": {
+                      "0": 0.0288,
+                      "1": 0.0347,
+                      "2": 0.9365
+                    },
+                    "score": 1.9077,
+                    "type": "score"
+                  },
+                  {
+                    "choice": "engineering",
+                    "confidence": 0.9004,
+                    "id": "<span:2>",
+                    "probabilities": {
+                      "billing": 0.0255,
+                      "engineering": 0.9745
+                    },
+                    "type": "choice"
+                  },
+                  {
+                    "id": "<span:3>",
+                    "noul": 0.9296,
+                    "type": "noul"
+                  }
+                ]
+              },
+              "metadata": {
+                "model": "clef-flash",
+                "operation": "decision",
+                "provider": "cloudflare"
+              },
+              "metrics": {
+                "completion_tokens": 0,
+                "prompt_tokens": 298,
+                "tokens": 298
+              }
+            }
+          ]
+        },
+        {
+          "name": "extraction",
+          "children": [
+            {
+              "name": "workers_ai.run",
+              "type": "task",
+              "children": [],
+              "input": {
+                "fields": {
+                  "contacts": {
+                    "instructions": "Contact names",
+                    "items": "text",
+                    "type": "list"
+                  },
+                  "invoice": {
+                    "instructions": "Invoice number",
+                    "type": "text"
+                  },
+                  "missing": {
+                    "instructions": "Purchase order number",
+                    "type": "text"
+                  },
+                  "total": {
+                    "decimals": 2,
+                    "instructions": "Total including shipping",
+                    "type": "number"
+                  }
+                },
+                "state": "Invoice INV-42. Two chairs at $15 each, shipping $5. Contact: Ada."
+              },
+              "output": {
+                "answers": {
+                  "contacts": {
+                    "confidence": 1,
+                    "spans": [
+                      [
+                        62,
+                        65
+                      ]
+                    ],
+                    "type": "list",
+                    "value": [
+                      "Ada"
+                    ]
+                  },
+                  "invoice": {
+                    "confidence": 0.9999837875366211,
+                    "guess": "INV-42",
+                    "p_null": 0.003641880350187421,
+                    "span": [
+                      8,
+                      14
+                    ],
+                    "type": "text",
+                    "value": "INV-42"
+                  },
+                  "missing": {
+                    "confidence": 0.6537490487098694,
+                    "guess": "INV",
+                    "p_null": 0.9999967813491821,
+                    "span": [
+                      8,
+                      11
+                    ],
+                    "type": "text",
+                    "value": null
+                  },
+                  "total": {
+                    "confidence": 0.998939978547779,
+                    "guess": 35,
+                    "p_null": 0.0000019774972770392196,
+                    "type": "number",
+                    "value": 35
+                  }
+                },
+                "truncated": false
+              },
+              "metadata": {
+                "model": "clairic",
+                "operation": "extraction",
+                "passes": 3,
+                "provider": "cloudflare"
+              },
+              "metrics": {
+                "completion_tokens": 0,
+                "prompt_tokens": 442,
+                "tokens": 442
+              }
+            }
+          ]
+        },
+        {
+          "name": "image-decision",
+          "children": [
+            {
+              "name": "workers_ai.run",
+              "type": "decision",
+              "children": [],
+              "input": {
+                "questions": [
+                  {
+                    "id": "<span:1>",
+                    "instructions": "Is there visible content in this image?",
+                    "type": "noul"
+                  }
+                ],
+                "state": {
+                  "images": [
+                    {
+                      "data": "<omitted>",
+                      "mediaType": "image/png",
+                      "type": "file"
+                    }
+                  ],
+                  "state": "Inspect the attached image."
+                }
+              },
+              "output": {
+                "answers": [
+                  {
+                    "id": "<span:1>",
+                    "noul": 0.9612,
+                    "type": "noul"
+                  }
+                ]
+              },
+              "metadata": {
+                "model": "clef-flash",
+                "operation": "decision",
+                "provider": "cloudflare"
+              },
+              "metrics": {
+                "completion_tokens": 0,
+                "prompt_tokens": 1176,
+                "tokens": 1176
+              }
+            }
+          ]
+        },
+        {
+          "name": "provider-error",
+          "children": [
+            {
+              "name": "workers_ai.run",
+              "type": "decision",
+              "children": [],
+              "input": {
+                "questions": [],
+                "state": "invalid request"
+              },
+              "metadata": {
+                "model": "@cf/cloudflare/clef-flash",
+                "operation": "decision",
+                "provider": "cloudflare"
+              },
+              "error": "5006: AiError: Bad input: Error: required properties at '/' are 'model,state,questions' (<uuid:1>)"
+            }
+          ]
+        },
+        {
+          "name": "raw-response",
+          "children": []
+        }
+      ],
+      "metadata": {
+        "scenario": "workers-ai-instrumentation",
+        "testRunId": "<run:1>"
+      }
+    }
+  ]
+}

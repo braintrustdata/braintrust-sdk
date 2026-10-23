@@ -327,6 +327,7 @@ function getCassetteServerRoutes(): CassetteServerRoute[] {
     { prefix: "/openai", upstreamOrigin: "https://api.openai.com" },
     { prefix: "/openrouter", upstreamOrigin: "https://openrouter.ai" },
     { prefix: "/typesafe", upstreamOrigin: "https://api.typesafe.ai" },
+    { prefix: "/cloudflare", upstreamOrigin: "https://api.cloudflare.com" },
   ];
 }
 
@@ -373,6 +374,7 @@ function getCassetteEnv(wiring: ActiveCassetteWiring): Record<string, string> {
     OPENAI_BASE_URL: `${serverUrl}/openai/v1`,
     OPENROUTER_BASE_URL: `${serverUrl}/openrouter/api/v1`,
     TYPESAFE_BASE_URL: `${serverUrl}/typesafe`,
+    CLOUDFLARE_BASE_URL: `${serverUrl}/cloudflare`,
   };
 }
 
@@ -429,6 +431,11 @@ const CASSETTE_PROVIDER_KEYS: Array<{
     placeholder: "sk-or-cassette-placeholder",
   },
   { envVars: ["TYPESAFE_API_KEY"], placeholder: "cassette-placeholder" },
+  {
+    envVars: ["CLOUDFLARE_AI_API_KEY", "CLOUDFLARE_API_TOKEN"],
+    placeholder: "cassette-placeholder",
+  },
+  { envVars: ["CLOUDFLARE_ACCOUNT_ID"], placeholder: "cassette-account" },
 ];
 
 function getProviderKeyPlaceholders(): Record<string, string> {

@@ -30,6 +30,7 @@ import { StrandsAgentSDKPlugin } from "./plugins/strands-agent-sdk-plugin";
 import { ElevenLabsPlugin } from "./plugins/elevenlabs-plugin";
 import { LiveKitPlugin } from "./plugins/livekit-plugin";
 import { VoyageAIPlugin } from "./plugins/voyageai-plugin";
+import { WorkersAIPlugin } from "./plugins/workers-ai-plugin";
 import { TypeSafePlugin } from "./plugins/typesafe-plugin";
 import { CloudflareAIChatPlugin } from "./plugins/cloudflare-ai-chat-plugin";
 import { CloudflareAgentsPlugin } from "./plugins/cloudflare-agents-plugin";
@@ -93,6 +94,7 @@ export class BraintrustPlugin extends BasePlugin {
   private elevenLabsPlugin: ElevenLabsPlugin | null = null;
   private liveKitPlugin: LiveKitPlugin | null = null;
   private voyageAIPlugin: VoyageAIPlugin | null = null;
+  private workersAIPlugin: WorkersAIPlugin | null = null;
   private typeSafePlugin: TypeSafePlugin | null = null;
   private cloudflareAIChatPlugin: CloudflareAIChatPlugin | null = null;
   private cloudflareAgentsPlugin: CloudflareAgentsPlugin | null = null;
@@ -221,6 +223,11 @@ export class BraintrustPlugin extends BasePlugin {
     if (integrations.voyageai !== false) {
       this.voyageAIPlugin = new VoyageAIPlugin();
       this.voyageAIPlugin.enable();
+    }
+
+    if (integrations.workersAI !== false) {
+      this.workersAIPlugin = new WorkersAIPlugin();
+      this.workersAIPlugin.enable();
     }
 
     if (integrations.typesafe !== false) {
@@ -404,6 +411,11 @@ export class BraintrustPlugin extends BasePlugin {
     if (this.voyageAIPlugin) {
       this.voyageAIPlugin.disable();
       this.voyageAIPlugin = null;
+    }
+
+    if (this.workersAIPlugin) {
+      this.workersAIPlugin.disable();
+      this.workersAIPlugin = null;
     }
 
     if (this.typeSafePlugin) {
