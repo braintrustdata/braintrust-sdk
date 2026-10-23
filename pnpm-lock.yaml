@@ -132,6 +132,28 @@ importers:
         specifier: 4.3.6
         version: 4.3.6
 
+  integrations/audio:
+    dependencies:
+      '@audio/encode-opus':
+        specifier: 1.3.1
+        version: 1.3.1
+    devDependencies:
+      '@types/node':
+        specifier: ^20.10.5
+        version: 20.19.40
+      braintrust:
+        specifier: workspace:^
+        version: link:../../js
+      tsup:
+        specifier: ^8.5.1
+        version: 8.5.1(@swc/core@1.15.8)(jiti@2.6.1)(postcss@8.5.26)(tsx@4.21.0)(typescript@5.9.3)(yaml@2.9.0)
+      typescript:
+        specifier: ^5.3.3
+        version: 5.9.3
+      vitest:
+        specifier: 4.1.11
+        version: 4.1.11(@opentelemetry/api@1.9.0)(@types/node@20.19.40)(msw@2.13.6(@types/node@20.19.40)(typescript@5.9.3))(vite@8.1.5(@types/node@20.19.40)(esbuild@0.28.1)(jiti@2.6.1)(terser@5.44.1)(tsx@4.21.0)(yaml@2.9.0))
+
   integrations/browser-js:
     dependencies:
       als-browser:
@@ -631,6 +653,10 @@ packages:
     peerDependenciesMeta:
       zod:
         optional: true
+
+  '@audio/encode-opus@1.3.1':
+    resolution: {integrity: sha512-FFNQgim/doIajnOyDidaIx541HI51VoMKWQk0NXFf2XP4bLgduR7kSmwoPXzF5TPCt7axC+Wu6IuTOGyuVWQPg==}
+    engines: {node: '>=18'}
 
   '@babel/runtime@7.28.4':
     resolution: {integrity: sha512-Q/N6JNWvIvPnLDvjlE1OUBLPQHH6l3CltCEsHIujp45zQUSSh8K+gHnaEX45yAT1nyngnINhvWtzN+Nb9D8RAQ==}
@@ -4560,6 +4586,8 @@ snapshots:
       json-schema-to-ts: 3.1.1
     optionalDependencies:
       zod: 3.25.76
+
+  '@audio/encode-opus@1.3.1': {}
 
   '@babel/runtime@7.28.4': {}
 
