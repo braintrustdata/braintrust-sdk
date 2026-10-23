@@ -9,7 +9,7 @@
     "ai": "6.0.202",
     "ai-unwrapped": "npm:ai@6.0.202",
     "dc-browser": "1.0.4",
-    "vite": "7.3.5",
+    "vite": "7.3.7",
     "wrangler": "4.112.0",
     "zod": "4.3.6",
     "cloudflare-think-v0-13": "npm:@cloudflare/think@0.13.0",
