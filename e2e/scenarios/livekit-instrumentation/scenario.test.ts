@@ -184,6 +184,57 @@ for (const variant of variants) {
       120000,
     );
 
+  // Compressed recordings through the optional @braintrust/audio middleware.
+  test.sequential(
+    `${variant} Ogg Opus fixture recording`,
+    async () => {
+      await withScenarioHarness(async (harness) => {
+        const result = await harness.runNodeScenarioDir(
+          scenarioOptions(variant, {
+            env: { LIVEKIT_AUDIO_MIDDLEWARE: "ogg" },
+          }),
+        );
+        const events = assertAudioTrace(harness.events());
+        const root = findLatestSpan(events, "session")!;
+        const recordings = root.metadata?.["audio.recordings"] as {
+          id: string;
+          duration_ms: number;
+        }[];
+        const probes = result.stdout
+          .split("\n")
+          .filter((line) => line.startsWith('{"audioMiddlewareSegment":'))
+          .map((line) => JSON.parse(line));
+        expect(recordings.length).toBeGreaterThan(0);
+        expect(probes).toHaveLength(recordings.length);
+        for (const [index, recording] of recordings.entries()) {
+          expect(recording).toMatchObject({
+            id: `call-${String(index).padStart(4, "0")}`,
+            state: "ready",
+            mime_type: "audio/ogg",
+            sample_rate_hz: 48000,
+            channel_count: 2,
+          });
+          expect(recording).not.toHaveProperty("sample_format");
+          // The uploaded file decodes to exactly the recorded duration.
+          expect(probes[index]).toMatchObject({
+            audioMiddlewareSegment: index,
+            magic: "OggS",
+          });
+          expect(probes[index].decodedMs).toBeCloseTo(recording.duration_ms, 1);
+        }
+        expect(
+          (root.row.input as { audio: Record<string, unknown> }).audio[
+            "call-0000"
+          ],
+        ).toMatchObject({
+          filename: "call-0000.ogg",
+          content_type: "audio/ogg",
+        });
+      });
+    },
+    120000,
+  );
+
   test.sequential(
     `${variant} recording requires attachment capture`,
     async () => {
