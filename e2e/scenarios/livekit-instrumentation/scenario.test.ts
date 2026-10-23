@@ -111,7 +111,8 @@ function scenarioOptions(
           ],
     env: {
       LIVEKIT_WRAP: mode === "auto" ? "0" : "1",
-      BRAINTRUST_CAPTURE_ATTACHMENTS: recording ? "true" : "",
+      BRAINTRUST_CAPTURE_USER_AUDIO_ATTACHMENTS: recording ? "true" : "",
+      BRAINTRUST_CAPTURE_AGENT_AUDIO_ATTACHMENTS: recording ? "true" : "",
       BRAINTRUST_DISABLE_INSTRUMENTATION: "",
       ...(cassette ? { LIVEKIT_PROVIDER: "1" } : {}),
       ...env,
@@ -187,8 +188,12 @@ for (const variant of variants) {
     `${variant} recording requires attachment capture`,
     async () => {
       await withScenarioHarness(async (harness) => {
+        // The shared attachment flag alone never records calls.
         await harness.runNodeScenarioDir(
-          scenarioOptions(variant, { recording: false }),
+          scenarioOptions(variant, {
+            recording: false,
+            env: { BRAINTRUST_CAPTURE_ATTACHMENTS: "true" },
+          }),
         );
         const events = assertAudioTrace(harness.events());
         expect(
@@ -298,6 +303,7 @@ for (const variant of variants) {
 
   // Rotation is anchored to session time, so a delayed playback start changes the
   // number of files. Assert complete, contiguous coverage instead of a snapshot.
+  // Segments also pass through audio middleware configured for the integration.
   test.sequential(
     `${variant} progressive order recording`,
     async () => {
@@ -308,6 +314,7 @@ for (const variant of variants) {
             env: {
               LIVEKIT_SEGMENTS: "1",
               LIVEKIT_PLAYBACK_START_DELAY_MS: "137",
+              LIVEKIT_AUDIO_MIDDLEWARE: "1",
             },
           }),
         );
@@ -339,6 +346,13 @@ for (const variant of variants) {
               1,
             );
         }
+        // Every uploaded segment passed through the configured middleware.
+        expect(
+          result.stdout
+            .split("\n")
+            .filter((line) => line.startsWith('{"audioMiddlewareSegment":'))
+            .map((line) => JSON.parse(line).audioMiddlewareSegment),
+        ).toEqual(recordings.map((_, index) => index));
         const { playedDurationMs, completedUploads } = JSON.parse(
           result.stdout
             .split("\n")

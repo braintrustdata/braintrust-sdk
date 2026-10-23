@@ -202,6 +202,40 @@ describe("Plugin Registry", () => {
     },
   );
 
+  it("LiveKit options keep it enabled and pass audio middleware across bundles", () => {
+    const bootstrap = new (registry.constructor as any)();
+    const sdk = new (registry.constructor as any)();
+    const middleware = () => [vi.fn(), vi.fn()];
+    const received: unknown[] = [];
+    const enable = vi
+      .spyOn(LiveKitPlugin.prototype, "enable")
+      .mockImplementation(function (this: LiveKitPlugin) {
+        received.push(Reflect.get(this, "audioMiddleware"));
+      });
+    try {
+      bootstrap.configure({
+        integrations: { livekit: { audioMiddleware: middleware } },
+      });
+      sdk.enable();
+      expect(received).toEqual([middleware]);
+    } finally {
+      sdk.disable();
+      enable.mockRestore();
+    }
+  });
+
+  it.each([[{ audioMiddleware: "opus" }], [{ audioMiddleware: [() => {}] }]])(
+    "rejects LiveKit audio middleware that is not a factory (%j)",
+    (livekit) => {
+      const testRegistry = new (registry.constructor as any)();
+      expect(() =>
+        testRegistry.configure({ integrations: { livekit } }),
+      ).toThrow(
+        "integrations.livekit.audioMiddleware must be a function returning middleware",
+      );
+    },
+  );
+
   it("should allow configuration before enable", () => {
     const testRegistry = new (registry.constructor as any)();
     const warnSpy = vi
@@ -295,6 +329,26 @@ describe("Environment Variable Configuration", () => {
     // OpenAI should be disabled, others enabled by default
     expect(testRegistry.isEnabled()).toBe(true);
     testRegistry.disable();
+  });
+
+  it("BRAINTRUST_DISABLE_INSTRUMENTATION disables LiveKit configured with options", async () => {
+    const iso = (await import("../isomorph")).default;
+    iso.getEnv = (name: string) =>
+      name === "BRAINTRUST_DISABLE_INSTRUMENTATION"
+        ? "livekit"
+        : originalGetEnv(name);
+    const enable = vi.spyOn(LiveKitPlugin.prototype, "enable");
+    const testRegistry = new (registry.constructor as any)();
+    try {
+      testRegistry.configure({
+        integrations: { livekit: { audioMiddleware: () => [vi.fn()] } },
+      });
+      testRegistry.enable();
+      expect(enable).not.toHaveBeenCalled();
+    } finally {
+      testRegistry.disable();
+      enable.mockRestore();
+    }
   });
 
   it("should parse BRAINTRUST_DISABLE_INSTRUMENTATION with multiple SDKs", async () => {

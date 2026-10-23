@@ -383,6 +383,8 @@ export {
   braintrustFlueInstrumentation,
 } from "./instrumentation";
 export type {
+  AudioMiddleware,
+  AudioSegmentMeta,
   InstrumentationConfig,
   SpanCustomizer,
   SpanExportData,
