@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, test, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { BraintrustState } from "./logger";
 import { configureNode } from "./node/config";
 import { Queue } from "./queue";
@@ -155,6 +155,7 @@ test("events enqueued as an active flush stops are not stranded", async () => {
   });
   const state = createState(fetchMock as unknown as typeof globalThis.fetch);
   const logger = state.httpLogger();
+  logger.flushDelayMs = 0;
   const queue = Reflect.get(logger, "queue") as Queue<{
     sequence: number;
     event: LazyValue<BackgroundLogEvent>;
@@ -207,6 +208,105 @@ test("log request concurrency is limited to eight by default", async () => {
   await flush;
   expect(logRequestCount).toBe(24);
   expect(peakActiveRequests).toBe(8);
+});
+
+describe("delayed flushing", () => {
+  function createCountingState() {
+    const logRequestSizes: number[] = [];
+    const fetchMock = vi.fn(
+      async (input: RequestInfo | URL, init?: RequestInit) => {
+        if (String(input).endsWith("/version")) {
+          return jsonResponse({ logs3_payload_max_bytes: 6 * 1024 * 1024 });
+        }
+        logRequestSizes.push(JSON.parse(String(init?.body)).rows.length);
+        return jsonResponse({});
+      },
+    );
+    const state = createState(fetchMock as unknown as typeof globalThis.fetch);
+    const logger = state.httpLogger();
+    logger.flushDelayMs = 1000;
+    return { state, logger, logRequestSizes };
+  }
+
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "Date"] });
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  test("rows logged within the delay share one request", async () => {
+    const { state, logRequestSizes } = createCountingState();
+
+    enqueueEvents(state, 0, 1);
+    await vi.advanceTimersByTimeAsync(400);
+    enqueueEvents(state, 1, 1);
+    await vi.advanceTimersByTimeAsync(400);
+    enqueueEvents(state, 2, 1);
+    expect(logRequestSizes).toEqual([]);
+
+    // The deadline is measured from the oldest row, not the newest.
+    await vi.advanceTimersByTimeAsync(200);
+    expect(logRequestSizes).toEqual([3]);
+  });
+
+  test("reaching the batch threshold flushes without waiting", async () => {
+    const { state, logger, logRequestSizes } = createCountingState();
+    logger.flushBatchThreshold = 5;
+
+    enqueueEvents(state, 0, 4);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(logRequestSizes).toEqual([]);
+
+    enqueueEvents(state, 4, 1);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(logRequestSizes).toEqual([5]);
+  });
+
+  test("explicit flush skips the delay; rows logged meanwhile get their own deadline", async () => {
+    const { state, logger, logRequestSizes } = createCountingState();
+
+    enqueueEvents(state, 0, 1);
+    const flush = logger.flush();
+    enqueueEvents(state, 1, 1);
+    await flush;
+    expect(logRequestSizes).toEqual([1]);
+
+    await vi.advanceTimersByTimeAsync(999);
+    expect(logRequestSizes).toEqual([1]);
+    await vi.advanceTimersByTimeAsync(1);
+    expect(logRequestSizes).toEqual([1, 1]);
+  });
+});
+
+describe("flush delay defaults", () => {
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  const createLogger = () =>
+    createState(vi.fn() as unknown as typeof fetch).httpLogger();
+
+  test("only long-lived Node processes delay by default", () => {
+    expect(createLogger().flushDelayMs).toBe(1000);
+
+    vi.stubEnv("AWS_EXECUTION_ENV", "AWS_Lambda_nodejs20.x");
+    expect(createLogger().flushDelayMs).toBe(0);
+
+    vi.stubEnv("VERCEL", "1");
+    expect(createLogger().flushDelayMs).toBe(0);
+
+    vi.stubEnv("BRAINTRUST_FLUSH_DELAY_MS", "250");
+    expect(createLogger().flushDelayMs).toBe(250);
+  });
+
+  test("the batch threshold defaults to the batch size", () => {
+    vi.stubEnv("BRAINTRUST_DEFAULT_BATCH_SIZE", "40");
+    expect(createLogger().flushBatchThreshold).toBe(40);
+    vi.stubEnv("BRAINTRUST_FLUSH_BATCH_THRESHOLD", "7");
+    expect(createLogger().flushBatchThreshold).toBe(7);
+  });
 });
 
 describe("numeric environment variables", () => {

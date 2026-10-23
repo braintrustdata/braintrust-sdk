@@ -93,6 +93,32 @@ export function getSpanInstrumentationName(
   return isSpanInstrumentationName(value) ? value : undefined;
 }
 
+const EARLY_SERVERLESS_PLATFORMS: Array<[string, string]> = [
+  ["VERCEL", "vercel"],
+  ["NETLIFY", "netlify"],
+];
+const GCP_SERVERLESS_PLATFORMS: Array<[string, string]> = [
+  ["K_SERVICE", "cloud_run"],
+  ["FUNCTION_TARGET", "gcp_functions"],
+];
+
+function isAwsLambda(): boolean {
+  return (
+    !!iso.getEnv("AWS_EXECUTION_ENV")?.startsWith("AWS_Lambda_") ||
+    !!iso.getEnv("AWS_LAMBDA_FUNCTION_NAME")
+  );
+}
+
+// Platforms that may freeze or throttle the process between requests.
+export function isServerlessEnvironment(): boolean {
+  return (
+    !!firstPresent(EARLY_SERVERLESS_PLATFORMS) ||
+    isAwsLambda() ||
+    !!firstPresent(GCP_SERVERLESS_PLATFORMS) ||
+    !!iso.getEnv("FUNCTIONS_WORKER_RUNTIME")
+  );
+}
+
 export function detectSpanOriginEnvironment(
   explicit?: SpanOriginEnvironment,
 ): SpanOriginEnvironment | undefined {
@@ -122,10 +148,7 @@ export function detectSpanOriginEnvironment(
   if (ci) return { type: "ci", name: ci };
   if (iso.getEnv("CI")) return { type: "ci", name: "ci" };
 
-  const earlyServer = firstPresent([
-    ["VERCEL", "vercel"],
-    ["NETLIFY", "netlify"],
-  ]);
+  const earlyServer = firstPresent(EARLY_SERVERLESS_PLATFORMS);
   if (earlyServer) return { type: "server", name: earlyServer };
   if (
     iso.getEnv("ECS_CONTAINER_METADATA_URI") ||
@@ -137,16 +160,12 @@ export function detectSpanOriginEnvironment(
   if (awsExecutionEnv?.startsWith("AWS_ECS_")) {
     return { type: "server", name: "ecs" };
   }
-  if (awsExecutionEnv?.startsWith("AWS_Lambda_")) {
-    return { type: "server", name: "aws_lambda" };
-  }
-  if (iso.getEnv("AWS_LAMBDA_FUNCTION_NAME")) {
+  if (isAwsLambda()) {
     return { type: "server", name: "aws_lambda" };
   }
 
   const server = firstPresent([
-    ["K_SERVICE", "cloud_run"],
-    ["FUNCTION_TARGET", "gcp_functions"],
+    ...GCP_SERVERLESS_PLATFORMS,
     ["KUBERNETES_SERVICE_HOST", "kubernetes"],
     ["DYNO", "heroku"],
     ["FLY_APP_NAME", "fly"],
