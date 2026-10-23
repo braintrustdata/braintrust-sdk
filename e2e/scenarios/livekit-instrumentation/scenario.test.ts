@@ -111,7 +111,8 @@ function scenarioOptions(
           ],
     env: {
       LIVEKIT_WRAP: mode === "auto" ? "0" : "1",
-      BRAINTRUST_CAPTURE_ATTACHMENTS: recording ? "true" : "",
+      BRAINTRUST_CAPTURE_USER_AUDIO_ATTACHMENTS: recording ? "true" : "",
+      BRAINTRUST_CAPTURE_AGENT_AUDIO_ATTACHMENTS: recording ? "true" : "",
       BRAINTRUST_DISABLE_INSTRUMENTATION: "",
       ...(cassette ? { LIVEKIT_PROVIDER: "1" } : {}),
       ...env,
@@ -183,12 +184,92 @@ for (const variant of variants) {
       120000,
     );
 
+  // Compressed recordings through the optional @braintrust/audio middleware.
+  test.sequential(
+    `${variant} Ogg Opus fixture recording`,
+    async () => {
+      await withScenarioHarness(async (harness) => {
+        const result = await harness.runNodeScenarioDir(
+          scenarioOptions(variant, {
+            env: { LIVEKIT_AUDIO_MIDDLEWARE: "ogg" },
+          }),
+        );
+        const events = assertAudioTrace(harness.events());
+        const root = findLatestSpan(events, "session")!;
+        const recordings = root.metadata?.["audio.recordings"] as {
+          id: string;
+          duration_ms: number;
+        }[];
+        const probes = result.stdout
+          .split("\n")
+          .filter((line) => line.startsWith('{"audioMiddlewareSegment":'))
+          .map((line) => JSON.parse(line));
+        expect(recordings.length).toBeGreaterThan(0);
+        expect(probes).toHaveLength(recordings.length);
+        for (const [index, recording] of recordings.entries()) {
+          expect(recording).toMatchObject({
+            id: `call-${String(index).padStart(4, "0")}`,
+            state: "ready",
+            mime_type: "audio/ogg",
+            sample_rate_hz: 48000,
+            channel_count: 2,
+          });
+          expect(recording).not.toHaveProperty("sample_format");
+          // The uploaded file decodes to exactly the recorded duration.
+          expect(probes[index]).toMatchObject({
+            audioMiddlewareSegment: index,
+            magic: "OggS",
+          });
+          expect(probes[index].decodedMs).toBeCloseTo(recording.duration_ms, 1);
+        }
+        expect(
+          (root.row.input as { audio: Record<string, unknown> }).audio[
+            "call-0000"
+          ],
+        ).toMatchObject({
+          filename: "call-0000.ogg",
+          content_type: "audio/ogg",
+        });
+      });
+    },
+    120000,
+  );
+
+  // BRAINTRUST_AUDIO_COMPRESSION alone, with no code configuration.
+  test.sequential(
+    `${variant} Ogg Opus recording from the environment`,
+    async () => {
+      await withScenarioHarness(async (harness) => {
+        await harness.runNodeScenarioDir(
+          scenarioOptions(variant, {
+            env: { BRAINTRUST_AUDIO_COMPRESSION: "true" },
+          }),
+        );
+        const events = assertAudioTrace(harness.events());
+        const root = findLatestSpan(events, "session")!;
+        expect(root.metadata?.["audio.recordings"]).toMatchObject([
+          { id: "call-0000", state: "ready", mime_type: "audio/ogg" },
+        ]);
+        expect(
+          (root.row.input as { audio: Record<string, unknown> }).audio[
+            "call-0000"
+          ],
+        ).toMatchObject({ filename: "call-0000.ogg" });
+      });
+    },
+    120000,
+  );
+
   test.sequential(
     `${variant} recording requires attachment capture`,
     async () => {
       await withScenarioHarness(async (harness) => {
+        // The shared attachment flag alone never records calls.
         await harness.runNodeScenarioDir(
-          scenarioOptions(variant, { recording: false }),
+          scenarioOptions(variant, {
+            recording: false,
+            env: { BRAINTRUST_CAPTURE_ATTACHMENTS: "true" },
+          }),
         );
         const events = assertAudioTrace(harness.events());
         expect(
@@ -298,6 +379,7 @@ for (const variant of variants) {
 
   // Rotation is anchored to session time, so a delayed playback start changes the
   // number of files. Assert complete, contiguous coverage instead of a snapshot.
+  // Segments also pass through audio middleware configured for the integration.
   test.sequential(
     `${variant} progressive order recording`,
     async () => {
@@ -308,6 +390,7 @@ for (const variant of variants) {
             env: {
               LIVEKIT_SEGMENTS: "1",
               LIVEKIT_PLAYBACK_START_DELAY_MS: "137",
+              LIVEKIT_AUDIO_MIDDLEWARE: "1",
             },
           }),
         );
@@ -339,6 +422,13 @@ for (const variant of variants) {
               1,
             );
         }
+        // Every uploaded segment passed through the configured middleware.
+        expect(
+          result.stdout
+            .split("\n")
+            .filter((line) => line.startsWith('{"audioMiddlewareSegment":'))
+            .map((line) => JSON.parse(line).audioMiddlewareSegment),
+        ).toEqual(recordings.map((_, index) => index));
         const { playedDurationMs, completedUploads } = JSON.parse(
           result.stdout
             .split("\n")

@@ -43,5 +43,6 @@ export type {
 
 // Configuration API
 export type { SpanCustomizer, SpanExportData } from "./config";
+export type { AudioMiddleware, AudioSegmentMeta } from "../audio-middleware";
 export { configureInstrumentation } from "./registry";
 export type { InstrumentationConfig } from "./registry";

@@ -1,3 +1,5 @@
+import type { AudioMiddlewareStack } from "../audio-middleware";
+
 export type SpanExportData = Record<string, unknown>;
 
 export interface SpanCustomizer {
@@ -63,7 +65,37 @@ export interface InstrumentationIntegrationsConfig {
   typesafe?: boolean;
   workersAI?: boolean;
   elevenlabs?: boolean;
-  livekit?: boolean;
+  /** Set to false to disable, or pass options; options keep LiveKit enabled. */
+  livekit?: boolean | LiveKitIntegrationConfig;
+}
+
+export interface LiveKitIntegrationConfig {
+  /**
+   * Returns the middleware applied in order to each recorded audio segment
+   * before upload. Called once per recording, so each gets its own state.
+   * Recording still requires BRAINTRUST_CAPTURE_USER_AUDIO_ATTACHMENTS or
+   * BRAINTRUST_CAPTURE_AGENT_AUDIO_ATTACHMENTS; without middleware, segments
+   * upload as raw PCM. Takes precedence over BRAINTRUST_AUDIO_MIDDLEWARE and
+   * BRAINTRUST_AUDIO_COMPRESSION, which load @braintrust/audio when installed.
+   *
+   * @example
+   * ```ts
+   * configureInstrumentation({
+   *   integrations: {
+   *     livekit: {
+   *       audioMiddleware: () => [
+   *         async (segment, meta, next) => {
+   *           const result = await next(segment, meta);
+   *           console.log(meta.encoding, "->", result.meta.encoding);
+   *           return result;
+   *         },
+   *       ],
+   *     },
+   *   },
+   * });
+   * ```
+   */
+  audioMiddleware?: () => AudioMiddlewareStack;
 }
 
 export const DEFAULT_STREAMING_ATTACHMENT_BUFFER_BYTES = 4 * 1024 * 1024;
@@ -74,6 +106,8 @@ export interface InstrumentationConfig {
    * Defaults to 4 MiB. Must be a positive safe integer.
    * Instrumentations flush at valid media boundaries and on recording completion.
    * Counts binary bytes after decoding and format conversion, excluding metadata.
+   * Audio recordings count raw PCM before audio middleware, so compressed
+   * uploads are smaller than this size.
    * Whole-file responses remain intact and may exceed this threshold.
    * This is not a total memory limit and does not enable attachment capture.
    * Configure before initializing the SDK or enabling instrumentation.

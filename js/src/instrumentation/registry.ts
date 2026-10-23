@@ -82,6 +82,17 @@ class PluginRegistry {
         "streamingAttachmentBufferBytes must be a positive safe integer",
       );
     }
+    const livekit = config.integrations?.livekit;
+    if (
+      typeof livekit === "object" &&
+      livekit !== null &&
+      livekit.audioMiddleware !== undefined &&
+      typeof livekit.audioMiddleware !== "function"
+    ) {
+      throw new Error(
+        "integrations.livekit.audioMiddleware must be a function returning middleware",
+      );
+    }
     if ("spanCustomizers" in config) {
       setSpanCustomizers(config.spanCustomizers);
     }
