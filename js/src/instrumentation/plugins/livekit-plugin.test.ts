@@ -24,7 +24,8 @@ import { traceAsyncCall } from "../core/tracing";
 import { _exportsForTestingOnly } from "./livekit-plugin";
 
 configureNode();
-const { LiveKitTracing, Recording, requestMetadata } = _exportsForTestingOnly;
+const { LiveKitTracing, Recording, requestMetadata, recordingMiddleware } =
+  _exportsForTestingOnly;
 
 let logger: ReturnType<typeof logging.useTestBackgroundLogger>;
 let tracing: InstanceType<typeof LiveKitTracing>;
@@ -1074,6 +1075,57 @@ describe("recording", () => {
     expect(audio).toMatchObject({
       filename: "call-0000.x-test",
       content_type: "audio/x-test",
+    });
+  });
+
+  test("a stack still loading is used once it resolves", async () => {
+    await tracing.shutdown();
+    tracing = new LiveKitTracing(
+      DEFAULT_STREAMING_ATTACHMENT_BUFFER_BYTES,
+      async () => [
+        (segment, meta, next) =>
+          next(segment, { ...meta, mimeType: "audio/x-loaded" }),
+      ],
+    );
+    const { sink, origin, close } = session();
+    await playOneFrame(sink, origin);
+    expect((await close()).recordings).toMatchObject([
+      { state: "ready", mime_type: "audio/x-loaded" },
+    ]);
+  });
+
+  describe("middleware precedence", () => {
+    const registry = globalThis as Record<symbol, unknown>;
+    const fromEnv = vi.fn(() => () => [vi.fn<AudioMiddleware>()]);
+    beforeEach(() => {
+      fromEnv.mockClear();
+      registry[Symbol.for("braintrust.audio")] = {
+        version: 1,
+        middlewareFromEnv: fromEnv,
+      };
+      vi.stubEnv("BRAINTRUST_AUDIO_COMPRESSION", "true");
+    });
+    afterEach(() => {
+      delete registry[Symbol.for("braintrust.audio")];
+    });
+
+    test("code configuration wins over the env", () => {
+      const configured = () => [];
+      expect(recordingMiddleware(configured)).toBe(configured);
+      expect(fromEnv).not.toHaveBeenCalled();
+    });
+
+    test("the env applies when recording is on", async () => {
+      const factory = recordingMiddleware()!;
+      expect(await factory()).toHaveLength(1);
+      expect(fromEnv).toHaveBeenCalledTimes(1);
+    });
+
+    test("nothing loads when recording is off", () => {
+      vi.stubEnv("BRAINTRUST_CAPTURE_USER_AUDIO_ATTACHMENTS", "");
+      vi.stubEnv("BRAINTRUST_CAPTURE_AGENT_AUDIO_ATTACHMENTS", "");
+      expect(recordingMiddleware()).toBeUndefined();
+      expect(fromEnv).not.toHaveBeenCalled();
     });
   });
 

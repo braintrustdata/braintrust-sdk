@@ -235,6 +235,31 @@ for (const variant of variants) {
     120000,
   );
 
+  // BRAINTRUST_AUDIO_COMPRESSION alone, with no code configuration.
+  test.sequential(
+    `${variant} Ogg Opus recording from the environment`,
+    async () => {
+      await withScenarioHarness(async (harness) => {
+        await harness.runNodeScenarioDir(
+          scenarioOptions(variant, {
+            env: { BRAINTRUST_AUDIO_COMPRESSION: "true" },
+          }),
+        );
+        const events = assertAudioTrace(harness.events());
+        const root = findLatestSpan(events, "session")!;
+        expect(root.metadata?.["audio.recordings"]).toMatchObject([
+          { id: "call-0000", state: "ready", mime_type: "audio/ogg" },
+        ]);
+        expect(
+          (root.row.input as { audio: Record<string, unknown> }).audio[
+            "call-0000"
+          ],
+        ).toMatchObject({ filename: "call-0000.ogg" });
+      });
+    },
+    120000,
+  );
+
   test.sequential(
     `${variant} recording requires attachment capture`,
     async () => {

@@ -75,7 +75,8 @@ export interface LiveKitIntegrationConfig {
    * before upload. Called once per recording, so each gets its own state.
    * Recording still requires BRAINTRUST_CAPTURE_USER_AUDIO_ATTACHMENTS or
    * BRAINTRUST_CAPTURE_AGENT_AUDIO_ATTACHMENTS; without middleware, segments
-   * upload as raw PCM.
+   * upload as raw PCM. Takes precedence over BRAINTRUST_AUDIO_MIDDLEWARE and
+   * BRAINTRUST_AUDIO_COMPRESSION, which load @braintrust/audio when installed.
    *
    * @example
    * ```ts

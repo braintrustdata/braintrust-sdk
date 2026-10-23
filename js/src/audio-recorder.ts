@@ -16,7 +16,8 @@ type AudioRecorderOptions = {
   /** Bound on buffered and reserved audio; one in-flight segment is extra. */
   maxBufferBytes?: number;
   maxDurationMs?: number;
-  middleware?: AudioMiddlewareStack;
+  /** A stack, or one still loading; segments wait for it. */
+  middleware?: AudioMiddlewareStack | Promise<AudioMiddlewareStack>;
   /** Receives each transformed segment; the recorder waits for it to settle. */
   onFlush(segment: Uint8Array, meta: AudioSegmentMeta): void | Promise<void>;
   /** Receives the original metadata of a segment that failed, and the stop reason. */
@@ -193,7 +194,7 @@ export class AudioRecorder {
     let result: AudioResult;
     try {
       result = await runMiddleware(
-        this.options.middleware ?? [],
+        (await this.options.middleware) ?? [],
         segment,
         meta,
       );

@@ -55,6 +55,21 @@ configureInstrumentation({
 });
 ```
 
+### From environment variables
+
+With auto-instrumentation, enable compression without code. Install the package, then:
+
+```sh
+BRAINTRUST_AUDIO_COMPRESSION=true node --import braintrust/hook.mjs agent.js
+```
+
+| Variable                       | Example    | Behavior                                                             |
+| ------------------------------ | ---------- | -------------------------------------------------------------------- |
+| `BRAINTRUST_AUDIO_COMPRESSION` | `true`     | Equivalent to `BRAINTRUST_AUDIO_MIDDLEWARE=opus,ogg`.                |
+| `BRAINTRUST_AUDIO_MIDDLEWARE`  | `opus,ogg` | Middleware stack to apply. Overrides `BRAINTRUST_AUDIO_COMPRESSION`. |
+
+Middleware configured in code takes precedence over these variables. If the package is missing or a name is unknown, recordings stay raw PCM and a warning is logged.
+
 ## Options
 
 `opus()` accepts encoder settings:

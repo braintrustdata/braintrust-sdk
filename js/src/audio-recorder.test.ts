@@ -166,6 +166,24 @@ test("middleware output is flushed; a failing segment is omitted, stops capture 
   ]);
 });
 
+test("a stack that resolves later runs every segment", async () => {
+  let resolveStack!: (stack: AudioMiddleware[]) => void;
+  const stack = new Promise<AudioMiddleware[]>((resolve) => {
+    resolveStack = resolve;
+  });
+  const tag: AudioMiddleware = (segment, meta, next) =>
+    next(segment, { ...meta, encoding: "tagged" });
+  const { r, flushed } = recorder({ middleware: stack });
+  r.record("a", ramp(15), mono(0));
+  const finishing = r.finish();
+  resolveStack([tag]);
+  await finishing;
+  expect(flushed.map(({ meta }) => meta.encoding)).toEqual([
+    "tagged",
+    "tagged",
+  ]);
+});
+
 test("a rejected flush is reported, stops capture and never rejects finish", async () => {
   const { r, errors } = recorder({
     onFlush: async () => {

@@ -34,6 +34,7 @@ import { isEnvFlagEnabled } from "../../wrappers/attachment-utils";
 import { DEFAULT_STREAMING_ATTACHMENT_BUFFER_BYTES } from "../config";
 import { pcmBytesToMs, msToSamples, samplesToMs } from "../../pcm-buffer";
 import { AudioRecorder } from "../../audio-recorder";
+import { loadAudioMiddlewareFromEnv } from "../../audio-extensions";
 import type {
   AudioMiddlewareStack,
   AudioSegmentMeta,
@@ -52,6 +53,26 @@ const FINAL_TRANSCRIPT = 2; // SpeechEventType.FINAL_TRANSCRIPT
 // than the shared BRAINTRUST_CAPTURE_ATTACHMENTS, which also enables other media.
 const CAPTURE_USER_AUDIO = "BRAINTRUST_CAPTURE_USER_AUDIO_ATTACHMENTS";
 const CAPTURE_AGENT_AUDIO = "BRAINTRUST_CAPTURE_AGENT_AUDIO_ATTACHMENTS";
+
+/** Builds each recording's stack: configured, or still loading from the env. */
+type AudioMiddlewareFactory = () =>
+  | AudioMiddlewareStack
+  | Promise<AudioMiddlewareStack>;
+
+/**
+ * Code configuration wins. Otherwise, when recording is on, BRAINTRUST_AUDIO_*
+ * starts loading its middleware now, so the first call does not wait for it.
+ */
+function recordingMiddleware(
+  configured?: AudioMiddlewareFactory,
+): AudioMiddlewareFactory | undefined {
+  if (configured) return configured;
+  if (
+    isEnvFlagEnabled(CAPTURE_USER_AUDIO) ||
+    isEnvFlagEnabled(CAPTURE_AGENT_AUDIO)
+  )
+    return loadAudioMiddlewareFromEnv();
+}
 
 // Native spans with a Braintrust name. Other session spans export as `livekit.<name>`.
 const SPANS = new Map<string, { name: string; type: "task" | "llm" | "tool" }>([
@@ -78,7 +99,7 @@ export class LiveKitPlugin extends BasePlugin {
   private tracing?: LiveKitTracing;
   constructor(
     private streamingAttachmentBufferBytes = DEFAULT_STREAMING_ATTACHMENT_BUFFER_BYTES,
-    private audioMiddleware?: () => AudioMiddlewareStack,
+    private audioMiddleware?: AudioMiddlewareFactory,
   ) {
     super();
   }
@@ -86,7 +107,7 @@ export class LiveKitPlugin extends BasePlugin {
   protected onEnable(): void {
     const tracing = (this.tracing = new LiveKitTracing(
       this.streamingAttachmentBufferBytes,
-      this.audioMiddleware,
+      recordingMiddleware(this.audioMiddleware),
     ));
     const observeActive =
       <T>(fn: (span: LiveKitSpan) => T, options: TraceOptions) =>
@@ -241,7 +262,7 @@ class LiveKitTracing {
 
   constructor(
     private streamingAttachmentBufferBytes: number,
-    private audioMiddleware?: () => AudioMiddlewareStack,
+    private audioMiddleware?: AudioMiddlewareFactory,
   ) {}
 
   private rowOf(span: LiveKitSpan | undefined): Row | undefined {
@@ -1182,10 +1203,10 @@ class Recording {
     private resolve: (owner: string) => Row | undefined,
     /** Which directions this recording captures: caller input, agent output. */
     readonly captures = { input: true, output: true },
-    middleware?: () => AudioMiddlewareStack,
+    middleware?: AudioMiddlewareFactory,
   ) {
     // Each recording builds its own stack, so plugin state is never shared.
-    let stack: AudioMiddlewareStack = [];
+    let stack: AudioMiddlewareStack | Promise<AudioMiddlewareStack> = [];
     let failed = false;
     try {
       stack = middleware?.() ?? [];
@@ -1895,6 +1916,7 @@ class Playback {
 }
 
 export const _exportsForTestingOnly = {
+  recordingMiddleware,
   LiveKitTracing,
   Recording,
   Playback,

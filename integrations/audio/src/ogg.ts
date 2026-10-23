@@ -18,7 +18,7 @@ const EOS = 0x04;
  * ```
  */
 export function ogg(): AudioMiddleware<EncodedPackets, Uint8Array> {
-  return (segment, meta, next) => {
+  return function ogg(segment, meta, next) {
     if (segment?.codec !== "opus" || !segment.headers?.[0])
       throw new Error("ogg requires Opus packets, such as from opus()");
     const serial = Math.floor(Math.random() * 2 ** 32);

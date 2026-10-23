@@ -36,7 +36,7 @@ export function opus(
     application: "audio" as const,
     ...options,
   };
-  return async (segment, meta, next) => {
+  return async function opus(segment, meta, next) {
     if (meta.mimeType !== "audio/pcm" || meta.encoding !== "s16le")
       throw new Error("opus requires s16le PCM input");
     const channels = meta.channelCount;
@@ -103,6 +103,13 @@ export function opus(
       },
     );
   };
+}
+
+/** Loads and compiles the codec ahead of the first segment. */
+export function warmOpus(): Promise<void> {
+  return (codec ??= import("@audio/encode-opus/core"))
+    .then(({ createOpusEncoder }) => createOpusEncoder())
+    .then((encoder) => encoder.free());
 }
 
 const yieldToEventLoop = () =>
