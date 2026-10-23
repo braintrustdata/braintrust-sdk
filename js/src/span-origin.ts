@@ -44,6 +44,7 @@ export const INSTRUMENTATION_NAMES = {
   STRANDS_AGENT_SDK: "strands-agent-sdk",
   TEMPORAL: "temporal",
   TYPESAFE: "typesafe",
+  WORKERS_AI: "workers-ai",
   VOYAGEAI: "voyageai",
   ELEVENLABS: "elevenlabs",
 } as const;

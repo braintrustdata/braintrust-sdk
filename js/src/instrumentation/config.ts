@@ -61,6 +61,7 @@ export interface InstrumentationIntegrationsConfig {
   langsmith?: boolean;
   voyageai?: boolean;
   typesafe?: boolean;
+  workersAI?: boolean;
   elevenlabs?: boolean;
   livekit?: boolean;
 }
@@ -177,6 +178,8 @@ const envIntegrationAliases: Record<
   voyage: "voyageai",
   "voyage-ai": "voyageai",
   voyageai: "voyageai",
+  workersai: "workersAI",
+  "workers-ai": "workersAI",
   typesafe: "typesafe",
   "typesafe-ai": "typesafe",
   "@typesafe-ai/sdk": "typesafe",
@@ -226,6 +229,7 @@ export function getDefaultInstrumentationIntegrations(): Record<
     langsmith: true,
     voyageai: true,
     typesafe: true,
+    workersAI: true,
     elevenlabs: true,
     livekit: true,
     piCodingAgent: true,

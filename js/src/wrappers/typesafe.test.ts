@@ -9,7 +9,7 @@ import {
   vi,
 } from "vitest";
 import { Attachment, _exportsForTestingOnly, initLogger } from "../logger";
-import { DecisionAttachmentProcessor } from "../decision-attachments";
+import { TypedAttachmentProcessor } from "../typed-attachments";
 import {
   configureInstrumentation,
   registry,
@@ -482,7 +482,7 @@ describe("TypeSafe wrapper", () => {
         questions: { target: { type: "box", instructions: "Find target" } },
       });
       const [span] = await backgroundLogger.drain();
-      const exported = await new DecisionAttachmentProcessor().process(
+      const exported = await new TypedAttachmentProcessor().process(
         span as any,
       );
       const path = mode === "move" ? "/state/moved" : "/state/photo";

@@ -1,6 +1,6 @@
 import { traceAISDKCodeMode } from "./ai-sdk-code-mode";
 import { currentAISDKToolSpan, traceAISDKTool } from "./ai-sdk-tool-tracing";
-import { prepareDecisionAttachments } from "../../decision-attachments";
+import { prepareTypedAttachments } from "../../typed-attachments";
 import { aiSDKBatchChannels } from "./ai-sdk-batch-interceptors";
 import {
   captureAISDKBatchStart,
@@ -998,7 +998,7 @@ function interceptAISDKEvaluate(defaultDenyOutputPaths: string[]): () => void {
 export function processAISDKDecisionInput(
   params: Pick<AISDKEvaluateParams, "state" | "questions">,
 ) {
-  return prepareDecisionAttachments({
+  return prepareTypedAttachments({
     state: params.state,
     questions: addEvaluationIds(params.questions),
   }) as { state: unknown; questions: unknown };
@@ -1024,7 +1024,7 @@ export function processAISDKDecisionResult(
       ? providerMetadataKeys[0]
       : (resolvedModel.provider ?? requestMetadata.provider));
   return {
-    output: prepareDecisionAttachments(
+    output: prepareTypedAttachments(
       omit(
         { answers: addEvaluationIds(value.answers, confidence) },
         denyOutputPaths,
