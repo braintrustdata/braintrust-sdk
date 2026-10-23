@@ -796,11 +796,8 @@ describe("braintrustAISDKTelemetry", () => {
       (span) => span.span_attributes?.name === "generateText",
     );
 
-    expect(toModelOutput).toHaveBeenCalledWith({
-      toolCallId: "tool-1",
-      input: {},
-      output: rawOutput,
-    });
+    // The SDK already called toModelOutput; telemetry must not call it again.
+    expect(toModelOutput).not.toHaveBeenCalled();
     expect(toolSpan?.output).toEqual(modelOutput);
     expect(operation?.output.content[0].output).toEqual(modelOutput);
     expect(operation?.output.content[1]).not.toHaveProperty("output");

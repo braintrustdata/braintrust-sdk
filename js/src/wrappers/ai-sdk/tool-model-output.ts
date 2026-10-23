@@ -37,6 +37,38 @@ function isToolResultFor(
   );
 }
 
+/** Collect the model-facing results that AI SDK tool messages carry. */
+export function collectAISDKToolModelOutputs(
+  output: unknown,
+  toolNames: Set<string>,
+): Map<string, unknown> {
+  const modelOutputs = new Map<string, unknown>();
+  if (toolNames.size === 0) {
+    return modelOutputs;
+  }
+  const seen = new WeakSet<object>();
+  const collect = (value: unknown, inToolMessage: boolean): void => {
+    if (typeof value === "object" && value !== null) {
+      if (seen.has(value)) {
+        return;
+      }
+      seen.add(value);
+    }
+    if (Array.isArray(value)) {
+      value.forEach((entry) => collect(entry, inToolMessage));
+    } else if (isObject(value)) {
+      if (inToolMessage && isToolResultFor(value, toolNames)) {
+        modelOutputs.set(value.toolCallId, value.output);
+        return;
+      }
+      const isToolMessage = inToolMessage || value.role === "tool";
+      Object.values(value).forEach((entry) => collect(entry, isToolMessage));
+    }
+  };
+  collect(output, false);
+  return modelOutputs;
+}
+
 /**
  * Replace raw results of tools that define `toModelOutput` with what the model
  * saw. AI SDK tool messages already carry that value, so it is reused instead
@@ -51,20 +83,7 @@ export function applyAISDKToolModelOutputs<T>(
     return output;
   }
 
-  const modelOutputs = new Map<string, unknown>();
-  const collect = (value: unknown, inToolMessage: boolean): void => {
-    if (Array.isArray(value)) {
-      value.forEach((entry) => collect(entry, inToolMessage));
-    } else if (isObject(value)) {
-      if (inToolMessage && isToolResultFor(value, toolNames)) {
-        modelOutputs.set(value.toolCallId, value.output);
-        return;
-      }
-      const isToolMessage = inToolMessage || value.role === "tool";
-      Object.values(value).forEach((entry) => collect(entry, isToolMessage));
-    }
-  };
-  collect(output, false);
+  const modelOutputs = collectAISDKToolModelOutputs(output, toolNames);
 
   // Copy only the containers on the path to a replaced result.
   const replace = (value: unknown): unknown => {
