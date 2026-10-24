@@ -695,15 +695,16 @@ function finishPiLlmSpan(
   promptState.activeLlmSpans.delete(llmState);
 
   const messageError = message?.stopReason === "error" && message.errorMessage;
+  const usageMetrics = extractUsageMetrics(message?.usage);
   const metrics = {
-    ...extractUsageMetrics(message?.usage),
+    ...usageMetrics,
     ...cleanMetrics(llmState.metrics),
     ...buildDurationMetrics(llmState.startTime),
   };
-  const usageMetrics = extractUsageMetrics(message?.usage);
   if (Object.keys(usageMetrics).length > 0) {
+    // Usage stays on the LLM span. Copying the sum onto the prompt task makes
+    // Braintrust rollups count the same tokens and estimated cost twice.
     promptState.collectedLlmUsageMetrics = true;
-    addMetrics(promptState.metrics, usageMetrics);
   }
 
   try {
