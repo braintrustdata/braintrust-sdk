@@ -209,10 +209,19 @@ describe("PiCodingAgentPlugin", () => {
         expect.objectContaining({ output: { stdout: "pi_tool_ok" } }),
       );
       const finalTaskLog = taskSpan?.log.mock.calls.at(-1)?.[0];
-      expect(finalTaskLog?.metrics).toMatchObject({
-        completion_tokens: 3,
-        prompt_tokens: 5,
-        tokens: 8,
+      expect(finalTaskLog?.metrics).toEqual(
+        expect.objectContaining({
+          duration: expect.any(Number),
+        }),
+      );
+      expect(finalTaskLog?.metrics).not.toHaveProperty("completion_tokens");
+      expect(finalTaskLog?.metrics).not.toHaveProperty("prompt_tokens");
+      expect(finalTaskLog?.metrics).not.toHaveProperty("tokens");
+      expect(finalTaskLog?.output).toBeDefined();
+      expect(finalTaskLog?.metadata).toMatchObject({
+        model: "claude-haiku-4-5",
+        "pi_coding_agent.operation": "AgentSession.prompt",
+        provider: "anthropic",
       });
       expect(taskSpan?.end).toHaveBeenCalledTimes(1);
     },
@@ -263,7 +272,13 @@ describe("PiCodingAgentPlugin", () => {
       spans,
       "AgentSession.prompt",
     )?.log.mock.calls.at(-1)?.[0];
-    expect(finalTaskLog?.metrics).toMatchObject(expected);
+    expect(finalTaskLog?.metrics).not.toHaveProperty("completion_tokens");
+    expect(finalTaskLog?.metrics).not.toHaveProperty(
+      "prompt_cache_creation_tokens",
+    );
+    expect(finalTaskLog?.metrics).not.toHaveProperty("prompt_cached_tokens");
+    expect(finalTaskLog?.metrics).not.toHaveProperty("prompt_tokens");
+    expect(finalTaskLog?.metrics).not.toHaveProperty("tokens");
   });
 
   it("isolates overlapping prompts on the same agent without prompt matching", async () => {

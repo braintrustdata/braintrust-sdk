@@ -205,6 +205,14 @@ export function definePiCodingAgentInstrumentationAssertions(options: {
           "pi_coding_agent.operation": "AgentSession.prompt",
           provider: "anthropic",
         });
+        expect(task?.metrics).not.toHaveProperty("completion_tokens");
+        expect(task?.metrics).not.toHaveProperty(
+          "prompt_cache_creation_tokens",
+        );
+        expect(task?.metrics).not.toHaveProperty("prompt_cached_tokens");
+        expect(task?.metrics).not.toHaveProperty("prompt_tokens");
+        expect(task?.metrics).not.toHaveProperty("tokens");
+        expect(task?.metrics).not.toHaveProperty("estimated_cost");
 
         expect(llm).toBeDefined();
         expect(llmSpans).toHaveLength(2);
